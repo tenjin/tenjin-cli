@@ -1,0 +1,68 @@
+10-01 21:55:02.319 D/TenjinSDK(17352): Stored initialized_at timestamp: 1790909702309
+10-01 21:55:02.346 D/TenjinSDK(17352): Connecting...
+10-01 21:55:02.346 D/TenjinSDK(17352): Set encrypt requests setting true
+10-01 21:55:02.346 D/TenjinSDK(17352): Set event cache setting true
+10-01 21:55:02.347 D/TenjinSDK(17352): Starting connect task
+10-01 21:55:02.349 D/TenjinSDK(17352): Ready to connect - lock available? false
+10-01 21:55:03.198 D/TenjinStartup(17352): Starting attribution retrieval
+10-01 21:55:03.210 D/TenjinStartup(17352): Completed attribution retrieval
+10-01 21:55:03.210 D/TenjinStartup(17352): Starting advertising id retrieval
+10-01 21:55:03.267 D/TenjinStartup(17352): Starting Firebase app instance id retrieval
+10-01 21:55:03.267 D/TenjinSDK(17352): FirebaseAppInstanceIdProvider: Firebase Analytics not available (ClassNotFoundException)
+10-01 21:55:03.270 D/TenjinStartup(17352): Completed Firebase app instance id retrieval
+10-01 21:55:04.102 E/TenjinReflection(17352): Error running static method getAdvertisingIdInfo on com.huawei.hms.ads.identifier.AdvertisingIdClient : null
+10-01 21:55:04.131 D/TenjinSDK(17352): AppSetIdProvider: Initializing...
+10-01 21:55:04.155 D/TenjinSDK(17352): AppSetIdProvider: AppSet class found, fetching ID...
+10-01 21:55:04.931 D/TenjinSDK(17352): Connecting...
+10-01 21:55:04.932 D/TenjinSDK(17352): Dropping duplicate connect call
+10-01 21:55:04.932 D/TenjinSDK(17352): Set encrypt requests setting true
+10-01 21:55:04.933 D/TenjinSDK(17352): Set event cache setting true
+10-01 21:55:04.947 I/CameraManagerGlobal(17352): Connecting to camera service
+10-01 21:55:05.017 D/TenjinSDK(17352): AppSetIdProvider: Callback completed successfully
+10-01 21:55:05.017 D/TenjinSDK(17352): AppSet ID retrieved successfully
+10-01 21:55:05.018 D/TenjinSDK(17352): AppSetIdProvider: Completed. ID=99999999-8888-7777-6666-555555555555, Scope=app
+10-01 21:55:05.018 D/TenjinStartup(17352): Completed advertising id retrieval
+10-01 21:55:05.145 D/TenjinStartup(17352): Set complete
+10-01 21:55:05.146 D/TenjinStartup(17352): Startup completed
+10-01 21:55:05.146 D/TenjinSDK(17352): Releasing startup lock
+10-01 21:55:05.146 I/ImeTracker(17352): com.example.sample:1785a450: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+10-01 21:55:05.214 D/TenjinSDK(17352): Acquired startup lock, sending connect.
+10-01 21:55:05.215 D/SourceAppStoreGetter(17352): sourceAppStore = googleplay
+10-01 21:55:05.296 D/TenjinSDK(17352): Get customer user id
+10-01 21:55:05.321 D/HttpConnection(17352): --------------------
+10-01 21:55:05.385 I/FA      (17352): App measurement initialized, version: 167007
+10-01 21:55:05.386 I/FA      (17352): To enable debug logging run: adb shell setprop log.tag.FA VERBOSE
+10-01 21:55:05.386 I/FA      (17352): To enable faster debug mode event logging run:
+10-01 21:55:05.386 I/FA      (17352):   adb shell setprop debug.firebase.analytics.app com.example.sample
+10-01 21:55:05.666 D/HttpConnection(17352): Tenjin request URL: https://track.tenjin.com/v0/event
+10-01 21:55:05.666 D/HttpConnection(17352): Tenjin::connect params: {device_product=sdk_gphone64_arm64, country=US, app_version=1.0.5, device_abi_list=arm64-v8a, language=en, device_hardware=ranchu, screen_height=2400, app_version_code=8, retry_enabled=true, ad_user_data=false, last_session_length=1371, screen_width=1080, iap_transaction_count=57, device_cpu_count=1, advertising_id=11111111-2222-3333-4444-555555555555, ad_id_local=false, sent_at=1790909705296, build_id=BUILD.000, bundle_id=com.example.sample, session_count=10, total_session_time=6270, device=emu64a, current_session_length=2981, device_flags=adb, ad_personalization=true, device_model=sdk_gphone64_arm64, device_memory=2070859776, timezone=UTC, device_build_tags=release-keys, locale=en_US, platform=android, device_manufacturer=Google, analytics_installation_id=aaaabbbbccccddddeeeeffff00001111, initialized_at=1790909702309, sdk_version=1.23.0, developer_device_id_scope=app, device_screen_density=420, os_version_release=16, developer_device_id=99999999-8888-7777-6666-555555555555, connection_type=wifi, device_sensor_count=18, iab_tcf=0011010000, os_version=36, first_session_date=2026-06-03T17:45:33Z, sandbox=true, session_id=00000000-0000-0000-0000-000000000001, limit_ad_tracking=false, last_session_date=2026-06-24T16:38:12Z, carrier=Carrier, average_session_length=627, device_brand=google, customer_user_id=null, opt_in=true, source_app_store=googleplay, total_ilrd_revenue_usd=0.0}
+10-01 21:55:05.667 D/HttpConnection(17352): Tenjin::connect response: {"code":200,"success":true}
+10-01 21:55:05.667 D/HttpConnection(17352): --------------------
+10-01 21:55:05.670 D/SourceAppStoreGetter(17352): sourceAppStore = googleplay
+10-01 21:55:05.674 D/TenjinSDK(17352): Get customer user id
+10-01 21:55:05.675 D/SourceAppStoreGetter(17352): sourceAppStore = googleplay
+10-01 21:55:05.677 D/TenjinSDK(17352): Get customer user id
+10-01 21:55:05.677 D/SourceAppStoreGetter(17352): sourceAppStore = googleplay
+10-01 21:55:05.677 D/TenjinSDK(17352): Get customer user id
+10-01 21:55:05.677 D/SourceAppStoreGetter(17352): sourceAppStore = googleplay
+10-01 21:55:05.677 D/TenjinSDK(17352): Get customer user id
+10-01 21:55:05.680 D/HttpConnection(17352): --------------------
+10-01 21:55:05.683 D/HttpConnection(17352): --------------------
+10-01 21:55:05.685 D/HttpConnection(17352): --------------------
+10-01 21:55:05.687 D/HttpConnection(17352): --------------------
+10-01 21:55:05.776 D/HttpConnection(17352): Tenjin request URL: https://track.tenjin.com/v0/purchase
+10-01 21:55:05.776 D/HttpConnection(17352): Tenjin::connect params: {device_product=sdk_gphone64_arm64, country=US, app_version=1.0.5, device_abi_list=arm64-v8a, language=en, device_hardware=ranchu, screen_height=2400, app_version_code=8, retry_enabled=true, price=5.99, product_id=PRODUCT_123, ad_user_data=false, last_session_length=1371, screen_width=1080, iap_transaction_count=60, device_cpu_count=1, advertising_id=11111111-2222-3333-4444-555555555555, ad_id_local=false, sent_at=1790909705674, build_id=BUILD.000, bundle_id=com.example.sample, session_count=10, total_session_time=6646, device=emu64a, current_session_length=3340, device_flags=adb, ad_personalization=true, device_model=sdk_gphone64_arm64, device_memory=2070859776, timezone=UTC, device_build_tags=release-keys, locale=en_US, platform=android, device_manufacturer=Google, analytics_installation_id=aaaabbbbccccddddeeeeffff00001111, initialized_at=1790909702309, sdk_version=1.23.0, currency=USD, developer_device_id_scope=app, device_screen_density=420, event=, os_version_release=16, developer_device_id=99999999-8888-7777-6666-555555555555, quantity=1, connection_type=wifi, device_sensor_count=18, iab_tcf=0011010000, os_version=36, first_session_date=2026-06-03T17:45:33Z, sandbox=true, session_id=00000000-0000-0000-0000-000000000001, limit_ad_tracking=false, last_session_date=2026-06-24T16:38:12Z, carrier=Carrier, average_session_length=664, device_brand=google, customer_user_id=null, opt_in=true, source_app_store=googleplay, total_ilrd_revenue_usd=0.0}
+10-01 21:55:05.776 D/HttpConnection(17352): Tenjin::connect response: {"code":200}
+10-01 21:55:05.776 D/HttpConnection(17352): --------------------
+10-01 21:55:05.915 D/HttpConnection(17352): Tenjin request URL: https://track.tenjin.com/v0/ad_impressions
+10-01 21:55:05.915 D/HttpConnection(17352): Tenjin::connect params: {device_product=sdk_gphone64_arm64, country=US, app_version=1.0.5, precision=BID, device_abi_list=arm64-v8a, language=en, ad_revenue_mediation=custom, device_hardware=ranchu, creative_id=demo_creative, ad_unit_id=demo_ad_unit_id, screen_height=2400, app_version_code=8, retry_enabled=true, ad_user_data=false, last_session_length=1371, ad_format=banner, screen_width=1080, iap_transaction_count=60, network_placement=demo_network_placement, device_cpu_count=1, advertising_id=11111111-2222-3333-4444-555555555555, network_name=mintegral, ad_id_local=false, mediation_country=US, revenue_decimal=0.001, sent_at=1790909705677, build_id=BUILD.000, bundle_id=com.example.sample, session_count=10, total_session_time=6653, placement=demo_placement, device=emu64a, current_session_length=3341, device_flags=adb, ad_personalization=true, device_model=sdk_gphone64_arm64, device_memory=2070859776, timezone=UTC, device_build_tags=release-keys, locale=en_US, platform=android, device_manufacturer=Google, analytics_installation_id=aaaabbbbccccddddeeeeffff00001111, initialized_at=1790909702309, sdk_version=1.23.0, currency=USD, developer_device_id_scope=app, device_screen_density=420, event=, os_version_release=16, developer_device_id=99999999-8888-7777-6666-555555555555, connection_type=wifi, device_sensor_count=18, iab_tcf=0011010000, os_version=36, first_session_date=2026-06-03T17:45:33Z, sandbox=true, session_id=00000000-0000-0000-0000-000000000001, auction_id=demo_auction_id, limit_ad_tracking=false, last_session_date=2026-06-24T16:38:12Z, carrier=Carrier, average_session_length=665, device_brand=google, customer_user_id=null, opt_in=true, source_app_store=googleplay, total_ilrd_revenue_usd=0.0}
+10-01 21:55:05.915 D/HttpConnection(17352): Tenjin::connect response: {"code":200}
+10-01 21:55:05.915 D/HttpConnection(17352): --------------------
+10-01 21:55:05.932 D/HttpConnection(17352): Tenjin request URL: https://track.tenjin.com/v0/purchase
+10-01 21:55:05.932 D/HttpConnection(17352): Tenjin::connect params: {device_product=sdk_gphone64_arm64, country=US, app_version=1.0.5, device_abi_list=arm64-v8a, language=en, device_hardware=ranchu, screen_height=2400, app_version_code=8, retry_enabled=true, price=1.9900000095367432, product_id=coins_small, ad_user_data=false, last_session_length=1371, screen_width=1080, iap_transaction_count=60, device_cpu_count=1, advertising_id=11111111-2222-3333-4444-555555555555, ad_id_local=false, sent_at=1790909705677, build_id=BUILD.000, bundle_id=com.example.sample, session_count=10, total_session_time=6652, receipt=RECEIPT, device=emu64a, current_session_length=3341, device_flags=adb, ad_personalization=true, device_model=sdk_gphone64_arm64, device_memory=2070859776, signature=SIGNATURE, timezone=UTC, device_build_tags=release-keys, locale=en_US, platform=android, device_manufacturer=Google, analytics_installation_id=aaaabbbbccccddddeeeeffff00001111, initialized_at=1790909702309, sdk_version=1.23.0, currency=USD, developer_device_id_scope=app, device_screen_density=420, event=, os_version_release=16, developer_device_id=99999999-8888-7777-6666-555555555555, quantity=1, connection_type=wifi, device_sensor_count=18, iab_tcf=0011010000, os_version=36, first_session_date=2026-06-03T17:45:33Z, sandbox=true, session_id=00000000-0000-0000-0000-000000000001, limit_ad_tracking=false, last_session_date=2026-06-24T16:38:12Z, carrier=Carrier, average_session_length=665, device_brand=google, customer_user_id=null, opt_in=true, source_app_store=googleplay, total_ilrd_revenue_usd=0.0}
+10-01 21:55:05.932 D/HttpConnection(17352): Tenjin::connect response: {"code":200}
+10-01 21:55:05.932 D/HttpConnection(17352): --------------------
+10-01 21:55:05.962 D/HttpConnection(17352): Tenjin request URL: https://track.tenjin.com/v0/purchase
+10-01 21:55:05.962 D/HttpConnection(17352): Tenjin::connect params: {device_product=sdk_gphone64_arm64, country=US, app_version=1.0.5, device_abi_list=arm64-v8a, language=en, device_hardware=ranchu, screen_height=2400, app_version_code=8, retry_enabled=true, price=2.99, product_id=gold_medal, ad_user_data=false, last_session_length=1371, screen_width=1080, iap_transaction_count=60, device_cpu_count=1, advertising_id=11111111-2222-3333-4444-555555555555, receipt_id=RECEIPT_ID, ad_id_local=false, sent_at=1790909705677, build_id=BUILD.000, user_id=STORE_USER_ID, bundle_id=com.example.sample, session_count=10, total_session_time=6653, receipt=RECEIPT, device=emu64a, current_session_length=3341, device_flags=adb, ad_personalization=true, device_model=sdk_gphone64_arm64, device_memory=2070859776, timezone=UTC, device_build_tags=release-keys, locale=en_US, platform=android, device_manufacturer=Google, analytics_installation_id=aaaabbbbccccddddeeeeffff00001111, initialized_at=1790909702309, sdk_version=1.23.0, currency=USD, developer_device_id_scope=app, device_screen_density=420, event=, os_version_release=16, developer_device_id=99999999-8888-7777-6666-555555555555, quantity=1, connection_type=wifi, device_sensor_count=18, iab_tcf=0011010000, os_version=36, first_session_date=2026-06-03T17:45:33Z, sandbox=true, session_id=00000000-0000-0000-0000-000000000001, limit_ad_tracking=false, last_session_date=2026-06-24T16:38:12Z, carrier=Carrier, average_session_length=665, device_brand=google, customer_user_id=null, opt_in=true, source_app_store=googleplay, total_ilrd_revenue_usd=0.0}
+10-01 21:55:05.964 D/HttpConnection(17352): Tenjin::connect response: {"code":200}
+10-01 21:55:05.964 D/HttpConnection(17352): --------------------
