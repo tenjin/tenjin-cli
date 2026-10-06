@@ -1,0 +1,3 @@
+# Golden files, fixtures and scripts are compared or run byte for byte, so
+# they keep LF line endings on every checkout, Windows included.
+* text=auto eol=lf

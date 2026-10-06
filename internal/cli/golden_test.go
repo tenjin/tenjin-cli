@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
@@ -17,6 +18,9 @@ var update = flag.Bool("update", false, "rewrite the golden files with the curre
 // to accept a deliberate change.
 func golden(t *testing.T, name, got, root string) {
 	t.Helper()
+	// In JSON a Windows path has its backslashes escaped.
+	escaped, _ := json.Marshal(root)
+	got = strings.ReplaceAll(got, strings.Trim(string(escaped), `"`), "<root>")
 	got = strings.ReplaceAll(got, root, "<root>")
 	file := filepath.Join("testdata", name)
 	if *update {
