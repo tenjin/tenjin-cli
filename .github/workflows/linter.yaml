@@ -1,0 +1,31 @@
+name: Lint
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**/*.go'
+      - go.mod
+      - go.sum
+      - .golangci.yml
+      - Makefile
+      - .github/workflows/linter.yaml
+jobs:
+  linter:
+    name: Linter
+    concurrency: ${{ github.ref }}/linter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Format check
+        run: make fmt-check
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.13.0
+          args: --timeout=5m

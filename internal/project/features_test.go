@@ -1,0 +1,116 @@
+package project_test
+
+import (
+	"sort"
+	"strings"
+	"testing"
+
+	"github.com/tenjin/tenjin-cli/internal/project"
+	"github.com/tenjin/tenjin-cli/internal/testproject"
+)
+
+// suggested lists the suggested features, each with its evidence.
+func suggested(p *project.Project) string {
+	var out []string
+	for _, f := range p.Features {
+		if !f.Suggested {
+			continue
+		}
+		var why []string
+		for _, e := range f.Evidence {
+			why = append(why, e.What)
+		}
+		sort.Strings(why)
+		out = append(out, f.ID+"("+strings.Join(why, "; ")+")")
+	}
+	return strings.Join(out, " ")
+}
+
+func offered(p *project.Project) string {
+	var out []string
+	for _, f := range p.Features {
+		out = append(out, f.ID)
+	}
+	return strings.Join(out, " ")
+}
+
+func TestAProjectThatShowsNoFeature(t *testing.T) {
+	p := detect(t, testproject.AndroidNative())
+	if got := suggested(p); got != "opens()" {
+		t.Errorf("suggested = %s", got)
+	}
+	// SKAN conversion values are for iOS only.
+	if got := offered(p); got != "opens purchases subscriptions ad_revenue consent deep_links custom_events user_id" {
+		t.Errorf("offered = %s", got)
+	}
+	if f := p.Feature(project.FeatureOpens); f == nil || !f.Required {
+		t.Errorf("opens = %+v", f)
+	}
+}
+
+func TestAndroidFeatureSignals(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	const manifest = "app/src/main/AndroidManifest.xml"
+	p := detect(t, base.With(testproject.Files{
+		build: strings.Replace(base[build], "dependencies {", `dependencies {
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
+    implementation("com.applovin:applovin-sdk:13.0.1")
+    implementation("com.google.android.ump:user-messaging-platform:3.1.0")`, 1),
+		manifest: strings.Replace(base[manifest], "</application>", `    <activity android:name=".LinkActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <data android:scheme="sample" />
+            </intent-filter>
+        </activity>
+    </application>`, 1),
+		"app/src/main/java/com/example/sample/Store.kt": "package com.example.sample\n\nval type = BillingClient.ProductType.SUBS\n",
+	}))
+	want := "opens() purchases(Google Play Billing) subscriptions(subscription products) ad_revenue(AppLovin MAX) consent(Google's consent SDK (UMP)) deep_links(an intent filter that opens links)"
+	if got := suggested(p); got != want {
+		t.Errorf("suggested:\n%s\nwant:\n%s", got, want)
+	}
+	if e := p.Feature(project.FeatureAdRevenue).Evidence[0]; e.File != build {
+		t.Errorf("evidence = %+v", e)
+	}
+}
+
+func TestIOSFeatureSignals(t *testing.T) {
+	base := testproject.IOSNative()
+	p := detect(t, base.With(testproject.Files{
+		"Sample/Info.plist": strings.Replace(base["Sample/Info.plist"], "</dict>\n</plist>", `	<key>CFBundleURLTypes</key>
+	<array><dict><key>CFBundleURLSchemes</key><array><string>sample</string></array></dict></array>
+</dict>
+</plist>`, 1),
+		"Sample/Store.swift": "import StoreKit\n\nfunc load() async throws {\n    let products = try await Product.products(for: [\"pro\"])\n    _ = products.first?.subscription?.subscriptionPeriod\n}\n",
+	}))
+	want := "opens() purchases(StoreKit purchases) subscriptions(subscription products) deep_links(a URL scheme)"
+	if got := suggested(p); got != want {
+		t.Errorf("suggested:\n%s\nwant:\n%s", got, want)
+	}
+	// Offered on iOS, never chosen for the developer.
+	if f := p.Feature(project.FeatureSKAN); f == nil || f.Suggested {
+		t.Errorf("skan = %+v", f)
+	}
+}
+
+func TestRevenueCatSuggestsSubscriptions(t *testing.T) {
+	base := testproject.Flutter()
+	p := detect(t, base.With(testproject.Files{
+		"pubspec.yaml": strings.Replace(base["pubspec.yaml"], "dependencies:\n", "dependencies:\n  purchases_flutter: ^8.0.0\n", 1),
+	}))
+	if got := suggested(p); !strings.Contains(got, "purchases(RevenueCat)") || !strings.Contains(got, "subscriptions(RevenueCat, used mostly for subscriptions)") {
+		t.Errorf("suggested = %s", got)
+	}
+}
+
+// Words in comments are not signals.
+func TestCommentsAreNotSignals(t *testing.T) {
+	base := testproject.AndroidNative()
+	p := detect(t, base.With(testproject.Files{
+		"app/src/main/java/com/example/sample/Later.kt": "package com.example.sample\n\n// TODO: BillingClient for subscriptions, ProductType.SUBS\n",
+	}))
+	if got := suggested(p); got != "opens()" {
+		t.Errorf("suggested = %s", got)
+	}
+}

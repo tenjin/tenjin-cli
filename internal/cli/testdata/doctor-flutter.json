@@ -1,0 +1,197 @@
+{
+  "project": {
+    "root": "<root>",
+    "framework": "flutter",
+    "supported": true,
+    "targets": [
+      {
+        "platform": "android",
+        "bundle_id": "com.example.sample",
+        "bundle_id_source": "android/app/build.gradle.kts",
+        "builds": [
+          {
+            "id": "android",
+            "bundle_id": "com.example.sample",
+            "tenjin_platform": "android",
+            "sdk_key_placeholder": "__TENJIN_ANDROID_SDK_KEY__"
+          }
+        ],
+        "android": {
+          "module_dir": "android/app",
+          "build_file": "android/app/build.gradle.kts",
+          "dsl": "kotlin",
+          "manifest": "android/app/src/main/AndroidManifest.xml",
+          "launcher_activity": "com.example.sample.MainActivity",
+          "minify": false,
+          "flavors": false
+        }
+      },
+      {
+        "platform": "ios",
+        "bundle_id": "com.example.sample",
+        "bundle_id_source": "ios/Runner.xcodeproj/project.pbxproj",
+        "builds": [
+          {
+            "id": "ios",
+            "bundle_id": "com.example.sample",
+            "tenjin_platform": "ios",
+            "sdk_key_placeholder": "__TENJIN_IOS_SDK_KEY__"
+          }
+        ],
+        "ios": {
+          "xcodeproj": "ios/Runner.xcodeproj",
+          "info_plist": "ios/Runner/Info.plist",
+          "generated_info_plist": false,
+          "swift_packages": false
+        }
+      }
+    ],
+    "tenjin": [
+      {
+        "package": "tenjin_plugin",
+        "version": "1.5.0",
+        "source": "pubspec.yaml"
+      }
+    ],
+    "ad_sdks": [],
+    "tracking_prompt": {
+      "file": "lib/main.dart",
+      "line": 9
+    },
+    "features": [
+      {
+        "id": "opens",
+        "name": "App opens and attribution",
+        "required": true,
+        "suggested": true
+      },
+      {
+        "id": "purchases",
+        "name": "In-app purchases",
+        "suggested": false
+      },
+      {
+        "id": "subscriptions",
+        "name": "Subscriptions",
+        "suggested": false
+      },
+      {
+        "id": "ad_revenue",
+        "name": "Ad revenue (ILRD)",
+        "suggested": false
+      },
+      {
+        "id": "consent",
+        "name": "Consent (GDPR)",
+        "suggested": false
+      },
+      {
+        "id": "deep_links",
+        "name": "Deep links",
+        "suggested": false
+      },
+      {
+        "id": "skan",
+        "name": "SKAdNetwork conversion values",
+        "suggested": false
+      },
+      {
+        "id": "custom_events",
+        "name": "Custom events",
+        "suggested": false
+      },
+      {
+        "id": "user_id",
+        "name": "Customer user ID",
+        "suggested": false
+      }
+    ],
+    "notes": []
+  },
+  "findings": [
+    {
+      "id": "sdk.dependency",
+      "severity": "pass",
+      "title": "Tenjin SDK is declared: tenjin_plugin 1.5.0",
+      "file": "pubspec.yaml"
+    },
+    {
+      "id": "sdk.init",
+      "severity": "pass",
+      "title": "The SDK is initialised",
+      "file": "lib/main.dart",
+      "line": 7
+    },
+    {
+      "id": "sdk.connect",
+      "severity": "pass",
+      "title": "TenjinSDK.instance.connect() is called",
+      "file": "lib/main.dart",
+      "line": 11
+    },
+    {
+      "id": "android.permission.internet",
+      "severity": "pass",
+      "platform": "android",
+      "title": "INTERNET permission is declared",
+      "file": "android/app/src/main/AndroidManifest.xml"
+    },
+    {
+      "id": "android.permission.network_state",
+      "severity": "pass",
+      "platform": "android",
+      "title": "ACCESS_NETWORK_STATE permission is declared",
+      "file": "android/app/src/main/AndroidManifest.xml"
+    },
+    {
+      "id": "android.permission.ad_id",
+      "severity": "pass",
+      "platform": "android",
+      "title": "AD_ID permission is declared",
+      "file": "android/app/src/main/AndroidManifest.xml"
+    },
+    {
+      "id": "key.valid",
+      "severity": "pass",
+      "platform": "android",
+      "title": "Tenjin accepts the SDK key …MNBV for com.example.sample",
+      "file": "lib/main.dart",
+      "line": 7
+    },
+    {
+      "id": "ios.plist.att_description",
+      "severity": "pass",
+      "platform": "ios",
+      "title": "The tracking prompt text (NSUserTrackingUsageDescription) is set",
+      "file": "ios/Runner/Info.plist"
+    },
+    {
+      "id": "ios.plist.skan_endpoint",
+      "severity": "pass",
+      "platform": "ios",
+      "title": "SKAdNetwork postback copies go to Tenjin",
+      "file": "ios/Runner/Info.plist"
+    },
+    {
+      "id": "ios.att_request",
+      "severity": "pass",
+      "platform": "ios",
+      "title": "The app asks for tracking permission",
+      "file": "lib/main.dart",
+      "line": 9
+    },
+    {
+      "id": "key.valid",
+      "severity": "pass",
+      "platform": "ios",
+      "title": "Tenjin accepts the SDK key …MNBV for com.example.sample",
+      "file": "lib/main.dart",
+      "line": 7
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 0,
+    "passed": 11
+  }
+}

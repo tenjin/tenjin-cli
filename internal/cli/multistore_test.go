@@ -1,0 +1,316 @@
+package cli
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/tenjin/tenjin-cli/internal/testproject"
+)
+
+const flavorBuild = "app/build.gradle.kts"
+
+// multiStore is a signed-in harness whose fake Tenjin knows each store's
+// key as its own app's only, and the multi-store project.
+func multiStore(t *testing.T, files testproject.Files) (*harness, string) {
+	t.Helper()
+	h := newHarness(t)
+	h.fake.keyApps[testproject.PlayKey] = "com.example.sample|android"
+	h.fake.keyApps[testproject.AmazonKey] = "com.example.sample|amazon"
+	return h, testproject.Write(t, files)
+}
+
+func TestProjectDetectListsEachStoresApp(t *testing.T) {
+	h, dir := multiStore(t, testproject.AndroidMultiStore())
+	_, stdout, _ := h.run("project", "detect", dir)
+	lacks(t, stdout, "Apps in Tenjin", "android:amazon", "Amazon Appstore", "__TENJIN_ANDROID_SDK_KEY_AMAZON__")
+
+	_, stdout, _ = h.run("project", "detect", dir, "--json")
+	var got struct {
+		Targets []struct {
+			Builds []struct {
+				ID             string `json:"id"`
+				TenjinPlatform string `json:"tenjin_platform"`
+				Placeholder    string `json:"sdk_key_placeholder"`
+			}
+		}
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil || len(got.Targets) != 1 || len(got.Targets[0].Builds) != 2 {
+		t.Fatalf("%v\n%s", err, stdout)
+	}
+	if b := got.Targets[0].Builds[1]; b.ID != "android:amazon" || b.TenjinPlatform != "amazon" || b.Placeholder != "__TENJIN_ANDROID_SDK_KEY_AMAZON__" {
+		t.Errorf("amazon build = %+v", b)
+	}
+}
+
+func TestDoctorChecksEachStoresKeyAgainstItsOwnApp(t *testing.T) {
+	h, dir := multiStore(t, testproject.AndroidMultiStore())
+	code, stdout, _ := h.run("doctor", dir)
+	if code != 0 {
+		t.Fatalf("exit = %d\n%s", code, stdout)
+	}
+	lacks(t, stdout,
+		"Tenjin accepts the SDK key …PLAY for com.example.sample (the main build, Google Play)",
+		"Tenjin accepts the SDK key …AMZN for com.example.sample (the amazon build, Amazon Appstore)",
+	)
+	if strings.Contains(stdout, testproject.PlayKey) || strings.Contains(stdout, testproject.AmazonKey) {
+		t.Error("a whole key was printed")
+	}
+}
+
+// The mistake this is all for: the Google Play key copied into the Amazon
+// build, whose events Tenjin then refuses.
+func TestDoctorCatchesOneStoresKeyInAnothersBuild(t *testing.T) {
+	base := testproject.AndroidMultiStore()
+	h, dir := multiStore(t, base.With(testproject.Files{
+		flavorBuild: strings.Replace(base[flavorBuild], testproject.AmazonKey, testproject.PlayKey, 1),
+	}))
+	code, stdout, _ := h.run("doctor", dir, "--json")
+	if code != 9 {
+		t.Fatalf("exit = %d, want 9", code)
+	}
+	var report struct {
+		Findings []struct{ ID, Severity, Build, Title string }
+	}
+	_ = json.Unmarshal([]byte(stdout), &report)
+	found := false
+	for _, f := range report.Findings {
+		if f.ID == "key.rejected" && f.Build == "android:amazon" && f.Severity == "error" &&
+			strings.Contains(f.Title, "No SDK key in the project is accepted for com.example.sample (the amazon build, Amazon Appstore)") {
+			found = true
+		}
+		if f.ID == "key.valid" && f.Build == "android:amazon" {
+			t.Errorf("the Google Play key passed for the Amazon build: %+v", f)
+		}
+	}
+	if !found {
+		t.Errorf("findings = %+v", report.Findings)
+	}
+}
+
+func TestDoctorCanBeLimitedToBuilds(t *testing.T) {
+	h, dir := multiStore(t, testproject.AndroidMultiStore())
+	_, stdout, _ := h.run("doctor", dir, "--build", "android:amazon")
+	if strings.Contains(stdout, "…PLAY") || !strings.Contains(stdout, "…AMZN") {
+		t.Errorf("stdout:\n%s", stdout)
+	}
+	code, _, stderr := h.run("doctor", dir, "--build", "android:galaxy")
+	if code != 2 || !strings.Contains(stderr, "android, android:amazon") {
+		t.Errorf("exit = %d, stderr = %q", code, stderr)
+	}
+}
+
+// placeholderStores is the multi-store project as a coding agent leaves it:
+// a placeholder in each flavor.
+func placeholderStores() testproject.Files {
+	base := testproject.AndroidMultiStore()
+	build := strings.Replace(base[flavorBuild], testproject.PlayKey, "__TENJIN_ANDROID_SDK_KEY__", 1)
+	build = strings.Replace(build, testproject.AmazonKey, "__TENJIN_ANDROID_SDK_KEY_AMAZON__", 1)
+	return base.With(testproject.Files{flavorBuild: build})
+}
+
+func TestSetupMakesAnAppAndWritesAKeyPerStore(t *testing.T) {
+	h, dir := multiStore(t, placeholderStores())
+	h.signIn()
+	code, stdout, stderr := h.run("setup", dir, "--yes",
+		"--sdk-key", "android="+testproject.PlayKey, "--sdk-key", "android:amazon="+testproject.AmazonKey)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	lacks(t, stdout,
+		"This project ships builds that are separate apps in Tenjin",
+		"this project needs 2 apps",
+		`Android, amazon (Amazon Appstore) com.example.sample: created "`,
+		"Wrote the SDK key of Android, play (Google Play) at "+flavorBuild,
+		"Wrote the SDK key of Android, amazon (Amazon Appstore) at "+flavorBuild,
+		"Nothing here would stop events reaching Tenjin",
+	)
+	platforms := map[string]bool{}
+	for _, a := range h.fake.apps {
+		platforms[a.BundleID+"|"+a.Platform+"|"+a.Name] = true
+	}
+	if !platforms["com.example.sample|android|"+filepath.Base(dir)+" (Android, Google Play)"] || !platforms["com.example.sample|amazon|"+filepath.Base(dir)+" (Android, Amazon Appstore)"] {
+		t.Errorf("apps = %+v", h.fake.apps)
+	}
+	raw, _ := os.ReadFile(filepath.Join(dir, flavorBuild))
+	if !strings.Contains(string(raw), testproject.PlayKey) || !strings.Contains(string(raw), testproject.AmazonKey) {
+		t.Errorf("build file:\n%s", raw)
+	}
+	if strings.Contains(stdout, testproject.AmazonKey) {
+		t.Error("a whole key was printed")
+	}
+}
+
+// A key given for the wrong store's app is refused before it is written.
+func TestSetupRefusesOneStoresKeyForAnother(t *testing.T) {
+	h, dir := multiStore(t, placeholderStores())
+	h.signIn()
+	code, stdout, _ := h.run("setup", dir, "--yes",
+		"--sdk-key", "android="+testproject.PlayKey, "--sdk-key", "android:amazon="+testproject.PlayKey)
+	lacks(t, stdout, "✗ Android, amazon (Amazon Appstore), key …PLAY from --sdk-key: Tenjin does not accept this key for com.example.sample")
+	raw, _ := os.ReadFile(filepath.Join(dir, flavorBuild))
+	if code != 9 || !strings.Contains(string(raw), "__TENJIN_ANDROID_SDK_KEY_AMAZON__") {
+		t.Errorf("exit = %d\n%s", code, raw)
+	}
+}
+
+func TestSetupAsksWhichBuildsShip(t *testing.T) {
+	h, dir := multiStore(t, placeholderStores())
+	h.signIn()
+	_, stdout, _ := h.typing("", "1", "y", "", "q").run("setup", dir, "--sdk-key", "android="+testproject.PlayKey)
+	lacks(t, stdout, "Which of these do you ship?", "Setting up 1 build.")
+	for _, a := range h.fake.apps {
+		if a.Platform == "amazon" {
+			t.Errorf("an app was created for a build that does not ship: %+v", a)
+		}
+	}
+	code, _, stderr := h.run("setup", dir, "--build", "android:galaxy")
+	if code != 2 || !strings.Contains(stderr, "no such build") {
+		t.Errorf("exit = %d, stderr = %q", code, stderr)
+	}
+}
+
+// The agent's task names each store's placeholder, and where it goes.
+func TestTheAgentIsToldEachStoresPlaceholder(t *testing.T) {
+	base := testproject.AndroidMultiStore()
+	build := strings.Replace(base[flavorBuild], `            buildConfigField("String", "TENJIN_SDK_KEY", "\"`+testproject.PlayKey+`\"")`+"\n", "", 1)
+	build = strings.Replace(build, `            buildConfigField("String", "TENJIN_SDK_KEY", "\"`+testproject.AmazonKey+`\"")`+"\n", "", 1)
+	// The INTERNET permission is missing too, so there is work for the agent.
+	const manifest = "app/src/main/AndroidManifest.xml"
+	withoutInternet := strings.Replace(base[manifest], `    <uses-permission android:name="android.permission.INTERNET" />`+"\n", "", 1)
+	h, dir := multiStore(t, base.With(testproject.Files{flavorBuild: build, manifest: withoutInternet}))
+	h.signIn()
+	agent := h.installAgent()
+	h.run("setup", dir, "--yes", "--agent", "claude")
+	prompt := agent.read("prompt")
+	for _, want := range []string{
+		"with 2 builds that are separate apps in Tenjin",
+		"variants amazon, bundle ID com.example.sample, Amazon Appstore: write the string __TENJIN_ANDROID_SDK_KEY_AMAZON__ exactly",
+		"variants play, bundle ID com.example.sample, Google Play: write the string __TENJIN_ANDROID_SDK_KEY__ exactly",
+		"buildConfigField",
+		"two builds never share a placeholder",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the task lacks %q:\n%s", want, prompt)
+		}
+	}
+}
+
+func TestSetKeysPerStoreFromTheEnvironment(t *testing.T) {
+	h, dir := multiStore(t, placeholderStores())
+	h.vars["TENJIN_SDK_KEY_ANDROID"] = testproject.PlayKey
+	h.vars["TENJIN_SDK_KEY_ANDROID_AMAZON"] = testproject.AmazonKey
+	code, stdout, stderr := h.run("project", "set-keys", dir)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	lacks(t, stdout, "Wrote the SDK key of Android, amazon (Amazon Appstore)")
+	code, _, stderr = h.run("project", "set-keys", dir, "--sdk-key", "android:galaxy=X")
+	if code != 2 || !strings.Contains(stderr, `no build "android:galaxy"`) {
+		t.Errorf("exit = %d, stderr = %q", code, stderr)
+	}
+}
+
+// At a terminal each build's key is asked for in turn, with its own app's
+// page, and checked against that app.
+func TestSetupAsksForEachStoresKey(t *testing.T) {
+	h, dir := multiStore(t, placeholderStores())
+	h.signIn()
+	// All builds; the Amazon key pasted for Google Play first, then the
+	// right ones.
+	code, stdout, _ := h.typing("", "", testproject.AmazonKey, testproject.PlayKey, testproject.AmazonKey).run("setup", dir, "--yes")
+	if code != 0 {
+		t.Fatalf("exit = %d\n%s", code, stdout)
+	}
+	lacks(t, stdout,
+		"Android, play (Google Play) SDK key, for com.example.sample:",
+		"Android, amazon (Amazon Appstore) SDK key, for com.example.sample:",
+		"✗   Android, play (Google Play), key …AMZN: Tenjin does not accept this key for com.example.sample",
+		"✓   Android, amazon (Amazon Appstore), key …AMZN: Tenjin accepts this key for com.example.sample",
+		"Nothing here would stop events reaching Tenjin",
+	)
+}
+
+// withBilling is the Android sample with Google Play Billing, so purchases
+// are suggested.
+func withBilling() testproject.Files {
+	base := testproject.AndroidNative()
+	return base.With(testproject.Files{
+		"app/build.gradle.kts": strings.Replace(base["app/build.gradle.kts"], "dependencies {", "dependencies {\n    implementation(\"com.android.billingclient:billing-ktx:7.1.1\")", 1),
+	})
+}
+
+func TestSetupAsksWhichFeatures(t *testing.T) {
+	h := newHarness(t)
+	h.fake.addApp("Sample", "com.example.sample", "android")
+	h.signIn()
+	dir := testproject.Write(t, withBilling())
+
+	// Enter: the suggested ones, and the purchases are then expected.
+	code, stdout, _ := h.typing("", "q").run("setup", dir)
+	lacks(t, stdout,
+		"Tenjin features this integration can include:",
+		"App opens and attribution  always included",
+		"2) In-app purchases  (Google Play Billing in app/build.gradle.kts)",
+		"In-app purchases: chosen for the integration, but not sent to Tenjin",
+	)
+	if code != 0 {
+		t.Errorf("exit = %d, want 0: a missing feature is a warning", code)
+	}
+
+	// 0: app opens only, and the purchases are only suggested.
+	_, stdout, _ = h.typing("0", "q").run("setup", dir)
+	lacks(t, stdout, "In-app purchases: could be sent to Tenjin")
+
+	// An answer that is not a number is asked again.
+	_, stdout, _ = h.typing("maybe", "", "q").run("setup", dir)
+	lacks(t, stdout, "Give numbers from the list")
+}
+
+func TestFeaturesFlag(t *testing.T) {
+	h := newHarness(t)
+	h.fake.addApp("Sample", "com.example.sample", "android")
+	h.signIn()
+	dir := testproject.Write(t, withBilling())
+	code, _, stderr := h.run("setup", dir, "--features", "iap")
+	if code != 2 || !strings.Contains(stderr, "purchases, subscriptions") {
+		t.Errorf("exit = %d, stderr = %q", code, stderr)
+	}
+	_, stdout, _ := h.run("doctor", dir, "--features", "purchases")
+	lacks(t, stdout, "In-app purchases: chosen for the integration, but not sent to Tenjin")
+	_, stdout, _ = h.run("doctor", dir, "--features", "none")
+	lacks(t, stdout, "In-app purchases: could be sent to Tenjin")
+	_, stdout, _ = h.run("project", "detect", dir)
+	lacks(t, stdout, "Suggested features", "Google Play Billing in app/build.gradle.kts")
+}
+
+// The agent is told which features to integrate, and where the project
+// already does what each measures.
+func TestTheAgentIsToldTheChosenFeatures(t *testing.T) {
+	h := newHarness(t)
+	h.fake.addApp("Sample", "com.example.sample", "android")
+	h.signIn()
+	base := withBilling()
+	const manifest = "app/src/main/AndroidManifest.xml"
+	dir := testproject.Write(t, base.With(testproject.Files{
+		manifest: strings.Replace(base[manifest], `    <uses-permission android:name="android.permission.INTERNET" />`+"\n", "", 1),
+	}))
+	agent := h.installAgent()
+	h.run("setup", dir, "--agent", "claude", "--features", "purchases,custom_events")
+	prompt := agent.read("prompt")
+	for _, want := range []string{
+		"Features to integrate, as the developer chose them:",
+		"- App opens and attribution",
+		"- In-app purchases: the project has Google Play Billing in app/build.gradle.kts; send it to Tenjin where that code runs",
+		"- Custom events",
+		"Integrate these and no others.",
+		"tenjin sdk guide android",
+		"In-app purchases: chosen for the integration, but not sent to Tenjin",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the task lacks %q:\n%s", want, prompt)
+		}
+	}
+}

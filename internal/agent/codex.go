@@ -1,0 +1,132 @@
+package agent
+
+import (
+	"bufio"
+	"encoding/json"
+	"errors"
+	"io"
+	"regexp"
+	"strings"
+)
+
+// Codex has no list of allowed commands. It is kept to the task by its own
+// sandbox instead: files outside the project cannot be written, and there is
+// no network. So it checks its work with the doctor's offline form; the key
+// check against Tenjin is made afterwards, outside the sandbox.
+var codex = driver{
+	id: "codex", name: "Codex", binary: "codex",
+	limits: "it runs in Codex's sandbox: it can change files in this project only, and has no network access; it is told not to commit",
+	doctor: "tenjin doctor --offline --json .",
+	args: func(task Task, _ string) []string {
+		return []string{
+			"exec", "--json",
+			"--sandbox", "workspace-write",
+			// A project need not be a Git repository to be integrated.
+			"--skip-git-repo-check",
+			// The developer's connectors have no part in this task. The rest
+			// of their Codex configuration, such as the model, is kept.
+			"-c", "mcp_servers={}",
+			"-C", task.Dir,
+			// The task is read from standard input.
+			"-",
+		}
+	},
+	read:   readCodexEvents,
+	resume: func(sessionID string) string { return "codex resume " + sessionID },
+	inside: []string{"CODEX_THREAD_ID", "CODEX_SANDBOX"},
+}
+
+// codexEvent is the part of `codex exec --json` output this package reads.
+type codexEvent struct {
+	Type     string `json:"type"`
+	ThreadID string `json:"thread_id"`
+	Message  string `json:"message"`
+	Error    struct {
+		Message string `json:"message"`
+	} `json:"error"`
+	Item struct {
+		Type    string `json:"type"`
+		Text    string `json:"text"`
+		Command string `json:"command"`
+		Changes []struct {
+			Path string `json:"path"`
+		} `json:"changes"`
+	} `json:"item"`
+}
+
+// Codex runs every command through a login shell; the wrapper says nothing.
+var shellWrapper = regexp.MustCompile(`^\S*/(?:zsh|bash|sh) -lc (.*)$`)
+
+// lookingAround matches commands that only read: Codex has no read tool, so
+// it inspects files with these, many times over. They are left out of the
+// progress, as searches are for Claude Code.
+var lookingAround = regexp.MustCompile(`^(?:cat|sed -n|nl|head|tail|ls|find|rg|grep|wc|pwd|tree|file|stat)\b`)
+
+// readCodexEvents follows Codex's output, one JSON object per line. finished
+// is true once the turn has ended, well or badly.
+func readCodexEvents(r io.Reader, dir string, progress func(Action)) (result Result, finished bool, err error) {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 1<<20), 16<<20)
+	for scanner.Scan() {
+		var e codexEvent
+		if json.Unmarshal(scanner.Bytes(), &e) != nil {
+			continue
+		}
+		switch e.Type {
+		case "thread.started":
+			result.SessionID = e.ThreadID
+		case "item.started":
+			if progress == nil {
+				continue
+			}
+			switch e.Item.Type {
+			case "file_change":
+				for _, change := range e.Item.Changes {
+					progress(Action{Verb: "edit", Detail: relative(change.Path, dir)})
+				}
+			case "command_execution":
+				if command := unwrapShell(e.Item.Command); command != "" && !lookingAround.MatchString(command) {
+					progress(Action{Verb: "run", Detail: firstLine(command)})
+				}
+			}
+		case "item.completed":
+			// The last thing the agent says is its report.
+			if e.Item.Type == "agent_message" {
+				result.Summary = strings.TrimSpace(e.Item.Text)
+			}
+		case "turn.completed":
+			finished = true
+		case "turn.failed", "error":
+			return result, true, errors.New(codexFailure(firstNonEmpty(e.Error.Message, e.Message)))
+		}
+	}
+	return result, finished, scanner.Err()
+}
+
+// unwrapShell returns the command Codex was asked to run, without the shell
+// it runs it through.
+func unwrapShell(command string) string {
+	m := shellWrapper.FindStringSubmatch(command)
+	if m == nil {
+		return command
+	}
+	inner := m[1]
+	if len(inner) >= 2 && (inner[0] == '\'' || inner[0] == '"') && inner[len(inner)-1] == inner[0] {
+		inner = inner[1 : len(inner)-1]
+	}
+	return inner
+}
+
+// codexFailure pulls the sentence out of a failure, which often arrives as
+// the service's JSON error inside a string.
+func codexFailure(message string) string {
+	var body struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if json.Unmarshal([]byte(message), &body) == nil && body.Error.Message != "" {
+		return body.Error.Message
+	}
+	return firstNonEmpty(message, "Codex reported an error")
+}

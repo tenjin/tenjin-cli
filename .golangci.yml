@@ -1,0 +1,9 @@
+version: "2"
+linters:
+  exclusions:
+    rules:
+      # Tests routinely ignore errors from buffer writes and cleanup Close
+      # calls; errcheck stays fully active on non-test code.
+      - path: _test\.go
+        linters:
+          - errcheck

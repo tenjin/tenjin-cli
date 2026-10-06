@@ -1,0 +1,41 @@
+name: Bug report
+description: Something the CLI does wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not paste SDK keys, access tokens or other credentials. The CLI masks keys in its own output; keep them masked here.
+        For a security problem, see SECURITY.md instead of opening an issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The command's output. `--verbose` adds each request it made, without credentials.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The output of `tenjin version`.
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS, Linux, Windows]
+    validations:
+      required: true
+  - type: dropdown
+    id: framework
+    attributes:
+      label: Project type
+      options: [Native Android, Native iOS, Flutter, React Native, Capacitor, Unity, Unreal, Other]

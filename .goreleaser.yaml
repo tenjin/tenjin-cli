@@ -1,0 +1,78 @@
+# Release builds, archives and the Homebrew cask. A release is made by pushing
+# a tag such as v0.1.0 (see .github/workflows/release.yaml). To try the whole
+# pipeline locally without publishing anything: make release-snapshot
+version: 2
+
+project_name: tenjin
+
+before:
+  hooks:
+    - ./scripts/completions.sh
+
+builds:
+  - id: tenjin
+    main: ./cmd/tenjin
+    binary: tenjin
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/tenjin/tenjin-cli/internal/buildinfo.version={{ .Version }}
+      - -X github.com/tenjin/tenjin-cli/internal/buildinfo.commit={{ .ShortCommit }}
+      - -X github.com/tenjin/tenjin-cli/internal/buildinfo.date={{ .CommitDate }}
+    # Builds of one commit are byte for byte the same, wherever they are made.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: tenjin
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # install.sh builds this name too; change both together.
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE*
+      - completions/*
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  use: git
+  sort: asc
+
+release:
+  github:
+    owner: tenjin
+    name: tenjin-cli
+
+homebrew_casks:
+  - name: tenjin
+    repository:
+      owner: tenjin
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/tenjin/tenjin-cli
+    description: Integrate and verify the Tenjin SDK from your terminal
+    completions:
+      bash: completions/tenjin.bash
+      zsh: completions/tenjin.zsh
+      fish: completions/tenjin.fish
+    # Homebrew marks what a cask downloads as quarantined, and macOS then
+    # refuses to run a binary that is not notarized. Until releases are
+    # signed and notarized, the mark is removed after install.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/tenjin"]
+          end

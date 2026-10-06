@@ -1,0 +1,19 @@
+/bin/
+/dist/
+*.out
+.env
+.DS_Store
+
+# Internal research and notes. This repository is meant to become public; these
+# files describe private systems and must be reviewed before they are ever
+# committed. Remove a line here only after that review.
+/CLAUDE.local.md
+/docs/findings.md
+/docs/plan.md
+/docs/spike-notes.md
+/docs/how-it-works.md
+/*.pdf
+
+# Local demo material for presentations; refers to internal apps.
+/demo/
+/completions/

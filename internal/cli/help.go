@@ -1,0 +1,77 @@
+package cli
+
+import (
+	"bytes"
+	"io"
+	"regexp"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/tenjin/tenjin-cli/internal/render"
+)
+
+// tagline goes under the wordmark.
+const tagline = "Integrate and verify the Tenjin SDK from your terminal"
+
+var (
+	helpEntry = regexp.MustCompile(`^  (\S+)(\s{2,}\S.*)$`)
+	helpFlag  = regexp.MustCompile(`^(\s+)((?:-\w, )?--[\w-]+)`)
+)
+
+// styleHelp makes help for root and every command under it coloured on a
+// terminal: section titles, command names and flags. The text is cobra's
+// own, untouched, so piped help is exactly what it was.
+func styleHelp(root *cobra.Command) {
+	plain := root.HelpFunc()
+	root.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		out := cmd.OutOrStdout()
+		style := render.NewStyler(out)
+		if !style.Enabled() {
+			plain(cmd, args)
+			return
+		}
+		var text bytes.Buffer
+		cmd.SetOut(&text)
+		plain(cmd, args)
+		cmd.SetOut(out)
+
+		if banner := render.Banner(out, tagline); banner != "" && !cmd.HasParent() {
+			_, _ = io.WriteString(out, banner+"\n")
+		}
+		_, _ = io.WriteString(out, colourHelp(text.String(), style, cmd))
+	})
+}
+
+// colourHelp styles cobra's help text line by line.
+func colourHelp(text string, style render.Styler, cmd *cobra.Command) string {
+	// Titles that list commands; under any other title an indented first
+	// word is not a command name.
+	commandTitles := map[string]bool{"Available Commands:": true, "Additional Commands:": true}
+	for _, g := range cmd.Groups() {
+		commandTitles[g.Title] = true
+	}
+	titles := map[string]bool{"Usage:": true, "Aliases:": true, "Examples:": true, "Flags:": true, "Global Flags:": true}
+
+	lines := strings.Split(text, "\n")
+	section := ""
+	for i, line := range lines {
+		switch {
+		case titles[line] || commandTitles[line]:
+			section = line
+			lines[i] = style.Heading(line)
+		case commandTitles[section]:
+			if m := helpEntry.FindStringSubmatch(line); m != nil {
+				lines[i] = "  " + style.Accent(m[1]) + m[2]
+			}
+		case strings.HasSuffix(section, "Flags:"):
+			if m := helpFlag.FindStringSubmatch(line); m != nil {
+				lines[i] = m[1] + style.Accent(m[2]) + line[len(m[0]):]
+			}
+		}
+		if strings.HasPrefix(line, `Use "`) {
+			lines[i] = style.Dim(line)
+		}
+	}
+	return strings.Join(lines, "\n")
+}

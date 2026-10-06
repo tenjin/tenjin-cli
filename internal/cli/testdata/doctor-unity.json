@@ -1,0 +1,169 @@
+{
+  "project": {
+    "root": "<root>",
+    "framework": "unity",
+    "supported": true,
+    "targets": [
+      {
+        "platform": "android",
+        "bundle_id": "com.example.sample",
+        "bundle_id_source": "ProjectSettings/ProjectSettings.asset",
+        "builds": [
+          {
+            "id": "android",
+            "bundle_id": "com.example.sample",
+            "tenjin_platform": "android",
+            "sdk_key_placeholder": "__TENJIN_ANDROID_SDK_KEY__"
+          }
+        ]
+      },
+      {
+        "platform": "ios",
+        "bundle_id": "com.example.sample",
+        "bundle_id_source": "ProjectSettings/ProjectSettings.asset",
+        "builds": [
+          {
+            "id": "ios",
+            "bundle_id": "com.example.sample",
+            "tenjin_platform": "ios",
+            "sdk_key_placeholder": "__TENJIN_IOS_SDK_KEY__"
+          }
+        ]
+      }
+    ],
+    "tenjin": [
+      {
+        "package": "com.tenjin.sdk",
+        "version": "1.22.1",
+        "source": "Packages/manifest.json"
+      }
+    ],
+    "ad_sdks": [],
+    "tracking_prompt": {
+      "file": "Assets/Scripts/TenjinBootstrap.cs",
+      "line": 25
+    },
+    "features": [
+      {
+        "id": "opens",
+        "name": "App opens and attribution",
+        "required": true,
+        "suggested": true
+      },
+      {
+        "id": "purchases",
+        "name": "In-app purchases",
+        "suggested": false
+      },
+      {
+        "id": "subscriptions",
+        "name": "Subscriptions",
+        "suggested": false
+      },
+      {
+        "id": "ad_revenue",
+        "name": "Ad revenue (ILRD)",
+        "suggested": false
+      },
+      {
+        "id": "consent",
+        "name": "Consent (GDPR)",
+        "suggested": false
+      },
+      {
+        "id": "deep_links",
+        "name": "Deep links",
+        "suggested": false
+      },
+      {
+        "id": "skan",
+        "name": "SKAdNetwork conversion values",
+        "suggested": false
+      },
+      {
+        "id": "custom_events",
+        "name": "Custom events",
+        "suggested": false
+      },
+      {
+        "id": "user_id",
+        "name": "Customer user ID",
+        "suggested": false
+      }
+    ],
+    "notes": []
+  },
+  "findings": [
+    {
+      "id": "sdk.dependency",
+      "severity": "pass",
+      "title": "Tenjin SDK is declared: com.tenjin.sdk 1.22.1",
+      "file": "Packages/manifest.json"
+    },
+    {
+      "id": "sdk.init",
+      "severity": "pass",
+      "title": "The SDK is initialised",
+      "file": "Assets/Scripts/TenjinBootstrap.cs",
+      "line": 22
+    },
+    {
+      "id": "sdk.connect",
+      "severity": "pass",
+      "title": "Connect() is called",
+      "file": "Assets/Scripts/TenjinBootstrap.cs",
+      "line": 27
+    },
+    {
+      "id": "unity.android_libraries",
+      "severity": "pass",
+      "platform": "android",
+      "title": "The External Dependency Manager adds Tenjin's Android libraries to the build",
+      "file": "Packages/manifest.json"
+    },
+    {
+      "id": "key.valid",
+      "severity": "pass",
+      "platform": "android",
+      "title": "Tenjin accepts the SDK key …MNBV for com.example.sample",
+      "file": "Assets/Scripts/TenjinBootstrap.cs",
+      "line": 5
+    },
+    {
+      "id": "unity.att_description",
+      "severity": "info",
+      "platform": "ios",
+      "title": "The Tenjin package writes the tracking prompt text on every iOS build",
+      "detail": "It sets NSUserTrackingUsageDescription to a generic sentence, replacing any text of your own. Apple reviews this text with the app.",
+      "fix": "To use your own wording, set it in a [PostProcessBuild] script whose callbackOrder is above 1, so that it runs after Tenjin's."
+    },
+    {
+      "id": "ios.plist.skan_endpoint",
+      "severity": "pass",
+      "platform": "ios",
+      "title": "A build script points SKAdNetwork postbacks at Tenjin",
+      "file": "Assets/Editor/TenjinPostProcess.cs"
+    },
+    {
+      "id": "ios.att_request",
+      "severity": "pass",
+      "platform": "ios",
+      "title": "The app asks for tracking permission",
+      "file": "Assets/Scripts/TenjinBootstrap.cs",
+      "line": 25
+    },
+    {
+      "id": "key.valid",
+      "severity": "pass",
+      "platform": "ios",
+      "title": "Tenjin accepts the SDK key …MNBV for com.example.sample",
+      "file": "Assets/Scripts/TenjinBootstrap.cs",
+      "line": 5
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 0,
+    "passed": 8
+  }
+}

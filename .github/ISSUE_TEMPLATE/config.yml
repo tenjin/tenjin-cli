@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Help with your Tenjin account or integration
+    url: mailto:support@tenjin.com
+    about: Tenjin support answers questions about your account, apps and SDK integration.

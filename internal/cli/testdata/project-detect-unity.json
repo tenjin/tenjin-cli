@@ -1,0 +1,94 @@
+{
+  "root": "<root>",
+  "framework": "unity",
+  "supported": true,
+  "targets": [
+    {
+      "platform": "android",
+      "bundle_id": "com.example.sample",
+      "bundle_id_source": "ProjectSettings/ProjectSettings.asset",
+      "builds": [
+        {
+          "id": "android",
+          "bundle_id": "com.example.sample",
+          "tenjin_platform": "android",
+          "sdk_key_placeholder": "__TENJIN_ANDROID_SDK_KEY__"
+        }
+      ]
+    },
+    {
+      "platform": "ios",
+      "bundle_id": "com.example.sample",
+      "bundle_id_source": "ProjectSettings/ProjectSettings.asset",
+      "builds": [
+        {
+          "id": "ios",
+          "bundle_id": "com.example.sample",
+          "tenjin_platform": "ios",
+          "sdk_key_placeholder": "__TENJIN_IOS_SDK_KEY__"
+        }
+      ]
+    }
+  ],
+  "tenjin": [
+    {
+      "package": "com.tenjin.sdk",
+      "version": "1.22.1",
+      "source": "Packages/manifest.json"
+    }
+  ],
+  "ad_sdks": [],
+  "tracking_prompt": {
+    "file": "Assets/Scripts/TenjinBootstrap.cs",
+    "line": 25
+  },
+  "features": [
+    {
+      "id": "opens",
+      "name": "App opens and attribution",
+      "required": true,
+      "suggested": true
+    },
+    {
+      "id": "purchases",
+      "name": "In-app purchases",
+      "suggested": false
+    },
+    {
+      "id": "subscriptions",
+      "name": "Subscriptions",
+      "suggested": false
+    },
+    {
+      "id": "ad_revenue",
+      "name": "Ad revenue (ILRD)",
+      "suggested": false
+    },
+    {
+      "id": "consent",
+      "name": "Consent (GDPR)",
+      "suggested": false
+    },
+    {
+      "id": "deep_links",
+      "name": "Deep links",
+      "suggested": false
+    },
+    {
+      "id": "skan",
+      "name": "SKAdNetwork conversion values",
+      "suggested": false
+    },
+    {
+      "id": "custom_events",
+      "name": "Custom events",
+      "suggested": false
+    },
+    {
+      "id": "user_id",
+      "name": "Customer user ID",
+      "suggested": false
+    }
+  ],
+  "notes": []
+}
