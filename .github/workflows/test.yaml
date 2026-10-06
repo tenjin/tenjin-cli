@@ -26,6 +26,16 @@ jobs:
           go-version-file: go.mod
       - name: Build
         run: go build ./cmd/tenjin
+      - name: Run the binary
+        # The tests call the command tree in-process; this starts the real
+        # binary, console handling included.
+        shell: bash
+        run: |
+          ./tenjin version
+          ./tenjin sdk guide android > guide.md && grep -q TenjinSDK guide.md
+          mkdir empty
+          code=0; ./tenjin project detect empty --json 2> error.json || code=$?
+          test "$code" -eq 5 && grep -q '"not_found"' error.json
       - name: Test
         if: runner.os != 'Windows'
         run: make test

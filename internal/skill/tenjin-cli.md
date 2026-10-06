@@ -86,7 +86,7 @@ When the project already holds a real key, `doctor` checks it against Tenjin by 
 
 End by telling the developer to run `tenjin setup` in the project. It writes any SDK key still missing, asking for it if Tenjin cannot serve it; then it re-runs the checks, asks them to launch the app, and reads Tenjin's answer from the device.
 
-If the keys are already in the project and the developer asks you to check a launch, run this after a debug build has been launched on a connected Android device or emulator, or on an iOS simulator:
+If the keys are already in the project and the developer asks you to check a launch, run this after a debug build has been launched on a connected Android device or emulator, or on an iOS simulator, or installed on an iPhone connected by cable:
 
 ```
 tenjin doctor --device --json
