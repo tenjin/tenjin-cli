@@ -186,21 +186,32 @@ func TestFindADB(t *testing.T) {
 		t.Errorf("on PATH: %q, %v", path, ok)
 	}
 
-	sdk := t.TempDir()
-	if err := os.MkdirAll(sdk+"/platform-tools", 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(sdk+"/platform-tools/adb", []byte("#!/bin/sh\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	env := func(name string) string {
-		if name == "ANDROID_HOME" {
-			return sdk
+	for _, c := range []struct{ goos, binary string }{{"linux", "adb"}, {"windows", "adb.exe"}} {
+		sdk := t.TempDir()
+		want := filepath.Join(sdk, "platform-tools", c.binary)
+		if err := os.MkdirAll(filepath.Dir(want), 0o755); err != nil {
+			t.Fatal(err)
 		}
-		return ""
-	}
-	if path, ok := FindADB(notOnPath, env); !ok || !strings.HasSuffix(path, "platform-tools/adb") {
-		t.Errorf("in the SDK: %q, %v", path, ok)
+		if err := os.WriteFile(want, []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		env := func(name string) string {
+			if name == "ANDROID_HOME" {
+				return sdk
+			}
+			return ""
+		}
+		if path, ok := findADB(notOnPath, env, c.goos); !ok || path != want {
+			t.Errorf("%s, in the SDK: %q, %v", c.goos, path, ok)
+		}
+		// Each looks for its own binary only.
+		other := "windows"
+		if c.goos == "windows" {
+			other = "linux"
+		}
+		if path, ok := findADB(notOnPath, env, other); ok {
+			t.Errorf("%s found %q", other, path)
+		}
 	}
 	if _, ok := FindADB(notOnPath, func(string) string { return "" }); ok {
 		t.Error("found adb where there is none")
