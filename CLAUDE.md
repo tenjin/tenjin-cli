@@ -37,7 +37,8 @@ internal/tenjinapi    API operations (apps); destined for the shared module
 internal/oauth        browser sign-in: PKCE on a loopback port, then token exchange
 internal/session      credential store (keychain, file fallback) and token refresh
 internal/config       service URLs per environment
-internal/render       table and JSON output, terminal colour
+internal/render       table and JSON output, terminal colour (a muted palette, 24-bit where the terminal says it can)
+internal/update       the once-a-day check for a newer release, told on stderr to a person at a terminal
 internal/clierr       error kinds and their exit codes
 internal/testproject  builds sample projects on disk for tests
 docs/adr              architecture decisions
@@ -47,7 +48,8 @@ docs/adr              architecture decisions
 
 - **Commands are thin.** Parse flags, call one operation, render. No HTTP in `internal/cli`.
 - **One output contract.** Every command honours `--json` / `-o`, writes only the result to stdout, and sends everything else to stderr. `setup` is the exception: it is a guided flow for people and refuses `--json`.
-- **Colour and the wordmark are for a terminal only.** Style through `render.Styler`, which is off for pipes, files and `NO_COLOR`; never write an escape code directly. Styling may add to the text, never change it: piped output must stay what it was. JSON is never styled.
+- **Colour and the wordmark are for a terminal only.** Style through `render.Styler`, which is off for pipes, files and `NO_COLOR`; never write an escape code directly. Its palette is muted mid-tones that read on light and dark backgrounds; add a colour there, not at a call site. Styling may add to the text, never change it: piped output must stay what it was. JSON is never styled.
+- **The update notice is for people.** It goes to stderr after the command, at most once a day, and never with `--json`, in CI, or when stderr is not a terminal (`TENJIN_NO_UPDATE_CHECK=1` turns it off). Its request goes through `internal/transport` like any other.
 - **Never prompt when `env.interactive` is false.** Every prompt needs a flag. Creating anything needs `--yes` or a yes at the prompt.
 - **Errors are `*clierr.Error`** with a kind that fixes the exit code. Add kinds; never renumber.
 - **The CLI does not edit the user's project**, except to write an SDK key over its own placeholder (`internal/keyfill`). `setup` may start the user's own coding agent to do it, only after a yes or `--agent`, and never from inside another agent. Each agent is confined by the strongest means it has: Claude Code by an allow-list (file edits, `tenjin doctor` and `tenjin sdk guide`), Codex by its sandbox (project files only, no network, so it runs the doctor with `--offline`). Never pass a flag that bypasses an agent's sandbox or approvals. The task goes in on stdin; `setup` re-runs the checks itself afterwards. The conversation is kept by the agent, and `setup` prints the command to resume it after a run that finished.

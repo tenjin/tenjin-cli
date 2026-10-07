@@ -115,7 +115,7 @@ func Indent(text string, indent, width int) string {
 }
 
 // Styler colours text for a terminal and leaves it plain everywhere else.
-type Styler struct{ enabled bool }
+type Styler struct{ enabled, truecolor bool }
 
 // NewStyler enables colour when w is a terminal. NO_COLOR turns it off
 // everywhere; CLICOLOR_FORCE keeps it on when the output is piped, for
@@ -124,11 +124,13 @@ func NewStyler(w io.Writer) Styler {
 	if os.Getenv("NO_COLOR") != "" {
 		return Styler{}
 	}
+	// Terminals that show 24-bit colour say so here.
+	truecolor := os.Getenv("COLORTERM") == "truecolor" || os.Getenv("COLORTERM") == "24bit"
 	if force := os.Getenv("CLICOLOR_FORCE"); force != "" && force != "0" {
-		return Styler{enabled: true}
+		return Styler{enabled: true, truecolor: truecolor}
 	}
 	f, ok := w.(*os.File)
-	return Styler{enabled: ok && term.IsTerminal(int(f.Fd())) && colourSupported(f)}
+	return Styler{enabled: ok && term.IsTerminal(int(f.Fd())) && colourSupported(f), truecolor: truecolor}
 }
 
 // Enabled reports whether the styler colours anything.
@@ -141,30 +143,60 @@ func (s Styler) wrap(code, text string) string {
 	return "\x1b[" + code + "m" + text + "\x1b[0m"
 }
 
-// accent is the one colour that is the CLI's own: a teal that reads on dark
-// and on light backgrounds. It is from the 256-colour set, which every
-// current terminal has.
-const accent = "38;5;37"
+// colour is one colour of the palette: exact where the terminal shows 24-bit
+// colour, and the nearest of the 256-colour set, which every current
+// terminal has, otherwise.
+type colour struct {
+	r, g, b uint8
+	nearest int
+}
 
-func (s Styler) Red(text string) string    { return s.wrap("31", text) }
-func (s Styler) Green(text string) string  { return s.wrap("32", text) }
-func (s Styler) Yellow(text string) string { return s.wrap("33", text) }
+func (s Styler) code(c colour) string {
+	if s.truecolor {
+		return fmt.Sprintf("38;2;%d;%d;%d", c.r, c.g, c.b)
+	}
+	return fmt.Sprintf("38;5;%d", c.nearest)
+}
+
+// The palette is muted on purpose: each colour is a mid tone that keeps a
+// contrast of 3 or more on a white background and on a dark one, so it
+// reads in a light terminal as well as a dark one, and none of it shouts.
+// The terminal's own red, green and yellow are not used: their brightness
+// depends on the theme, and in many they are glaring.
+var (
+	errorColour   = colour{204, 92, 92, 167}   // a soft red
+	warningColour = colour{184, 134, 11, 136}  // amber
+	successColour = colour{78, 154, 106, 71}   // sage green
+	accentColour  = colour{38, 150, 150, 37}   // Tenjin teal
+	quietColour   = colour{138, 138, 138, 245} // grey, for what is secondary
+)
+
+func (s Styler) Red(text string) string    { return s.wrap(s.code(errorColour), text) }
+func (s Styler) Green(text string) string  { return s.wrap(s.code(successColour), text) }
+func (s Styler) Yellow(text string) string { return s.wrap(s.code(warningColour), text) }
 func (s Styler) Bold(text string) string   { return s.wrap("1", text) }
-func (s Styler) Dim(text string) string    { return s.wrap("2", text) }
-func (s Styler) Accent(text string) string { return s.wrap(accent, text) }
+func (s Styler) Accent(text string) string { return s.wrap(s.code(accentColour), text) }
+
+// Dim is for what is secondary: file names, hints, table headers. It is a
+// grey rather than the terminal's faint style, which some consoles, the
+// Windows one among them, do not show.
+func (s Styler) Dim(text string) string { return s.wrap(s.code(quietColour), text) }
 
 // Heading is for the title of a section of output.
-func (s Styler) Heading(text string) string { return s.wrap("1;"+accent, text) }
+func (s Styler) Heading(text string) string { return s.wrap("1;"+s.code(accentColour), text) }
 
-// logo is the wordmark, with the colour of each row: a fade from light to
-// deep teal.
-var logo = []struct{ colour, row string }{
-	{"38;5;80", `████████╗███████╗███╗   ██╗     ██╗██╗███╗   ██╗`},
-	{"38;5;44", `╚══██╔══╝██╔════╝████╗  ██║     ██║██║████╗  ██║`},
-	{"38;5;43", `   ██║   █████╗  ██╔██╗ ██║     ██║██║██╔██╗ ██║`},
-	{"38;5;37", `   ██║   ██╔══╝  ██║╚██╗██║██   ██║██║██║╚██╗██║`},
-	{"38;5;36", `   ██║   ███████╗██║ ╚████║╚█████╔╝██║██║ ╚████║`},
-	{"38;5;30", `   ╚═╝   ╚══════╝╚═╝  ╚═══╝ ╚════╝ ╚═╝╚═╝  ╚═══╝`},
+// logo is the wordmark, with the colour of each row: a gentle fade from a
+// light to a deep teal.
+var logo = []struct {
+	colour colour
+	row    string
+}{
+	{colour{104, 186, 186, 73}, `████████╗███████╗███╗   ██╗     ██╗██╗███╗   ██╗`},
+	{colour{82, 174, 174, 73}, `╚══██╔══╝██╔════╝████╗  ██║     ██║██║████╗  ██║`},
+	{colour{60, 162, 162, 37}, `   ██║   █████╗  ██╔██╗ ██║     ██║██║██╔██╗ ██║`},
+	{colour{38, 150, 150, 37}, `   ██║   ██╔══╝  ██║╚██╗██║██   ██║██║██║╚██╗██║`},
+	{colour{30, 134, 134, 30}, `   ██║   ███████╗██║ ╚████║╚█████╔╝██║██║ ╚████║`},
+	{colour{24, 118, 118, 30}, `   ╚═╝   ╚══════╝╚═╝  ╚═══╝ ╚════╝ ╚═╝╚═╝  ╚═══╝`},
 }
 
 // logoWidth is the number of columns the wordmark needs, with its margin.
@@ -181,7 +213,7 @@ func Banner(w io.Writer, tagline string) string {
 	var b strings.Builder
 	b.WriteString("\n")
 	for _, line := range logo {
-		b.WriteString("  " + style.wrap(line.colour, line.row) + "\n")
+		b.WriteString("  " + style.wrap(style.code(line.colour), line.row) + "\n")
 	}
 	b.WriteString("  " + style.Dim(tagline) + "\n")
 	return b.String()

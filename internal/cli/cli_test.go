@@ -326,6 +326,7 @@ func TestHelpIsStyledOnATerminal(t *testing.T) {
 	}
 
 	t.Setenv("CLICOLOR_FORCE", "1")
+	t.Setenv("COLORTERM", "")
 	_, styled, _ := newHarness(t).run()
 	for _, want := range []string{
 		"████████╗",                         // the wordmark
@@ -357,6 +358,7 @@ func TestHelpIsStyledOnATerminal(t *testing.T) {
 
 func TestReportsAreStyledOnATerminal(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
+	t.Setenv("COLORTERM", "")
 	base := testproject.AndroidNative()
 	const manifest = "app/src/main/AndroidManifest.xml"
 	dir := testproject.Write(t, base.With(testproject.Files{
@@ -365,7 +367,7 @@ func TestReportsAreStyledOnATerminal(t *testing.T) {
 	h := newHarness(t)
 
 	_, stdout, stderr := h.run("doctor", dir)
-	if !strings.Contains(stdout, "\x1b[31m1 error\x1b[0m, 0 warnings, \x1b[32m") || !strings.Contains(stderr, "\x1b[31mtenjin:\x1b[0m") {
+	if !strings.Contains(stdout, "\x1b[38;5;167m1 error\x1b[0m, 0 warnings, \x1b[38;5;71m") || !strings.Contains(stderr, "\x1b[38;5;167mtenjin:\x1b[0m") {
 		t.Errorf("stdout tail: %q\nstderr: %q", stdout[max(0, len(stdout)-120):], stderr)
 	}
 	// JSON is never styled, whatever the environment says.

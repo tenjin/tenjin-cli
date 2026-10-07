@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -353,7 +354,16 @@ func writeReport(w io.Writer, report *verify.Report, offline bool) error {
 			title += " · " + t.BundleID
 		}
 		fmt.Fprintf(&b, "\n%s\n", style.Heading(title))
-		for _, f := range findings {
+		// What needs doing comes first, the worst of it at the top, and what
+		// passed after it. A problem's explanation and fix make a block of
+		// their own, set apart by a blank line.
+		sort.SliceStable(findings, func(i, j int) bool {
+			return severityOrder[findings[i].Severity] < severityOrder[findings[j].Severity]
+		})
+		for i, f := range findings {
+			if i > 0 && (isBlock(findings[i-1]) || isBlock(f)) {
+				b.WriteString("\n")
+			}
 			writeFinding(&b, style, f, width)
 		}
 	}
@@ -375,6 +385,14 @@ func writeReport(w io.Writer, report *verify.Report, offline bool) error {
 	}
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// severityOrder is the order findings are listed in.
+var severityOrder = map[verify.Severity]int{verify.Error: 0, verify.Warning: 1, verify.Info: 2, verify.Pass: 3}
+
+// isBlock reports whether a finding prints more than its one line.
+func isBlock(f verify.Finding) bool {
+	return f.Severity != verify.Pass && (f.Detail != "" || f.Fix != "")
 }
 
 // writeFinding prints one finding. width is the terminal's, or 0 to leave

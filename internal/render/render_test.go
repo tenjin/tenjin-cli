@@ -70,8 +70,9 @@ func TestStylerEnvironment(t *testing.T) {
 		t.Error("colour is on for something that is not a terminal")
 	}
 	t.Setenv("CLICOLOR_FORCE", "1")
+	t.Setenv("COLORTERM", "")
 	forced := NewStyler(&buf)
-	if !forced.Enabled() || forced.Red("x") != "\x1b[31mx\x1b[0m" || forced.Heading("x") != "\x1b[1;38;5;37mx\x1b[0m" {
+	if !forced.Enabled() || forced.Red("x") != "\x1b[38;5;167mx\x1b[0m" || forced.Heading("x") != "\x1b[1;38;5;37mx\x1b[0m" {
 		t.Errorf("forced styler: enabled = %v, red = %q", forced.Enabled(), forced.Red("x"))
 	}
 	// NO_COLOR wins over everything.
@@ -87,6 +88,7 @@ func TestBannerOnlyWhereItCanBeSeen(t *testing.T) {
 		t.Errorf("a banner was written to something that is not a terminal: %q", got)
 	}
 	t.Setenv("CLICOLOR_FORCE", "1")
+	t.Setenv("COLORTERM", "")
 	got := Banner(&buf, "tagline")
 	lines := strings.Split(strings.Trim(got, "\n"), "\n")
 	if len(lines) != 7 || !strings.Contains(lines[6], "tagline") {
@@ -104,13 +106,27 @@ func TestBannerOnlyWhereItCanBeSeen(t *testing.T) {
 // push the header out of line with its rows.
 func TestTableHeaderStaysAlignedWhenStyled(t *testing.T) {
 	t.Setenv("CLICOLOR_FORCE", "1")
+	t.Setenv("COLORTERM", "")
 	var buf bytes.Buffer
 	if err := WriteTable(&buf, NewStyler(&buf), []string{"name", "id"}, [][]string{{"a-long-name", "1"}}); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(buf.String(), "\n")
-	header := strings.NewReplacer("\x1b[2m", "", "\x1b[0m", "").Replace(lines[0])
+	header := strings.NewReplacer("\x1b[38;5;245m", "", "\x1b[0m", "").Replace(lines[0])
 	if strings.Index(header, "ID") != strings.Index(lines[1], "1") || header == lines[0] {
 		t.Errorf("table:\n%s", buf.String())
+	}
+}
+
+// A terminal that shows 24-bit colour gets the palette's exact colours.
+func TestTrueColourTerminalsGetTheExactPalette(t *testing.T) {
+	t.Setenv("CLICOLOR_FORCE", "1")
+	t.Setenv("COLORTERM", "truecolor")
+	style := NewStyler(&bytes.Buffer{})
+	if got := style.Red("x"); got != "\x1b[38;2;204;92;92mx\x1b[0m" {
+		t.Errorf("Red = %q", got)
+	}
+	if got := style.Dim("x"); got != "\x1b[38;2;138;138;138mx\x1b[0m" {
+		t.Errorf("Dim = %q", got)
 	}
 }

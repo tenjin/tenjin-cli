@@ -26,6 +26,10 @@ Both install scripts check each download against the release's `checksums.txt`, 
 
 The shell script installs where `tenjin` already is, or in a folder that is already on your PATH (`~/.local/bin`, `~/bin`, or `/usr/local/bin` when it can be written to). Otherwise it uses `~/.local/bin` and adds it to PATH for zsh (`.zshenv`), bash (`.bashrc` and the login profile), fish (`conf.d/tenjin.fish`) and `.profile`, each marked `# Added by the Tenjin CLI installer`, so the command works in every new terminal. `TENJIN_NO_MODIFY_PATH=1` leaves those files alone. If the CLI was installed with Homebrew, the script stops and points to `brew upgrade tenjin`.
 
+### Updates
+
+When a newer release is out, the CLI says so after a command, with the command that updates it the way it was installed (`brew upgrade tenjin`, the install script, or `go install`). It asks GitHub at most once a day, alongside the command, and only when a person is at the terminal: never for `--json`, in CI, or when stderr is not a terminal, so scripts and coding agents never see it. `TENJIN_NO_UPDATE_CHECK=1` turns it off.
+
 Homebrew installs shell completions for bash, zsh and fish. Otherwise, `tenjin completion <bash|zsh|fish|powershell> --help` says how to load them; the release archives also carry them, under `completions/`.
 
 ## What it does
