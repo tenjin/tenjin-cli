@@ -266,7 +266,7 @@ func readLaunch(ctx context.Context, env *environment, p *project.Project, platf
 				Fix:    "Install Xcode, or save the log yourself and pass it with --logs.",
 			}
 		}
-		phones, _ := devicelog.ConnectedIPhones(ctx, env.runner(), xcrun)
+		phones, listErr := devicelog.ConnectedIPhones(ctx, env.runner(), xcrun)
 		var matching []devicelog.IPhone
 		for _, phone := range phones {
 			if serial == "" || strings.EqualFold(phone.UDID, serial) {
@@ -292,6 +292,12 @@ func readLaunch(ctx context.Context, env *environment, p *project.Project, platf
 			return raw, fromIPhone, err
 		}
 		raw, err := devicelog.ReadIOSSimulatorSince(ctx, env.runner(), xcrun, serial, since)
+		// With no simulator either, a devicectl that failed is the more
+		// likely reason nothing was found.
+		var unavailable *devicelog.Unavailable
+		if listErr != nil && errors.As(err, &unavailable) {
+			unavailable.Reason += "; and Xcode's devicectl could not list iPhones (" + listErr.Error() + ")"
+		}
 		return raw, fromSimulator, err
 	}
 	adb, ok := devicelog.FindADB(env.lookPath, env.getenv)

@@ -99,8 +99,13 @@ When several devices or simulators are running, pass `--serial` with the adb ser
 | `device.connect` is `pass` | Tenjin accepted the app's connect request |
 | `device.connect` is `error` | Tenjin refused it; the title says why, and the fix follows from it |
 | `device.processed` is `pass` | Tenjin has processed the install and attributed it |
+| `device.processed` is `info` | Tenjin has not processed the install yet; run it again in a minute |
+| `device.lookup` | Tenjin could not be asked about the install; the detail gives Tenjin's answer |
+| `device.processed.unchecked` | The install was not looked up, for the reason in the title (offline, for example) |
+| `device.connect` is `warning` | Only other apps' connects are in the log, or Tenjin gave an unusual answer |
 | `device.bundle_id` | The build that ran has a different application ID from the project file |
 | `device.connect.deduped` | The app was relaunched within 30 seconds, so the SDK sent nothing. Wait and relaunch |
+| `device.no_debug_logs` | On iOS, the SDK's requests are logged without their contents: add `TenjinSDK.debugLogs()` to debug builds |
 | `device.no_sdk_output` | The SDK never ran, the app was not launched, or, on iOS, the build does not call `TenjinSDK.debugLogs()` |
 | `device.advertising_id` | On iOS, `warning` when `connect()` ran before the tracking prompt was answered; `info` when the user declined tracking, which is expected |
 | `device.unavailable` | No device could be read; the title says why |

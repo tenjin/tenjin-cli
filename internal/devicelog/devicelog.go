@@ -4,13 +4,14 @@
 package devicelog
 
 import (
-	"bufio"
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf16"
 )
 
 // The Android SDK logs each request as three lines once the response is in:
@@ -70,13 +71,16 @@ type Request struct {
 	Line int
 	// Time is when the device logged it, as the log writes it, or "".
 	Time string
+	// Unread is true for an iOS request whose body was not logged, as
+	// without debug logs: what it was cannot be told.
+	Unread bool
 }
 
 // IsConnect reports whether this is the launch call that registers an
 // install or session, as opposed to a custom event sent to the same URL.
 func (r Request) IsConnect() bool {
 	_, named := r.Params["event"]
-	return r.Endpoint == "event" && !named
+	return r.Endpoint == "event" && !named && !r.Unread
 }
 
 // Accepted reports whether Tenjin took the request.
@@ -155,10 +159,12 @@ func Parse(r io.Reader) (*Log, error) {
 		}
 	}
 
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64<<10), 4<<20)
-	for n := 1; scanner.Scan(); n++ {
-		line := scanner.Text()
+	lines, err := readLines(r)
+	if err != nil {
+		return nil, err
+	}
+	for i, line := range lines {
+		n := i + 1
 		if strings.Contains(line, iosTag) {
 			log.SawSDK, log.Platform = true, "ios"
 			pending = parseIOSLine(log, pending, line, n)
@@ -197,11 +203,62 @@ func Parse(r io.Reader) (*Log, error) {
 			}
 		}
 	}
+	if pending != nil && log.Platform == "ios" {
+		pending.Unread = len(pending.Params) == 0
+	}
 	flush()
 	if log.SawSDK && log.Platform == "" {
 		log.Platform = "android"
 	}
-	return log, scanner.Err()
+	return log, nil
+}
+
+// maxLine is the longest line kept whole; the SDK's never come near it.
+const maxLine = 1 << 20
+
+// readLines splits a log into lines. A log saved by Windows PowerShell is
+// UTF-16 with a byte-order mark, and is read as such; a line longer than
+// maxLine is cut there rather than failing the whole read.
+func readLines(r io.Reader) ([]string, error) {
+	raw, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	text := decodeText(raw)
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if len(line) > maxLine {
+			line = line[:maxLine]
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines, nil
+}
+
+// decodeText returns a log as UTF-8 text, from UTF-8 or from UTF-16 with a
+// byte-order mark.
+func decodeText(raw []byte) string {
+	switch {
+	case bytes.HasPrefix(raw, []byte{0xFF, 0xFE}), bytes.HasPrefix(raw, []byte{0xFE, 0xFF}):
+		little := raw[0] == 0xFF
+		raw = raw[2:]
+		units := make([]uint16, len(raw)/2)
+		for i := range units {
+			if little {
+				units[i] = uint16(raw[2*i]) | uint16(raw[2*i+1])<<8
+			} else {
+				units[i] = uint16(raw[2*i])<<8 | uint16(raw[2*i+1])
+			}
+		}
+		return string(utf16.Decode(units))
+	case bytes.HasPrefix(raw, []byte{0xEF, 0xBB, 0xBF}):
+		return string(raw[3:])
+	}
+	return string(raw)
 }
 
 // parseIOSLine reads one line of the iOS SDK's output into the request it
@@ -209,6 +266,7 @@ func Parse(r io.Reader) (*Log, error) {
 func parseIOSLine(log *Log, pending *Request, line string, n int) *Request {
 	flush := func() {
 		if pending != nil {
+			pending.Unread = len(pending.Params) == 0
 			log.Requests = append(log.Requests, *pending)
 			pending = nil
 		}

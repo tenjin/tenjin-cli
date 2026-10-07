@@ -92,9 +92,18 @@ func TestDeviceProcessedByTenjin(t *testing.T) {
 	r = withDevice(t, accepted, &fakeLookup{})
 	expect(t, r, "device.processed", project.Android, verify.Info)
 
-	// A lookup that fails says nothing either way.
-	r = withDevice(t, accepted, &fakeLookup{err: errors.New("timeout")})
-	expect(t, r, "device.processed", project.Android, verify.Info)
+	// A lookup that fails says so, and why; it is not "not processed yet".
+	r = withDevice(t, accepted, &fakeLookup{err: errors.New(`Tenjin answered HTTP 404 "no such app"`)})
+	if f := expect(t, r, "device.lookup", project.Android, verify.Warning); !strings.Contains(f.Detail, "no such app") {
+		t.Errorf("detail = %q", f.Detail)
+	}
+	if find(r, "device.processed", project.Android) != nil {
+		t.Error("a failed lookup was reported as an answer")
+	}
+
+	// Without a lookup, the report says the install was not checked.
+	r = withDevice(t, accepted, nil)
+	expect(t, r, "device.processed.unchecked", project.Android, verify.Info)
 
 	// A refused connect is not looked up at all.
 	refused := &fakeLookup{}
@@ -259,5 +268,20 @@ func TestAConnectSaysWhenItWasSent(t *testing.T) {
 	f := expect(t, withDevice(t, log+"\n", nil), "device.connect", project.Android, verify.Error)
 	if !strings.Contains(f.Detail, "Sent at 10-02 15:07:34.121.") {
 		t.Errorf("detail = %q", f.Detail)
+	}
+}
+
+// Without debug logs an iOS request is only its URL and status: it is not
+// taken for a connect.
+func TestAnIOSRequestWithoutItsBodyIsNotAConnect(t *testing.T) {
+	text := "[Tenjin] - LOG: Sending request - https://track.tenjin.com/v0/event\n[Tenjin] - LOG: Got http response 200\n"
+	log, err := devicelog.Parse(strings.NewReader(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := run(t, testproject.IOSNative(), verify.Options{Device: &verify.DeviceInput{Log: log, Platform: project.IOS}})
+	expect(t, r, "device.no_debug_logs", project.IOS, verify.Warning)
+	if find(r, "device.connect", project.IOS) != nil {
+		t.Error("an unread request was taken for a connect")
 	}
 }

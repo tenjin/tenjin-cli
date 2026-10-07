@@ -121,3 +121,16 @@ func TestLookupDevice(t *testing.T) {
 		})
 	}
 }
+
+// A 200 that is not Tenjin's JSON, such as a captive portal's page,
+// is not taken for a processed install.
+func TestAnUnreadableAnswerIsNotAnInstall(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("<html>Sign in to the Wi-Fi</html>"))
+	}))
+	defer srv.Close()
+	got, err := New(srv.URL, "test").LookupDevice(context.Background(), "KEY", "com.example", "android", "install-1")
+	if err == nil || got.Known {
+		t.Errorf("got %+v, %v", got, err)
+	}
+}

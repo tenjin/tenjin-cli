@@ -2,8 +2,10 @@ package devicelog
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -79,12 +81,22 @@ func readAndroid(ctx context.Context, run Runner, adb, serial string, extra ...s
 	out, err := run(ctx, adb, "devices")
 	if err != nil {
 		return nil, &Unavailable{
-			Reason: fmt.Sprintf("adb could not list devices: %v", err),
+			Reason: "adb could not list devices: " + describe(err),
 			Fix:    "Check that adb works: run 'adb devices'.",
 		}
 	}
 	devices := connected(string(out))
 	switch {
+	case len(devices) == 0 && hasState(string(out), "unauthorized"):
+		return nil, &Unavailable{
+			Reason: "An Android device is connected, but it has not allowed USB debugging from this computer",
+			Fix:    "Unlock the device and accept the \"Allow USB debugging?\" prompt, then run this again.",
+		}
+	case len(devices) == 0 && hasState(string(out), "offline"):
+		return nil, &Unavailable{
+			Reason: "An Android device is connected but offline",
+			Fix:    "Reconnect it, or run 'adb kill-server' and then 'adb devices', then run this again.",
+		}
 	case len(devices) == 0:
 		return nil, &Unavailable{
 			Reason: "No Android device or emulator is connected",
@@ -110,7 +122,7 @@ func readAndroid(ctx context.Context, run Runner, adb, serial string, extra ...s
 	args = append(args, logcatTags...)
 	log, err := run(ctx, adb, args...)
 	if err != nil {
-		return nil, &Unavailable{Reason: fmt.Sprintf("adb could not read the log of %s: %v", serial, err)}
+		return nil, &Unavailable{Reason: fmt.Sprintf("adb could not read the log of %s: %s", serial, describe(err))}
 	}
 	return log, nil
 }
@@ -126,6 +138,28 @@ func connected(output string) []string {
 		}
 	}
 	return serials
+}
+
+// hasState reports whether `adb devices` lists a device in this state.
+func hasState(output, state string) bool {
+	for _, line := range strings.Split(output, "\n") {
+		if fields := strings.Fields(line); len(fields) == 2 && fields[1] == state {
+			return true
+		}
+	}
+	return false
+}
+
+// describe is a program's failure in its own words: the last line it wrote
+// to stderr, where there is one, rather than only its exit status.
+func describe(err error) string {
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		if line := lastLine(string(exit.Stderr)); line != "" {
+			return line
+		}
+	}
+	return err.Error()
 }
 
 func contains(values []string, v string) bool {

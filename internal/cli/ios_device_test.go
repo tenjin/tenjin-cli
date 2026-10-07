@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -192,4 +193,21 @@ func TestSetupSaysWhatConfirmsASimulatorLaunch(t *testing.T) {
 	dir := testproject.Write(t, testproject.IOSNative())
 	_, stdout, _ := h.typing("", "").run("setup", dir)
 	lacks(t, stdout, "Installs from an iOS simulator have not been seen to be processed; a launch on an iPhone connected by cable confirms it.")
+}
+
+// A launch on an iPhone that logs nothing from Tenjin says so, and what to
+// check, instead of reading as an empty log.
+func TestAnIPhoneLaunchWithoutTenjinSaysSo(t *testing.T) {
+	h := newHarness(t)
+	dir := testproject.Write(t, testproject.IOSNative())
+	h.connectIPhone("")
+	// The window ran out with the app still running: devicectl was stopped,
+	// which is not a failure.
+	h.env.stream = func(context.Context, string, []string, func(string) bool) ([]byte, error) {
+		return []byte("Launched application with com.example.sample bundle identifier.\n"), nil
+	}
+	_, stdout, _ := h.run("doctor", dir, "--device", "--offline")
+	if !strings.Contains(stdout, "the Tenjin SDK logged nothing") || !strings.Contains(stdout, "answer the prompt on the phone") {
+		t.Errorf("stdout:\n%s", stdout)
+	}
 }

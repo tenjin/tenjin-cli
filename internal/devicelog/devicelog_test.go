@@ -1,12 +1,14 @@
 package devicelog
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf16"
 )
 
 // The fixture is a real capture of the Android SDK (1.23.0) launching the
@@ -144,7 +146,8 @@ func TestReadAndroid(t *testing.T) {
 		name, devices, serial, want string
 	}{
 		{"nothing connected", "List of devices attached\n\n", "", "No Android device or emulator is connected"},
-		{"only an unauthorized device", "List of devices attached\nZY22\tunauthorized\n", "", "No Android device or emulator is connected"},
+		{"only an unauthorized device", "List of devices attached\nZY22\tunauthorized\n", "", "An Android device is connected, but it has not allowed USB debugging from this computer"},
+		{"only an offline device", "List of devices attached\nZY22\toffline\n", "", "An Android device is connected but offline"},
 		{"several and no serial", two, "", "More than one Android device is connected: emulator-5554, R58M123"},
 		{"unknown serial", two, "nope", "No connected Android device has the serial nope"},
 	}
@@ -258,9 +261,9 @@ func TestParseIOSWithoutDebugLogs(t *testing.T) {
 	log, _ := Parse(strings.NewReader(`2026-10-06 10:04:49.416 Df Sample[1:2] (TenjinSDK) [Tenjin] - LOG: Sending request - https://track.tenjin.com/v0/event
 2026-10-06 10:04:49.903 Df Sample[1:3] (TenjinSDK) [Tenjin] - LOG: Got http response 401
 `))
-	c := log.LastConnect()
-	if c == nil || c.Code != 401 || c.Accepted() {
-		t.Fatalf("connect = %+v", c)
+	// Without its body it cannot be told from an event: it is kept, unread.
+	if log.LastConnect() != nil || len(log.Requests) != 1 || !log.Requests[0].Unread || log.Requests[0].Code != 401 {
+		t.Fatalf("log = %+v", log)
 	}
 }
 
@@ -360,5 +363,43 @@ func TestConnectedIPhonesIncludesAnIdleCable(t *testing.T) {
 	phones, err := ConnectedIPhones(context.Background(), run, "xcrun")
 	if err != nil || len(phones) != 1 || phones[0].Name != "Idle" {
 		t.Errorf("phones = %+v, %v", phones, err)
+	}
+}
+
+// A log saved by Windows PowerShell (`adb logcat > log.txt`) is UTF-16 with
+// a byte-order mark; it reads the same as the original.
+func TestAUTF16LogIsRead(t *testing.T) {
+	text := "D/HttpConnection( 1): Tenjin request URL: https://track.tenjin.com/v0/event\r\n" +
+		"D/HttpConnection( 1): Tenjin::connect params: {bundle_id=com.example.sample, platform=android}\r\n" +
+		"D/HttpConnection( 1): Tenjin::connect response: {\"code\":200,\"success\":true}\r\n"
+	encoded := []byte{0xFF, 0xFE}
+	for _, u := range utf16.Encode([]rune(text)) {
+		encoded = append(encoded, byte(u), byte(u>>8))
+	}
+	log, err := Parse(bytes.NewReader(encoded))
+	if err != nil || log.LastConnect() == nil || !log.LastConnect().Accepted() {
+		t.Fatalf("log = %+v, %v", log, err)
+	}
+}
+
+// A line too long to keep whole is cut, not a failure of the whole read.
+func TestAnOverlongLineIsCut(t *testing.T) {
+	text := strings.Repeat("x", 5<<20) + "\nD/HttpConnection( 1): Tenjin request URL: https://track.tenjin.com/v0/event\n"
+	log, err := Parse(strings.NewReader(text))
+	if err != nil || len(log.Requests) != 1 {
+		t.Fatalf("log = %+v, %v", log, err)
+	}
+}
+
+// A device that has not allowed USB debugging is named as such, not taken
+// for no device at all.
+func TestAnUnauthorizedDeviceIsNamed(t *testing.T) {
+	run := func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		return []byte("List of devices attached\nR58N12345\tunauthorized\n\n"), nil
+	}
+	_, err := ReadAndroid(context.Background(), run, "adb", "")
+	var u *Unavailable
+	if !errors.As(err, &u) || !strings.Contains(u.Reason, "has not allowed USB debugging") {
+		t.Errorf("err = %v", err)
 	}
 }

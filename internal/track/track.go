@@ -137,7 +137,11 @@ func (c *Client) LookupDevice(ctx context.Context, key, bundleID, platform, inst
 			AdNetwork    string `json:"ad_network"`
 			CampaignName string `json:"campaign_name"`
 		}
-		_ = json.Unmarshal(raw, &body)
+		// Anything but Tenjin's JSON, such as a captive portal's page,
+		// says nothing about the install.
+		if err := json.Unmarshal(raw, &body); err != nil {
+			return Attribution{}, fmt.Errorf("Tenjin's answer could not be read: %s", truncate(string(raw), 80))
+		}
 		return Attribution{Known: true, AdNetwork: body.AdNetwork, CampaignName: body.CampaignName}, nil
 	case http.StatusNotFound:
 		// A 404 with an empty object is a device not processed yet; any
@@ -146,5 +150,19 @@ func (c *Client) LookupDevice(ctx context.Context, key, bundleID, platform, inst
 			return Attribution{}, nil
 		}
 	}
+	var answer struct {
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(raw, &answer) == nil && answer.Message != "" {
+		return Attribution{}, fmt.Errorf("Tenjin answered HTTP %d %q", resp.StatusCode, answer.Message)
+	}
 	return Attribution{}, fmt.Errorf("Tenjin answered HTTP %d", resp.StatusCode)
+}
+
+func truncate(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
 }

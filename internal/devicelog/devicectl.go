@@ -19,8 +19,10 @@ type Streamer func(ctx context.Context, name string, args []string, stop func(li
 var bundleIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]*$`)
 
 // iPhoneLaunchWindow is how long a launch is read for, at most. Tenjin
-// usually answers within a second of the app starting.
-const iPhoneLaunchWindow = 25 * time.Second
+// usually answers within a second of the app starting, but an app that
+// connects once the tracking prompt is answered waits for the person, and
+// the read stops as soon as Tenjin has answered anyway.
+const iPhoneLaunchWindow = 90 * time.Second
 
 // IPhone is a physical iOS device connected to this Mac.
 type IPhone struct {
@@ -81,6 +83,7 @@ func ConnectedIPhones(ctx context.Context, run Runner, xcrun string) ([]IPhone, 
 // already be installed, as a debug build that turns the SDK's logs on. It
 // is left running afterwards: only the console is closed.
 func ReadIPhone(ctx context.Context, stream Streamer, xcrun string, phone IPhone, bundleID string) ([]byte, error) {
+	parent := ctx
 	if !phone.DeveloperMode {
 		return nil, &Unavailable{
 			Reason: "Developer Mode is off on " + phone.Name,
@@ -99,6 +102,15 @@ func ReadIPhone(ctx context.Context, stream Streamer, xcrun string, phone IPhone
 		return strings.Contains(line, iosTag) && (strings.Contains(line, iosMarkResponse) ||
 			strings.Contains(line, "Connect succeeded") || strings.Contains(line, iosMarkDeduped))
 	})
+	if parent.Err() != nil {
+		return nil, parent.Err()
+	}
+	if err == nil && !strings.Contains(string(out), iosTag) {
+		return nil, &Unavailable{
+			Reason: fmt.Sprintf("%s ran on %s for %d seconds and the Tenjin SDK logged nothing", bundleID, phone.Name, int(iPhoneLaunchWindow/time.Second)),
+			Fix:    "Debug builds must call TenjinSDK.debugLogs(). If the app asks for tracking permission before it connects, answer the prompt on the phone. Then run this again.",
+		}
+	}
 	if err != nil && !strings.Contains(string(out), iosTag) {
 		detail := lastLine(string(out))
 		if detail == "" {
