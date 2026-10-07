@@ -287,9 +287,18 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 
 var placeholderKey = regexp.MustCompile(`(?i)^$|[<>{}\s]|your|sdk[_-]?key|api[_-]?key|placeholder|xxxx|changeme|todo`)
 
+// wholeKey is what a real SDK key looks like: a long run of capitals and
+// digits.
+var wholeKey = regexp.MustCompile(`^[A-Z0-9]{24,64}$`)
+
 // isPlaceholder reports whether a key literal is obviously not a real key.
-// Real keys are long runs of letters and digits.
+// Real keys are long runs of letters and digits; one of those is a key even
+// when it happens to contain "TODO" or "XXXX", unless it is one character
+// over and over.
 func isPlaceholder(key string) bool {
+	if wholeKey.MatchString(key) {
+		return strings.Count(key, key[:1]) == len(key)
+	}
 	return placeholderKey.MatchString(key)
 }
 

@@ -145,6 +145,17 @@ func (m *Manager) Token(ctx context.Context) (string, error) {
 	}
 
 	tokens, err := m.Authority.Refresh(ctx, c.ClientID, c.RefreshToken)
+	if errors.Is(err, oauth.ErrGrantInvalid) {
+		// Another tenjin may have refreshed at the same moment, which spent
+		// the token this one used. Its result is in the store.
+		if again, reloadErr := m.Store.Load(m.Environment); reloadErr == nil && again.SignedIn() && again.RefreshToken != c.RefreshToken {
+			if again.JWT != "" && m.now().Before(again.JWTExpiry.Add(-refreshMargin)) {
+				return again.JWT, nil
+			}
+			c = again
+			tokens, err = m.Authority.Refresh(ctx, c.ClientID, c.RefreshToken)
+		}
+	}
 	if err != nil {
 		return "", m.refreshFailed(c, err)
 	}

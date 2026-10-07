@@ -3,6 +3,7 @@ package cli
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -82,5 +83,25 @@ func TestAnUpdateNoticeFollowsAnError(t *testing.T) {
 	errAt, noticeAt := strings.Index(stderr, "no mobile project"), strings.Index(stderr, "A new version")
 	if errAt < 0 || noticeAt < errAt {
 		t.Errorf("stderr:\n%s", stderr)
+	}
+}
+
+// A stray request to the sign-in's local port, without the sign-in's state,
+// does not end the sign-in.
+func TestAStrayCallbackDoesNotEndTheSignIn(t *testing.T) {
+	h := newHarness(t)
+	follow := h.env.openBrowser
+	h.env.openBrowser = func(authorize string) error {
+		u, err := url.Parse(authorize)
+		if err != nil {
+			return err
+		}
+		if resp, err := http.Get(u.Query().Get("redirect_uri") + "?state=guess&code=x"); err == nil {
+			_ = resp.Body.Close()
+		}
+		return follow(authorize)
+	}
+	if code, _, stderr := h.run("login"); code != 0 {
+		t.Fatalf("exit = %d: %s", code, stderr)
 	}
 }

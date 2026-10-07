@@ -178,12 +178,13 @@ func (r *runner) candidateKeys(src source, build string, wide bool) (keys []keyL
 }
 
 // Keys kept outside the init call: a flavor's buildConfigField, a properties
-// file, a constant. Only literals on a line that names Tenjin, or just below
-// one, are taken, so that no other service's secret is ever sent to Tenjin.
+// file, a constant. Only literals on a line that names Tenjin are taken, so
+// that no other service's secret, such as one on the next line, is ever sent
+// to Tenjin.
 var (
 	keyShaped    = regexp.MustCompile(`(?:["']|=\s*)([A-Z0-9]{24,64})\b`)
 	configExts   = []string{".kt", ".kts", ".java", ".gradle", ".properties", ".swift", ".m", ".dart", ".js", ".jsx", ".ts", ".tsx", ".json", ".xcconfig", ".plist", ".cs"}
-	nearTenjin   = 2
+	nearTenjin   = 0
 	maxKeyChecks = 8
 )
 
