@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -40,7 +41,9 @@ func TestANewerReleaseIsMentionedAfterTheCommand(t *testing.T) {
 	}
 	for _, want := range []string{
 		"A new version of the Tenjin CLI is available: 0.1.0 → 0.2.0",
-		"Update with: curl -fsSL https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.sh | sh",
+		// The harness's binary is /usr/local/bin/tenjin: the install script's
+		// place, so its command, for this OS.
+		"Update with: " + update.Command("/usr/local/bin/tenjin", runtime.GOOS, h.env.getenv),
 		"/releases/tag/v0.2.0",
 	} {
 		if !strings.Contains(stderr, want) {
