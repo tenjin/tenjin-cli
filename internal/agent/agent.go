@@ -42,6 +42,9 @@ type driver struct {
 	resume     func(sessionID string) string
 	// inside names environment variables the agent sets for what it runs.
 	inside []string
+	// confinable checks, before a run, that this installed version can be
+	// held to the limits above. Nil when nothing needs checking.
+	confinable func(ctx context.Context, path string) error
 }
 
 // drivers lists the agents this package can run headless, in the order they
@@ -142,6 +145,11 @@ var claude = driver{
 		return []string{
 			"--print",
 			"--output-format", "stream-json", "--verbose",
+			// Restricted mode is what makes the limits above hold: it ignores
+			// the user's and the project's settings files, so a project
+			// cannot bring hooks or permissions of its own, and it keeps the
+			// file tools inside the project.
+			"--restricted",
 			"--permission-mode", "acceptEdits",
 			"--tools", tools,
 			"--allowedTools", allowedTools,
@@ -158,6 +166,13 @@ var claude = driver{
 	read:   readEvents,
 	resume: func(sessionID string) string { return "claude --resume " + sessionID },
 	inside: []string{"CLAUDECODE"},
+	confinable: func(ctx context.Context, path string) error {
+		help, _ := exec.CommandContext(ctx, path, "--help").CombinedOutput()
+		if !strings.Contains(string(help), "--restricted") {
+			return errors.New("this version of Claude Code cannot be held to the task (it has no --restricted mode). Update it with 'claude update', then run this again")
+		}
+		return nil
+	},
 }
 
 // Run starts the agent on the task and blocks until it finishes. progress is
@@ -170,6 +185,11 @@ func (a Agent) Run(ctx context.Context, task Task, progress func(Action)) (Resul
 			return Result{}, err
 		}
 		sessionID = id
+	}
+	if a.confinable != nil {
+		if err := a.confinable(ctx, a.Path); err != nil {
+			return Result{}, err
+		}
 	}
 	cmd := exec.CommandContext(ctx, a.Path, a.args(task, sessionID)...)
 	cmd.Dir = task.Dir

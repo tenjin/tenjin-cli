@@ -64,8 +64,20 @@ func (r *runner) checkDevice(t *project.Target, src source) {
 		return
 	}
 
-	connect := d.Log.LastConnect()
+	connect, ours := lastConnectOf(d.Log, t)
+	// A connect skipped under the 30-second rule after the last one sent
+	// is what the newest launch did.
+	if connect != nil && d.Log.DedupedLine > connect.Line {
+		connect = nil
+	}
 	switch {
+	case connect != nil && !ours:
+		r.add(Finding{
+			ID: "device.connect", Severity: Warning, Platform: platform,
+			Title:  "The log shows connects only from other apps (" + connect.Params["bundle_id"] + "), none from this project's",
+			Detail: "Another app with the Tenjin SDK is running on this device, and this project's app has sent nothing since the log began.",
+			Fix:    "Launch this project's debug build, then run this again.",
+		})
 	case connect != nil:
 		r.add(connectFinding(connect, platform))
 		r.checkRunningBuild(t, connect)
@@ -94,15 +106,57 @@ func (r *runner) checkDevice(t *project.Target, src source) {
 	r.checkOtherRequests(d.Log, platform)
 }
 
+// lastConnectOf picks the newest connect from the target's own app: one of
+// its builds' IDs, or one of them with a suffix such as .debug, or a connect
+// that does not say (an iOS log without debug logs). ours is false when the
+// log has connects only from other apps, and the newest of them is returned.
+func lastConnectOf(log *devicelog.Log, t *project.Target) (connect *devicelog.Request, ours bool) {
+	ids := []string{t.BundleID}
+	for _, b := range t.Builds {
+		ids = append(ids, b.BundleID)
+	}
+	isOurs := func(running string) bool {
+		if running == "" {
+			return true
+		}
+		for _, id := range ids {
+			if id != "" && (running == id || strings.HasPrefix(running, id+".")) {
+				return true
+			}
+		}
+		return t.BundleID == ""
+	}
+	var other *devicelog.Request
+	for i := len(log.Requests) - 1; i >= 0; i-- {
+		c := &log.Requests[i]
+		if !c.IsConnect() {
+			continue
+		}
+		if isOurs(c.Params["bundle_id"]) {
+			return c, true
+		}
+		if other == nil {
+			other = c
+		}
+	}
+	return other, false
+}
+
 // connectFinding explains the collector's answer to the connect request.
-func connectFinding(c *devicelog.Request, platform project.Platform) Finding {
-	f := Finding{ID: "device.connect", Platform: platform, Severity: Error}
+func connectFinding(c *devicelog.Request, platform project.Platform) (f Finding) {
+	f = Finding{ID: "device.connect", Platform: platform, Severity: Error}
 	bundle, sent := c.Params["bundle_id"], c.Params["platform"]
 	answer := fmt.Sprintf("The collector answered %d", c.Code)
 	if c.Message != "" {
 		answer += " " + quote(c.Message)
 	}
 	f.Detail = answer + "."
+	// When it was sent tells an old launch from this one.
+	when := ""
+	if c.Time != "" {
+		when = " Sent at " + c.Time + "."
+	}
+	defer func() { f.Detail = strings.TrimSpace(f.Detail + when) }()
 
 	switch {
 	case c.Accepted():

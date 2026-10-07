@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -227,6 +228,36 @@ const (
 // a simulator: tenjin launches the app on it to read its console. The error
 // is a *devicelog.Unavailable when there is nothing to read from.
 func readDeviceLog(ctx context.Context, env *environment, p *project.Project, platform project.Platform, serial string) ([]byte, string, error) {
+	return readLaunch(ctx, env, p, platform, serial, nil)
+}
+
+// launchMark is where a device's log stood before a launch: the newest line
+// of an Android device's, and the time for a simulator's.
+type launchMark struct {
+	android string
+	since   time.Time
+}
+
+// markLaunch notes where the log stands now, so that a read after a launch
+// holds that launch only. An iPhone needs no mark: each read launches the
+// app afresh.
+func markLaunch(ctx context.Context, env *environment, platform project.Platform, serial string) *launchMark {
+	m := &launchMark{since: time.Now()}
+	if platform == project.Android {
+		if adb, ok := devicelog.FindADB(env.lookPath, env.getenv); ok {
+			m.android = devicelog.AndroidMark(ctx, env.runner(), adb, serial)
+		}
+	}
+	return m
+}
+
+// readLaunch is readDeviceLog for what came after mark; nil reads it all.
+func readLaunch(ctx context.Context, env *environment, p *project.Project, platform project.Platform, serial string, mark *launchMark) ([]byte, string, error) {
+	since := time.Time{}
+	if mark != nil {
+		// A second's margin for the log's rounding.
+		since = mark.since.Add(-time.Second)
+	}
 	if platform == project.IOS {
 		xcrun, err := env.lookPath("xcrun")
 		if err != nil {
@@ -260,7 +291,7 @@ func readDeviceLog(ctx context.Context, env *environment, p *project.Project, pl
 			raw, err := devicelog.ReadIPhone(ctx, env.streamer(), xcrun, matching[0], bundle)
 			return raw, fromIPhone, err
 		}
-		raw, err := devicelog.ReadIOSSimulator(ctx, env.runner(), xcrun, serial)
+		raw, err := devicelog.ReadIOSSimulatorSince(ctx, env.runner(), xcrun, serial, since)
 		return raw, fromSimulator, err
 	}
 	adb, ok := devicelog.FindADB(env.lookPath, env.getenv)
@@ -271,6 +302,9 @@ func readDeviceLog(ctx context.Context, env *environment, p *project.Project, pl
 		}
 	}
 	raw, err := devicelog.ReadAndroid(ctx, env.runner(), adb, serial)
+	if err == nil && mark != nil {
+		raw = devicelog.After(raw, mark.android)
+	}
 	return raw, fromAndroid, err
 }
 

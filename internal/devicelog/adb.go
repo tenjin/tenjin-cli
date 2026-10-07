@@ -61,6 +61,21 @@ func findADB(lookPath func(string) (string, error), getenv func(string) string, 
 // emulator. serial picks one when several are connected. The error is an
 // *Unavailable when there is nothing to read from.
 func ReadAndroid(ctx context.Context, run Runner, adb, serial string) ([]byte, error) {
+	return readAndroid(ctx, run, adb, serial)
+}
+
+// AndroidMark is the newest of the SDK's lines in a device's log now, or ""
+// when there is none or the device cannot be read. Passed to After with a
+// later read, it leaves only what was logged since.
+func AndroidMark(ctx context.Context, run Runner, adb, serial string) string {
+	raw, err := readAndroid(ctx, run, adb, serial, "-t", "1")
+	if err != nil {
+		return ""
+	}
+	return LastLine(raw)
+}
+
+func readAndroid(ctx context.Context, run Runner, adb, serial string, extra ...string) ([]byte, error) {
 	out, err := run(ctx, adb, "devices")
 	if err != nil {
 		return nil, &Unavailable{
@@ -91,7 +106,8 @@ func ReadAndroid(ctx context.Context, run Runner, adb, serial string) ([]byte, e
 
 	// -d dumps what is in the buffer and exits; -s silences every tag but
 	// the ones listed.
-	args := append([]string{"-s", serial, "logcat", "-d", "-v", "time", "-s"}, logcatTags...)
+	args := append(append([]string{"-s", serial, "logcat", "-d"}, extra...), "-v", "time", "-s")
+	args = append(args, logcatTags...)
 	log, err := run(ctx, adb, args...)
 	if err != nil {
 		return nil, &Unavailable{Reason: fmt.Sprintf("adb could not read the log of %s: %v", serial, err)}

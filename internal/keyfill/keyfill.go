@@ -6,6 +6,7 @@
 package keyfill
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -103,17 +104,42 @@ func Fill(root string, keys map[string]string) ([]Spot, error) {
 	return filled, nil
 }
 
+// Unfill puts the placeholders back where Fill wrote keys, given the spots
+// it filled and the keys it wrote, so that a coding agent started on the
+// project again does not read them. Fill writes them again afterwards.
+func Unfill(root string, filled []Spot, keys map[string]string) error {
+	byFile := map[string]map[string]string{}
+	for _, s := range filled {
+		if key := keys[s.Placeholder]; key != "" {
+			if byFile[s.File] == nil {
+				byFile[s.File] = map[string]string{}
+			}
+			byFile[s.File][key] = s.Placeholder
+		}
+	}
+	for rel, back := range byFile {
+		path := filepath.Join(root, filepath.FromSlash(rel))
+		raw, err := readRegular(path)
+		if err != nil {
+			return err
+		}
+		text := string(raw)
+		for key, placeholder := range back {
+			text = strings.ReplaceAll(text, key, placeholder)
+		}
+		if err := writeFile(path, text); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func files(root string) []string {
 	return project.SourceFiles(root, ".", exts...)
 }
 
 func read(root, rel string) (string, bool) {
-	path := filepath.Join(root, filepath.FromSlash(rel))
-	info, err := os.Stat(path)
-	if err != nil || info.Size() > maxFileSize {
-		return "", false
-	}
-	raw, err := os.ReadFile(path)
+	raw, err := readRegular(filepath.Join(root, filepath.FromSlash(rel)))
 	// Cheap filter: every placeholder starts this way.
 	if err != nil || !strings.Contains(string(raw), "__TENJIN_") {
 		return "", false
@@ -121,12 +147,33 @@ func read(root, rel string) (string, bool) {
 	return string(raw), true
 }
 
+// readRegular reads a file of the project itself. A symbolic link is not
+// followed: what it points to may be outside the project, and writing the
+// key there, or bringing that file's content into the project, is not this
+// package's to do.
+func readRegular(path string) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a regular file", path)
+	}
+	if info.Size() > maxFileSize {
+		return nil, fmt.Errorf("%s is too large", path)
+	}
+	return os.ReadFile(path)
+}
+
 // writeFile replaces a file's content through a temporary file in the same
 // folder, so the file is never left half written, and keeps its mode.
 func writeFile(path, content string) error {
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
 	if err != nil {
 		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", path)
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".tenjin-*")
 	if err != nil {

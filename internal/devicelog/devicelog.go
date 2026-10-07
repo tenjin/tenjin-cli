@@ -68,6 +68,8 @@ type Request struct {
 	Response string
 	// Line is where the request starts in the log, counting from 1.
 	Line int
+	// Time is when the device logged it, as the log writes it, or "".
+	Time string
 }
 
 // IsConnect reports whether this is the launch call that registers an
@@ -88,8 +90,48 @@ type Log struct {
 	// SawSDK is true when the SDK wrote anything at all.
 	SawSDK   bool
 	Requests []Request
-	// Deduped counts connects the SDK skipped under its 30-second rule.
-	Deduped int
+	// Deduped counts connects the SDK skipped under its 30-second rule, and
+	// DedupedLine is where the last of them is in the log.
+	Deduped     int
+	DedupedLine int
+}
+
+// logTime matches the time at the start of a log line: logcat's "-v time"
+// (10-02 15:07:34.121) and the unified log's (2026-10-06 14:22:01.123).
+var logTime = regexp.MustCompile(`^\s*((?:\d{4}-)?\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?)`)
+
+func lineTime(line string) string {
+	if m := logTime.FindStringSubmatch(line); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// After returns the part of a log that comes after its last line equal to
+// mark: what a device logged since mark was its newest line. When mark is
+// empty or no longer in the log, the whole log is new.
+func After(raw []byte, mark string) []byte {
+	if mark == "" {
+		return raw
+	}
+	lines := strings.Split(string(raw), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if strings.TrimRight(lines[i], "\r") == mark {
+			return []byte(strings.Join(lines[i+1:], "\n"))
+		}
+	}
+	return raw
+}
+
+// LastLine is the newest non-empty line of a log, to pass to After later.
+func LastLine(raw []byte) string {
+	lines := strings.Split(strings.TrimRight(string(raw), "\r\n"), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if line := strings.TrimRight(lines[i], "\r"); strings.TrimSpace(line) != "" {
+			return line
+		}
+	}
+	return ""
 }
 
 // LastConnect returns the most recent connect request, or nil.
@@ -126,7 +168,7 @@ func Parse(r io.Reader) (*Log, error) {
 		case strings.Contains(line, markURL):
 			flush()
 			url := strings.TrimSpace(after(line, markURL))
-			pending = &Request{URL: url, Endpoint: endpoint(url), Params: map[string]string{}, Line: n}
+			pending = &Request{URL: url, Endpoint: endpoint(url), Params: map[string]string{}, Line: n, Time: lineTime(line)}
 			log.SawSDK = true
 		case strings.Contains(line, markParams):
 			if pending == nil {
@@ -144,6 +186,7 @@ func Parse(r io.Reader) (*Log, error) {
 			flush()
 		case strings.Contains(line, markDeduped):
 			log.Deduped++
+			log.DedupedLine = n
 			log.SawSDK = true
 		default:
 			for _, tag := range sdkTags {
@@ -174,11 +217,12 @@ func parseIOSLine(log *Log, pending *Request, line string, n int) *Request {
 	case strings.Contains(line, iosMarkURL):
 		flush()
 		u := strings.TrimSpace(after(line, iosMarkURL))
-		return &Request{URL: u, Endpoint: endpoint(u), Params: map[string]string{}, Line: n}
+		return &Request{URL: u, Endpoint: endpoint(u), Params: map[string]string{}, Line: n, Time: lineTime(line)}
+	case strings.Contains(line, iosMarkDeduped):
+		log.Deduped++
+		log.DedupedLine = n
+		return pending
 	case pending == nil:
-		if strings.Contains(line, iosMarkDeduped) {
-			log.Deduped++
-		}
 		return nil
 	case strings.Contains(line, iosMarkParams):
 		if values, err := url.ParseQuery(strings.TrimSpace(after(line, iosMarkParams))); err == nil {

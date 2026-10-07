@@ -108,3 +108,47 @@ func TestFillABuildsOwnPlaceholder(t *testing.T) {
 		t.Errorf("build file:\n%s", raw)
 	}
 }
+
+// A placeholder in a file that is a symbolic link is left alone: the file
+// it points to may be outside the project.
+func TestASymlinkedFileIsNotFilled(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need privileges on Windows")
+	}
+	root, outside := t.TempDir(), t.TempDir()
+	target := filepath.Join(outside, "config.json")
+	if err := os.WriteFile(target, []byte(`{"key": "__TENJIN_ANDROID_SDK_KEY__"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(root, "config.json")); err != nil {
+		t.Fatal(err)
+	}
+	filled, _ := Fill(root, map[string]string{"__TENJIN_ANDROID_SDK_KEY__": "K"})
+	if len(filled) != 0 {
+		t.Errorf("filled %v", filled)
+	}
+	if info, err := os.Lstat(filepath.Join(root, "config.json")); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Error("the link was replaced")
+	}
+}
+
+// Unfill puts back exactly what Fill wrote.
+func TestUnfillPutsThePlaceholdersBack(t *testing.T) {
+	root := t.TempDir()
+	const original = "val key = \"__TENJIN_ANDROID_SDK_KEY__\"\n"
+	path := filepath.Join(root, "Main.kt")
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	keys := map[string]string{"__TENJIN_ANDROID_SDK_KEY__": "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"}
+	filled, err := Fill(root, keys)
+	if err != nil || len(filled) != 1 {
+		t.Fatalf("filled %v, %v", filled, err)
+	}
+	if err := Unfill(root, filled, keys); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != original {
+		t.Errorf("got %q", got)
+	}
+}

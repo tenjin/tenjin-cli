@@ -163,6 +163,11 @@ type setup struct {
 	// came from. A build with no entry either has its key in the project
 	// already or has none yet.
 	keys map[string]verify.GivenKey
+	// filled are the placeholders this run has written keys over, and
+	// filledKeys the keys, by placeholder: put back before a coding agent
+	// works on the project again, so it never reads them.
+	filled     []keyfill.Spot
+	filledKeys map[string]string
 	// inProject marks the builds whose key is already written in the
 	// project and accepted by Tenjin.
 	inProject map[string]bool
@@ -647,6 +652,15 @@ func (s *setup) manualGuide(report *verify.Report) {
 // did. A failure here is not fatal: the check that follows is what decides
 // whether the integration works.
 func (s *setup) runAgent(p *project.Project, report *verify.Report) {
+	// Keys this run wrote go back to their placeholders while the agent
+	// works, and are written again when it is done.
+	if len(s.filled) > 0 {
+		if err := keyfill.Unfill(p.Root, s.filled, s.filledKeys); err != nil {
+			s.say("%s Could not take the SDK keys out of the project before %s starts, so it was not started: %v", s.style.Yellow("!"), s.helper.Name, err)
+			return
+		}
+		s.filled = nil
+	}
 	toolDir := ""
 	if exe, err := s.env.executable(); err == nil {
 		toolDir = filepath.Dir(exe)
@@ -726,8 +740,13 @@ func (s *setup) fillKeys(p *project.Project, ask bool) error {
 		}
 	}
 	filled, err := keyfill.Fill(p.Root, keys)
+	if s.filledKeys == nil {
+		s.filledKeys = map[string]string{}
+	}
 	for _, spot := range filled {
 		s.say("  %s Wrote %s at %s:%d", s.style.Green("✓"), keyNoun(p, spot), spot.File, spot.Line)
+		s.filled = append(s.filled, spot)
+		s.filledKeys[spot.Placeholder] = keys[spot.Placeholder]
 	}
 	if err != nil {
 		return fmt.Errorf("could not write the SDK keys: %w", err)

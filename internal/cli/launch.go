@@ -68,6 +68,7 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 	}
 
 	for {
+		mark := markLaunch(s.cmd.Context(), s.env, platform, "")
 		prompt := fmt.Sprintf("\nLaunch a debug build of the app on %s, then press Enter (s to skip):", deviceNoun(platform))
 		if platform == project.IOS {
 			prompt = "\nInstall a debug build on the iPhone, or launch one on a simulator, then press Enter (s to skip):"
@@ -81,7 +82,7 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 			return err
 		}
 
-		raw, from, err := readDeviceLog(s.cmd.Context(), s.env, p, platform, "")
+		raw, from, err := readLaunch(s.cmd.Context(), s.env, p, platform, "", mark)
 		var unavailable *devicelog.Unavailable
 		if errors.As(err, &unavailable) {
 			s.say("%s %s", s.style.Yellow("!"), unavailable.Reason)
