@@ -8,12 +8,14 @@ import (
 )
 
 // The newest release of each SDK when this version of the CLI was built,
-// read from Maven Central, CocoaPods, pub.dev and npm on 2 October 2026.
-// A fix that says "add the SDK" names these, so that neither a person nor a
-// coding agent has to guess a version. Update them with each CLI release.
+// read from Maven Central, CocoaPods, pub.dev, npm and GitHub on 6 October
+// 2026. A fix that says "add the SDK" names these, so that neither a person
+// nor a coding agent has to guess a version. They are also what doctor falls
+// back to offline; online it looks for newer releases of the same major
+// version (Options.Latest).
 var latestSDK = []struct{ packagePrefix, version string }{
-	{"com.tenjin:android-sdk", "1.24.0"},
-	{"TenjinSDK", "1.19.1"}, // the pod and the Swift package share a version
+	{"com.tenjin:android-sdk", "2.0.0"},
+	{"TenjinSDK", "1.20.0"}, // the pod and the Swift package share a version
 	{"tenjin_plugin", "1.5.0"},
 	{"react-native-tenjin", "1.7.0"},
 	{"ionic-capacitor-tenjin", "2.2.0"},
@@ -26,31 +28,49 @@ const (
 	appSetVersion        = "16.1.0"
 )
 
-// LatestVersion is the newest release of a Tenjin SDK package this CLI
-// knows, or "" for a package it does not.
-func LatestVersion(pkg string) string { return latestVersion(pkg) }
+// LatestVersion is the newest release of a Tenjin SDK package this CLI was
+// built with, or "" for a package it does not know.
+func LatestVersion(pkg string) string { return latestVersion(pkg, nil) }
 
-func latestVersion(pkg string) string {
+// latestVersion is the newest release of a package: the one this CLI was
+// built with, or a newer one of the same major version from live.
+func latestVersion(pkg string, live map[string]string) string {
 	for _, sdk := range latestSDK {
-		if strings.HasPrefix(pkg, sdk.packagePrefix) {
-			return sdk.version
+		if !strings.HasPrefix(pkg, sdk.packagePrefix) {
+			continue
 		}
+		known, _ := parseVersion(sdk.version)
+		if found, ok := parseVersion(live[sdk.packagePrefix]); ok && found[0] == known[0] && olderThan(sdk.version, live[sdk.packagePrefix]) {
+			return live[sdk.packagePrefix]
+		}
+		return sdk.version
 	}
 	return ""
 }
 
-// checkVersion warns when the declared SDK is older than the newest release
-// this CLI knows. It stays silent when it cannot tell: an unreadable version,
-// or a range that already admits the newest release.
+// sdkVersionToken stands for the newest release in a framework's installFix.
+const sdkVersionToken = "{sdk_version}"
+
+// installFix is how to add a framework's SDK, at its newest release.
+func installFix(spec frameworkSpec, live map[string]string) string {
+	if len(spec.packages) == 0 {
+		return spec.installFix
+	}
+	return strings.ReplaceAll(spec.installFix, sdkVersionToken, latestVersion(spec.packages[0], live))
+}
+
+// checkVersion warns when the declared SDK is older than the newest release.
+// It stays silent when it cannot tell: an unreadable version, or a range
+// that already admits the newest release.
 func (r *runner) checkVersion(i project.Integration, platform project.Platform) {
-	latest := latestVersion(i.Package)
+	latest := latestVersion(i.Package, r.opts.Latest)
 	if latest == "" || !olderThan(i.Version, latest) {
 		return
 	}
 	r.add(Finding{
 		ID: "sdk.version", Severity: Warning, Platform: platform,
 		Title:  "The Tenjin SDK is at " + i.Version + "; the current release is " + latest,
-		Detail: "Later releases carry fixes for attribution and for store policy changes. " + latest + " was the newest when this version of the Tenjin CLI was built.",
+		Detail: "Later releases carry fixes for attribution and for store policy changes.",
 		File:   i.Source,
 		Fix:    "Update " + i.Package + " to " + latest + ".",
 	})
@@ -87,6 +107,22 @@ func olderThan(declared, latest string) bool {
 		}
 	}
 	return false
+}
+
+// atLeast reports whether an exact declared version is min or later. A range
+// or an unreadable version is not judged.
+func atLeast(declared, min string) bool {
+	have, ok := parseVersion(strings.TrimPrefix(strings.TrimSpace(declared), "v"))
+	want, okMin := parseVersion(min)
+	if !ok || !okMin {
+		return false
+	}
+	for n := range have {
+		if have[n] != want[n] {
+			return have[n] > want[n]
+		}
+	}
+	return true
 }
 
 // parseVersion reads "1.24.0" or "1.24" into three numbers.

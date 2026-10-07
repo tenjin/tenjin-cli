@@ -127,11 +127,11 @@ It says so when a project is not one to integrate into: a build exported from Un
 
 Native Android, native iOS, Flutter, React Native, Capacitor and Unity projects: the SDK dependency and whether it is an old release, the initialise and connect calls, a placeholder key, Android permissions and Play Services libraries, ProGuard rules, the iOS tracking and SKAdNetwork plist keys, and whether Tenjin accepts the SDK key for each platform's bundle ID.
 
-Each problem comes with a fix that can be applied as written: where a dependency is missing, the fix names the version to add. The versions are the newest releases at the time the CLI was built.
+Each problem comes with a fix that can be applied as written: where a dependency is missing, the fix names the version to add. Once a day `doctor` asks each SDK's public registry (Maven Central, pub.dev, npm, GitHub) for its newest release, and names it when it is of the major version this CLI was built for; offline, or for a new major version, it names the newest release it was built with.
 
 For Unity it also checks that the External Dependency Manager is there to add Tenjin's Android libraries, finds the `TenjinObject` component in scenes as well as calls in code, reads a key kept in a C# constant, and checks that a build script points SKAdNetwork postbacks at Tenjin, which the Unity package does not do.
 
-The key check sends one request to Tenjin's collector and no event; `--offline` skips it. Unreal projects are detected but not checked yet.
+The key check sends one request to Tenjin's collector and no event. `--offline` skips it and the registry lookup. Unreal projects are detected but not checked yet.
 
 
 It also reports, for each feature beyond app opens, whether the project sends it to Tenjin: ad revenue per ad network, purchases, subscriptions and the rest, by the SDK's own calls. With `--features`, a chosen feature that nothing sends is a warning; without it, a feature the project suggests is a suggestion, and one it does not suggest is not mentioned.

@@ -33,7 +33,7 @@ func Guide(report *Report) []GuidePart {
 	steps := func(spec frameworkSpec, platform project.Platform) []string {
 		var out []string
 		if !done("sdk.dependency", platform) {
-			out = append(out, spec.installFix)
+			out = append(out, installFix(spec, report.latest))
 		}
 		if !done("sdk.init", platform) {
 			out = append(out, spec.initFix)

@@ -104,7 +104,7 @@ func TestAndroidFaults(t *testing.T) {
 		severity verify.Severity
 	}{
 		{"sdk not a dependency",
-			base.With(testproject.Files{build: strings.Replace(base[build], `implementation("com.tenjin:android-sdk:1.24.0")`, "", 1)}),
+			base.With(testproject.Files{build: strings.Replace(base[build], `implementation("com.tenjin:android-sdk:2.0.0")`, "", 1)}),
 			"sdk.dependency", verify.Error},
 		{"never initialised",
 			base.With(testproject.Files{activity: "package com.example.sample\nclass MainActivity\n"}),
@@ -134,7 +134,8 @@ func TestAndroidFaults(t *testing.T) {
 			base.With(testproject.Files{build: strings.Replace(base[build], `implementation("com.google.android.gms:play-services-appset:16.1.0")`, "", 1)}),
 			"android.play_services.appset", verify.Warning},
 		{"shrinking without keep rules",
-			base.With(testproject.Files{build: strings.Replace(base[build], "isMinifyEnabled = false", "isMinifyEnabled = true", 1)}),
+			// Before 2.0.0 the SDK has no keep rules of its own.
+			base.With(testproject.Files{build: strings.Replace(strings.Replace(base[build], "isMinifyEnabled = false", "isMinifyEnabled = true", 1), "android-sdk:2.0.0", "android-sdk:1.24.0", 1)}),
 			"android.proguard", verify.Warning},
 		{"connect in the Application class",
 			base.With(testproject.Files{activity: strings.Replace(base[activity], "class MainActivity : Activity()", "class App : Application()", 1)}),
@@ -364,15 +365,15 @@ func has(r *verify.Report, id string) bool {
 func TestOutdatedSDKVersion(t *testing.T) {
 	const build = "app/build.gradle.kts"
 	base := testproject.AndroidNative()
-	old := base.With(testproject.Files{build: strings.Replace(base[build], "android-sdk:1.24.0", "android-sdk:1.16.5", 1)})
+	old := base.With(testproject.Files{build: strings.Replace(base[build], "android-sdk:2.0.0", "android-sdk:1.16.5", 1)})
 	f := expect(t, run(t, old, verify.Options{}), "sdk.version", project.Android, verify.Warning)
-	if !strings.Contains(f.Title, "1.16.5") || !strings.Contains(f.Fix, "com.tenjin:android-sdk to 1.24.0") || f.File != build {
+	if !strings.Contains(f.Title, "1.16.5") || !strings.Contains(f.Fix, "com.tenjin:android-sdk to 2.0.0") || f.File != build {
 		t.Errorf("finding = %+v", f)
 	}
 
 	// Current, and newer than this CLI knows about: nothing to say.
-	for _, version := range []string{"1.24.0", "1.30.2", "2.0.0"} {
-		files := base.With(testproject.Files{build: strings.Replace(base[build], "android-sdk:1.24.0", "android-sdk:"+version, 1)})
+	for _, version := range []string{"2.0.0", "2.1.3", "3.0.0"} {
+		files := base.With(testproject.Files{build: strings.Replace(base[build], "android-sdk:2.0.0", "android-sdk:"+version, 1)})
 		if has(run(t, files, verify.Options{}), "sdk.version") {
 			t.Errorf("version %s was reported as outdated", version)
 		}
@@ -474,5 +475,41 @@ func TestIOSDebugLogs(t *testing.T) {
 				t.Errorf("fix = %q", f.Fix)
 			}
 		})
+	}
+}
+
+// From 2.0.0 the Android SDK's AAR carries its keep rules, so shrinking needs
+// none in the app.
+func TestTheAndroidSDKBringsItsOwnKeepRules(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	r := run(t, base.With(testproject.Files{build: strings.Replace(base[build], "isMinifyEnabled = false", "isMinifyEnabled = true", 1)}), verify.Options{})
+	f := expect(t, r, "android.proguard", project.Android, verify.Pass)
+	if !strings.Contains(f.Title, "own keep rules") {
+		t.Errorf("title = %q", f.Title)
+	}
+}
+
+// A newer release from the registries is named only within the major version
+// the checks were built for.
+func TestNewerReleasesCountWithinTheKnownMajorVersion(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	missing := base.With(testproject.Files{build: strings.Replace(base[build], `implementation("com.tenjin:android-sdk:2.0.0")`, "", 1)})
+	for _, c := range []struct{ live, want string }{
+		{"2.0.3", "2.0.3"},
+		{"3.0.0", "2.0.0"},
+		{"1.24.0", "2.0.0"},
+		{"2.1.0-rc.1", "2.0.0"},
+	} {
+		r := run(t, missing, verify.Options{Latest: map[string]string{"com.tenjin:android-sdk": c.live}})
+		f := expect(t, r, "sdk.dependency", project.Android, verify.Error)
+		if !strings.Contains(f.Fix, "com.tenjin:android-sdk:"+c.want+`")`) {
+			t.Errorf("live %s: fix = %q", c.live, f.Fix)
+		}
+	}
+	r := run(t, base, verify.Options{Latest: map[string]string{"com.tenjin:android-sdk": "2.0.3"}})
+	if f := expect(t, r, "sdk.version", project.Android, verify.Warning); !strings.Contains(f.Fix, "to 2.0.3") {
+		t.Errorf("fix = %q", f.Fix)
 	}
 }

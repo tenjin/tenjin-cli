@@ -50,7 +50,7 @@ func TestAndroidNative(t *testing.T) {
 	if target.Android.Manifest != "app/src/main/AndroidManifest.xml" {
 		t.Errorf("manifest = %q", target.Android.Manifest)
 	}
-	if len(p.Tenjin) != 1 || p.Tenjin[0].Package != "com.tenjin:android-sdk" || p.Tenjin[0].Version != "1.24.0" {
+	if len(p.Tenjin) != 1 || p.Tenjin[0].Package != "com.tenjin:android-sdk" || p.Tenjin[0].Version != "2.0.0" {
 		t.Errorf("tenjin = %+v", p.Tenjin)
 	}
 	if p.Target(project.IOS) != nil {
@@ -106,7 +106,7 @@ func TestIOSNative(t *testing.T) {
 	if target.IOS.InfoPlist != "Sample/Info.plist" || target.IOS.Podfile != "Podfile" {
 		t.Errorf("ios info = %+v", target.IOS)
 	}
-	if len(p.Tenjin) != 1 || p.Tenjin[0].Version != "1.19.1" {
+	if len(p.Tenjin) != 1 || p.Tenjin[0].Version != "1.20.0" {
 		t.Errorf("tenjin = %+v", p.Tenjin)
 	}
 }

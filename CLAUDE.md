@@ -10,7 +10,7 @@ This repository is meant to be public. Keep internal details (private repos, int
 make build      # bin/tenjin, with version stamped in
 make test       # go test -race ./...
 make lint       # gofmt check + golangci-lint
-make release-snapshot   # GoReleaser, locally: every archive and the cask into dist/, nothing published
+make release-snapshot   # GoReleaser, locally: every archive (with THIRD_PARTY_NOTICES.md) and the cask into dist/, nothing published
 go test -tags keychain ./internal/session   # opt-in: writes to the real system keychain
 go test -tags realagent -run RealClaudeCode -v ./internal/cli   # opt-in: starts the real Claude Code (setup, then the skill); needs `make build`
 go test -tags realagent -run RealCodex -v ./internal/cli        # opt-in: starts the real Codex
@@ -38,6 +38,7 @@ internal/oauth        browser sign-in: PKCE on a loopback port, then token excha
 internal/session      credential store (keychain, file fallback) and token refresh
 internal/config       service URLs per environment
 internal/render       table and JSON output, terminal colour (a muted palette, 24-bit where the terminal says it can)
+internal/sdkrelease   the newest release of each SDK, from Maven Central, pub.dev, npm and GitHub, once a day
 internal/update       the once-a-day check for a newer release, told on stderr to a person at a terminal
 internal/clierr       error kinds and their exit codes
 internal/testproject  builds sample projects on disk for tests
@@ -62,7 +63,7 @@ docs/adr              architecture decisions
 - **All HTTP goes through `internal/transport`** (`env.transport()`). It retries a request only when sending it again cannot do anything twice: GET, or a request whose context is marked `transport.Retryable`. Never mark a request that creates or changes something, or an OAuth token request (refresh tokens rotate). The `--verbose` log is method, address, status and time; never add headers or bodies to it.
 - **Never print a credential or a whole SDK key.** Findings show the last four characters (`mask`), and an agent's report is masked the same way before it is shown. The API client decodes only the app attributes it shows, because the API returns shared secrets alongside them.
 - **A check that cannot tell must not say pass.** Use an `info` finding.
-- **A fix must be usable as written.** Name the file, the line and the version; never "the latest". The SDK versions fixes name live in `internal/verify/versions.go` and are updated with each release.
+- **A fix must be usable as written.** Name the file, the line and the version; never "the latest". The SDK versions fixes name come from `internal/verify/versions.go`, which is also the offline answer; online, `internal/sdkrelease` finds newer releases once a day, and `verify` takes one only within the major version the table knows. A new major SDK version is a CLI change: read its changelog, adjust the checks, then move the table.
 - **No dead flags or code.** Add a flag in the change that gives it behaviour.
 - **The skill describes this binary.** `internal/skill/tenjin-cli.md` is what agents are told. When a command or flag it mentions changes, change it too; `TestTheSkillOnlyNamesCommandsThatExist` fails if it names something that is not there.
 - **JSON output is a contract.** `project detect --json` and `doctor --json` are pinned by golden files in `internal/cli/testdata`. Add fields; do not rename or remove them.

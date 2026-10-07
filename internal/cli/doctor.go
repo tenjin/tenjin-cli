@@ -40,8 +40,10 @@ that it is initialised and connected, that the manifest and Info.plist carry
 what the SDK needs, and that Tenjin accepts the SDK key for each platform's
 bundle ID.
 
-The key check sends one request to Tenjin's collector and no event. Use
---offline to skip it. doctor never changes the project.
+The key check sends one request to Tenjin's collector and no event. Once a
+day doctor also asks the SDKs' public registries (Maven Central, pub.dev,
+npm, GitHub) for their newest releases, so its fixes name current versions.
+--offline skips both. doctor never changes the project.
 
 With --device, doctor also reads what the app's last launch sent and what
 Tenjin answered to each request, then asks Tenjin whether the device's
@@ -100,6 +102,7 @@ otherwise. With --strict, warnings count too.`,
 			vopts := verify.Options{Given: given, Features: chosen}
 			var tenjin *collector.Client
 			if !offline {
+				vopts.Latest = env.latestSDKs(cmd.Context())
 				tenjin = env.collector()
 				vopts.Keys = tenjin
 			}
@@ -127,7 +130,7 @@ otherwise. With --strict, warnings count too.`,
 		},
 	}
 	addSDKKeyFlag(cmd, &sdkKeys)
-	cmd.Flags().BoolVar(&offline, "offline", false, "skip the SDK key check against Tenjin")
+	cmd.Flags().BoolVar(&offline, "offline", false, "skip the SDK key check against Tenjin, and the look for newer SDK releases")
 	cmd.Flags().BoolVar(&strict, "strict", false, "exit non-zero on warnings as well as errors")
 	cmd.Flags().BoolVar(&device, "device", false, "also read the log of a connected Android device or emulator, or of a running iOS simulator")
 	cmd.Flags().StringVar(&serial, "serial", "", "which device to read, when several are connected: an Android serial (see 'adb devices') or a simulator's UDID")

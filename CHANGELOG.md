@@ -11,3 +11,5 @@ The first release:
 - Native Android and iOS, Flutter, React Native, Capacitor and Unity projects; builds per app store; device checks on Android devices, iPhones and iOS simulators.
 - Installs with Homebrew (macOS and Linux), a shell script (macOS and Linux) or a PowerShell script (Windows), each checked against the release checksums.
 - Says when a newer release is out, once a day, with the command that updates it.
+- `doctor` names the newest SDK releases, looked up once a day, and knows that the Android SDK brings its own keep rules from 2.0.0.
+- Release archives carry the licences of the software compiled into the binary (`THIRD_PARTY_NOTICES.md`).

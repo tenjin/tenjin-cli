@@ -30,7 +30,7 @@
     "tenjin": [
       {
         "package": "TenjinSDK (CocoaPods)",
-        "version": "1.19.1",
+        "version": "1.20.0",
         "source": "Podfile"
       }
     ],
@@ -94,7 +94,7 @@
       "id": "sdk.dependency",
       "severity": "pass",
       "platform": "ios",
-      "title": "Tenjin SDK is declared: TenjinSDK (CocoaPods) 1.19.1",
+      "title": "Tenjin SDK is declared: TenjinSDK (CocoaPods) 1.20.0",
       "file": "Podfile"
     },
     {
