@@ -612,3 +612,16 @@ func TestAConnectInDebugBuildsOnlyIsAnError(t *testing.T) {
 		t.Errorf("title = %q", f.Title)
 	}
 }
+
+// A tracking request in a file of its own, which never names Tenjin, counts.
+func TestATrackingRequestInItsOwnFile(t *testing.T) {
+	ios := testproject.IOSNative()
+	const delegate = "Sample/AppDelegate.swift"
+	r := run(t, ios.With(testproject.Files{
+		delegate:                          strings.Replace(ios[delegate], "ATTrackingManager.requestTrackingAuthorization", "TrackingPermission.request", 1),
+		"Sample/TrackingPermission.swift": "import AppTrackingTransparency\nenum TrackingPermission {\n  static func request(completionHandler: @escaping (ATTrackingManager.AuthorizationStatus) -> Void) {\n    ATTrackingManager.requestTrackingAuthorization(completionHandler: completionHandler)\n  }\n}\n",
+	}), verify.Options{})
+	if f := expect(t, r, "ios.att_request", project.IOS, verify.Pass); f.File != "Sample/TrackingPermission.swift" {
+		t.Errorf("found at %s", f.File)
+	}
+}

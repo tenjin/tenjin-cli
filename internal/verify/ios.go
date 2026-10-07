@@ -22,6 +22,13 @@ func (r *runner) checkIOS(spec frameworkSpec, t *project.Target, src source) {
 		})
 		return
 	}
+	if t.IOS.InfoPlist == "" && t.IOS.MissingInfoPlist != "" && !t.IOS.GeneratedInfoPlist {
+		r.add(Finding{
+			ID: "ios.plist", Severity: Info, Platform: project.IOS, File: t.IOS.Xcodeproj,
+			Title: "The app's Info.plist (" + t.IOS.MissingInfoPlist + ") was not found, so its keys were not checked",
+		})
+		return
+	}
 	plist := r.readRel(t.IOS.InfoPlist)
 	pbx := r.readRel(t.IOS.Xcodeproj + "/project.pbxproj")
 	if t.IOS.InfoPlist != "" && !strings.Contains(plist, "<plist") {
@@ -147,6 +154,10 @@ func (r *runner) checkATTRequest(spec frameworkSpec, src source) {
 	switch {
 	case spec.attCall != nil && len(src.att) > 0:
 		r.pass("ios.att_request", project.IOS, "The app asks for tracking permission", src.att[0].File, src.att[0].Line)
+	// The request is often in a file of its own that never names Tenjin;
+	// detection looks for it everywhere.
+	case spec.attCall != nil && r.p.TrackingPrompt != nil && r.p.TrackingPrompt.File != "":
+		r.pass("ios.att_request", project.IOS, "The app asks for tracking permission", r.p.TrackingPrompt.File, r.p.TrackingPrompt.Line)
 	case spec.attCall != nil:
 		r.add(Finding{
 			ID: "ios.att_request", Severity: Warning, Platform: project.IOS,

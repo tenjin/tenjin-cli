@@ -106,6 +106,9 @@ type AndroidInfo struct {
 type IOSInfo struct {
 	Xcodeproj string `json:"xcodeproj"`
 	InfoPlist string `json:"info_plist,omitempty"`
+	// MissingInfoPlist is the Info.plist the app's build settings name when
+	// it could not be found, so that its keys cannot be checked.
+	MissingInfoPlist string `json:"-"`
 	// GeneratedInfoPlist means Xcode builds the plist from build settings.
 	GeneratedInfoPlist bool   `json:"generated_info_plist"`
 	Podfile            string `json:"podfile,omitempty"`
