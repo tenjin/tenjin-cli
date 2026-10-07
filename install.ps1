@@ -1,4 +1,4 @@
-# Installs the tenjin command-line tool on Windows from its GitHub releases.
+# Installs the Tenjin CLI (the tenjin command) on Windows from its GitHub releases.
 #
 #   irm https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.ps1 | iex
 #
@@ -20,7 +20,7 @@
 	$releases = if ($env:TENJIN_RELEASES_URL) { $env:TENJIN_RELEASES_URL } else { 'https://github.com/tenjin/tenjin-cli/releases' }
 
 	# Failing throws rather than exits: this runs inside the caller's shell.
-	function Fail($message) { throw "tenjin install: $message" }
+	function Fail($message) { throw "Tenjin CLI installer: $message" }
 
 	$arch = $null
 	try { $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() } catch { }
@@ -53,7 +53,7 @@
 	$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("tenjin-" + [System.Guid]::NewGuid().ToString('N'))
 	New-Item -ItemType Directory -Path $tmp | Out-Null
 	try {
-		Write-Host "Downloading tenjin $version for windows/$arch"
+		Write-Host "Downloading the Tenjin CLI $version for windows/$arch"
 		try {
 			Invoke-WebRequest -Uri "$url/$archive" -OutFile (Join-Path $tmp $archive) -UseBasicParsing
 		} catch {
@@ -101,7 +101,7 @@
 			# does not.
 			[Environment]::SetEnvironmentVariable('TENJIN_INSTALL_PATH_CHANGED', '1', 'User')
 			[Environment]::SetEnvironmentVariable('TENJIN_INSTALL_PATH_CHANGED', $null, 'User')
-			Write-Host "Added $dir to your PATH. Open a new terminal to use tenjin there."
+			Write-Host "Added $dir to your PATH. Open a new terminal to use the tenjin command there."
 		}
 		if (($env:Path -split ';') -notcontains $dir) { $env:Path = "$env:Path;$dir" }
 

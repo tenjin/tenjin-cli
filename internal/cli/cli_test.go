@@ -14,7 +14,7 @@ func TestVersion(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d, stderr = %q", code, stderr)
 	}
-	if !strings.HasPrefix(stdout, "tenjin ") || !strings.Contains(stdout, "commit ") {
+	if !strings.HasPrefix(stdout, "Tenjin CLI ") || !strings.Contains(stdout, "commit ") {
 		t.Errorf("stdout = %q", stdout)
 	}
 	if stderr != "" {

@@ -50,7 +50,7 @@ func (r *runner) checkVersion(i project.Integration, platform project.Platform) 
 	r.add(Finding{
 		ID: "sdk.version", Severity: Warning, Platform: platform,
 		Title:  "The Tenjin SDK is at " + i.Version + "; the current release is " + latest,
-		Detail: "Later releases carry fixes for attribution and for store policy changes. " + latest + " was the newest when this version of tenjin was built.",
+		Detail: "Later releases carry fixes for attribution and for store policy changes. " + latest + " was the newest when this version of the Tenjin CLI was built.",
 		File:   i.Source,
 		Fix:    "Update " + i.Package + " to " + latest + ".",
 	})

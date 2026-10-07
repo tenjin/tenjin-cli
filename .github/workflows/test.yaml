@@ -105,8 +105,33 @@ jobs:
         run: |
           python3 -m http.server -d site -b 127.0.0.1 8765 &
           until curl -fs http://127.0.0.1:8765/install.sh > /dev/null; do sleep 1; done
-          curl -fsSL http://127.0.0.1:8765/install.sh | TENJIN_INSTALL_DIR="$RUNNER_TEMP/bin" sh
-          "$RUNNER_TEMP/bin/tenjin" version | grep -F "tenjin $TENJIN_VERSION"
+          curl -fsSL http://127.0.0.1:8765/install.sh | TENJIN_INSTALL_DIR="$RUNNER_TEMP/bin" TENJIN_NO_MODIFY_PATH=1 sh
+          "$RUNNER_TEMP/bin/tenjin" version | grep -F "Tenjin CLI $TENJIN_VERSION"
+          # A new user, with nothing on PATH to install into: a new terminal
+          # must find the tenjin command with no step of theirs.
+          shells="bash"
+          if command -v zsh > /dev/null; then shells="bash zsh"; fi
+          for shell in $shells; do
+            home="$RUNNER_TEMP/home-$shell"
+            mkdir -p "$home"
+            curl -fsSL http://127.0.0.1:8765/install.sh |
+              env -i HOME="$home" PATH=/usr/bin:/bin SHELL="/bin/$shell" \
+                TENJIN_RELEASES_URL="$TENJIN_RELEASES_URL" TENJIN_VERSION="$TENJIN_VERSION" sh
+            # Once more: nothing is added twice.
+            curl -fsSL http://127.0.0.1:8765/install.sh |
+              env -i HOME="$home" PATH=/usr/bin:/bin SHELL="/bin/$shell" \
+                TENJIN_RELEASES_URL="$TENJIN_RELEASES_URL" TENJIN_VERSION="$TENJIN_VERSION" sh > /dev/null
+            modes="-lc -ic"
+            if [ "$shell" = zsh ]; then modes="-c -lc -ic"; fi
+            for mode in $modes; do
+              found=$(env -i HOME="$home" PATH=/usr/bin:/bin TERM=dumb "/bin/$shell" $mode 'command -v tenjin' 2> /dev/null | tail -n 1 || true)
+              test "$found" = "$home/.local/bin/tenjin" || { echo "$shell $mode found '$found'"; exit 1; }
+            done
+            for f in "$home"/.??*; do
+              if [ -f "$f" ] && [ "$(grep -c 'Tenjin CLI installer' "$f")" -gt 1 ]; then echo "$f was changed twice"; exit 1; fi
+            done
+            echo "$shell: a new terminal finds the tenjin command"
+          done
       - name: Homebrew
         if: runner.os != 'Windows'
         env:
@@ -120,7 +145,7 @@ jobs:
           sed -E "s#https://github.com/tenjin/tenjin-cli/releases/download/[^/]+/#file://$PWD/site/download/v$TENJIN_VERSION/#" \
             dist/homebrew/Casks/tenjin.rb > "$tap/Casks/tenjin.rb"
           brew install --cask tenjin/local/tenjin
-          "$(brew --prefix)/bin/tenjin" version | grep -F "tenjin $TENJIN_VERSION"
+          "$(brew --prefix)/bin/tenjin" version | grep -F "Tenjin CLI $TENJIN_VERSION"
           ls "$(brew --prefix)/share/zsh/site-functions" "$(brew --prefix)/etc/bash_completion.d" "$(brew --prefix)/share/fish/vendor_completions.d" | grep -i tenjin
       - name: install.ps1, Windows PowerShell
         if: runner.os == 'Windows'
@@ -133,7 +158,7 @@ jobs:
           irm http://127.0.0.1:8765/install.ps1 | iex
           $dir = Join-Path $env:LOCALAPPDATA 'Programs\tenjin'
           tenjin version
-          if (-not ((tenjin version) -like "tenjin $env:TENJIN_VERSION *")) { throw 'wrong version' }
+          if (-not ((tenjin version) -like "Tenjin CLI $env:TENJIN_VERSION *")) { throw 'wrong version' }
           $saved = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
           if (($saved -split ';') -notcontains $dir) { throw "$dir is not on the saved PATH: $saved" }
       - name: install.ps1 again, PowerShell 7

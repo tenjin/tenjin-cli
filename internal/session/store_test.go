@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/zalando/go-keyring"
 )
@@ -93,5 +95,34 @@ func TestUnreadableCredentialsAreNone(t *testing.T) {
 	}
 	if got, err := newStoreIn(dir).Load("production"); got != nil || err != nil {
 		t.Errorf("got %+v, %v", got, err)
+	}
+}
+
+// A keychain that never answers, as a locked Linux keyring over SSH, costs
+// one wait at sign-in, and none afterwards: the session is in the file.
+func TestAKeychainThatDoesNotAnswerIsPassedOver(t *testing.T) {
+	store := newStoreIn(t.TempDir())
+	block := make(chan struct{})
+	t.Cleanup(func() { close(block) })
+	var asked atomic.Int32
+	store.set = func(string, string, string) error { asked.Add(1); <-block; return nil }
+	store.get = func(string, string) (string, error) { asked.Add(1); <-block; return "", nil }
+	store.timeout = 10 * time.Millisecond
+
+	where, err := store.Save(creds())
+	if err != nil || !strings.Contains(where, "no system keychain is available") {
+		t.Fatalf("where = %q, err = %v", where, err)
+	}
+	asked.Store(0)
+	got, err := store.Load("production")
+	if err != nil || got == nil || got.RefreshToken != "refresh" {
+		t.Fatalf("loaded %+v, %v", got, err)
+	}
+	if n := asked.Load(); n != 0 {
+		t.Errorf("the keychain was asked %d times with the session in the file", n)
+	}
+	// With nothing saved, Load gives up on the keychain and reports nothing.
+	if got, err := store.Load("staging"); got != nil || err != nil {
+		t.Errorf("loaded %+v, %v", got, err)
 	}
 }

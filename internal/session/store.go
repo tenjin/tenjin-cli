@@ -42,39 +42,62 @@ type Store interface {
 	Save(c *Credentials) (location string, err error)
 }
 
+// keychainTimeout bounds each keychain call. A locked Linux keyring can wait
+// for an unlock prompt that nobody will see, as over SSH; past this, the
+// credentials go to the file.
+const keychainTimeout = 5 * time.Second
+
 // NewStore returns the store for this machine: the operating system's
 // keychain, falling back to a private file where no keychain is available.
 func NewStore() Store {
 	dir, err := os.UserConfigDir()
 	if err != nil {
-		dir = os.TempDir()
+		// No XDG_CONFIG_HOME and no HOME the usual way; the home folder still
+		// outlasts a reboot, which the temporary folder does not.
+		if home, homeErr := os.UserHomeDir(); homeErr == nil {
+			dir = filepath.Join(home, ".config")
+		} else {
+			dir = os.TempDir()
+		}
 	}
-	return &systemStore{dir: filepath.Join(dir, "tenjin")}
+	return newStoreIn(filepath.Join(dir, "tenjin"))
 }
 
 // newStoreIn is NewStore with the file kept in dir, for tests.
-func newStoreIn(dir string) Store { return &systemStore{dir: dir} }
+func newStoreIn(dir string) *systemStore {
+	return &systemStore{dir: dir, get: keyring.Get, set: keyring.Set, timeout: keychainTimeout}
+}
 
 type systemStore struct {
-	dir string
+	dir     string
+	get     func(service, user string) (string, error)
+	set     func(service, user, secret string) error
+	timeout time.Duration
 }
 
 func (s *systemStore) file(environment string) string {
 	return filepath.Join(s.dir, "credentials-"+environment+".json")
 }
 
+// The file is written only when the keychain failed, and removed whenever a
+// save to the keychain succeeds, so when it exists it holds the latest
+// credentials, and the keychain is not asked at all: where it is missing or
+// locked, every command would otherwise wait on it first.
 func (s *systemStore) Load(environment string) (*Credentials, error) {
-	raw, err := keyring.Get(keyringService, environment)
-	if err != nil {
-		// No keychain entry, or no keychain at all: fall back to the file.
-		b, fileErr := os.ReadFile(s.file(environment))
-		if errors.Is(fileErr, os.ErrNotExist) {
+	b, err := os.ReadFile(s.file(environment))
+	var raw string
+	switch {
+	case err == nil:
+		raw = string(b)
+	case errors.Is(err, os.ErrNotExist):
+		var keychainErr error
+		raw, keychainErr = s.keychainGet(environment)
+		if keychainErr != nil {
+			// No entry, or no keychain at all: nothing is stored.
 			return nil, nil
 		}
-		if fileErr != nil {
-			return nil, fileErr
-		}
-		raw = string(b)
+	default:
+		return nil, err
 	}
 	var c Credentials
 	if err := json.Unmarshal([]byte(raw), &c); err != nil {
@@ -89,7 +112,7 @@ func (s *systemStore) Save(c *Credentials) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := keyring.Set(keyringService, c.Environment, string(raw)); err == nil {
+	if err := s.keychainSet(c.Environment, string(raw)); err == nil {
 		// A file left over from a time without a keychain must not shadow it.
 		_ = os.Remove(s.file(c.Environment))
 		return "the system keychain", nil
@@ -102,6 +125,37 @@ func (s *systemStore) Save(c *Credentials) (string, error) {
 		return "", err
 	}
 	return path + " (no system keychain is available)", nil
+}
+
+var errKeychainTimeout = errors.New("the system keychain did not answer")
+
+func (s *systemStore) keychainGet(environment string) (string, error) {
+	type result struct {
+		secret string
+		err    error
+	}
+	done := make(chan result, 1)
+	go func() {
+		secret, err := s.get(keyringService, environment)
+		done <- result{secret, err}
+	}()
+	select {
+	case r := <-done:
+		return r.secret, r.err
+	case <-time.After(s.timeout):
+		return "", errKeychainTimeout
+	}
+}
+
+func (s *systemStore) keychainSet(environment, secret string) error {
+	done := make(chan error, 1)
+	go func() { done <- s.set(keyringService, environment, secret) }()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(s.timeout):
+		return errKeychainTimeout
+	}
 }
 
 // writePrivate replaces a file with content only its owner can read, through

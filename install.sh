@@ -1,20 +1,25 @@
 #!/bin/sh
-# Installs the tenjin command-line tool from its GitHub releases.
+# Installs the Tenjin CLI (the tenjin command) from its GitHub releases.
 #
 #   curl -fsSL https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.sh | sh
 #
-# TENJIN_VERSION       a version to install, such as 0.1.0 (default: the latest)
-# TENJIN_INSTALL_DIR   where to put the binary (default: /usr/local/bin if it
-#                      can be written to, otherwise ~/.local/bin)
+# TENJIN_VERSION         a version to install, such as 0.1.0 (default: the
+#                        latest)
+# TENJIN_INSTALL_DIR     where to put the binary (default: where tenjin already
+#                        is, or a folder already on PATH that needs no sudo, or
+#                        ~/.local/bin)
+# TENJIN_NO_MODIFY_PATH  set to 1 to leave shell startup files alone
 #
 # The archive is checked against the release's checksums.txt before anything
-# is installed. Nothing is run with sudo.
+# is installed. Nothing is run with sudo. When the folder is not on PATH yet,
+# it is added in the shell startup files, so the tenjin command works in
+# every new terminal without further steps.
 set -eu
 
 releases="${TENJIN_RELEASES_URL:-https://github.com/tenjin/tenjin-cli/releases}"
 
 fail() {
-	echo "tenjin install: $*" >&2
+	echo "Tenjin CLI installer: $*" >&2
 	exit 1
 }
 
@@ -50,13 +55,47 @@ case "$version" in
 "" | latest) fail "could not tell which version is the latest" ;;
 esac
 
+on_path() {
+	case ":$PATH:" in
+	*":$1:"*) return 0 ;;
+	*) return 1 ;;
+	esac
+}
+
+# The folder: where tenjin already is, so an update replaces it and no older
+# copy is left ahead of it on PATH; otherwise a usual folder for programs
+# that is on PATH already and needs no sudo; otherwise ~/.local/bin.
+dir="${TENJIN_INSTALL_DIR:-}"
+if [ -z "$dir" ]; then
+	current=$(command -v tenjin 2>/dev/null || true)
+	if [ -L "$current" ]; then
+		case "$(readlink "$current")" in
+		*/Caskroom/* | */Cellar/*) fail "The Tenjin CLI was installed with Homebrew ($current). Update it with: brew upgrade tenjin" ;;
+		esac
+		# Some other manager's link: leave it, and install beside it.
+		current=""
+	fi
+	case "$current" in
+	/*) [ -w "$(dirname "$current")" ] && dir=$(dirname "$current") ;;
+	esac
+fi
+if [ -z "$dir" ]; then
+	for candidate in "$HOME/.local/bin" "$HOME/bin" /usr/local/bin; do
+		if on_path "$candidate" && { [ -w "$candidate" ] || { [ ! -e "$candidate" ] && [ "$candidate" != /usr/local/bin ]; }; }; then
+			dir="$candidate"
+			break
+		fi
+	done
+fi
+[ -n "$dir" ] || dir="$HOME/.local/bin"
+
 archive="tenjin_${version}_${os}_${arch}.tar.gz"
 url="$releases/download/v$version"
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
-echo "Downloading tenjin $version for $os/$arch"
+echo "Downloading the Tenjin CLI $version for $os/$arch"
 curl -fsSL -o "$tmp/$archive" "$url/$archive" || fail "could not download $url/$archive"
 curl -fsSL -o "$tmp/checksums.txt" "$url/checksums.txt" || fail "could not download $url/checksums.txt"
 
@@ -72,15 +111,7 @@ fi
 
 tar -xzf "$tmp/$archive" -C "$tmp" tenjin || fail "the archive has no tenjin binary"
 
-dir="${TENJIN_INSTALL_DIR:-}"
-if [ -z "$dir" ]; then
-	if [ -w /usr/local/bin ]; then
-		dir=/usr/local/bin
-	else
-		dir="$HOME/.local/bin"
-	fi
-fi
-mkdir -p "$dir"
+mkdir -p "$dir" || fail "could not create $dir"
 # Write next to the target and rename, so a running tenjin is never left
 # half overwritten.
 cp "$tmp/tenjin" "$dir/.tenjin.new"
@@ -88,8 +119,68 @@ chmod 0755 "$dir/.tenjin.new"
 mv -f "$dir/.tenjin.new" "$dir/tenjin"
 
 echo "Installed $("$dir/tenjin" version) in $dir"
-case ":$PATH:" in
-*":$dir:"*) ;;
-*) echo "$dir is not on your PATH. Add it, for example: export PATH=\"$dir:\$PATH\"" ;;
-esac
-echo "Start with: tenjin setup"
+
+# Adds the folder to PATH in a shell startup file, once. A file that cannot
+# be written, such as one a dotfiles manager keeps read-only, is reported and
+# skipped.
+changed=""
+add_to() {
+	file="$1"
+	line="$2"
+	if [ -f "$file" ] && grep -qF "$line" "$file" 2>/dev/null; then
+		return 0
+	fi
+	mkdir -p "$(dirname "$file")" 2>/dev/null || true
+	if printf '\n# Added by the Tenjin CLI installer\n%s\n' "$line" >> "$file" 2>/dev/null; then
+		changed="$changed $file"
+	else
+		echo "Could not write to $file; add this line to it yourself: $line" >&2
+	fi
+}
+
+if ! on_path "$dir" && [ "${TENJIN_NO_MODIFY_PATH:-}" != 1 ]; then
+	sh_line="case \":\$PATH:\" in *\":$dir:\"*) ;; *) export PATH=\"$dir:\$PATH\" ;; esac"
+	login_shell=$(basename "${SHELL:-sh}")
+	# Every zsh reads .zshenv, including the ones editors and coding agents
+	# start to run a command; .zshrc is read by interactive ones only.
+	zdot="${ZDOTDIR:-$HOME}"
+	if [ "$login_shell" = zsh ] || [ -f "$zdot/.zshrc" ] || [ -f "$zdot/.zshenv" ]; then
+		add_to "$zdot/.zshenv" "$sh_line"
+	fi
+	if [ "$login_shell" = bash ] || [ -f "$HOME/.bashrc" ]; then
+		add_to "$HOME/.bashrc" "$sh_line"
+		# A login shell, as macOS's Terminal starts, reads only the first of
+		# these that exists, and not .bashrc.
+		login_file="$HOME/.profile"
+		for f in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+			if [ -f "$f" ]; then
+				login_file="$f"
+				break
+			fi
+		done
+		add_to "$login_file" "$sh_line"
+	fi
+	case "$login_shell" in
+	zsh | bash | fish) [ -f "$HOME/.profile" ] && add_to "$HOME/.profile" "$sh_line" ;;
+	*) add_to "$HOME/.profile" "$sh_line" ;;
+	esac
+	fish_config="${XDG_CONFIG_HOME:-$HOME/.config}/fish"
+	if [ "$login_shell" = fish ] || [ -d "$fish_config" ]; then
+		add_to "$fish_config/conf.d/tenjin.fish" "contains -- \"$dir\" \$PATH; or set -gx PATH \"$dir\" \$PATH"
+	fi
+	if [ -n "$changed" ]; then
+		echo "Added $dir to PATH in:$changed"
+	fi
+fi
+
+if on_path "$dir"; then
+	found=$(command -v tenjin 2>/dev/null || true)
+	if [ -n "$found" ] && [ "$found" != "$dir/tenjin" ]; then
+		echo "Another copy of the Tenjin CLI, $found, comes first on your PATH. Remove it, or run $dir/tenjin."
+	fi
+	echo "Start with: tenjin setup"
+elif [ -n "$changed" ]; then
+	echo "New terminals will find the tenjin command. In this one, start with: $dir/tenjin setup"
+else
+	echo "$dir is not on your PATH. Start with: $dir/tenjin setup"
+fi

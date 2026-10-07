@@ -63,8 +63,8 @@ another store (Amazon, or any other) is an app of its own, so a project can
 need several apps and SDK keys. setup lists the builds it finds and asks which
 ship; --build names them instead.
 
-tenjin itself never edits the project, except to write each SDK key where a
-placeholder stands for it. In step 5, if Claude Code or Codex is
+The Tenjin CLI itself never edits the project, except to write each SDK key
+where a placeholder stands for it. In step 5, if Claude Code or Codex is
 installed, setup offers to have it make the changes; with both, it asks
 which. The agent runs under your own account, in this project only, and
 setup checks its work afterwards. Claude Code may edit files and run
@@ -791,7 +791,7 @@ func integrationPrompt(p *project.Project, report *verify.Report, inProject map[
 	several := false
 	for _, t := range p.Targets {
 		if !t.SeveralBuilds() {
-			key := "write the string " + keyfill.Placeholder(t.Platform) + " exactly, as the key's value, where the key belongs. tenjin writes the real key in its place when you finish"
+			key := "write the string " + keyfill.Placeholder(t.Platform) + " exactly, as the key's value, where the key belongs. The Tenjin CLI writes the real key in its place when you finish"
 			if len(t.Builds) == 1 && inProject[t.Builds[0].ID] {
 				key = "already in the project: leave it as it is"
 			}
@@ -809,7 +809,7 @@ func integrationPrompt(p *project.Project, report *verify.Report, inProject map[
 		}
 	}
 	if several {
-		b.WriteString("Each build must send its own key. For Android product flavors, put each placeholder in its flavor's block of the build file, for example buildConfigField(\"String\", \"TENJIN_SDK_KEY\", \"\\\"<placeholder>\\\"\") in the Kotlin DSL, and read BuildConfig.TENJIN_SDK_KEY where the SDK starts; in a Flutter app, choose by appFlavor from package:flutter/services.dart. Keep the word Tenjin on each line that holds a placeholder, so the checks can find the key there later. tenjin writes the real keys in their places when you finish.\n")
+		b.WriteString("Each build must send its own key. For Android product flavors, put each placeholder in its flavor's block of the build file, for example buildConfigField(\"String\", \"TENJIN_SDK_KEY\", \"\\\"<placeholder>\\\"\") in the Kotlin DSL, and read BuildConfig.TENJIN_SDK_KEY where the SDK starts; in a Flutter app, choose by appFlavor from package:flutter/services.dart. Keep the word Tenjin on each line that holds a placeholder, so the checks can find the key there later. The Tenjin CLI writes the real keys in their places when you finish.\n")
 	}
 	if len(features) > 0 {
 		b.WriteString("\nFeatures to integrate, as the developer chose them:\n")
@@ -868,7 +868,7 @@ Rules:
 - A Tenjin app is one bundle ID on one platform, and an Android build for another store is an app of its own. Each app has its own SDK key, so two builds never share a placeholder.
 - Where a fix needs a choice only the developer can make, such as the wording of the tracking prompt, pick a sensible default and list it at the end.
 - When you think you are done, run ` + "`" + doctor + "`" + ` and read its findings. Repeat until none has severity "error" or "warning", apart from findings whose id starts with "key." and the "sdk.key.unfilled" findings for the placeholders, which are expected.
-- Finish with a summary of at most six short lines, in plain text without Markdown: what you changed, and anything left for the developer. Do not tell them to write the SDK key or to run tenjin setup for it: this run of tenjin writes the keys as soon as you finish.
+- Finish with a summary of at most six short lines, in plain text without Markdown: what you changed, and anything left for the developer. Do not tell them to write the SDK key or to run tenjin setup for it: this run of the Tenjin CLI writes the keys as soon as you finish.
 `)
 	return b.String()
 }
