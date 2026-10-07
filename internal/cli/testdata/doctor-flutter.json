@@ -151,6 +151,13 @@
       "file": "android/app/src/main/AndroidManifest.xml"
     },
     {
+      "id": "android.proguard",
+      "severity": "pass",
+      "platform": "android",
+      "title": "ProGuard keep rules for Tenjin are present",
+      "file": "android/app/proguard-rules.pro"
+    },
+    {
       "id": "key.valid",
       "severity": "pass",
       "platform": "android",
@@ -192,6 +199,6 @@
   "summary": {
     "errors": 0,
     "warnings": 0,
-    "passed": 11
+    "passed": 12
   }
 }

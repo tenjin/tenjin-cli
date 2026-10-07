@@ -253,8 +253,17 @@ func bringsAdsIdentifier(deps string) string {
 // keep rules (consumer-rules.pro), applied to the app automatically.
 const bundledRulesSince = "2.0.0"
 
+// minifyOff matches a build file that turns shrinking off for release.
+var minifyOff = regexp.MustCompile(`isMinifyEnabled\s*=\s*false|minifyEnabled\s*(?:=\s*)?false`)
+
 func (r *runner) checkProguard(t *project.Target) {
-	if !t.Android.Minify {
+	minify := t.Android.Minify
+	// Flutter's Gradle plugin shrinks release builds with R8 unless the
+	// build file says otherwise, and the Tenjin plugin ships no keep rules.
+	if r.p.Framework == project.Flutter && !minifyOff.MatchString(stripCode(r.readRel(t.Android.BuildFile))) {
+		minify = true
+	}
+	if !minify {
 		return
 	}
 	for _, i := range r.p.Tenjin {
@@ -382,3 +391,6 @@ func (r *runner) storeSetInCode() string {
 	}
 	return ""
 }
+
+// stripCode is a build file without its comments, for matching settings.
+func stripCode(s string) string { return project.BlankComments(s) }

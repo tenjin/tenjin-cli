@@ -351,6 +351,10 @@ func (s *setup) apps(p *project.Project) error {
 	for i := range p.Targets {
 		t := &p.Targets[i]
 		if len(t.Builds) == 0 {
+			if t.BundleID != "" {
+				s.say("  %s %s: the bundle ID is %s, set from build settings that the Tenjin CLI cannot resolve, so its app was not looked up. Create it in the Tenjin dashboard with the ID Xcode shows.", s.style.Yellow("!"), platformNames[t.Platform], t.BundleID)
+				continue
+			}
 			s.say("  %s %s: the bundle ID could not be read, so its app was not looked up.", s.style.Yellow("!"), platformNames[t.Platform])
 			continue
 		}

@@ -167,12 +167,25 @@ func (d *detector) androidTarget(rel string) (Target, bool) {
 	}
 	sort.Strings(buildFiles)
 	// The root build file often only declares the plugin for its modules
-	// (`apply false`). Prefer a file that also sets an application ID.
+	// (`apply false`). Prefer a file that sets an application ID, and of
+	// those the one that has Tenjin, then the one called app: with several
+	// apps in a project, the one being integrated is the one to check.
 	buildFile := buildFiles[0]
+	best := -1
 	for _, f := range buildFiles {
-		if applicationID.MatchString(d.read(f)) {
-			buildFile = f
-			break
+		content := stripComments(d.read(f))
+		if !applicationID.MatchString(content) {
+			continue
+		}
+		score := 1
+		if path.Base(path.Dir(f)) == "app" {
+			score = 2
+		}
+		if strings.Contains(content, "com.tenjin") || strings.Contains(content, "libs.tenjin") {
+			score = 3
+		}
+		if score > best {
+			best, buildFile = score, f
 		}
 	}
 	if modules := countModules(buildFiles, d); modules > 1 {
@@ -281,14 +294,22 @@ func countModules(buildFiles []string, d *detector) int {
 func (d *detector) androidIntegration(info *AndroidInfo) {
 	for _, rel := range dedupe([]string{info.BuildFile, info.VersionCatalog}) {
 		content := stripComments(d.read(rel))
-		if m := tenjinMaven.FindStringSubmatch(content); m != nil {
-			d.found(Integration{Package: "com.tenjin:android-sdk", Version: m[1], Source: rel})
-			return
+		loc := tenjinMaven.FindStringSubmatchIndex(content)
+		if loc == nil {
+			loc = tenjinTOML.FindStringIndex(content)
 		}
-		if tenjinTOML.MatchString(content) {
-			d.found(Integration{Package: "com.tenjin:android-sdk", Source: rel})
-			return
+		if loc == nil {
+			continue
 		}
+		version := ""
+		if len(loc) > 3 && loc[2] >= 0 {
+			version = content[loc[2]:loc[3]]
+		}
+		if version == "" {
+			version = d.androidVersion(info, rel, content, loc[0])
+		}
+		d.found(Integration{Package: "com.tenjin:android-sdk", Version: version, Source: rel})
+		return
 	}
 	for _, name := range []string{"tenjin.aar", "tenjin.jar"} {
 		if rel := path.Join(info.ModuleDir, "libs", name); d.exists(rel) {
@@ -296,6 +317,62 @@ func (d *detector) androidIntegration(info *AndroidInfo) {
 			return
 		}
 	}
+}
+
+var (
+	catalogVersion    = regexp.MustCompile(`\bversion\s*=\s*"([^"]+)"`)
+	catalogVersionRef = regexp.MustCompile(`\bversion\.ref\s*=\s*"([\w.-]+)"`)
+	interpolated      = regexp.MustCompile(`com\.tenjin:android-sdk:\$\{?([A-Za-z_][\w.]*)\}?`)
+)
+
+// androidVersion reads the SDK version where the declaration does not
+// write it out: in a version catalog, the entry's version or the
+// [versions] entry its version.ref names; in a build file, the variable it
+// interpolates, set in the build file, the root build file or
+// gradle.properties. It is "" when none of that can be read.
+func (d *detector) androidVersion(info *AndroidInfo, rel, content string, at int) string {
+	line := content[at:]
+	if end := strings.IndexByte(line, '\n'); end >= 0 {
+		line = line[:end]
+	}
+	if strings.HasSuffix(rel, ".toml") {
+		if m := catalogVersion.FindStringSubmatch(line); m != nil {
+			return m[1]
+		}
+		if m := catalogVersionRef.FindStringSubmatch(line); m != nil {
+			versions := blockOfTOML(content, "versions")
+			if v := regexp.MustCompile(`(?m)^\s*` + regexp.QuoteMeta(m[1]) + `\s*=\s*"([^"]+)"`).FindStringSubmatch(versions); v != nil {
+				return v[1]
+			}
+		}
+		return ""
+	}
+	m := interpolated.FindStringSubmatch(line)
+	if m == nil {
+		return ""
+	}
+	name := m[1][strings.LastIndex(m[1], ".")+1:]
+	assigned := regexp.MustCompile(`\b` + regexp.QuoteMeta(name) + `\b["']?\s*(?:=|,)\s*["']([0-9][^"'\s]*)["']|(?m)^\s*` + regexp.QuoteMeta(name) + `\s*=\s*([0-9][^\s]*)\s*$`)
+	root := path.Dir(info.ModuleDir)
+	for _, f := range []string{rel, path.Join(root, "build.gradle"), path.Join(root, "build.gradle.kts"), path.Join(root, "gradle.properties")} {
+		if v := assigned.FindStringSubmatch(stripComments(d.read(f))); v != nil {
+			return firstNonEmpty(v[1], v[2])
+		}
+	}
+	return ""
+}
+
+// blockOfTOML returns the body of a [table] in a TOML file.
+func blockOfTOML(content, table string) string {
+	start := strings.Index(content, "["+table+"]")
+	if start < 0 {
+		return ""
+	}
+	body := content[start+len(table)+2:]
+	if next := regexp.MustCompile(`(?m)^\s*\[`).FindStringIndex(body); next != nil {
+		body = body[:next[0]]
+	}
+	return body
 }
 
 // iosTarget finds the Xcode project under rel.
@@ -455,6 +532,28 @@ func (d *detector) iosIntegration(info *IOSInfo) {
 			}
 		}
 		d.found(i)
+		return
+	}
+	// A local Swift package of the project's own, which the app links, can
+	// be the one that depends on Tenjin.
+	var local string
+	d.walk(dir, 4, func(p string, entry fs.DirEntry) {
+		if local == "" && !entry.IsDir() && path.Base(p) == "Package.swift" && spmTenjin.MatchString(stripComments(d.read(p))) {
+			local = p
+		}
+	})
+	if local != "" {
+		i := Integration{Package: "TenjinSDK (Swift Package)", Source: local}
+		for _, resolved := range []string{
+			path.Join(info.Xcodeproj, "project.xcworkspace/xcshareddata/swiftpm/Package.resolved"),
+			path.Join(path.Dir(local), "Package.resolved"),
+		} {
+			if m := resolvedTenjinVers.FindStringSubmatch(d.read(resolved)); m != nil {
+				i.Version = m[1]
+				break
+			}
+		}
+		d.found(i)
 	}
 }
 
@@ -470,4 +569,13 @@ func blankComments(s string) string { return BlankComments(s) }
 
 func stripRubyComments(s string) string {
 	return rubyComment.ReplaceAllString(s, "")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

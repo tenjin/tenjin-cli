@@ -137,6 +137,13 @@ func StoreName(tenjinPlatform string) string {
 	return "Google Play"
 }
 
+// Resolved reports whether a bundle ID is a value, not a build setting or
+// a variable left to resolve ($(APP_BUNDLE_ID), ${appId}): only a value can
+// name an app in Tenjin.
+func Resolved(bundleID string) bool {
+	return bundleID != "" && !strings.ContainsAny(bundleID, "$@{}") && !strings.Contains(bundleID, "(")
+}
+
 func mainBuild(t *Target) Build {
 	id := string(t.Platform)
 	return Build{ID: id, BundleID: t.BundleID, TenjinPlatform: string(t.Platform), SDKKeyPlaceholder: Placeholder(id)}
@@ -174,7 +181,7 @@ func (d *detector) androidBuilds(t *Target, content, flavorsBlock, rest string) 
 
 	flavors := parseFlavors(flavorsBlock)
 	if len(flavors) == 0 {
-		if t.BundleID == "" {
+		if !Resolved(t.BundleID) {
 			return nil
 		}
 		b := mainBuild(t)

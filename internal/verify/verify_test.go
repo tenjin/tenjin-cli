@@ -625,3 +625,44 @@ func TestATrackingRequestInItsOwnFile(t *testing.T) {
 		t.Errorf("found at %s", f.File)
 	}
 }
+
+// sharedInstanceWithToken: still initialises and connects, and is
+// deprecated.
+func TestSharedInstanceWithTokenIsDeprecated(t *testing.T) {
+	ios := testproject.IOSNative()
+	const delegate = "Sample/AppDelegate.swift"
+	objc := "#import <TenjinSDK/TenjinSDK.h>\n@implementation AppDelegate\n- (void)applicationDidBecomeActive:(UIApplication *)application {\n  [TenjinSDK sharedInstanceWithToken:@\"" + testproject.Key + "\"];\n}\n@end\n"
+	r := run(t, ios.With(testproject.Files{delegate: "", "Sample/AppDelegate.m": objc}), verify.Options{})
+	expect(t, r, "sdk.init", project.IOS, verify.Pass)
+	expect(t, r, "sdk.connect", project.IOS, verify.Pass)
+	expect(t, r, "sdk.init.deprecated", project.IOS, verify.Warning)
+}
+
+// An Expo project whose native folders are generated at build time, and
+// whose IDs are in app.config.ts, says what was not checked.
+func TestAnExpoProjectWithoutNativeFolders(t *testing.T) {
+	files := testproject.Files{
+		"package.json":  `{"dependencies": {"expo": "52.0.0", "react-native": "0.76.0", "react-native-tenjin": "1.7.0"}}`,
+		"app.config.ts": "export default { expo: { name: 'Sample', ios: { bundleIdentifier: 'com.example.sample' }, android: { package: 'com.example.sample' } } };\n",
+		"App.tsx":       "import Tenjin from 'react-native-tenjin';\nTenjin.initialize('" + testproject.Key + "');\nTenjin.connect();\n",
+	}
+	r := run(t, files, verify.Options{})
+	expect(t, r, "native.unchecked", "", verify.Info)
+	if len(r.Project.Targets) != 2 {
+		t.Errorf("targets = %+v", r.Project.Targets)
+	}
+}
+
+// Flutter shrinks release builds unless told not to, so its keep rules are
+// checked even when the build file says nothing about shrinking.
+func TestFlutterReleaseBuildsAreShrunk(t *testing.T) {
+	flutter := testproject.Flutter()
+	without := flutter.With(testproject.Files{"android/app/proguard-rules.pro": ""})
+	expect(t, run(t, without, verify.Options{}), "android.proguard", project.Android, verify.Warning)
+
+	const build = "android/app/build.gradle.kts"
+	off := without.With(testproject.Files{build: strings.Replace(flutter[build], "android {", "android {\n    buildTypes { release { isMinifyEnabled = false } }", 1)})
+	if f := find(run(t, off, verify.Options{}), "android.proguard", project.Android); f != nil {
+		t.Errorf("checked with shrinking off: %+v", f)
+	}
+}

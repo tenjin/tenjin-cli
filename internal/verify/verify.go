@@ -142,6 +142,9 @@ type runner struct {
 	// source files that mention Tenjin.
 	configured *[]keyLiteral
 	code       *tenjinCode
+	// autoTrackingChecked is set once automatic purchase tracking is looked
+	// at, which purchases and subscriptions share.
+	autoTrackingChecked bool
 }
 
 func (r *runner) add(f Finding) {
@@ -178,10 +181,27 @@ func (r *runner) run() {
 		r.checkDependency(spec, "")
 		src := r.scanSource(spec, spec.sourceDirs(nil))
 		r.checkCalls(spec, src, "")
+		native := false
 		for i := range r.p.Targets {
 			t := &r.p.Targets[i]
+			native = native || t.Android != nil || t.IOS != nil
 			r.checkPlatform(spec, t, src)
 			r.checkKey(t, src)
+		}
+		// An Expo project that generates its native folders at build time
+		// has none to check here.
+		if !native {
+			fix := map[project.Framework]string{
+				project.ReactNative: "Run npx expo prebuild, then run this again to check them.",
+				project.Capacitor:   "Run npx cap add android and npx cap add ios, then run this again to check them.",
+				project.Flutter:     "Run flutter create . to add them, then run this again to check them.",
+			}[r.p.Framework]
+			r.add(Finding{
+				ID: "native.unchecked", Severity: Info,
+				Title:  "There are no android/ or ios/ folders, so the native settings were not checked",
+				Detail: "Permissions, Info.plist keys and the native SDK's requirements live there. An Expo project that generates them at build time has none in the repository.",
+				Fix:    fix,
+			})
 		}
 	case project.Unity:
 		r.checkUnity()
