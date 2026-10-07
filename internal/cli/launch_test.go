@@ -163,3 +163,13 @@ func logReads(calls [][]string) int {
 	}
 	return n
 }
+
+// Offline, a key already written in the project settles its build: setup
+// does not ask for one.
+func TestSetupOfflineUsesTheKeyInTheProject(t *testing.T) {
+	h, dir := correctAndroid(t)
+	_, stdout, _ := h.typing("", "s").run("setup", dir, "--offline")
+	if !strings.Contains(stdout, "the project holds a key, not checked (--offline)") || strings.Contains(stdout, "Paste the") {
+		t.Errorf("stdout:\n%s", stdout)
+	}
+}

@@ -456,3 +456,44 @@ func TestSetupReportsWhyCodexFailed(t *testing.T) {
 		t.Errorf("exit = %d\n%s", code, stdout)
 	}
 }
+
+// When only a key is left to settle, the agent has nothing to do and is not
+// started.
+func TestTheAgentIsNotStartedForKeysAlone(t *testing.T) {
+	h := newHarness(t)
+	h.fake.addApp("Sample", "com.example.sample", "android")
+	h.signIn()
+	base := testproject.AndroidNative()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	dir := testproject.Write(t, base.With(testproject.Files{activity: strings.Replace(base[activity], testproject.Key, "__TENJIN_ANDROID_SDK_KEY__", 1)}))
+	agent := h.installAgent()
+
+	_, stdout, _ := h.typing("", "", "").run("setup", dir)
+	if _, err := os.Stat(filepath.Join(agent.dir, "runs")); err == nil {
+		t.Errorf("the agent was started:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "What is left is the SDK keys") {
+		t.Errorf("stdout:\n%s", stdout)
+	}
+}
+
+// A key passed in that Tenjin refuses is said so, and step 4 asks for the
+// right one at once.
+func TestARefusedGivenKeyIsAskedForAgain(t *testing.T) {
+	h := newHarness(t)
+	h.fake.addApp("Sample", "com.example.sample", "android")
+	h.signIn()
+	base := testproject.AndroidNative()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	dir := testproject.Write(t, base.With(testproject.Files{activity: strings.Replace(base[activity], testproject.Key, "__TENJIN_ANDROID_SDK_KEY__", 1)}))
+	h.fake.keyAnswers["WRONGKEYWRONGKEYWRONGKEY1234"] = "unauthorized"
+
+	_, stdout, _ := h.typing("", "", "q").run("setup", dir, "--sdk-key", "android=WRONGKEYWRONGKEYWRONGKEY1234")
+	step4 := stdout[strings.Index(stdout, "Step 4 of 7"):]
+	if i := strings.Index(step4, "Step 5 of 7"); i > 0 {
+		step4 = step4[:i]
+	}
+	if !strings.Contains(step4, "Paste the") {
+		t.Errorf("step 4 did not ask for the key:\n%s", step4)
+	}
+}

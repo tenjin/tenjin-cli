@@ -15,6 +15,7 @@ import (
 // contain a key itself, only its last four characters.
 func (r *runner) checkKey(t *project.Target, src source) {
 	if r.opts.Keys == nil {
+		r.offlineKeys(t, src)
 		return
 	}
 	if len(t.Builds) == 0 {
@@ -29,6 +30,28 @@ func (r *runner) checkKey(t *project.Target, src source) {
 		if !r.checkBuildKey(t, b, src, multi) {
 			return // Tenjin could not be reached; once is enough to say so
 		}
+	}
+}
+
+// offlineKeys says, without asking Tenjin, which builds have a key written
+// in the project: something an offline run can still tell.
+func (r *runner) offlineKeys(t *project.Target, src source) {
+	multi := t.SeveralBuilds()
+	for _, b := range t.Builds {
+		candidates, _ := r.candidateKeys(src, b.ID, multi)
+		if len(candidates) == 0 {
+			continue
+		}
+		f := Finding{
+			ID: "key.unchecked", Severity: Info, Platform: t.Platform,
+			Title: "An SDK key is in the project (" + maskAll(candidates) + "), and was not checked against Tenjin",
+			File:  candidates[0].File, Line: candidates[0].Line,
+		}
+		if multi {
+			f.Build = b.ID
+			f.Title = "An SDK key for " + buildLabel(b) + " is in the project (" + maskAll(candidates) + "), and was not checked against Tenjin"
+		}
+		r.add(f)
 	}
 }
 

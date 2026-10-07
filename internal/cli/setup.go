@@ -39,6 +39,7 @@ func newSetupCmd(opts *options, env *environment) *cobra.Command {
 		yes       bool
 		sdkKeys   []string
 		offline   bool
+		serial    string
 		agentFlag string
 		builds    []string
 		features  []string
@@ -67,8 +68,10 @@ The Tenjin CLI itself never edits the project, except to write each SDK key
 where a placeholder stands for it. In step 5, if Claude Code or Codex is
 installed, setup offers to have it make the changes; with both, it asks
 which. The agent runs under your own account, in this project only, and
-setup checks its work afterwards. Claude Code may edit files and run
-'tenjin doctor', and nothing else. Codex runs in its own sandbox: it can
+setup checks its work afterwards. Claude Code may edit files in this
+project and run 'tenjin doctor' and 'tenjin sdk guide', and nothing else;
+it is started in its restricted mode, so the project's and your own Claude
+Code settings do not apply. Codex runs in its own sandbox: it can
 change files in this project only and has no network access. Decline, or
 pass --agent none, to do it by hand.
 
@@ -94,7 +97,7 @@ with --yes and starts an agent only with --agent.`,
 			if err != nil {
 				return err
 			}
-			s := &setup{cmd: cmd, env: env, args: args, yes: yes, offline: offline, given: given, agentFlag: agentFlag,
+			s := &setup{cmd: cmd, env: env, args: args, yes: yes, offline: offline, serial: serial, given: given, agentFlag: agentFlag,
 				chosen: builds, wantFeatures: features, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
 				appIDs: map[string]string{}, keyURLs: map[string]string{},
 				keys: map[string]verify.GivenKey{}, inProject: map[string]bool{}}
@@ -106,6 +109,7 @@ with --yes and starts an agent only with --agent.`,
 	addSDKKeyFlag(cmd, &sdkKeys)
 	cmd.Flags().BoolVar(&offline, "offline", false, "skip the SDK key check against Tenjin, and the look for newer SDK releases")
 	cmd.Flags().StringVar(&agentFlag, "agent", "", "coding agent to integrate with: "+strings.Join(agent.IDs(), ", ")+", or none to do it by hand (default: ask)")
+	cmd.Flags().StringVar(&serial, "serial", "", serialUsage)
 	addBuildFlag(cmd, &builds)
 	addFeaturesFlag(cmd, &features)
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
@@ -139,11 +143,13 @@ func narrowBuilds(p *project.Project, ids []string) error {
 }
 
 type setup struct {
-	cmd       *cobra.Command
-	env       *environment
-	args      []string
-	yes       bool
-	offline   bool
+	cmd     *cobra.Command
+	env     *environment
+	args    []string
+	yes     bool
+	offline bool
+	// serial picks the device the launch step reads.
+	serial    string
 	agentFlag string
 	out       io.Writer
 	style     render.Styler
@@ -303,22 +309,29 @@ func (s *setup) chooseBuilds(p *project.Project) error {
 		s.say("All of them are set up. To set up only some, pass --build for each, such as --build %s.", all[len(all)-1].ID)
 		return nil
 	}
-	answer, err := s.env.ask(s.out, "\nWhich of these do you ship? Press Enter for all, or give their numbers, such as 1,3:")
-	if err != nil && !errors.Is(err, io.EOF) {
-		return err
-	}
-	answer = strings.TrimSpace(answer)
-	if answer == "" {
-		return nil
-	}
 	var picked []string
-	for _, part := range strings.FieldsFunc(answer, func(r rune) bool { return r == ',' || r == ' ' }) {
-		n := 0
-		if _, err := fmt.Sscan(part, &n); err != nil || n < 1 || n > len(all) {
-			return clierr.New(clierr.Usage, "%q is not one of the builds listed", part).
-				WithHint("Run setup again and give numbers from the list, or pass --build.")
+	for picked == nil {
+		answer, err := s.env.ask(s.out, "\nWhich of these do you ship? Press Enter for all, or give their numbers, such as 1,3:")
+		if err != nil && !errors.Is(err, io.EOF) {
+			return err
 		}
-		picked = append(picked, all[n-1].ID)
+		answer = strings.TrimSpace(answer)
+		if answer == "" {
+			return nil
+		}
+		picked = []string{}
+		for _, part := range strings.FieldsFunc(answer, func(r rune) bool { return r == ',' || r == ' ' }) {
+			n := 0
+			if _, err := fmt.Sscan(part, &n); err != nil || n < 1 || n > len(all) {
+				s.say("%q is not one of the builds listed. Give their numbers, such as 1,3.", part)
+				picked = nil
+				break
+			}
+			picked = append(picked, all[n-1].ID)
+		}
+		if errors.Is(err, io.EOF) && picked == nil {
+			return nil
+		}
 	}
 	s.chosen = picked
 	if err := narrowBuilds(p, picked); err != nil {
@@ -431,13 +444,21 @@ func (s *setup) buildKey(t *project.Target, b project.Build, report *verify.Repo
 		s.inProject[b.ID] = true
 		return nil
 	}
+	// Offline, a key in the project is taken as it is; the launch check, or
+	// a run online, tells whether Tenjin accepts it.
+	if f := findingFor(report, "key.unchecked", t, b); s.offline && f != nil && f.File != "" {
+		s.say("  %s %s: the project holds a key, not checked (--offline) (%s)", s.style.Dim("i"), label, f.File)
+		s.inProject[b.ID] = true
+		return nil
+	}
 	if given, ok := s.given.For(b.ID); ok {
 		verdict := checkGivenKey(s.cmd.Context(), s.keyCheck(), given.Value, b, s.keyURLs[b.ID] != "")
 		s.asker().verdict(label+", key "+maskKey(given.Value)+" from "+given.Source, verdict)
 		if verdict.ok {
 			s.keys[b.ID] = given
+			return nil
 		}
-		return nil
+		// Refused: the right key is still to be found, as if none was given.
 	}
 	if id := s.appIDs[b.ID]; id != "" {
 		fetched, note := keyFromTenjin(s.cmd.Context(), s.env, s.keyCheck(), id, b)
@@ -474,12 +495,17 @@ func (s *setup) asker() keyAsker {
 
 // accepted returns the finding that says Tenjin accepts a build's key.
 func accepted(report *verify.Report, t *project.Target, b project.Build) *verify.Finding {
+	return findingFor(report, "key.valid", t, b)
+}
+
+// findingFor returns a build's finding with this ID, or nil.
+func findingFor(report *verify.Report, id string, t *project.Target, b project.Build) *verify.Finding {
 	build := ""
 	if t.SeveralBuilds() {
 		build = b.ID
 	}
 	for i := range report.Findings {
-		if f := &report.Findings[i]; f.ID == "key.valid" && f.Platform == t.Platform && f.Build == build {
+		if f := &report.Findings[i]; f.ID == id && f.Platform == t.Platform && f.Build == build {
 			return f
 		}
 	}
@@ -532,6 +558,10 @@ func (s *setup) integrate(p *project.Project) error {
 		return nil
 	}
 	s.say("The Tenjin SDK is not fully set up in this project yet. %s", outstanding(report.Summary))
+	if len(agentWork(report)) == 0 {
+		s.say("What is left is the SDK keys, which the next step settles.")
+		return nil
+	}
 
 	helper, err := s.chooseAgent()
 	if err != nil {
@@ -548,7 +578,13 @@ func (s *setup) integrate(p *project.Project) error {
 // chooseAgent decides whether a coding agent does the integration. It
 // returns nil when the developer will do it by hand.
 func (s *setup) chooseAgent() (*agent.Agent, error) {
-	if s.agentFlag == "none" || agent.InsideAgent(s.env.getenv) {
+	if s.agentFlag == "none" {
+		return nil, nil
+	}
+	if agent.InsideAgent(s.env.getenv) {
+		if s.agentFlag != "" {
+			s.say("This is already running inside a coding agent, so --agent %s is not started: the agent at work makes the changes.", s.agentFlag)
+		}
 		return nil, nil
 	}
 	installed := agent.Find(s.env.lookPath)
@@ -807,7 +843,8 @@ func (s *setup) check() error {
 		}
 
 		question := "\nFix the items marked ✗, then press Enter to check again (q to stop)."
-		if s.helper != nil {
+		canAgent := s.helper != nil && len(agentWork(report)) > 0
+		if canAgent {
 			question = fmt.Sprintf("\nPress Enter to check again, a to continue with %s, or q to stop.", s.helper.Name)
 		}
 		answer, err := s.env.ask(s.out, question)
@@ -817,12 +854,28 @@ func (s *setup) check() error {
 		switch {
 		case errors.Is(err, io.EOF), strings.EqualFold(answer, "q"):
 			return status
-		case strings.EqualFold(answer, "a") && s.helper != nil:
+		case strings.EqualFold(answer, "a") && canAgent:
 			if err := s.runAgent(p, report); err != nil {
 				return err
 			}
 		}
 	}
+}
+
+// agentWork is what a coding agent is asked to resolve: the errors and
+// warnings, but not whether Tenjin accepts a key, nor writing the key, which
+// are not the agent's to do. Turning on the iOS SDK's logs in debug builds
+// stops nothing, but it is what lets setup check the launch, so the agent
+// does it too.
+func agentWork(report *verify.Report) []verify.Finding {
+	var work []verify.Finding
+	for _, f := range report.Findings {
+		wanted := f.Severity == verify.Error || f.Severity == verify.Warning || (f.ID == "ios.debug_logs" && f.Fix != "")
+		if wanted && !strings.HasPrefix(f.ID, "key.") && f.ID != "sdk.key.unfilled" {
+			work = append(work, f)
+		}
+	}
+	return work
 }
 
 // integrationPrompt is the task given to the coding agent: the doctor's open
@@ -878,15 +931,7 @@ func integrationPrompt(p *project.Project, report *verify.Report, inProject map[
 	}
 	b.WriteString("\n`tenjin doctor` checked the project and found the items below. Resolve every one. Each names the file it concerns and the fix.\n\n")
 	n := 0
-	for _, f := range report.Findings {
-		// Whether Tenjin accepts a key, and writing the key, are not the
-		// agent's to do.
-		// Turning on the iOS SDK's logs in debug builds stops nothing, but
-		// it is what lets setup check the launch, so the agent does it too.
-		wanted := f.Severity == verify.Error || f.Severity == verify.Warning || (f.ID == "ios.debug_logs" && f.Fix != "")
-		if !wanted || strings.HasPrefix(f.ID, "key.") || f.ID == "sdk.key.unfilled" {
-			continue
-		}
+	for _, f := range agentWork(report) {
 		n++
 		fmt.Fprintf(&b, "%d. [%s] %s", n, f.Severity, f.Title)
 		if f.File != "" {

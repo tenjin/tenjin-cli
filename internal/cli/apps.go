@@ -260,7 +260,14 @@ To write a key into a project, leave a placeholder where it belongs and run
 			for i, step := range result.Instructions {
 				fmt.Fprintf(&b, "  %d. %s\n", i+1, step)
 			}
-			fmt.Fprintf(&b, "Then check it: tenjin doctor --sdk-key %s=<key>\n", app.Platform)
+			switch app.Platform {
+			case "android", "ios":
+				fmt.Fprintf(&b, "Then check it: tenjin doctor --sdk-key %s=<key>\n", app.Platform)
+			default:
+				// A store other than Google Play is a build variant of the
+				// Android project.
+				b.WriteString("Then check it: tenjin doctor --sdk-key android:<variant>=<key>, where <variant> is the build for this store (tenjin project detect lists the builds)\n")
+			}
 			_, err = io.WriteString(cmd.OutOrStdout(), b.String())
 			return err
 		},

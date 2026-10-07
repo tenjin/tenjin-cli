@@ -267,7 +267,9 @@ func TestSetKeysWritesNoKeyTenjinRefuses(t *testing.T) {
 func TestSetKeysWithoutAKeyOrATerminal(t *testing.T) {
 	h, dir := agentPlaceholderAndroid(t)
 	code, _, stderr := h.run("project", "set-keys", dir)
-	if code != 2 || !strings.Contains(stderr, "--sdk-key") {
+	// Not a usage error, and no invitation to pass the key, which a coding
+	// agent reading this must never do.
+	if code != 5 || strings.Contains(stderr, "--sdk-key") || !strings.Contains(stderr, "tenjin setup") {
 		t.Errorf("exit = %d, stderr = %q", code, stderr)
 	}
 }

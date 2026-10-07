@@ -541,8 +541,10 @@ func setKeysStatus(p *project.Project, r setKeysResult) error {
 		return clierr.New(clierr.Usage, "%s names no build of this project", strings.Join(r.Unknown, ", ")).
 			WithHint("Replace it with the placeholder of the build it is for; tenjin project detect lists them.")
 	case len(r.Missing) > 0:
-		return clierr.New(clierr.Usage, "no SDK key for %s", joinTitles(p, r.Missing)).
-			WithHint("Pass it with --sdk-key %s=<key>, or run this at a terminal to paste it. Run 'tenjin setup' to be walked through it.", r.Missing[0])
+		// Not a misuse: the key is simply not to be had here. The developer
+		// gives it to setup, which asks; a coding agent is never to.
+		return clierr.New(clierr.NotFound, "no SDK key for %s", joinTitles(p, r.Missing)).
+			WithHint("Run 'tenjin setup', which asks for it, or run this at a terminal to paste it.")
 	}
 	return nil
 }

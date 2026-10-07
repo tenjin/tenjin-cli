@@ -60,7 +60,7 @@ Once the placeholders are written, have the CLI fill them:
 tenjin project set-keys --json
 ```
 
-Never pass it `--sdk-key`. When the developer is signed in and Tenjin serves the app's keys, it fetches each key, checks it with Tenjin and writes it over the placeholder, changing nothing else; you see only the last four characters. `filled` lists what it wrote. A build in `missing` has no key it could fetch: leave the placeholder, and say at the end that `tenjin setup` will ask the developer for it. A build in `refused` means Tenjin refused the app's own key: report it as it is. A placeholder in `unknown` names no build: replace it with the right one.
+Never pass it `--sdk-key`. When the developer is signed in and Tenjin serves the app's keys, it fetches each key, checks it with Tenjin and writes it over the placeholder, changing nothing else; you see only the last four characters. `filled` lists what it wrote. A build in `missing` has no key it could fetch, and the exit status is then 5: leave the placeholder, and say at the end that `tenjin setup` will ask the developer for it. A build in `refused` means Tenjin refused the app's own key: report it as it is. A placeholder in `unknown` names no build: replace it with the right one.
 
 ### 5. Integrate, then check
 
