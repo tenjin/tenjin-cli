@@ -95,7 +95,7 @@ func TestSetupChecksALaunchOnTheIOSSimulator(t *testing.T) {
 		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
 	}
 	lacks(t, stdout,
-		"On an iPhone connected by cable, tenjin launches the app itself",
+		"On an iPhone connected by cable, the Tenjin CLI launches the app itself",
 		"Install a debug build on the iPhone, or launch one on a simulator, then press Enter",
 		"✓ Tenjin received this device's install and processed it. The integration works end to end.",
 	)

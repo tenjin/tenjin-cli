@@ -19,7 +19,7 @@ const Name = "tenjin-cli"
 // description is what an agent reads to decide whether the skill applies.
 // It goes into YAML front matter unquoted, so it must not contain ": ".
 const description = "Use when adding the Tenjin SDK to a mobile app, or when a Tenjin integration shows no installs or events. " +
-	"Drives the tenjin command-line tool, which reports the project's platforms and bundle IDs, finds or creates the Tenjin app for each, " +
+	"Drives the Tenjin CLI (the tenjin command), which reports the project's platforms and bundle IDs, finds or creates the Tenjin app for each, " +
 	"checks the integration and says what to fix, and reads what Tenjin answered to a device."
 
 //go:embed tenjin-cli.md

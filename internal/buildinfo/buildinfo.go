@@ -61,5 +61,5 @@ func Get() Info {
 }
 
 func (i Info) String() string {
-	return fmt.Sprintf("tenjin %s (commit %s, built %s, %s %s/%s)", i.Version, i.Commit, i.Date, i.Go, i.OS, i.Arch)
+	return fmt.Sprintf("Tenjin CLI %s (commit %s, built %s, %s %s/%s)", i.Version, i.Commit, i.Date, i.Go, i.OS, i.Arch)
 }

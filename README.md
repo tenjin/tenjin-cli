@@ -24,6 +24,8 @@ It installs `tenjin.exe` in `%LOCALAPPDATA%\Programs\tenjin` and adds that folde
 
 Both install scripts check each download against the release's `checksums.txt`, and neither uses sudo or administrator rights. `TENJIN_VERSION` picks a version and `TENJIN_INSTALL_DIR` the folder.
 
+The shell script installs where `tenjin` already is, or in a folder that is already on your PATH (`~/.local/bin`, `~/bin`, or `/usr/local/bin` when it can be written to). Otherwise it uses `~/.local/bin` and adds it to PATH for zsh (`.zshenv`), bash (`.bashrc` and the login profile), fish (`conf.d/tenjin.fish`) and `.profile`, each marked `# Added by the Tenjin CLI installer`, so the command works in every new terminal. `TENJIN_NO_MODIFY_PATH=1` leaves those files alone. If the CLI was installed with Homebrew, the script stops and points to `brew upgrade tenjin`.
+
 Homebrew installs shell completions for bash, zsh and fish. Otherwise, `tenjin completion <bash|zsh|fish|powershell> --help` says how to load them; the release archives also carry them, under `completions/`.
 
 ## What it does
@@ -35,7 +37,7 @@ The parts of SDK onboarding that happen on your machine:
 - check the integration and explain why it would send nothing;
 - read what the SDK sent from a device, and what Tenjin answered.
 
-tenjin does not write your integration. The code changes are made by you, or by your own coding agent: if Claude Code or Codex is installed, `tenjin setup` offers to hand it the integration, and `tenjin agent install` teaches any agent to use the CLI on its own. The CLI handles the Tenjin side and the checking. The one change it makes to your files is to write an SDK key where a coding agent left a placeholder for it, so that the key never passes through the agent.
+The Tenjin CLI does not write your integration. The code changes are made by you, or by your own coding agent: if Claude Code or Codex is installed, `tenjin setup` offers to hand it the integration, and `tenjin agent install` teaches any agent to use the CLI on its own. The CLI handles the Tenjin side and the checking. The one change it makes to your files is to write an SDK key where a coding agent left a placeholder for it, so that the key never passes through the agent.
 
 ## Commands
 
@@ -83,7 +85,7 @@ With `--json`, a failure is written to stderr as `{"error": {"code", "message", 
 4. **SDK keys.** Where Tenjin's API serves SDK keys, `setup` fetches each app's key and checks it, and there is nothing to copy. Otherwise it says where to copy each one from: the app's page in the dashboard, in the "SDK Keys" card. It asks Tenjin about a key as soon as you paste it, so a wrong one, or the other platform's, is caught here and not after a build. A key that is already in the project and accepted is left alone. If a coding agent has already left a placeholder for it, the key is written there.
 5. **Add the SDK.** With your coding agent, or by hand: `setup` lists what is still to add and the file the app starts in. An agent writes a placeholder where the key belongs, and `setup` writes the key there when the agent is done.
 6. **Check.** Runs `doctor`, and again after each change until it is clean.
-7. **Check a real launch.** Asks you to launch a debug build on an Android device or emulator, or to install one on an iPhone connected by cable (tenjin launches it) or launch it on an iOS simulator. It reads the device's log (through adb, or Xcode's `devicectl` and `simctl`) and says what Tenjin answered. It ends when Tenjin has processed the device's install, which shows the integration works end to end; if the launch was refused, it says why and reads the next one. A project for both platforms is checked on each. Without adb or Xcode it says how to check later.
+7. **Check a real launch.** Asks you to launch a debug build on an Android device or emulator, or to install one on an iPhone connected by cable (the CLI launches it) or launch it on an iOS simulator. It reads the device's log (through adb, or Xcode's `devicectl` and `simctl`) and says what Tenjin answered. It ends when Tenjin has processed the device's install, which shows the integration works end to end; if the launch was refused, it says why and reads the next one. A project for both platforms is checked on each. Without adb or Xcode it says how to check later.
 
 ### SDK keys
 

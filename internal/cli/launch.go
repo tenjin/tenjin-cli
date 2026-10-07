@@ -64,7 +64,7 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		return nil
 	}
 	if platform == project.IOS {
-		s.say("On an iPhone connected by cable, tenjin launches the app itself to read its console: install a debug build on it first (run it once from Xcode). On a simulator, launch the app yourself. Either way, debug builds must call TenjinSDK.debugLogs(), as the checks above say.")
+		s.say("On an iPhone connected by cable, the Tenjin CLI launches the app itself to read its console: install a debug build on it first (run it once from Xcode). On a simulator, launch the app yourself. Either way, debug builds must call TenjinSDK.debugLogs(), as the checks above say.")
 	}
 
 	for {

@@ -241,8 +241,8 @@ func (r *runner) checkStores(t *project.Target) {
 		r.add(Finding{
 			ID: "android.store.in_code", Severity: Info, Platform: project.Android, File: file,
 			Title:  "The app store is set in code, which these checks cannot read",
-			Detail: "A build for another store is its own app in Tenjin, with its own SDK key. tenjin can only tell the builds apart when each flavor declares its store in its manifest.",
-			Fix:    "To have tenjin set up an app and key for each store, declare TENJIN_APP_STORE in each flavor's AndroidManifest.xml instead.",
+			Detail: "A build for another store is its own app in Tenjin, with its own SDK key. The Tenjin CLI can only tell the builds apart when each flavor declares its store in its manifest.",
+			Fix:    "To have the Tenjin CLI set up an app and key for each store, declare TENJIN_APP_STORE in each flavor's AndroidManifest.xml instead.",
 		})
 		return
 	}

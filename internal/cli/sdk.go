@@ -38,9 +38,9 @@ func newSDKGuideCmd(opts *options) *cobra.Command {
 		Use:   "guide [" + strings.Join(guides.Names(), "|") + "]",
 		Short: "Print the SDK integration guide for a platform",
 		Long: `Print the Tenjin SDK integration guide for a platform, from
-github.com/tenjin/sdk-llm-guides at the revision this version of tenjin was
-tested with. It is part of the binary, so it works offline and matches what
-'tenjin doctor' checks.
+github.com/tenjin/sdk-llm-guides at the revision this version of the Tenjin
+CLI was tested with. It is part of the binary, so it works offline and
+matches what 'tenjin doctor' checks.
 
 With no platform named, the guide for the project in --path (the current
 folder by default) is printed.`,
@@ -101,12 +101,12 @@ func guideFor(p *project.Project) (string, error) {
 // SDK version over the network, and ask for the SDK key.
 func guideHeader(g sdkGuide) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "<!-- tenjin sdk guide %s: tenjin/sdk-llm-guides at %s, as tested with tenjin %s. -->\n\n", g.Name, g.Revision, buildinfo.Get().Version)
-	b.WriteString("> **From tenjin:**\n")
+	fmt.Fprintf(&b, "<!-- tenjin sdk guide %s: tenjin/sdk-llm-guides at %s, as tested with Tenjin CLI %s. -->\n\n", g.Name, g.Revision, buildinfo.Get().Version)
+	b.WriteString("> **From the Tenjin CLI:**\n")
 	if g.SDKVersion != "" {
 		fmt.Fprintf(&b, "> - Where this guide says `<TENJIN_SDK_VERSION>`, use **%s**, the release `tenjin doctor` checks against. There is no need to look it up.\n", g.SDKVersion)
 	}
-	b.WriteString("> - Do not ask for the SDK key or write one. Where the key belongs, write the build's placeholder (`tenjin project detect` lists each build's `sdk_key_placeholder`), and tenjin writes the key: `tenjin setup`, or `tenjin project set-keys`.\n")
+	b.WriteString("> - Do not ask for the SDK key or write one. Where the key belongs, write the build's placeholder (`tenjin project detect` lists each build's `sdk_key_placeholder`), and the Tenjin CLI writes the key: `tenjin setup`, or `tenjin project set-keys`.\n")
 	b.WriteString("> - Check the result with `tenjin doctor`.\n\n")
 	return b.String()
 }
