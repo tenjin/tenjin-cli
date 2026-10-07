@@ -22,6 +22,8 @@ const (
 	// AlreadyExists is a create that found the thing already there.
 	AlreadyExists Kind = "already_exists"
 	ChecksFailed  Kind = "checks_failed"
+	// Interrupted is a run the user stopped, with Ctrl-C.
+	Interrupted Kind = "interrupted"
 )
 
 // ExitCode is the process exit status for a failure of this kind. 8 is kept
@@ -45,6 +47,9 @@ func (k Kind) ExitCode() int {
 		return 10
 	case ChecksFailed:
 		return 9
+	case Interrupted:
+		// The shells' code for a program stopped by SIGINT.
+		return 130
 	}
 	return 1
 }

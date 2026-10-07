@@ -237,7 +237,8 @@ func (r *runner) checkDependency(spec frameworkSpec, platform project.Platform) 
 func (r *runner) checkUnfilledKeys() {
 	reported := map[string]bool{}
 	for _, spot := range keyfill.Find(r.p.Root) {
-		if reported[spot.Placeholder] {
+		// A build left out with --build is not this run's to check.
+		if reported[spot.Placeholder] || r.p.IsOmitted(spot.Placeholder) {
 			continue
 		}
 		reported[spot.Placeholder] = true

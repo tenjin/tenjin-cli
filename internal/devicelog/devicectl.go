@@ -37,7 +37,9 @@ func ConnectedIPhones(ctx context.Context, run Runner, xcrun string) ([]IPhone, 
 		Result struct {
 			Devices []struct {
 				ConnectionProperties struct {
-					TunnelState string `json:"tunnelState"`
+					TunnelState   string `json:"tunnelState"`
+					PairingState  string `json:"pairingState"`
+					TransportType string `json:"transportType"`
 				} `json:"connectionProperties"`
 				DeviceProperties struct {
 					Name                string `json:"name"`
@@ -56,8 +58,12 @@ func ConnectedIPhones(ctx context.Context, run Runner, xcrun string) ([]IPhone, 
 	}
 	var phones []IPhone
 	for _, d := range list.Result.Devices {
-		hw := d.HardwareProperties
-		if hw.Reality != "physical" || hw.Platform != "iOS" || d.ConnectionProperties.TunnelState != "connected" {
+		hw, c := d.HardwareProperties, d.ConnectionProperties
+		// A paired phone plugged in but idle has its tunnel "disconnected":
+		// devicectl brings it up when it is used. One that cannot be reached
+		// at all has no transport.
+		reachable := c.TunnelState == "connected" || c.TransportType == "wired" || c.TransportType == "localNetwork"
+		if hw.Reality != "physical" || hw.Platform != "iOS" || !reachable || (c.PairingState != "" && c.PairingState != "paired") {
 			continue
 		}
 		phones = append(phones, IPhone{UDID: hw.UDID, Name: d.DeviceProperties.Name, DeveloperMode: d.DeviceProperties.DeveloperModeStatus == "enabled"})

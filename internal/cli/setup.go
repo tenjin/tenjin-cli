@@ -181,12 +181,18 @@ func (s *setup) say(format string, a ...any) {
 	_, _ = fmt.Fprintf(s.out, format+"\n", a...)
 }
 
-func (s *setup) step(n int, title string) {
+func (s *setup) step(n int, title string) error {
+	if err := s.env.interrupted(); err != nil {
+		return err
+	}
 	s.say("\n%s", s.style.Heading(fmt.Sprintf("Step %d of 7 · %s", n, title)))
+	return nil
 }
 
 func (s *setup) run() error {
-	s.step(1, "Your project")
+	if err := s.step(1, "Your project"); err != nil {
+		return err
+	}
 	p, err := loadProject(s.args)
 	if err != nil {
 		return err
@@ -210,12 +216,16 @@ func (s *setup) run() error {
 		return err
 	}
 
-	s.step(2, "Sign in")
+	if err := s.step(2, "Sign in"); err != nil {
+		return err
+	}
 	if err := s.signIn(); err != nil {
 		return err
 	}
 
-	s.step(3, "Tenjin apps")
+	if err := s.step(3, "Tenjin apps"); err != nil {
+		return err
+	}
 	if err := s.chooseBuilds(p); err != nil {
 		return err
 	}
@@ -223,22 +233,30 @@ func (s *setup) run() error {
 		return err
 	}
 
-	s.step(4, "SDK keys")
+	if err := s.step(4, "SDK keys"); err != nil {
+		return err
+	}
 	if err := s.sdkKeys(p); err != nil {
 		return err
 	}
 
-	s.step(5, "Add the SDK")
+	if err := s.step(5, "Add the SDK"); err != nil {
+		return err
+	}
 	if err := s.integrate(p); err != nil {
 		return err
 	}
 
-	s.step(6, "Check the integration")
+	if err := s.step(6, "Check the integration"); err != nil {
+		return err
+	}
 	if err := s.check(); err != nil {
 		return err
 	}
 
-	s.step(7, "Check a real launch")
+	if err := s.step(7, "Check a real launch"); err != nil {
+		return err
+	}
 	return s.launch(p)
 }
 
@@ -524,8 +542,7 @@ func (s *setup) integrate(p *project.Project) error {
 		return nil
 	}
 	s.helper = helper
-	s.runAgent(p, report)
-	return nil
+	return s.runAgent(p, report)
 }
 
 // chooseAgent decides whether a coding agent does the integration. It
@@ -650,14 +667,14 @@ func (s *setup) manualGuide(report *verify.Report) {
 
 // runAgent hands the open findings to the coding agent and reports what it
 // did. A failure here is not fatal: the check that follows is what decides
-// whether the integration works.
-func (s *setup) runAgent(p *project.Project, report *verify.Report) {
+// whether the integration works. Only Ctrl-C stops setup here.
+func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
 	// Keys this run wrote go back to their placeholders while the agent
 	// works, and are written again when it is done.
 	if len(s.filled) > 0 {
 		if err := keyfill.Unfill(p.Root, s.filled, s.filledKeys); err != nil {
 			s.say("%s Could not take the SDK keys out of the project before %s starts, so it was not started: %v", s.style.Yellow("!"), s.helper.Name, err)
-			return
+			return nil
 		}
 		s.filled = nil
 	}
@@ -702,10 +719,13 @@ func (s *setup) runAgent(p *project.Project, report *verify.Report) {
 		s.say("\nTo ask %s about these changes or to keep going, run this in %s:", s.helper.Name, p.Root)
 		s.say("  %s", s.style.Accent(s.helper.ResumeCommand(result.SessionID)))
 	}
-	// The agent left placeholders where the keys go; the keys go in now.
+	// The agent left placeholders where the keys go; the keys go in now,
+	// also after Ctrl-C, so a stopped run does not leave the project without
+	// the keys it had.
 	if err := s.fillKeys(p, false); err != nil {
 		s.say("%s %v", s.style.Yellow("!"), err)
 	}
+	return s.env.interrupted()
 }
 
 // fillKeys writes the SDK keys setup knows where the project has
@@ -797,7 +817,9 @@ func (s *setup) check() error {
 		case errors.Is(err, io.EOF), strings.EqualFold(answer, "q"):
 			return status
 		case strings.EqualFold(answer, "a") && s.helper != nil:
-			s.runAgent(p, report)
+			if err := s.runAgent(p, report); err != nil {
+				return err
+			}
 		}
 	}
 }

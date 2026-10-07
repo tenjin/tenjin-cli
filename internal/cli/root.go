@@ -28,6 +28,7 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/config"
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
 	"github.com/tenjin/tenjin-cli/internal/oauth"
+	"github.com/tenjin/tenjin-cli/internal/proc"
 	"github.com/tenjin/tenjin-cli/internal/render"
 	"github.com/tenjin/tenjin-cli/internal/sdkrelease"
 	"github.com/tenjin/tenjin-cli/internal/session"
@@ -81,8 +82,12 @@ type environment struct {
 	// stream runs a program until a line of its output says to stop: how an
 	// app launched on an iPhone is read.
 	stream devicelog.Streamer
-	// wait pauses; tests make it return at once.
+	// wait pauses; tests make it return at once. Nil waits for real, and
+	// Ctrl-C ends it (see pause).
 	wait func(time.Duration)
+	// ctx is the run's context, cancelled by Ctrl-C, for the prompts and
+	// waits that have no context of their own.
+	ctx context.Context
 	// verbose receives a line for each request sent and each program run,
 	// when --verbose is given. Nil otherwise.
 	verbose io.Writer
@@ -139,10 +144,13 @@ func defaultEnvironment() (*environment, error) {
 		interactive: term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())),
 		openBrowser: openBrowser,
 		lookPath:    exec.LookPath,
-		wait:        time.Sleep,
 		executable:  os.Executable,
 		run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
-			return exec.CommandContext(ctx, name, args...).Output()
+			// A device tool that hangs, such as adb with a wedged server,
+			// must not hold the command forever.
+			ctx, cancel := context.WithTimeout(ctx, programTimeout)
+			defer cancel()
+			return proc.Command(ctx, name, args...).Output()
 		},
 		stream: streamProgram,
 	}, nil
@@ -232,6 +240,9 @@ func (e *environment) reportUpdate(w io.Writer) {
 	_, _ = fmt.Fprintf(w, "%s\n", style.Dim("What changed: "+n.Notes))
 }
 
+// programTimeout bounds each run of a device tool.
+const programTimeout = 2 * time.Minute
+
 // streamProgram runs a program, gathers its output line by line, and kills
 // it once stop reports true for a line, or when ctx ends. Killing it is
 // SIGKILL, which devicectl cannot pass on to the app it launched, so the
@@ -239,7 +250,7 @@ func (e *environment) reportUpdate(w io.Writer) {
 func streamProgram(ctx context.Context, name string, args []string, stop func(string) bool) ([]byte, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := proc.Command(ctx, name, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -334,6 +345,7 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
+	env.ctx = ctx
 	root := newRootCmd(env)
 	root.SetArgs(args)
 	root.SetOut(stdout)

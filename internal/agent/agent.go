@@ -16,6 +16,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/tenjin/tenjin-cli/internal/proc"
 )
 
 // Agent is an installed coding agent the CLI knows how to drive.
@@ -191,7 +193,8 @@ func (a Agent) Run(ctx context.Context, task Task, progress func(Action)) (Resul
 			return Result{}, err
 		}
 	}
-	cmd := exec.CommandContext(ctx, a.Path, a.args(task, sessionID)...)
+	// Its own process group, so stopping it stops the commands it started.
+	cmd := proc.Command(ctx, a.Path, a.args(task, sessionID)...)
 	cmd.Dir = task.Dir
 	cmd.Stdin = strings.NewReader(task.Prompt)
 	cmd.Env = withPath(withoutKeys(os.Environ()), task.ToolDir)
