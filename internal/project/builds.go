@@ -95,16 +95,29 @@ func Shout(name string) string {
 	return b.String()
 }
 
+// SDKStore is the store the Android SDK reads from a TENJIN_APP_STORE
+// value: it lowercases it, drops whitespace and takes it as one of its
+// AppStoreType names (SourceAppStoreLoader). Anything else is
+// "unspecified", which Tenjin files under Google Play.
+func SDKStore(declared string) string {
+	v := strings.ToLower(strings.Join(strings.Fields(declared), ""))
+	switch v {
+	case "googleplay", "amazon", "other", "unspecified":
+		return v
+	}
+	return "unspecified"
+}
+
 // TenjinPlatform is the Tenjin platform of an Android build, given the store
-// it declares.
+// it declares in TENJIN_APP_STORE, as the SDK reads it.
 func TenjinPlatform(platform Platform, store string) string {
 	if platform != Android {
 		return string(platform)
 	}
-	switch strings.ToLower(store) {
+	switch SDKStore(store) {
 	case "amazon":
 		return "amazon"
-	case "other", "android_other":
+	case "other":
 		return "android_other"
 	}
 	return "android"
@@ -129,7 +142,7 @@ func mainBuild(t *Target) Build {
 }
 
 var (
-	flavorDimensions = regexp.MustCompile(`flavorDimensions[^\n]*`)
+	flavorDimensions = regexp.MustCompile(`flavorDimensions`)
 	quoted           = regexp.MustCompile(`["']([\w-]+)["']`)
 	flavorDimension  = regexp.MustCompile(`\bdimension\s*=?\s*["']([\w-]+)["']`)
 	// A flavor block: create("amazon") { in Kotlin, amazon { in Groovy.
@@ -360,23 +373,49 @@ func blockNamed(content, name string) string {
 // in any of the ways Gradle lets them be written.
 func manifestPlaceholders(content string) map[string]string {
 	values := map[string]string{}
-	for _, line := range strings.Split(content, "\n") {
-		if !strings.Contains(line, "anifestPlaceholders") {
-			continue
-		}
-		_, assignment, _ := strings.Cut(line, "anifestPlaceholders")
+	for i := strings.Index(content, "anifestPlaceholders"); i >= 0; {
+		start := i + len("anifestPlaceholders")
+		assignment := statement(content, start)
 		for _, m := range placeholders.FindAllStringSubmatch(assignment, -1) {
 			values[m[1]] = m[2]
 		}
+		next := strings.Index(content[start:], "anifestPlaceholders")
+		if next < 0 {
+			break
+		}
+		i = start + next
 	}
 	return values
+}
+
+// statement returns a Gradle statement from offset start to its end: the
+// end of the line, or, when brackets are open there, the line where they
+// close, so that a list or a map written over several lines is read whole.
+func statement(content string, start int) string {
+	depth := 0
+	for i := start; i < len(content); i++ {
+		switch content[i] {
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			if depth == 0 {
+				return content[start:i]
+			}
+			depth--
+		case '\n':
+			if depth == 0 {
+				return content[start:i]
+			}
+		}
+	}
+	return content[start:]
 }
 
 // dimensionOrder reads flavorDimensions, in order.
 func dimensionOrder(content string) []string {
 	var out []string
-	for _, line := range flavorDimensions.FindAllString(content, -1) {
-		for _, m := range quoted.FindAllStringSubmatch(line, -1) {
+	for _, loc := range flavorDimensions.FindAllStringIndex(content, -1) {
+		for _, m := range quoted.FindAllStringSubmatch(statement(content, loc[1]), -1) {
 			out = append(out, m[1])
 		}
 	}

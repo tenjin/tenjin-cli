@@ -340,14 +340,14 @@ func (r *runner) checkStores(t *project.Target) {
 			if t.SeveralBuilds() {
 				f.Build = b.ID
 			}
-			switch strings.ToLower(d.Store) {
-			case "googleplay", "amazon", "other", "android_other":
+			switch {
+			case strings.TrimSpace(d.Store) == "":
+			case project.SDKStore(d.Store) != "unspecified":
 				continue
-			case "":
 			default:
 				f.ID, f.Severity = "android.store", Warning
-				f.Title = "TENJIN_APP_STORE is " + quote(d.Store) + ", which Tenjin does not know"
-				f.Detail = "Tenjin files the build's events under its Google Play app."
+				f.Title = "TENJIN_APP_STORE is " + quote(d.Store) + ", which the Tenjin SDK does not know"
+				f.Detail = "The SDK takes it as unspecified, and Tenjin files the build's events under its Google Play app."
 				f.File = d.Source
 				f.Fix = "Set it to googleplay, amazon or other."
 				r.add(f)

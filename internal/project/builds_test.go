@@ -160,3 +160,92 @@ func TestShout(t *testing.T) {
 		}
 	}
 }
+
+// Dimensions and placeholders written over several lines are read whole.
+func TestMultiLineGradleForms(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	p := detect(t, base.With(testproject.Files{
+		build: strings.Replace(base[build], "    buildTypes {", `    flavorDimensions += listOf(
+        "store", "env"
+    )
+    productFlavors {
+        create("play") { dimension = "store" }
+        create("amazon") { dimension = "store" }
+        create("prod") { dimension = "env" }
+        create("staging") {
+            dimension = "env"
+            applicationIdSuffix = ".staging"
+        }
+    }
+    buildTypes {`, 1),
+		"app/src/play/AndroidManifest.xml":   strings.Replace(manifestStore, "%s", "googleplay", 1),
+		"app/src/amazon/AndroidManifest.xml": strings.Replace(manifestStore, "%s", "amazon", 1),
+	}))
+	got := buildList(t, p, project.Android)
+	for _, want := range []string{"com.example.sample.staging amazon", "com.example.sample amazon", "com.example.sample.staging android", "com.example.sample android"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("no build %q in:\n%s", want, got)
+		}
+	}
+
+	groovy := `apply plugin: 'com.android.application'
+android {
+    defaultConfig { applicationId "com.example.sample" }
+    flavorDimensions "store"
+    productFlavors {
+        play { dimension "store" }
+        amazon {
+            dimension "store"
+            manifestPlaceholders = [
+                tenjinStore: "amazon"
+            ]
+        }
+    }
+}
+dependencies { implementation 'com.tenjin:android-sdk:2.0.0' }
+`
+	p = detect(t, base.With(testproject.Files{
+		build:                              "",
+		"app/build.gradle":                 groovy,
+		"app/src/main/AndroidManifest.xml": strings.Replace(manifestStore, "%s", "${tenjinStore}", 1),
+	}))
+	if got := buildList(t, p, project.Android); !strings.Contains(got, "android:amazon com.example.sample amazon") {
+		t.Errorf("the Amazon flavor's placeholder was not read:\n%s", got)
+	}
+}
+
+// TENJIN_APP_STORE is read as the SDK reads it.
+func TestStoresAsTheSDKReadsThem(t *testing.T) {
+	for declared, want := range map[string]string{
+		"amazon": "amazon", "Amazon": "amazon", "other": "android_other",
+		"Google Play": "android", "googleplay": "android",
+		"android_other": "android", "samsung": "android", "": "android",
+	} {
+		if got := project.TenjinPlatform(project.Android, declared); got != want {
+			t.Errorf("%q: %q, want %q", declared, got, want)
+		}
+	}
+}
+
+// The app's Info.plist is the one its own build settings name, with
+// $(SRCROOT) resolved, even when an extension's settings come first.
+func TestTheAppsOwnInfoPlist(t *testing.T) {
+	base := testproject.IOSNative()
+	const pbx = "Sample.xcodeproj/project.pbxproj"
+	widget := `		CCCC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				INFOPLIST_FILE = Widget/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.sample.widget;
+			};
+			name = Debug;
+		};
+`
+	pbxText := strings.Replace(base[pbx], "\tobjects = {\n", "\tobjects = {\n"+widget, 1)
+	pbxText = strings.Replace(pbxText, "INFOPLIST_FILE = Sample/Info.plist;", `INFOPLIST_FILE = "$(SRCROOT)/Sample/Info.plist";`, 1)
+	p := detect(t, base.With(testproject.Files{pbx: pbxText, "Widget/Info.plist": testproject.InfoPlist}))
+	if got := p.Target(project.IOS).IOS.InfoPlist; got != "Sample/Info.plist" {
+		t.Errorf("Info.plist = %q", got)
+	}
+}

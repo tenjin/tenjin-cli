@@ -334,12 +334,6 @@ func (d *detector) iosTarget(rel string) (Target, bool) {
 		GeneratedInfoPlist: pbxGeneratedPlist.MatchString(pbx),
 		SwiftPackages:      strings.Contains(pbx, "XCRemoteSwiftPackageReference"),
 	}
-	for _, m := range pbxInfoPlist.FindAllStringSubmatch(pbx, -1) {
-		if candidate := path.Join(dir, m[1]); !isTestPath(m[1]) && d.exists(candidate) {
-			info.InfoPlist = candidate
-			break
-		}
-	}
 	if podfile := path.Join(dir, "Podfile"); d.exists(podfile) {
 		info.Podfile = podfile
 	}
@@ -365,7 +359,63 @@ func (d *detector) iosTarget(rel string) (Target, bool) {
 	} else {
 		d.note("Could not read PRODUCT_BUNDLE_IDENTIFIER from %s.", xcodeproj)
 	}
+	d.chooseInfoPlist(info, pbx, dir, target.BundleID)
 	return target, true
+}
+
+// pbxBuildSettings is one configuration's build settings in project.pbxproj.
+var pbxBuildSettings = regexp.MustCompile(`(?s)buildSettings = \{(.*?)\n\s*\};`)
+
+// chooseInfoPlist picks the app's own Info.plist: the one named in the build
+// settings that also set the app's bundle ID, so that a widget's or an
+// extension's is not taken for it, with $(SRCROOT) and $(PROJECT_DIR)
+// resolved. A plist the settings name that is not there is recorded as
+// missing.
+func (d *detector) chooseInfoPlist(info *IOSInfo, pbx, dir, bundleID string) {
+	resolve := func(p string) string {
+		p = strings.Trim(strings.TrimSpace(p), `"`)
+		for _, root := range []string{"$(SRCROOT)/", "${SRCROOT}/", "$(PROJECT_DIR)/", "${PROJECT_DIR}/"} {
+			p = strings.TrimPrefix(p, root)
+		}
+		return p
+	}
+	var ofApp, others []string
+	for _, block := range pbxBuildSettings.FindAllStringSubmatch(pbx, -1) {
+		m := pbxInfoPlist.FindStringSubmatch(block[1])
+		if m == nil || isTestPath(m[1]) {
+			continue
+		}
+		plist := resolve(m[1])
+		if id := pbxBundleID.FindStringSubmatch(block[1]); id != nil && strings.TrimSpace(id[1]) == bundleID {
+			ofApp = append(ofApp, plist)
+		} else {
+			others = append(others, plist)
+		}
+	}
+	// Settings outside any configuration block, as hand-written files have.
+	if len(ofApp) == 0 && len(others) == 0 {
+		for _, m := range pbxInfoPlist.FindAllStringSubmatch(pbx, -1) {
+			if !isTestPath(m[1]) {
+				others = append(others, resolve(m[1]))
+			}
+		}
+	}
+	candidates := ofApp
+	if len(candidates) == 0 {
+		candidates = others
+	}
+	for _, c := range candidates {
+		if strings.Contains(c, "$(") || strings.Contains(c, "${") {
+			continue
+		}
+		if p := path.Join(dir, c); d.exists(p) {
+			info.InfoPlist = p
+			return
+		}
+	}
+	if len(candidates) > 0 {
+		info.MissingInfoPlist = candidates[0]
+	}
 }
 
 func isTestBundle(id string) bool {
