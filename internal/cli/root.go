@@ -206,9 +206,12 @@ func (e *environment) startUpdateCheck(cmd *cobra.Command, asJSON bool) {
 	if e.updates == nil || e.updateNotice != nil || asJSON {
 		return
 	}
-	switch cmd.Name() {
-	case "completion", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:
-		return
+	// Shell completion runs inside the shell, for which a notice is noise.
+	for c := cmd; c != nil; c = c.Parent() {
+		switch c.Name() {
+		case "completion", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:
+			return
+		}
 	}
 	e.updates.Transport = e.transport()
 	e.updateNotice = make(chan *update.Notice, 1)

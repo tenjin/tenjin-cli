@@ -22,7 +22,7 @@ func newAgentCmd(opts *options, env *environment) *cobra.Command {
 		newAgentInstallCmd(opts, env),
 		newAgentUninstallCmd(opts, env),
 		newAgentStatusCmd(opts, env),
-		newAgentSkillCmd(),
+		newAgentSkillCmd(opts),
 	)
 }
 
@@ -296,13 +296,20 @@ func newAgentStatusCmd(opts *options, env *environment) *cobra.Command {
 	return cmd
 }
 
-func newAgentSkillCmd() *cobra.Command {
+func newAgentSkillCmd(opts *options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "skill",
 		Short: "Print the instructions, for an agent this command cannot install them for",
 		Args:  noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_, err := io.WriteString(cmd.OutOrStdout(), skill.Body())
+			format, err := opts.format(cmd)
+			if err != nil {
+				return err
+			}
+			if format == render.JSON {
+				return render.WriteJSON(cmd.OutOrStdout(), map[string]string{"name": skill.Name, "instructions": skill.Body()})
+			}
+			_, err = io.WriteString(cmd.OutOrStdout(), skill.Body())
 			return err
 		},
 	}

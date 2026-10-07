@@ -134,7 +134,7 @@ otherwise. With --strict, warnings count too.`,
 	cmd.Flags().BoolVar(&offline, "offline", false, "skip the SDK key check against Tenjin, and the look for newer SDK releases")
 	cmd.Flags().BoolVar(&strict, "strict", false, "exit non-zero on warnings as well as errors")
 	cmd.Flags().BoolVar(&device, "device", false, "also read the log of a connected Android device or emulator, or of a running iOS simulator")
-	cmd.Flags().StringVar(&serial, "serial", "", "which device to read, when several are connected: an Android serial (see 'adb devices') or a simulator's UDID")
+	cmd.Flags().StringVar(&serial, "serial", "", serialUsage)
 	cmd.Flags().StringVar(&logs, "logs", "", "also read a saved device log (logcat or iOS simulator), or - for standard input")
 	addBuildFlag(cmd, &builds)
 	addFeaturesFlag(cmd, &features)
@@ -222,6 +222,9 @@ const (
 	fromIPhone    = "iphone"
 	fromSimulator = "simulator"
 )
+
+// serialUsage describes --serial, which doctor and setup share.
+const serialUsage = "which device to read, when several are connected: an Android serial (see 'adb devices'), or an iPhone's or a simulator's UDID"
 
 // readDeviceLog reads the SDK's lines from a device of one platform, and
 // says what kind of device it was. On iOS a connected iPhone is preferred to

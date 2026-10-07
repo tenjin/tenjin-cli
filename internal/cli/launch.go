@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tenjin/tenjin-cli/internal/clierr"
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
 	"github.com/tenjin/tenjin-cli/internal/project"
 	"github.com/tenjin/tenjin-cli/internal/render"
@@ -26,7 +27,7 @@ const (
 // processed the device's install, which is the proof that events get
 // through. A project that builds for both platforms is checked on each.
 func (s *setup) launch(p *project.Project) error {
-	for _, platform := range devicePlatforms(p, "") {
+	for _, platform := range devicePlatforms(p, s.serial) {
 		if err := s.launchOn(p, platform); err != nil {
 			return err
 		}
@@ -67,8 +68,11 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		s.say("On an iPhone connected by cable, the Tenjin CLI launches the app itself to read its console: install a debug build on it first (run it once from Xcode), keep the phone unlocked, and answer the tracking prompt if the app shows one. On a simulator, launch the app yourself. Either way, debug builds must call TenjinSDK.debugLogs(), as the checks above say.")
 	}
 
+	// refused is set once a read shows Tenjin refusing the app's connect, so
+	// that skipping after it does not end setup as a success.
+	refused := false
 	for {
-		mark := markLaunch(s.cmd.Context(), s.env, platform, "")
+		mark := markLaunch(s.cmd.Context(), s.env, platform, s.serial)
 		prompt := fmt.Sprintf("\nLaunch a debug build of the app on %s, then press Enter (s to skip):", deviceNoun(platform))
 		if platform == project.IOS {
 			prompt = "\nInstall a debug build on the iPhone, or launch one on a simulator, then press Enter (s to skip):"
@@ -76,13 +80,16 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		answer, err := s.env.ask(s.out, prompt)
 		if errors.Is(err, io.EOF) || strings.EqualFold(answer, "s") {
 			s.say("Skipped. After launching the app, run %s to see Tenjin's answer.", s.style.Accent("tenjin doctor --device"))
+			if refused {
+				return clierr.New(clierr.ChecksFailed, "Tenjin refused the app's last connect request")
+			}
 			return nil
 		}
 		if err != nil {
 			return err
 		}
 
-		raw, from, err := readLaunch(s.cmd.Context(), s.env, p, platform, "", mark)
+		raw, from, err := readLaunch(s.cmd.Context(), s.env, p, platform, s.serial, mark)
 		var unavailable *devicelog.Unavailable
 		if errors.As(err, &unavailable) {
 			s.say("%s %s", s.style.Yellow("!"), unavailable.Reason)
@@ -121,10 +128,15 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 			return nil
 		case connectAccepted(report) && from == fromSimulator:
 			s.say("\nTenjin accepted the app's request, and has not processed the install. Installs from an iOS simulator have not been seen to be processed; a launch on an iPhone connected by cable confirms it. Run %s with one connected.", s.style.Accent("tenjin doctor --device"))
+			s.testDevicePages()
+			return nil
 		case connectAccepted(report):
 			s.say("\nTenjin accepted the app's request, and has not processed the install yet. Run %s again in a minute.", s.style.Accent("tenjin doctor --device"))
 			s.testDevicePages()
 			return nil
+		}
+		if f := deviceFinding(report, "device.connect"); f != nil && f.Severity == verify.Error {
+			refused = true
 		}
 		s.say("\nFix what is marked above, rebuild and relaunch the app; the next read is of the new launch.")
 	}

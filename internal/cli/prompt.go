@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
@@ -75,6 +76,12 @@ func (e *environment) confirm(w io.Writer, question string, def bool) (bool, err
 	}
 	_, _ = fmt.Fprint(w, question+suffix)
 	answer, err := e.readLine()
+	// Input that ends is a no, whatever the default: nothing is created or
+	// started on an answer nobody gave.
+	if errors.Is(err, io.EOF) {
+		_, _ = fmt.Fprintln(w)
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
