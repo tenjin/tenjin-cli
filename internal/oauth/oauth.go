@@ -164,6 +164,13 @@ func (c *Client) Login(ctx context.Context, opts LoginOptions) (Tokens, error) {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		// A request without this sign-in's state is not its answer: anything
+		// on this machine can reach the port. It is refused and the wait
+		// goes on.
+		if r.URL.Query().Get("state") != state {
+			http.Error(w, "Tenjin CLI: this is not the answer to the sign-in in progress.", http.StatusBadRequest)
+			return
+		}
 		result := check(r.URL.Query())
 		if result.err != nil {
 			http.Error(w, "Tenjin CLI: sign-in failed. You can close this tab and return to the terminal.", http.StatusBadRequest)
