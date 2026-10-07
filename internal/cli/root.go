@@ -14,6 +14,8 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -30,6 +32,7 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/session"
 	"github.com/tenjin/tenjin-cli/internal/tenjinapi"
 	"github.com/tenjin/tenjin-cli/internal/transport"
+	"github.com/tenjin/tenjin-cli/internal/update"
 )
 
 // options holds the flags every command shares.
@@ -82,7 +85,16 @@ type environment struct {
 	// verbose receives a line for each request sent and each program run,
 	// when --verbose is given. Nil otherwise.
 	verbose io.Writer
+	// updates looks for a newer release while the command runs. Nil skips
+	// it: for scripts, agents, CI, and anyone who turned it off.
+	updates *update.Checker
+	// updateNotice receives the check's answer once it was started.
+	updateNotice chan *update.Notice
 }
+
+// updateWait bounds the update check. A command that finishes first waits
+// for it at most this long, once a day.
+const updateWait = 1500 * time.Millisecond
 
 // transport is what every HTTP client uses: retries where they are safe, and
 // the --verbose log.
@@ -115,6 +127,7 @@ func defaultEnvironment() (*environment, error) {
 	}
 	return &environment{
 		getenv:      os.Getenv,
+		updates:     updateChecker(os.Getenv),
 		endpoints:   endpoints,
 		store:       session.NewStore(),
 		stdin:       bufio.NewReader(os.Stdin),
@@ -128,6 +141,66 @@ func defaultEnvironment() (*environment, error) {
 		},
 		stream: streamProgram,
 	}, nil
+}
+
+// updateChecker returns the update check for a person at a terminal, or nil.
+// The notice goes to stderr, so that is the terminal that matters.
+func updateChecker(getenv func(string) string) *update.Checker {
+	if !term.IsTerminal(int(os.Stderr.Fd())) || getenv("CI") != "" || getenv("TENJIN_NO_UPDATE_CHECK") != "" {
+		return nil
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return nil
+	}
+	releases := getenv("TENJIN_RELEASES_URL")
+	if releases == "" {
+		releases = update.Releases
+	}
+	return &update.Checker{
+		Current:  buildinfo.Get().Version,
+		Releases: releases,
+		State:    filepath.Join(dir, "tenjin", "update-check.json"),
+	}
+}
+
+// startUpdateCheck begins the update check alongside the command.
+func (e *environment) startUpdateCheck(cmd *cobra.Command, asJSON bool) {
+	if e.updates == nil || e.updateNotice != nil || asJSON {
+		return
+	}
+	switch cmd.Name() {
+	case "completion", cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd:
+		return
+	}
+	e.updates.Transport = e.transport()
+	e.updateNotice = make(chan *update.Notice, 1)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), updateWait)
+		defer cancel()
+		e.updateNotice <- e.updates.Check(ctx)
+	}()
+}
+
+// reportUpdate tells the user about a newer release, after the command's
+// own output.
+func (e *environment) reportUpdate(w io.Writer) {
+	if e.updateNotice == nil {
+		return
+	}
+	n := <-e.updateNotice
+	e.updateNotice = nil
+	if n == nil {
+		return
+	}
+	exe, err := e.executable()
+	if err != nil {
+		exe = ""
+	}
+	style := render.NewStyler(w)
+	_, _ = fmt.Fprintf(w, "\nA new version of the Tenjin CLI is available: %s → %s\n", n.Current, style.Accent(n.Latest))
+	_, _ = fmt.Fprintf(w, "%s %s\n", style.Dim("Update with:"), update.Command(exe, runtime.GOOS, e.getenv))
+	_, _ = fmt.Fprintf(w, "%s\n", style.Dim("What changed: "+n.Notes))
 }
 
 // streamProgram runs a program, gathers its output line by line, and kills
@@ -238,6 +311,7 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	root.SetErr(stderr)
 
 	err := root.ExecuteContext(ctx)
+	defer env.reportUpdate(stderr)
 	if err == nil {
 		return 0
 	}
@@ -290,9 +364,9 @@ func newRootCmd(env *environment) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "tenjin",
 		Short: "Developer tools for integrating and verifying the Tenjin SDK",
-		Long: `tenjin covers the parts of Tenjin SDK onboarding that happen on your machine:
-working out what the project is, finding its Tenjin app, checking the
-integration, and explaining why it sends nothing.
+		Long: `The Tenjin CLI covers the parts of Tenjin SDK onboarding that happen on your
+machine: working out what the project is, finding its Tenjin app, checking
+the integration, and explaining why it sends nothing.
 
 Start with 'tenjin setup'. The commands under it also work on their own: each
 accepts --json and never prompts when stdin is not a terminal, so scripts and
@@ -328,6 +402,7 @@ coding agents can drive them.`,
 		if opts.verbose {
 			env.verbose = cmd.ErrOrStderr()
 		}
+		env.startUpdateCheck(cmd, opts.json || opts.output == string(render.JSON))
 	}
 
 	// Help lists the commands in the order a new user needs them, so cobra

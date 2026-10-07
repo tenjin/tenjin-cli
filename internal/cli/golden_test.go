@@ -11,7 +11,7 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/testproject"
 )
 
-var update = flag.Bool("update", false, "rewrite the golden files with the current output")
+var updateGolden = flag.Bool("update", false, "rewrite the golden files with the current output")
 
 // golden compares got with testdata/<name>, after replacing the temporary
 // project directory with a fixed word. Run `go test ./internal/cli -update`
@@ -23,7 +23,7 @@ func golden(t *testing.T, name, got, root string) {
 	got = strings.ReplaceAll(got, strings.Trim(string(escaped), `"`), "<root>")
 	got = strings.ReplaceAll(got, root, "<root>")
 	file := filepath.Join("testdata", name)
-	if *update {
+	if *updateGolden {
 		if err := os.MkdirAll("testdata", 0o755); err != nil {
 			t.Fatal(err)
 		}
