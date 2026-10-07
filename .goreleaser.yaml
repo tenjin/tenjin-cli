@@ -56,6 +56,11 @@ release:
   github:
     owner: tenjin
     name: tenjin-cli
+  # A tag such as v0.2.0-rc.1 is a pre-release: not the latest release, so
+  # the install scripts and the update notice keep to the last full one.
+  prerelease: auto
+  # A release job run again after a failure replaces what it uploaded.
+  replace_existing_artifacts: true
 
 homebrew_casks:
   - name: tenjin
@@ -65,6 +70,8 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://github.com/tenjin/tenjin-cli
     description: Integrate and verify the Tenjin SDK from your terminal
+    # Pre-releases stay out of the tap.
+    skip_upload: auto
     completions:
       bash: completions/tenjin.bash
       zsh: completions/tenjin.zsh

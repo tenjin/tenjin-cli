@@ -30,6 +30,7 @@ need() {
 need curl
 need tar
 need uname
+[ -n "${HOME:-}" ] || fail "the HOME variable is not set, so there is no folder to install into"
 
 case "$(uname -s)" in
 Darwin) os=darwin ;;
@@ -48,6 +49,11 @@ if [ -z "$version" ]; then
 	# The latest release redirects to its tag's page.
 	latest=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "$releases/latest") ||
 		fail "could not find the latest release at $releases"
+	# With no release yet, it stays on the releases page.
+	case "$latest" in
+	*/tag/*) ;;
+	*) fail "no release of the Tenjin CLI has been published at $releases yet" ;;
+	esac
 	version="${latest##*/}"
 fi
 version="${version#v}"
@@ -88,6 +94,12 @@ if [ -z "$dir" ]; then
 	done
 fi
 [ -n "$dir" ] || dir="$HOME/.local/bin"
+# A relative folder would put a relative entry on PATH, which runs whatever
+# is at that path in any folder a shell is in.
+case "$dir" in
+/*) ;;
+*) dir="$(pwd)/$dir" ;;
+esac
 
 archive="tenjin_${version}_${os}_${arch}.tar.gz"
 url="$releases/download/v$version"
@@ -111,12 +123,13 @@ fi
 
 tar -xzf "$tmp/$archive" -C "$tmp" tenjin || fail "the archive has no tenjin binary"
 
-mkdir -p "$dir" || fail "could not create $dir"
+mkdir -p "$dir" 2>/dev/null || fail "could not create $dir; nothing was installed. Set TENJIN_INSTALL_DIR to a folder you can write to"
+[ -w "$dir" ] || fail "$dir cannot be written to; nothing was installed. Set TENJIN_INSTALL_DIR to a folder you can write to"
 # Write next to the target and rename, so a running tenjin is never left
 # half overwritten.
-cp "$tmp/tenjin" "$dir/.tenjin.new"
+cp "$tmp/tenjin" "$dir/.tenjin.new" || fail "could not write to $dir; nothing was installed"
 chmod 0755 "$dir/.tenjin.new"
-mv -f "$dir/.tenjin.new" "$dir/tenjin"
+mv -f "$dir/.tenjin.new" "$dir/tenjin" || fail "could not write to $dir; nothing was installed"
 
 echo "Installed $("$dir/tenjin" version) in $dir"
 
@@ -139,13 +152,22 @@ add_to() {
 }
 
 if ! on_path "$dir" && [ "${TENJIN_NO_MODIFY_PATH:-}" != 1 ]; then
-	sh_line="case \":\$PATH:\" in *\":$dir:\"*) ;; *) export PATH=\"$dir:\$PATH\" ;; esac"
+	# The folder goes inside double quotes in these lines, so the characters
+	# special there are escaped: a path holding a quote, a dollar sign or a
+	# backquote must not run anything when a shell starts.
+	sh_dir=$(printf '%s' "$dir" | sed 's/[\\"$`]/\\&/g')
+	fish_dir=$(printf '%s' "$dir" | sed 's/[\\"$]/\\&/g')
+	sh_line="case \":\$PATH:\" in *\":$sh_dir:\"*) ;; *) export PATH=\"$sh_dir:\$PATH\" ;; esac"
 	login_shell=$(basename "${SHELL:-sh}")
 	# Every zsh reads .zshenv, including the ones editors and coding agents
-	# start to run a command; .zshrc is read by interactive ones only.
-	zdot="${ZDOTDIR:-$HOME}"
-	if [ "$login_shell" = zsh ] || [ -f "$zdot/.zshrc" ] || [ -f "$zdot/.zshenv" ]; then
-		add_to "$zdot/.zshenv" "$sh_line"
+	# start to run a command; .zshrc is read by interactive ones only. A new
+	# zsh reads the one in the home folder first, whatever ZDOTDIR is set to
+	# later, so the line goes there, and in ZDOTDIR's as well when set.
+	if [ "$login_shell" = zsh ] || [ -f "$HOME/.zshrc" ] || [ -f "$HOME/.zshenv" ] || [ -n "${ZDOTDIR:-}" ]; then
+		add_to "$HOME/.zshenv" "$sh_line"
+		if [ -n "${ZDOTDIR:-}" ] && [ "$ZDOTDIR" != "$HOME" ]; then
+			add_to "$ZDOTDIR/.zshenv" "$sh_line"
+		fi
 	fi
 	if [ "$login_shell" = bash ] || [ -f "$HOME/.bashrc" ]; then
 		add_to "$HOME/.bashrc" "$sh_line"
@@ -166,18 +188,20 @@ if ! on_path "$dir" && [ "${TENJIN_NO_MODIFY_PATH:-}" != 1 ]; then
 	esac
 	fish_config="${XDG_CONFIG_HOME:-$HOME/.config}/fish"
 	if [ "$login_shell" = fish ] || [ -d "$fish_config" ]; then
-		add_to "$fish_config/conf.d/tenjin.fish" "contains -- \"$dir\" \$PATH; or set -gx PATH \"$dir\" \$PATH"
+		add_to "$fish_config/conf.d/tenjin.fish" "contains -- \"$fish_dir\" \$PATH; or set -gx PATH \"$fish_dir\" \$PATH"
 	fi
 	if [ -n "$changed" ]; then
 		echo "Added $dir to PATH in:$changed"
 	fi
 fi
 
+# An older copy elsewhere on PATH, such as one in a folder this script could
+# not write to, may be found before this one, now or in new terminals.
+found=$(command -v tenjin 2>/dev/null || true)
+if [ -n "$found" ] && [ "$found" != "$dir/tenjin" ]; then
+	echo "Another copy of the Tenjin CLI is at $found, and may run instead of this one. Remove it (sudo rm $found if it needs it), or run $dir/tenjin."
+fi
 if on_path "$dir"; then
-	found=$(command -v tenjin 2>/dev/null || true)
-	if [ -n "$found" ] && [ "$found" != "$dir/tenjin" ]; then
-		echo "Another copy of the Tenjin CLI, $found, comes first on your PATH. Remove it, or run $dir/tenjin."
-	fi
 	echo "Start with: tenjin setup"
 elif [ -n "$changed" ]; then
 	echo "New terminals will find the tenjin command. In this one, start with: $dir/tenjin setup"

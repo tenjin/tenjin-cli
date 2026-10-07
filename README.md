@@ -20,11 +20,11 @@ On Windows, in PowerShell:
 irm https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.ps1 | iex
 ```
 
-It installs `tenjin.exe` in `%LOCALAPPDATA%\Programs\tenjin` and adds that folder to your PATH, without administrator rights. The zips are also on the releases page.
+It installs `tenjin.exe` in `%LOCALAPPDATA%\Programs\tenjin` and adds that folder to your PATH, without administrator rights. The zips are also on the releases page. On an older Windows whose PowerShell reports a TLS error, run `[Net.ServicePointManager]::SecurityProtocol = 'Tls12'` first.
 
 Both install scripts check each download against the release's `checksums.txt`, and neither uses sudo or administrator rights. `TENJIN_VERSION` picks a version and `TENJIN_INSTALL_DIR` the folder.
 
-The shell script installs where `tenjin` already is, or in a folder that is already on your PATH (`~/.local/bin`, `~/bin`, or `/usr/local/bin` when it can be written to). Otherwise it uses `~/.local/bin` and adds it to PATH for zsh (`.zshenv`), bash (`.bashrc` and the login profile), fish (`conf.d/tenjin.fish`) and `.profile`, each marked `# Added by the Tenjin CLI installer`, so the command works in every new terminal. `TENJIN_NO_MODIFY_PATH=1` leaves those files alone. If the CLI was installed with Homebrew, the script stops and points to `brew upgrade tenjin`.
+The shell script installs where `tenjin` already is, or in a folder that is already on your PATH (`~/.local/bin`, `~/bin`, or `/usr/local/bin` when it can be written to). Otherwise it uses `~/.local/bin` and adds it to PATH for zsh (`.zshenv`), bash (`.bashrc` and the login profile), fish (`conf.d/tenjin.fish`) and `.profile`, each marked `# Added by the Tenjin CLI installer`, so the command works in every new terminal; with `ZDOTDIR` set, zsh's line goes in both `.zshenv` files. Another copy found elsewhere on PATH is pointed out. bash reads those files only for login and interactive shells, so a script run with `bash -c` needs the full path or its own PATH. `TENJIN_NO_MODIFY_PATH=1` leaves those files alone. If the CLI was installed with Homebrew, the script stops and points to `brew upgrade tenjin`.
 
 ### Updates
 
