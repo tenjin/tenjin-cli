@@ -249,3 +249,67 @@ func TestTheAppsOwnInfoPlist(t *testing.T) {
 		t.Errorf("Info.plist = %q", got)
 	}
 }
+
+// With several application modules, the one with Tenjin is the one checked.
+func TestTheModuleWithTenjinIsChosen(t *testing.T) {
+	base := testproject.AndroidNative()
+	files := testproject.Files{}
+	for name, content := range base {
+		files[strings.Replace(name, "app/", "mobile/", 1)] = content
+	}
+	files["settings.gradle.kts"] = "include(\":mobile\", \":automotive\")\n"
+	files["automotive/build.gradle.kts"] = "plugins { id(\"com.android.application\") }\nandroid { defaultConfig { applicationId = \"com.example.sample.car\" } }\n"
+	p := detect(t, files)
+	if got := p.Target(project.Android).Android.ModuleDir; got != "mobile" {
+		t.Errorf("module = %q", got)
+	}
+}
+
+// A Tenjin Swift package declared by a local package the app links is the
+// app's Tenjin SDK.
+func TestTenjinInALocalSwiftPackage(t *testing.T) {
+	base := testproject.IOSNative()
+	files := base.With(testproject.Files{
+		"Podfile":                        "platform :ios, '13.0'\ntarget 'Sample' do\nend\n",
+		"Podfile.lock":                   "",
+		"Packages/AppCore/Package.swift": "// swift-tools-version:5.9\nimport PackageDescription\nlet package = Package(name: \"AppCore\", dependencies: [.package(url: \"https://github.com/tenjin/tenjin-ios-spm\", from: \"1.20.0\")])\n",
+	})
+	p := detect(t, files)
+	if len(p.Tenjin) != 1 || p.Tenjin[0].Source != "Packages/AppCore/Package.swift" {
+		t.Errorf("Tenjin = %+v", p.Tenjin)
+	}
+}
+
+// A bundle ID left to a build setting names no app: there is no build.
+func TestAnUnresolvedBundleIDMakesNoBuild(t *testing.T) {
+	base := testproject.IOSNative()
+	const pbx = "Sample.xcodeproj/project.pbxproj"
+	p := detect(t, base.With(testproject.Files{pbx: strings.ReplaceAll(base[pbx], "com.example.sample", "$(APP_BUNDLE_ID)")}))
+	if b := p.Target(project.IOS).Builds; len(b) != 0 {
+		t.Errorf("builds = %+v", b)
+	}
+}
+
+// The SDK version is read through a version catalog's version.ref, and
+// through a variable a build file interpolates.
+func TestTheSDKVersionThroughCatalogsAndVariables(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	withCatalog := base.With(testproject.Files{
+		build:                       strings.Replace(base[build], `implementation("com.tenjin:android-sdk:2.0.0")`, "implementation(libs.tenjin)", 1),
+		"gradle/libs.versions.toml": "[versions]\ntenjin = \"1.16.0\"\n\n[libraries]\ntenjin = { module = \"com.tenjin:android-sdk\", version.ref = \"tenjin\" }\n",
+	})
+	withVariable := base.With(testproject.Files{
+		build:               strings.Replace(base[build], `implementation("com.tenjin:android-sdk:2.0.0")`, `implementation("com.tenjin:android-sdk:$tenjinVersion")`, 1),
+		"gradle.properties": "tenjinVersion=1.23.0\n",
+	})
+	for name, c := range map[string]struct {
+		files testproject.Files
+		want  string
+	}{"catalog": {withCatalog, "1.16.0"}, "variable": {withVariable, "1.23.0"}} {
+		p := detect(t, c.files)
+		if len(p.Tenjin) != 1 || p.Tenjin[0].Version != c.want {
+			t.Errorf("%s: Tenjin = %+v", name, p.Tenjin)
+		}
+	}
+}

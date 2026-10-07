@@ -345,7 +345,7 @@ func (d *detector) finish() {
 		// A target whose builds were not read separately ships one build.
 		if t := &d.p.Targets[i]; t.Builds == nil {
 			t.Builds = []Build{}
-			if t.BundleID != "" {
+			if Resolved(t.BundleID) {
 				t.Builds = []Build{mainBuild(t)}
 			}
 		}

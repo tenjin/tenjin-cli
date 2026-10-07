@@ -104,7 +104,13 @@ func (d *detector) reactNative() bool {
 	return true
 }
 
-// expoTargets reads bundle IDs from app.json when there are no native folders.
+var (
+	expoAndroidPackage   = regexp.MustCompile(`\bpackage\s*:\s*["']([\w.]+)["']`)
+	expoBundleIdentifier = regexp.MustCompile(`\bbundleIdentifier\s*:\s*["']([\w.-]+)["']`)
+)
+
+// expoTargets reads bundle IDs from app.json, or app.config, when there are
+// no native folders.
 func (d *detector) expoTargets() {
 	var app struct {
 		Expo struct {
@@ -114,6 +120,21 @@ func (d *detector) expoTargets() {
 	}
 	b, err := os.ReadFile(d.path("app.json"))
 	if err != nil || json.Unmarshal(b, &app) != nil {
+		// app.config.ts or .js is code; its IDs are read where they are
+		// written as plain strings.
+		for _, name := range []string{"app.config.ts", "app.config.js"} {
+			config := stripComments(d.read(name))
+			if config == "" {
+				continue
+			}
+			if m := expoAndroidPackage.FindStringSubmatch(config); m != nil {
+				d.p.Targets = append(d.p.Targets, Target{Platform: Android, BundleID: m[1], Source: name})
+			}
+			if m := expoBundleIdentifier.FindStringSubmatch(config); m != nil {
+				d.p.Targets = append(d.p.Targets, Target{Platform: IOS, BundleID: m[1], Source: name})
+			}
+			return
+		}
 		return
 	}
 	if id := app.Expo.Android.Package; id != "" {

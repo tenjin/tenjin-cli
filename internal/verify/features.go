@@ -40,8 +40,10 @@ var featureCalls = map[string]struct{ distinct, generic []string }{
 		distinct: []string{"eventWithNameAndValue", "sendEventWithName"},
 		generic:  []string{"eventWithName", "sendEvent", "SendEvent"},
 	},
+	// Other SDKs (AppsFlyer, for one) have a setCustomerUserId too: it
+	// counts only on a Tenjin receiver.
 	project.FeatureUserID: {
-		distinct: []string{"setCustomerUserId", "SetCustomerUserId"},
+		generic: []string{"setCustomerUserId", "SetCustomerUserId"},
 	},
 }
 
@@ -173,6 +175,9 @@ func (r *runner) checkFeatures() {
 		calls := featureCalls[f.ID]
 		if file, line, ok := code.find(calls.distinct, calls.generic); ok {
 			r.pass("feature."+f.ID, "", featureSent[f.ID], file, line)
+			if f.ID == project.FeaturePurchases || f.ID == project.FeatureSubscriptions {
+				r.checkAutoTracking(code)
+			}
 			continue
 		}
 		r.unsent(f, chosen[f.ID], f.Name, evidenceText(f.Evidence))
@@ -193,7 +198,8 @@ func (r *runner) checkAdRevenue(f project.Feature, chosen bool, code *tenjinCode
 		if !known {
 			continue
 		}
-		if file, line, ok := code.find(calls, nil); ok {
+		// eventAdImpression(network, data) takes any network's impressions.
+		if file, line, ok := code.find(calls, []string{"eventAdImpression"}); ok {
 			r.pass("feature.ad_revenue", "", "Ad revenue from "+e.What+" is sent to Tenjin", file, line)
 			continue
 		}
@@ -238,4 +244,43 @@ func featureFix(p *project.Project, id string) string {
 		return "Follow the section on " + topic + " in tenjin sdk guide android and tenjin sdk guide ios."
 	}
 	return "Follow the section on " + topic + " in the Tenjin SDK guide for this platform."
+}
+
+// checkAutoTracking looks at the SDKs' automatic purchase tracking, once:
+// on Android it needs the Play Billing library at runtime, which the SDK
+// does not bring; on iOS, alongside the transaction calls that pass no
+// transaction ID, it reports the same purchase twice.
+func (r *runner) checkAutoTracking(code *tenjinCode) {
+	if r.autoTrackingChecked {
+		return
+	}
+	r.autoTrackingChecked = true
+	auto := []string{"enableAutoPurchaseTracking", "enableAutoSubscriptionTracking"}
+	file, line, ok := code.find(auto, nil)
+	if !ok {
+		return
+	}
+	if t := r.p.Target(project.Android); t != nil && t.Android != nil {
+		deps := r.readRel(t.Android.BuildFile) + r.readRel(t.Android.VersionCatalog)
+		if !strings.Contains(deps, "com.android.billingclient") && !strings.Contains(deps, "billing-ktx") {
+			r.add(Finding{
+				ID: "feature.auto_tracking.billing", Severity: Warning, Platform: project.Android,
+				Title:  "Automatic purchase tracking is on, and Google Play Billing is not a dependency",
+				Detail: "The Android SDK reads purchases through the Play Billing library, which it does not bring itself; without it nothing is tracked.",
+				File:   file, Line: line,
+				Fix: `Add implementation("com.android.billingclient:billing:` + playBillingVersion + `") to the app module, or turn automatic tracking off.`,
+			})
+		}
+	}
+	if r.p.Target(project.IOS) != nil {
+		if f, l, ok := code.find([]string{"transactionWithProductName"}, nil); ok {
+			r.add(Finding{
+				ID: "feature.auto_tracking.double", Severity: Warning, Platform: project.IOS,
+				Title:  "Automatic purchase tracking is on alongside transaction calls that pass no transaction ID",
+				Detail: "The iOS SDK cannot tell those purchases from the ones it tracks itself, so each is reported twice.",
+				File:   f, Line: l,
+				Fix: "Keep one: remove the transactionWithProductName calls, or turn automatic purchase tracking off.",
+			})
+		}
+	}
 }

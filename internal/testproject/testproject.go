@@ -293,6 +293,8 @@ android {
 		"android/app/src/main/AndroidManifest.xml": AndroidManifest,
 		"ios/Runner.xcodeproj/project.pbxproj":     pbxproj("com.example.sample", "Runner/Info.plist"),
 		"ios/Runner/Info.plist":                    InfoPlist,
+		// Flutter shrinks release builds, and the plugin brings no rules.
+		"android/app/proguard-rules.pro": "-keep class com.tenjin.** { *; }\n",
 	}
 }
 

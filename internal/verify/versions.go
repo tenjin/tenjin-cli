@@ -22,10 +22,14 @@ var latestSDK = []struct{ packagePrefix, version string }{
 	{"com.tenjin.sdk", "1.22.1"}, // Unity, from the GitHub releases
 }
 
-// The Play Services libraries the Android SDK reads identifiers through.
+// The Play Services libraries the Android SDK reads identifiers through,
+// and the Play Billing library its automatic purchase tracking reads
+// purchases through: the version the SDK's own test apps use (it is built
+// against 7.1.1).
 const (
 	adsIdentifierVersion = "18.3.0"
 	appSetVersion        = "16.1.0"
+	playBillingVersion   = "9.0.0"
 )
 
 // LatestVersion is the newest release of a Tenjin SDK package this CLI was

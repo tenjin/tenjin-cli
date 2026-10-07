@@ -132,3 +132,14 @@ func TestCallsFromTheSDKSources(t *testing.T) {
 		t.Errorf("ad revenue = %+v", f)
 	}
 }
+
+// Automatic purchase tracking on Android needs Play Billing at runtime.
+func TestAutoTrackingNeedsPlayBilling(t *testing.T) {
+	base := testproject.AndroidNative()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	files := base.With(testproject.Files{activity: strings.Replace(base[activity], "        tenjin.connect()\n", "        tenjin.enableAutoPurchaseTracking()\n        tenjin.connect()\n", 1)})
+	r := run(t, files, verify.Options{Features: []string{project.FeaturePurchases}})
+	if f := expect(t, r, "feature.auto_tracking.billing", project.Android, verify.Warning); !strings.Contains(f.Fix, "billing:9.0.0") {
+		t.Errorf("fix = %q", f.Fix)
+	}
+}

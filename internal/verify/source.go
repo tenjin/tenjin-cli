@@ -96,18 +96,22 @@ var nativeSpecs = map[project.Platform]frameworkSpec{
 		sourceDirs: func(t *project.Target) []string {
 			return []string{filepath.ToSlash(filepath.Dir(t.IOS.Xcodeproj))}
 		},
-		packages:      []string{"TenjinSDK"},
-		installFix:    `Add pod 'TenjinSDK' to the app target in the Podfile and run pod install, or add the Swift package https://github.com/tenjin/tenjin-ios-spm.`,
-		initName:      "TenjinSDK.getInstance(key)",
-		connectName:   "TenjinSDK.connect()",
-		initCall:      regexp.MustCompile(`TenjinSDK\.(?:getInstance|initialize)\(|\[TenjinSDK (?:getInstance|initialize|init):`),
-		keyLiteral:    regexp.MustCompile(`TenjinSDK\.(?:getInstance|initialize)\(\s*"([^"]*)"|\[TenjinSDK (?:getInstance|initialize|init):\s*@"([^"]*)"`),
-		connectCall:   regexp.MustCompile(`TenjinSDK\.connect\(|\[TenjinSDK connect|connectWithDeferredDeeplink`),
-		initFix:       `At launch, call TenjinSDK.getInstance("<SDK_KEY>") (Swift) or [TenjinSDK initialize:@"<SDK_KEY>"] (Objective-C).`,
-		connectFix:    "Call TenjinSDK.connect() on every launch, after the user has answered the tracking prompt.",
-		attCall:       regexp.MustCompile(`requestTrackingAuthorization`),
-		debugLogsCall: regexp.MustCompile(`TenjinSDK\.debugLogs\(|\[TenjinSDK debugLogs\]`),
-		debugLogsFix:  "Before TenjinSDK.getInstance, add TenjinSDK.debugLogs() inside #if DEBUG … #endif (Swift), or [TenjinSDK debugLogs] inside #ifdef DEBUG … #endif (Objective-C), so that debug builds log what Tenjin answered and release builds stay quiet.",
+		packages:    []string{"TenjinSDK"},
+		installFix:  `Add pod 'TenjinSDK' to the app target in the Podfile and run pod install, or add the Swift package https://github.com/tenjin/tenjin-ios-spm.`,
+		initName:    "TenjinSDK.getInstance(key)",
+		connectName: "TenjinSDK.connect()",
+		// sharedInstanceWithToken: initialises and connects in one; the SDK
+		// marks it, and init:, deprecated.
+		initCall:       regexp.MustCompile(`TenjinSDK\.(?:getInstance|initialize)\(|\[TenjinSDK (?:getInstance|initialize|init|sharedInstanceWithToken):|TenjinSDK\.sharedInstance\(withToken:`),
+		keyLiteral:     regexp.MustCompile(`TenjinSDK\.(?:getInstance|initialize)\(\s*"([^"]*)"|\[TenjinSDK (?:getInstance|initialize|init|sharedInstanceWithToken):\s*@"([^"]*)"|TenjinSDK\.sharedInstance\(withToken:\s*"([^"]*)"`),
+		deprecatedInit: regexp.MustCompile(`\[TenjinSDK (?:init|sharedInstanceWithToken):|TenjinSDK\.sharedInstance\(withToken:`),
+		deprecatedFix:  "Replace it with TenjinSDK.initialize(\"<SDK_KEY>\") ([TenjinSDK initialize:@\"<SDK_KEY>\"] in Objective-C), then call TenjinSDK.connect() after the tracking prompt.",
+		connectCall:    regexp.MustCompile(`TenjinSDK\.connect\(|\[TenjinSDK connect|connectWithDeferredDeeplink|\[TenjinSDK sharedInstanceWithToken:|TenjinSDK\.sharedInstance\(withToken:`),
+		initFix:        `At launch, call TenjinSDK.getInstance("<SDK_KEY>") (Swift) or [TenjinSDK initialize:@"<SDK_KEY>"] (Objective-C).`,
+		connectFix:     "Call TenjinSDK.connect() on every launch, after the user has answered the tracking prompt.",
+		attCall:        regexp.MustCompile(`requestTrackingAuthorization`),
+		debugLogsCall:  regexp.MustCompile(`TenjinSDK\.debugLogs\(|\[TenjinSDK debugLogs\]`),
+		debugLogsFix:   "Before TenjinSDK.getInstance, add TenjinSDK.debugLogs() inside #if DEBUG … #endif (Swift), or [TenjinSDK debugLogs] inside #ifdef DEBUG … #endif (Objective-C), so that debug builds log what Tenjin answered and release builds stay quiet.",
 	},
 }
 
