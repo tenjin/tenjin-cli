@@ -348,3 +348,17 @@ func TestFindADBInTheSDKsUsualPlaces(t *testing.T) {
 		}
 	}
 }
+
+// A phone plugged in and paired is found whether or not its tunnel is up;
+// one devicectl cannot reach is not.
+func TestConnectedIPhonesIncludesAnIdleCable(t *testing.T) {
+	list := `{"result":{"devices":[
+{"connectionProperties":{"tunnelState":"disconnected","pairingState":"paired","transportType":"wired"},"deviceProperties":{"name":"Idle","developerModeStatus":"enabled"},"hardwareProperties":{"udid":"00008130-000000000000000A","reality":"physical","platform":"iOS"}},
+{"connectionProperties":{"tunnelState":"unavailable","pairingState":"paired"},"deviceProperties":{"name":"Away","developerModeStatus":"enabled"},"hardwareProperties":{"udid":"00008130-000000000000000B","reality":"physical","platform":"iOS"}},
+{"connectionProperties":{"tunnelState":"connected","pairingState":"paired","transportType":"sameMachine"},"deviceProperties":{"name":"Sim"},"hardwareProperties":{"udid":"SIM","reality":"simulated","platform":"iOS"}}]}}`
+	run := func(context.Context, string, ...string) ([]byte, error) { return []byte(list), nil }
+	phones, err := ConnectedIPhones(context.Background(), run, "xcrun")
+	if err != nil || len(phones) != 1 || phones[0].Name != "Idle" {
+		t.Errorf("phones = %+v, %v", phones, err)
+	}
+}

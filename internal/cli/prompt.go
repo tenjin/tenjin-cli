@@ -1,21 +1,71 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
+
+	"github.com/tenjin/tenjin-cli/internal/clierr"
 )
 
-// readLine reads one line of input, without its line ending.
+// readLine reads one line of input, without its line ending. Ctrl-C ends
+// the wait.
 func (e *environment) readLine() (string, error) {
-	line, err := e.stdin.ReadString('\n')
-	if err != nil && line == "" {
-		return "", err
+	type read struct {
+		line string
+		err  error
 	}
-	return strings.TrimRight(line, "\r\n"), nil
+	done := make(chan read, 1)
+	go func() {
+		line, err := e.stdin.ReadString('\n')
+		done <- read{line, err}
+	}()
+	var r read
+	select {
+	case r = <-done:
+	case <-e.context().Done():
+		return "", errInterrupted()
+	}
+	if r.err != nil && r.line == "" {
+		return "", r.err
+	}
+	return strings.TrimRight(r.line, "\r\n"), nil
 }
+
+// context is the run's context, which Ctrl-C cancels.
+func (e *environment) context() context.Context {
+	if e.ctx == nil {
+		return context.Background()
+	}
+	return e.ctx
+}
+
+// pause waits, and returns early with an error when the user presses Ctrl-C.
+func (e *environment) pause(d time.Duration) error {
+	if e.wait != nil {
+		e.wait(d)
+	} else {
+		select {
+		case <-time.After(d):
+		case <-e.context().Done():
+		}
+	}
+	return e.interrupted()
+}
+
+// interrupted is the error to stop with once the user pressed Ctrl-C, or nil.
+func (e *environment) interrupted() error {
+	if e.context().Err() != nil {
+		return errInterrupted()
+	}
+	return nil
+}
+
+func errInterrupted() error { return clierr.New(clierr.Interrupted, "stopped") }
 
 // confirm asks a yes/no question. An empty answer takes the default.
 func (e *environment) confirm(w io.Writer, question string, def bool) (bool, error) {

@@ -440,7 +440,7 @@ func placeholderBuilds(p *project.Project, spots []keyfill.Spot) (found []placeh
 		}
 	}
 	for _, s := range spots {
-		if matched[s.Placeholder] {
+		if matched[s.Placeholder] || p.IsOmitted(s.Placeholder) {
 			continue
 		}
 		matched[s.Placeholder] = true

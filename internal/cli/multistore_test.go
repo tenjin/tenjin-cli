@@ -314,3 +314,23 @@ func TestTheAgentIsToldTheChosenFeatures(t *testing.T) {
 		}
 	}
 }
+
+// A build left out with --build keeps its placeholder: setup neither asks
+// for its key nor writes one, and doctor does not count it.
+func TestABuildLeftOutKeepsItsPlaceholder(t *testing.T) {
+	h, dir := multiStore(t, placeholderStores())
+	h.signIn()
+	h.fake.addApp("Sample (Amazon)", "com.example.sample", "amazon")
+
+	code, stdout, stderr := h.run("setup", dir, "--yes", "--build", "android:amazon", "--sdk-key", "android:amazon="+testproject.AmazonKey)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	build, _ := os.ReadFile(filepath.Join(dir, flavorBuild))
+	if !strings.Contains(string(build), "__TENJIN_ANDROID_SDK_KEY__") || strings.Contains(string(build), "__TENJIN_ANDROID_SDK_KEY_AMAZON__") {
+		t.Errorf("build file:\n%s", build)
+	}
+	if code, stdout, _ := h.run("doctor", dir, "--build", "android:amazon"); code != 0 || strings.Contains(stdout, "still the placeholder") {
+		t.Errorf("exit = %d:\n%s", code, stdout)
+	}
+}

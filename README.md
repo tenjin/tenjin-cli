@@ -76,6 +76,7 @@ The Tenjin CLI does not write your integration. The code changes are made by you
 | 7 | Tenjin is unavailable |
 | 9 | `doctor` found problems |
 | 10 | Already exists |
+| 130 | Stopped with Ctrl-C |
 
 With `--json`, a failure is written to stderr as `{"error": {"code", "message", "hint"}}`.
 

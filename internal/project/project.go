@@ -60,6 +60,9 @@ type Project struct {
 	// suggested or not from what the project already does.
 	Features []Feature `json:"features"`
 	Notes    []string  `json:"notes"`
+	// Omitted are the builds KeepBuilds left out: their keys and
+	// placeholders are not this run's to settle.
+	Omitted []Build `json:"-"`
 }
 
 // Target is one platform build of the project. A Tenjin app is per platform,
@@ -161,6 +164,8 @@ func (p *Project) KeepBuilds(ids []string) (unknown []string) {
 		for _, b := range t.Builds {
 			if want[Shout(b.ID)] {
 				kept = append(kept, b)
+			} else {
+				p.Omitted = append(p.Omitted, b)
 			}
 		}
 		if len(t.Builds) > 0 && len(kept) == 0 {
@@ -171,6 +176,17 @@ func (p *Project) KeepBuilds(ids []string) (unknown []string) {
 	}
 	p.Targets = targets
 	return nil
+}
+
+// IsOmitted reports whether a placeholder is that of a build KeepBuilds
+// left out.
+func (p *Project) IsOmitted(placeholder string) bool {
+	for _, b := range p.Omitted {
+		if b.SDKKeyPlaceholder == placeholder {
+			return true
+		}
+	}
+	return false
 }
 
 // Builds returns every build of every target, in target order.

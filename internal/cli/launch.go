@@ -103,7 +103,9 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		if connectAccepted(report) && !installProcessed(report) && !s.offline {
 			s.say("Tenjin accepted the app's request. Waiting for it to process the install…")
 			for i := 0; i < processingPolls && !installProcessed(report); i++ {
-				s.env.wait(processingPoll)
+				if err := s.env.pause(processingPoll); err != nil {
+					return err
+				}
 				report = s.deviceReport(p, log, platform)
 			}
 		}
