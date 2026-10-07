@@ -79,6 +79,7 @@ func (r *runner) checkAndroidManifest(t *project.Target) {
 		})
 		return
 	}
+	deps := r.readRel(t.Android.BuildFile) + "\n" + r.readRel(t.Android.VersionCatalog)
 	declared, removed := map[string]bool{}, map[string]bool{}
 	for _, p := range manifest.Permissions {
 		if p.Node == "remove" {
@@ -90,6 +91,8 @@ func (r *runner) checkAndroidManifest(t *project.Target) {
 
 	if declared[permInternet] {
 		r.pass("android.permission.internet", project.Android, "INTERNET permission is declared", file, 0)
+	} else if lib := declaresNetwork(deps); lib != "" {
+		r.pass("android.permission.internet", project.Android, "INTERNET permission comes with "+lib, t.Android.BuildFile, 0)
 	} else {
 		r.add(Finding{
 			ID: "android.permission.internet", Severity: Error, Platform: project.Android,
@@ -102,6 +105,8 @@ func (r *runner) checkAndroidManifest(t *project.Target) {
 
 	if declared[permNetworkState] {
 		r.pass("android.permission.network_state", project.Android, "ACCESS_NETWORK_STATE permission is declared", file, 0)
+	} else if lib := declaresNetwork(deps); lib != "" {
+		r.pass("android.permission.network_state", project.Android, "ACCESS_NETWORK_STATE permission comes with "+lib, t.Android.BuildFile, 0)
 	} else {
 		r.add(Finding{
 			ID: "android.permission.network_state", Severity: Warning, Platform: project.Android,
@@ -122,6 +127,18 @@ func (r *runner) checkAndroidManifest(t *project.Target) {
 		})
 	case declared[permAdID]:
 		r.pass("android.permission.ad_id", project.Android, "AD_ID permission is declared", file, 0)
+	case adIDFromLibrary(deps) == "yes":
+		// play-services-ads-identifier declares it in its own manifest from
+		// 17.1.0, which the build merges into the app's.
+		r.pass("android.permission.ad_id", project.Android, "AD_ID permission comes with play-services-ads-identifier", t.Android.BuildFile, 0)
+	case adIDFromLibrary(deps) == "unknown":
+		r.add(Finding{
+			ID: "android.permission.ad_id", Severity: Info, Platform: project.Android,
+			Title:  "The AD_ID permission is not declared here, and comes with play-services-ads-identifier from 17.1.0",
+			Detail: "Which version the project uses could not be read.",
+			File:   file,
+			Fix:    `To be sure, add <uses-permission android:name="` + permAdID + `"/> to the manifest.`,
+		})
 	default:
 		r.add(Finding{
 			ID: "android.permission.ad_id", Severity: Warning, Platform: project.Android,
@@ -149,6 +166,8 @@ func (r *runner) checkPlayServices(t *project.Target) {
 
 	if strings.Contains(build, "play-services-ads-identifier") {
 		r.pass("android.play_services.ads_identifier", project.Android, "play-services-ads-identifier is a dependency", file, 0)
+	} else if lib := bringsAdsIdentifier(build); lib != "" {
+		r.pass("android.play_services.ads_identifier", project.Android, "play-services-ads-identifier comes with "+lib, file, 0)
 	} else {
 		r.add(Finding{
 			ID: "android.play_services.ads_identifier", Severity: Error, Platform: project.Android,
@@ -161,6 +180,8 @@ func (r *runner) checkPlayServices(t *project.Target) {
 
 	if strings.Contains(build, "play-services-appset") {
 		r.pass("android.play_services.appset", project.Android, "play-services-appset is a dependency", file, 0)
+	} else if mobileAds.MatchString(build) {
+		r.pass("android.play_services.appset", project.Android, "play-services-appset comes with Google Mobile Ads", file, 0)
 	} else {
 		r.add(Finding{
 			ID: "android.play_services.appset", Severity: Warning, Platform: project.Android,
@@ -169,6 +190,63 @@ func (r *runner) checkPlayServices(t *project.Target) {
 			Fix:   `Add implementation("com.google.android.gms:play-services-appset:` + appSetVersion + `") to the app module.`,
 		})
 	}
+}
+
+// Libraries that bring what the SDK needs, as their published POMs and
+// manifests show: Google Mobile Ads (play-services-ads, and -lite) depends
+// on play-services-ads-identifier and play-services-appset and declares the
+// INTERNET and ACCESS_NETWORK_STATE permissions; AppLovin's SDK declares
+// both permissions; play-services-ads-identifier declares AD_ID.
+var (
+	mobileAds = regexp.MustCompile(`play-services-ads(?:-lite)?["':]`)
+	appLovin  = regexp.MustCompile(`com\.applovin:applovin-sdk|applovin-sdk["']`)
+)
+
+// declaresNetwork names a dependency whose manifest declares the network
+// permissions, or "".
+func declaresNetwork(deps string) string {
+	switch {
+	case mobileAds.MatchString(deps):
+		return "Google Mobile Ads"
+	case appLovin.MatchString(deps):
+		return "AppLovin"
+	}
+	return ""
+}
+
+// adsIdentifierVersion reads the version of play-services-ads-identifier a
+// build file names.
+var adsIdentifierDeclared = regexp.MustCompile(`play-services-ads-identifier:(\d+(?:\.\d+){1,2})`)
+
+// adIDFromLibrary says whether the AD_ID permission comes with the
+// dependencies: "yes", "no", or "unknown" when a version cannot be read.
+// Google Mobile Ads brings a recent play-services-ads-identifier.
+func adIDFromLibrary(deps string) string {
+	if m := adsIdentifierDeclared.FindStringSubmatch(deps); m != nil {
+		if atLeast(m[1], "17.1.0") {
+			return "yes"
+		}
+		return "no"
+	}
+	switch {
+	case mobileAds.MatchString(deps):
+		return "yes"
+	case strings.Contains(deps, "play-services-ads-identifier"):
+		return "unknown"
+	}
+	return "no"
+}
+
+// bringsAdsIdentifier names where play-services-ads-identifier comes from,
+// or "".
+func bringsAdsIdentifier(deps string) string {
+	switch {
+	case strings.Contains(deps, "play-services-ads-identifier"):
+		return "play-services-ads-identifier"
+	case mobileAds.MatchString(deps):
+		return "Google Mobile Ads"
+	}
+	return ""
 }
 
 // bundledRulesSince is the first native Android SDK whose AAR carries its own

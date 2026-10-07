@@ -408,28 +408,15 @@ func (d *detector) iosIntegration(info *IOSInfo) {
 	}
 }
 
-var (
-	lineComment  = regexp.MustCompile(`(?m)^\s*//.*$`)
-	rubyComment  = regexp.MustCompile(`(?m)^\s*#.*$`)
-	blockComment = regexp.MustCompile(`(?s)/\*.*?\*/`)
-	// Unlike lineComment, this cannot reach back over blank lines.
-	lineCommentInPlace = regexp.MustCompile(`(?m)^[ \t]*//.*$`)
-)
+var rubyComment = regexp.MustCompile(`(?m)^\s*#.*$`)
 
-// stripComments removes whole-line // comments and block comments, so a
-// commented-out dependency is not mistaken for a real one.
-func stripComments(s string) string {
-	return lineComment.ReplaceAllString(blockComment.ReplaceAllString(s, ""), "")
-}
+// stripComments removes // and /* */ comments, so a commented-out
+// dependency is not mistaken for a real one.
+func stripComments(s string) string { return BlankComments(s) }
 
 // blankComments removes the same comments and keeps every line break, so
 // positions in the result are positions in the file.
-func blankComments(s string) string {
-	s = blockComment.ReplaceAllStringFunc(s, func(comment string) string {
-		return strings.Repeat("\n", strings.Count(comment, "\n"))
-	})
-	return lineCommentInPlace.ReplaceAllString(s, "")
-}
+func blankComments(s string) string { return BlankComments(s) }
 
 func stripRubyComments(s string) string {
 	return rubyComment.ReplaceAllString(s, "")

@@ -31,6 +31,9 @@ type frameworkSpec struct {
 	connectCall    *regexp.Regexp
 	initFix        string
 	connectFix     string
+	// normalize rewrites the project's own names for the SDK's receiver to
+	// the canonical one (receivers.go). Nil leaves the text as it is.
+	normalize func(text string) string
 	// bundlesPlayServices is true when the wrapper already ships the Play
 	// Services libraries the native Android SDK needs.
 	bundlesPlayServices bool
@@ -79,9 +82,12 @@ var nativeSpecs = map[project.Platform]frameworkSpec{
 		connectName: "connect()",
 		// getInstance has variants that take an app subversion or a
 		// shared secret as well; the key is the second argument of each.
-		initCall:    regexp.MustCompile(`TenjinSDK\.getInstance(?:WithAppSubversion|WithSharedSecret|WithSharedSecretAppSubversion)?\(`),
-		keyLiteral:  regexp.MustCompile(`TenjinSDK\.getInstance(?:WithAppSubversion|WithSharedSecret|WithSharedSecretAppSubversion)?\(\s*[^,()]+,\s*"([^"]*)"`),
-		connectCall: regexp.MustCompile(`\.connect\(`),
+		initCall:   regexp.MustCompile(`TenjinSDK\.getInstance(?:WithAppSubversion|WithSharedSecret|WithSharedSecretAppSubversion)?\(`),
+		keyLiteral: regexp.MustCompile(`TenjinSDK\.getInstance(?:WithAppSubversion|WithSharedSecret|WithSharedSecretAppSubversion)?\(\s*[^,()]+,\s*"([^"]*)"`),
+		// On a Tenjin receiver only, after normalizeAndroid: a media
+		// browser's or a socket's connect() is not Tenjin's.
+		connectCall: regexp.MustCompile(`TenjinSDK\.connect\(`),
+		normalize:   normalizeAndroid,
 		initFix:     `In the launcher Activity's onResume(), call TenjinSDK.getInstance(this, "<SDK_KEY>").connect().`,
 		connectFix:  "Call connect() on the TenjinSDK instance in the launcher Activity's onResume(), on every launch.",
 	},
@@ -118,6 +124,7 @@ var wrapperSpecs = map[project.Framework]frameworkSpec{
 		deprecatedInit:      regexp.MustCompile(`TenjinSDK\.instance\.init\(`),
 		deprecatedFix:       "Replace TenjinSDK.instance.init(apiKey: ...) with TenjinSDK.instance.initialize(sdkKey: ...).",
 		connectCall:         regexp.MustCompile(`TenjinSDK\.instance\.connect\(`),
+		normalize:           normalizeFlutter,
 		initFix:             `At startup, call TenjinSDK.instance.initialize(sdkKey: "<SDK_KEY>"), choosing the key by platform.`,
 		connectFix:          "Call TenjinSDK.instance.connect() on every launch, after the tracking prompt on iOS.",
 		bundlesPlayServices: true,
@@ -133,6 +140,7 @@ var wrapperSpecs = map[project.Framework]frameworkSpec{
 		initCall:    regexp.MustCompile(`Tenjin\.initialize\(`),
 		keyLiteral:  regexp.MustCompile(`Tenjin\.initialize\(\s*['"]([^'"]*)['"]`),
 		connectCall: regexp.MustCompile(`Tenjin\.connect\(`),
+		normalize:   normalizeReactNative,
 		initFix:     `At startup, call Tenjin.initialize("<SDK_KEY>"), choosing the key with Platform.OS.`,
 		connectFix:  "Call Tenjin.connect() on every launch, after the tracking prompt on iOS.",
 		attPackages: []string{"react-native-tracking-transparency", "expo-tracking-transparency"},
@@ -147,6 +155,7 @@ var wrapperSpecs = map[project.Framework]frameworkSpec{
 		initCall:    regexp.MustCompile(`Tenjin\.initialize\(`),
 		keyLiteral:  regexp.MustCompile(`Tenjin\.initialize\(\s*\{\s*sdkKey\s*:\s*['"]([^'"]*)['"]`),
 		connectCall: regexp.MustCompile(`Tenjin\.connect\(`),
+		normalize:   normalizeCapacitor,
 		initFix:     `After the platform is ready, call await Tenjin.initialize({ sdkKey: "<SDK_KEY>" }), choosing the key by platform.`,
 		connectFix:  "Call await Tenjin.connect() on every launch, after the tracking prompt on iOS.",
 		attPackages: []string{"capacitor-plugin-app-tracking-transparency", "@capacitor-community/app-tracking-transparency"},
@@ -188,7 +197,7 @@ func (r *runner) scanSource(spec frameworkSpec, dirs []string) source {
 	seen := map[string]bool{}
 	for _, dir := range dirs {
 		for _, rel := range project.SourceFiles(r.p.Root, dir, spec.exts...) {
-			if seen[rel] || spec.skips(rel) {
+			if seen[rel] || spec.skips(rel) || testSource(rel) {
 				continue
 			}
 			seen[rel] = true
@@ -204,6 +213,9 @@ func (r *runner) scanSource(spec frameworkSpec, dirs []string) source {
 			// Cheap filter: most files never mention the SDK.
 			if !strings.Contains(text, "Tenjin") {
 				continue
+			}
+			if spec.normalize != nil {
+				text = spec.normalize(text)
 			}
 			for _, loc := range spec.initCall.FindAllStringIndex(text, -1) {
 				src.inits = append(src.inits, call{File: rel, Line: lineAt(text, loc[0]), Text: text})
@@ -268,6 +280,15 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 			Detail: "Without it no install or session reaches Tenjin.",
 			Fix:    spec.connectFix,
 		})
+	} else if allDebugOnly(src.connects) {
+		c := src.connects[0]
+		r.add(Finding{
+			ID: "sdk.connect", Severity: Error, Platform: platform,
+			Title:  spec.connectName + " is called only in debug builds",
+			Detail: "Every call is inside #if DEBUG, so release builds, the ones people install, never connect.",
+			File:   c.File, Line: c.Line,
+			Fix:    "Move " + spec.connectName + " out of the #if DEBUG block, so that every build calls it.",
+		})
 	} else {
 		r.pass("sdk.connect", platform, spec.connectName+" is called", src.connects[0].File, src.connects[0].Line)
 	}
@@ -304,21 +325,22 @@ func isPlaceholder(key string) bool {
 
 func quote(s string) string { return `"` + s + `"` }
 
-var (
-	lineCommentRE  = regexp.MustCompile(`(?m)^[ \t]*//.*$`)
-	blockCommentRE = regexp.MustCompile(`(?s)/\*.*?\*/`)
-)
-
-// blankComments removes whole-line and block comments while keeping every
-// newline, so line numbers still match the file.
-func blankComments(s string) string {
-	s = blockCommentRE.ReplaceAllStringFunc(s, func(c string) string {
-		return strings.Repeat("\n", strings.Count(c, "\n"))
-	})
-	return lineCommentRE.ReplaceAllString(s, "")
-}
+// blankComments removes comments while keeping every newline, so line
+// numbers still match the file.
+func blankComments(s string) string { return project.BlankComments(s) }
 
 // lineAt returns the 1-based line number of a byte offset.
 func lineAt(text string, offset int) int {
 	return strings.Count(text[:offset], "\n") + 1
+}
+
+// allDebugOnly reports whether every one of the calls is compiled into debug
+// builds only.
+func allDebugOnly(calls []call) bool {
+	for _, c := range calls {
+		if !debugOnly(c) {
+			return false
+		}
+	}
+	return len(calls) > 0
 }

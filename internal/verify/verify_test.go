@@ -121,8 +121,11 @@ func TestAndroidFaults(t *testing.T) {
 		{"no internet permission",
 			base.With(testproject.Files{manifest: strings.Replace(base[manifest], `<uses-permission android:name="android.permission.INTERNET" />`, "", 1)}),
 			"android.permission.internet", verify.Error},
-		{"ad id not declared",
-			base.With(testproject.Files{manifest: strings.Replace(base[manifest], `<uses-permission android:name="com.google.android.gms.permission.AD_ID" />`, "", 1)}),
+		{"ad id not declared, nor brought by a library",
+			base.With(testproject.Files{
+				manifest: strings.Replace(base[manifest], `<uses-permission android:name="com.google.android.gms.permission.AD_ID" />`, "", 1),
+				build:    strings.Replace(base[build], `implementation("com.google.android.gms:play-services-ads-identifier:18.1.0")`, "", 1),
+			}),
 			"android.permission.ad_id", verify.Warning},
 		{"read phone state declared",
 			base.With(testproject.Files{manifest: strings.Replace(base[manifest], "<application", `<uses-permission android:name="android.permission.READ_PHONE_STATE" />`+"\n<application", 1)}),
@@ -511,5 +514,101 @@ func TestNewerReleasesCountWithinTheKnownMajorVersion(t *testing.T) {
 	r := run(t, base, verify.Options{Latest: map[string]string{"com.tenjin:android-sdk": "2.0.3"}})
 	if f := expect(t, r, "sdk.version", project.Android, verify.Warning); !strings.Contains(f.Fix, "to 2.0.3") {
 		t.Errorf("fix = %q", f.Fix)
+	}
+}
+
+// "image/*" in a string is not the start of a comment that would hide the
+// SDK calls after it.
+func TestAGlobInAStringHidesNoCode(t *testing.T) {
+	base := testproject.AndroidNative()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	source := strings.Replace(base[activity], "class MainActivity", "private val pickerType = \"image/*\"\n\nclass MainActivity", 1) + "\n/** Opens the picker. */\n"
+	r := run(t, base.With(testproject.Files{activity: source}), verify.Options{})
+	expect(t, r, "sdk.init", project.Android, verify.Pass)
+	expect(t, r, "sdk.connect", project.Android, verify.Pass)
+}
+
+// What Google Mobile Ads and play-services-ads-identifier bring is counted:
+// the build merges their manifests and dependencies into the app's.
+func TestLibrariesBringPermissionsAndPlayServices(t *testing.T) {
+	base := testproject.AndroidNative()
+	const (
+		build    = "app/build.gradle.kts"
+		manifest = "app/src/main/AndroidManifest.xml"
+	)
+	deps := strings.Replace(base[build], `implementation("com.google.android.gms:play-services-ads-identifier:18.1.0")`, `implementation("com.google.android.gms:play-services-ads:23.4.0")`, 1)
+	deps = strings.Replace(deps, `implementation("com.google.android.gms:play-services-appset:16.1.0")`, "", 1)
+	bare := base[manifest]
+	for _, perm := range []string{"android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE", "com.google.android.gms.permission.AD_ID"} {
+		bare = strings.Replace(bare, `<uses-permission android:name="`+perm+`" />`, "", 1)
+	}
+	r := run(t, base.With(testproject.Files{build: deps, manifest: bare}), verify.Options{})
+	for _, id := range []string{"android.permission.internet", "android.permission.network_state", "android.permission.ad_id", "android.play_services.ads_identifier", "android.play_services.appset"} {
+		if f := expect(t, r, id, project.Android, verify.Pass); !strings.Contains(f.Title, "comes with") {
+			t.Errorf("%s: %q", id, f.Title)
+		}
+	}
+}
+
+// Calls count on the SDK's receiver under whatever name the project gives
+// it, and not on an unrelated object's method of the same name.
+func TestReceiversUnderOtherNames(t *testing.T) {
+	android := testproject.AndroidNative()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	chained := strings.Replace(android[activity], "tenjin.connect()", "", 1)
+	chained = strings.Replace(chained, `val tenjin = TenjinSDK.getInstance(this, "`+testproject.Key+`")`, `TenjinSDK.getInstance(this, "`+testproject.Key+`")
+            .connect()`, 1)
+	cases := []struct {
+		name  string
+		files testproject.Files
+		id    string
+		want  verify.Severity
+	}{
+		{"chained on getInstance", android.With(testproject.Files{activity: chained}), "sdk.connect", verify.Pass},
+		{"another object's connect", android.With(testproject.Files{activity: strings.Replace(android[activity], "tenjin.connect()", "mediaBrowser.connect()", 1)}), "sdk.connect", verify.Error},
+		{"only in a unit test", android.With(testproject.Files{
+			activity: strings.Replace(android[activity], "tenjin.connect()", "", 1),
+			"app/src/test/java/com/example/sample/TenjinTest.kt": "import com.tenjin.android.TenjinSDK\nfun t() { TenjinSDK.getInstance(null, \"K\").connect() }\n",
+		}), "sdk.connect", verify.Error},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			expect(t, run(t, c.files, verify.Options{}), c.id, project.Android, c.want)
+		})
+	}
+	// The chained form still has its key read.
+	keys := &fakeKeys{answers: map[string]collector.KeyStatus{testproject.Key + "|com.example.sample|android": collector.KeyValid}}
+	if r := run(t, android.With(testproject.Files{activity: chained}), verify.Options{Keys: keys}); find(r, "key.valid", project.Android) == nil {
+		t.Errorf("the key of a chained call was not checked: %s", ids(r))
+	}
+
+	flutter := testproject.Flutter()
+	const main = "lib/main.dart"
+	aliased := strings.NewReplacer("TenjinSDK.instance.initialize(", "tenjin.initialize(", "TenjinSDK.instance.connect(", "tenjin.connect(", "TenjinSDK.instance.requestTrackingAuthorization(", "tenjin.requestTrackingAuthorization(").Replace(flutter[main])
+	aliased = strings.Replace(aliased, "  tenjin.initialize(", "  final tenjin = TenjinSDK.instance;\n  tenjin.initialize(", 1)
+	r := run(t, flutter.With(testproject.Files{main: aliased}), verify.Options{})
+	// A wrapper's calls are in its shared code, on no platform of their own.
+	expect(t, r, "sdk.init", "", verify.Pass)
+	expect(t, r, "sdk.connect", "", verify.Pass)
+}
+
+// React Native's default export can take any name.
+func TestReactNativeDefaultImportUnderAnyName(t *testing.T) {
+	r := run(t, testproject.Files{
+		"package.json": `{"dependencies": {"react-native": "0.79.2", "react-native-tenjin": "1.7.0"}}`,
+		"App.tsx":      "import TenjinSDK from 'react-native-tenjin';\nTenjinSDK.initialize('" + testproject.Key + "');\nTenjinSDK.connect();\n",
+	}, verify.Options{})
+	expect(t, r, "sdk.init", "", verify.Pass)
+	expect(t, r, "sdk.connect", "", verify.Pass)
+}
+
+// A connect that only debug builds make does nothing for the app people
+// install.
+func TestAConnectInDebugBuildsOnlyIsAnError(t *testing.T) {
+	ios := testproject.IOSNative()
+	const delegate = "Sample/AppDelegate.swift"
+	f := expect(t, run(t, ios.With(testproject.Files{delegate: strings.Replace(ios[delegate], "TenjinSDK.connect()", "#if DEBUG\n            TenjinSDK.connect()\n            #endif", 1)}), verify.Options{}), "sdk.connect", project.IOS, verify.Error)
+	if !strings.Contains(f.Title, "only in debug builds") {
+		t.Errorf("title = %q", f.Title)
 	}
 }
