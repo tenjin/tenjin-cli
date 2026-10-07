@@ -14,7 +14,15 @@ curl -fsSL https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.sh |
 go install github.com/tenjin/tenjin-cli/cmd/tenjin@latest                          # anywhere with Go
 ```
 
-On Windows, download the zip from the releases page. The install script checks each download against the release's `checksums.txt` and never uses sudo; `TENJIN_VERSION` picks a version and `TENJIN_INSTALL_DIR` the folder.
+On Windows, in PowerShell:
+
+```
+irm https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.ps1 | iex
+```
+
+It installs `tenjin.exe` in `%LOCALAPPDATA%\Programs\tenjin` and adds that folder to your PATH, without administrator rights. The zips are also on the releases page.
+
+Both install scripts check each download against the release's `checksums.txt`, and neither uses sudo or administrator rights. `TENJIN_VERSION` picks a version and `TENJIN_INSTALL_DIR` the folder.
 
 Homebrew installs shell completions for bash, zsh and fish. Otherwise, `tenjin completion <bash|zsh|fish|powershell> --help` says how to load them; the release archives also carry them, under `completions/`.
 

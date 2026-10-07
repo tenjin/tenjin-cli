@@ -44,3 +44,111 @@ jobs:
         # compiler for.
         if: runner.os == 'Windows'
         run: go test ./...
+  release:
+    # The release pipeline, short of publishing: the archives, checksums and
+    # cask a tag would publish.
+    name: Release snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Check the configuration
+        run: make release-check
+      - name: Build
+        run: make release-snapshot
+      - name: Keep
+        uses: actions/upload-artifact@v4
+        with:
+          name: release
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+            dist/metadata.json
+            dist/homebrew/Casks/tenjin.rb
+  install:
+    # Installs the snapshot the way users will, from a local copy of the
+    # release served over HTTP.
+    name: Install (${{ matrix.os }})
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Fetch the snapshot
+        uses: actions/download-artifact@v4
+        with:
+          name: release
+          path: dist
+      - name: Lay out the release
+        shell: bash
+        run: |
+          version=$(python3 -c 'import json; print(json.load(open("dist/metadata.json"))["version"])' 2>/dev/null ||
+            python -c 'import json; print(json.load(open("dist/metadata.json"))["version"])')
+          mkdir -p "site/download/v$version"
+          cp dist/*.tar.gz dist/*.zip dist/checksums.txt "site/download/v$version/"
+          cp install.sh install.ps1 site/
+          echo "TENJIN_VERSION=$version" >> "$GITHUB_ENV"
+          echo "TENJIN_RELEASES_URL=http://127.0.0.1:8765" >> "$GITHUB_ENV"
+      - name: install.sh
+        if: runner.os != 'Windows'
+        run: |
+          python3 -m http.server -d site -b 127.0.0.1 8765 &
+          until curl -fs http://127.0.0.1:8765/install.sh > /dev/null; do sleep 1; done
+          curl -fsSL http://127.0.0.1:8765/install.sh | TENJIN_INSTALL_DIR="$RUNNER_TEMP/bin" sh
+          "$RUNNER_TEMP/bin/tenjin" version | grep -F "tenjin $TENJIN_VERSION"
+      - name: Homebrew
+        if: runner.os != 'Windows'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          if ! command -v brew > /dev/null; then eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"; fi
+          brew tap-new --no-git tenjin/local
+          tap="$(brew --repository tenjin/local)"
+          mkdir -p "$tap/Casks"
+          sed -E "s#https://github.com/tenjin/tenjin-cli/releases/download/[^/]+/#file://$PWD/site/download/v$TENJIN_VERSION/#" \
+            dist/homebrew/Casks/tenjin.rb > "$tap/Casks/tenjin.rb"
+          brew install --cask tenjin/local/tenjin
+          "$(brew --prefix)/bin/tenjin" version | grep -F "tenjin $TENJIN_VERSION"
+          ls "$(brew --prefix)/share/zsh/site-functions" "$(brew --prefix)/etc/bash_completion.d" "$(brew --prefix)/share/fish/vendor_completions.d" | grep -i tenjin
+      - name: install.ps1, Windows PowerShell
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Start-Process -FilePath python -ArgumentList '-m', 'http.server', '-d', 'site', '-b', '127.0.0.1', '8765' -WindowStyle Hidden
+          for ($i = 0; $i -lt 30; $i++) {
+            try { Invoke-WebRequest -Uri 'http://127.0.0.1:8765/install.ps1' -UseBasicParsing | Out-Null; break } catch { Start-Sleep -Seconds 1 }
+          }
+          irm http://127.0.0.1:8765/install.ps1 | iex
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\tenjin'
+          tenjin version
+          if (-not ((tenjin version) -like "tenjin $env:TENJIN_VERSION *")) { throw 'wrong version' }
+          $saved = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+          if (($saved -split ';') -notcontains $dir) { throw "$dir is not on the saved PATH: $saved" }
+      - name: install.ps1 again, PowerShell 7
+        # Over the installed copy, and with the other PowerShell.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          try { Invoke-WebRequest -Uri 'http://127.0.0.1:8765/install.ps1' | Out-Null } catch {
+            Start-Process -FilePath python -ArgumentList '-m', 'http.server', '-d', 'site', '-b', '127.0.0.1', '8765' -WindowStyle Hidden
+            for ($i = 0; $i -lt 30; $i++) {
+              try { Invoke-WebRequest -Uri 'http://127.0.0.1:8765/install.ps1' | Out-Null; break } catch { Start-Sleep -Seconds 1 }
+            }
+          }
+          irm http://127.0.0.1:8765/install.ps1 | iex
+          $saved = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\tenjin'
+          if ((@($saved -split ';') | Where-Object { $_ -eq $dir }).Count -ne 1) { throw "PATH should hold $dir once: $saved" }
+          & (Join-Path $dir 'tenjin.exe') version

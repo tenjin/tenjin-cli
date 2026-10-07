@@ -68,7 +68,7 @@ docs/adr              architecture decisions
 
 ## Releases
 
-- `.goreleaser.yaml` builds six targets (macOS, Linux and Windows, each on amd64 and arm64), archives named `tenjin_<version>_<os>_<arch>`, `checksums.txt`, and the Homebrew cask. `install.sh` builds the same archive name; change both together.
+- `.goreleaser.yaml` builds six targets (macOS, Linux and Windows, each on amd64 and arm64), archives named `tenjin_<version>_<os>_<arch>`, `checksums.txt`, and the Homebrew cask. `install.sh` and `install.ps1` build the same archive names; change all three together. CI builds a snapshot on every pull request and installs it with both scripts and the cask, on each OS.
 - The cask removes macOS's quarantine mark after install, because the binaries are not notarized yet. Drop that hook once they are.
 - A local snapshot shows `commit none` and a `v0.0.0` download address while the repository has no remote and no tag. A tagged release in CI fills both in.
 
