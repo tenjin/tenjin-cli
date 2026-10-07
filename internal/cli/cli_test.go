@@ -309,7 +309,9 @@ func TestDoctorSaysWhereAGivenKeyCameFrom(t *testing.T) {
 func TestDoctorPrintsAMultiLineFix(t *testing.T) {
 	base := testproject.AndroidNative()
 	const build = "app/build.gradle.kts"
-	dir := testproject.Write(t, base.With(testproject.Files{build: strings.Replace(base[build], "isMinifyEnabled = false", "isMinifyEnabled = true", 1)}))
+	// An SDK from before 2.0.0, which has no keep rules of its own.
+	old := strings.Replace(base[build], "android-sdk:2.0.0", "android-sdk:1.24.0", 1)
+	dir := testproject.Write(t, base.With(testproject.Files{build: strings.Replace(old, "isMinifyEnabled = false", "isMinifyEnabled = true", 1)}))
 	_, stdout, _ := newHarness(t).run("doctor", dir)
 	want := "      Fix: Add these lines to app/proguard-rules.pro:\n      -keep class com.tenjin.** { *; }\n"
 	if !strings.Contains(stdout, want) || !strings.Contains(stdout, "\n          protected java.lang.Object[][] getContents();\n") || !strings.Contains(stdout, "TypeToken") {

@@ -104,7 +104,7 @@ with --yes and starts an agent only with --agent.`,
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "create missing apps without asking")
 	addSDKKeyFlag(cmd, &sdkKeys)
-	cmd.Flags().BoolVar(&offline, "offline", false, "skip the SDK key check against Tenjin")
+	cmd.Flags().BoolVar(&offline, "offline", false, "skip the SDK key check against Tenjin, and the look for newer SDK releases")
 	cmd.Flags().StringVar(&agentFlag, "agent", "", "coding agent to integrate with: "+strings.Join(agent.IDs(), ", ")+", or none to do it by hand (default: ask)")
 	addBuildFlag(cmd, &builds)
 	addFeaturesFlag(cmd, &features)
@@ -493,6 +493,9 @@ func (s *setup) verify(p *project.Project) *verify.Report {
 	opts := verify.Options{Given: s.givenForChecks(), Features: s.features}
 	if keys := s.keyCheck(); keys != nil {
 		opts.Keys = keys
+	}
+	if !s.offline {
+		opts.Latest = s.env.latestSDKs(s.cmd.Context())
 	}
 	return verify.Run(s.cmd.Context(), p, opts)
 }

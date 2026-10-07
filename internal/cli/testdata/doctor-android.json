@@ -31,7 +31,7 @@
     "tenjin": [
       {
         "package": "com.tenjin:android-sdk",
-        "version": "1.24.0",
+        "version": "2.0.0",
         "source": "app/build.gradle.kts"
       }
     ],
@@ -86,7 +86,7 @@
       "id": "sdk.dependency",
       "severity": "pass",
       "platform": "android",
-      "title": "Tenjin SDK is declared: com.tenjin:android-sdk 1.24.0",
+      "title": "Tenjin SDK is declared: com.tenjin:android-sdk 2.0.0",
       "file": "app/build.gradle.kts"
     },
     {

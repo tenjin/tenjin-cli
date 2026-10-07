@@ -23,7 +23,7 @@ var unitySpec = frameworkSpec{
 	exts:        []string{".cs"},
 	sourceDirs:  func(*project.Target) []string { return []string{"Assets"} },
 	packages:    []string{"com.tenjin.sdk", "Tenjin ("},
-	installFix:  `Add "com.tenjin.sdk": "https://github.com/tenjin/tenjin-unity-sdk.git#` + latestVersion("com.tenjin.sdk") + `" to the dependencies in Packages/manifest.json, or add that address in Window > Package Manager > Add package from git URL.`,
+	installFix:  `Add "com.tenjin.sdk": "https://github.com/tenjin/tenjin-unity-sdk.git#` + sdkVersionToken + `" to the dependencies in Packages/manifest.json, or add that address in Window > Package Manager > Add package from git URL.`,
 	initName:    "Tenjin.getInstance(key)",
 	connectName: "Connect()",
 	initCall:    regexp.MustCompile(`Tenjin\.getInstance\w*\(`),

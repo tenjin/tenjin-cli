@@ -29,6 +29,7 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
 	"github.com/tenjin/tenjin-cli/internal/oauth"
 	"github.com/tenjin/tenjin-cli/internal/render"
+	"github.com/tenjin/tenjin-cli/internal/sdkrelease"
 	"github.com/tenjin/tenjin-cli/internal/session"
 	"github.com/tenjin/tenjin-cli/internal/tenjinapi"
 	"github.com/tenjin/tenjin-cli/internal/transport"
@@ -85,6 +86,9 @@ type environment struct {
 	// verbose receives a line for each request sent and each program run,
 	// when --verbose is given. Nil otherwise.
 	verbose io.Writer
+	// sdkReleases finds the newest release of each SDK, for the checks to
+	// name. Nil keeps to the versions the CLI was built with.
+	sdkReleases *sdkrelease.Lookup
 	// updates looks for a newer release while the command runs. Nil skips
 	// it: for scripts, agents, CI, and anyone who turned it off.
 	updates *update.Checker
@@ -128,6 +132,7 @@ func defaultEnvironment() (*environment, error) {
 	return &environment{
 		getenv:      os.Getenv,
 		updates:     updateChecker(os.Getenv),
+		sdkReleases: sdkReleases(),
 		endpoints:   endpoints,
 		store:       session.NewStore(),
 		stdin:       bufio.NewReader(os.Stdin),
@@ -162,6 +167,30 @@ func updateChecker(getenv func(string) string) *update.Checker {
 		Releases: releases,
 		State:    filepath.Join(dir, "tenjin", "update-check.json"),
 	}
+}
+
+// sdkReleases returns the lookup of SDK releases, or nil without a folder to
+// keep its answers in.
+func sdkReleases() *sdkrelease.Lookup {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return nil
+	}
+	return &sdkrelease.Lookup{State: filepath.Join(dir, "tenjin", "sdk-releases.json")}
+}
+
+// sdkReleaseWait bounds the look for newer SDK releases, made once a day.
+const sdkReleaseWait = 3 * time.Second
+
+// latestSDKs returns the newest SDK releases the registries name, or nil.
+func (e *environment) latestSDKs(ctx context.Context) map[string]string {
+	if e.sdkReleases == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, sdkReleaseWait)
+	defer cancel()
+	e.sdkReleases.Transport = e.transport()
+	return e.sdkReleases.Latest(ctx)
 }
 
 // startUpdateCheck begins the update check alongside the command.

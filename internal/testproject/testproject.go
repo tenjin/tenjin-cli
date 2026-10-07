@@ -96,7 +96,7 @@ android {
 }
 
 dependencies {
-    implementation("com.tenjin:android-sdk:1.24.0")
+    implementation("com.tenjin:android-sdk:2.0.0")
     implementation("com.google.android.gms:play-services-ads-identifier:18.1.0")
     implementation("com.google.android.gms:play-services-appset:16.1.0")
 }
@@ -216,7 +216,7 @@ target 'Sample' do
 end
 `,
 		"Podfile.lock": `PODS:
-  - TenjinSDK (1.19.1)
+  - TenjinSDK (1.20.0)
 
 DEPENDENCIES:
   - TenjinSDK

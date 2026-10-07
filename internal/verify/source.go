@@ -13,9 +13,11 @@ import (
 // frameworkSpec says how the SDK is used in one kind of project: where the
 // source lives and what the calls look like.
 type frameworkSpec struct {
-	exts        []string
-	sourceDirs  func(t *project.Target) []string
-	packages    []string // prefixes of project.Integration.Package this spec covers
+	exts       []string
+	sourceDirs func(t *project.Target) []string
+	packages   []string // prefixes of project.Integration.Package this spec covers
+	// installFix says how to add the SDK; sdkVersionToken in it stands for
+	// the newest release (installFix).
 	installFix  string
 	initName    string
 	connectName string
@@ -72,7 +74,7 @@ var nativeSpecs = map[project.Platform]frameworkSpec{
 			return []string{t.Android.ModuleDir + "/src"}
 		},
 		packages:    []string{"com.tenjin:android-sdk", "tenjin.aar", "tenjin.jar"},
-		installFix:  `Add implementation("com.tenjin:android-sdk:` + latestVersion("com.tenjin:android-sdk") + `") to the app module's dependencies, and make sure mavenCentral() is a repository.`,
+		installFix:  `Add implementation("com.tenjin:android-sdk:` + sdkVersionToken + `") to the app module's dependencies, and make sure mavenCentral() is a repository.`,
 		initName:    "TenjinSDK.getInstance(context, key)",
 		connectName: "connect()",
 		// getInstance has variants that take an app subversion or a

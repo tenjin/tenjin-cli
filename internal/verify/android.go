@@ -171,9 +171,19 @@ func (r *runner) checkPlayServices(t *project.Target) {
 	}
 }
 
+// bundledRulesSince is the first native Android SDK whose AAR carries its own
+// keep rules (consumer-rules.pro), applied to the app automatically.
+const bundledRulesSince = "2.0.0"
+
 func (r *runner) checkProguard(t *project.Target) {
 	if !t.Android.Minify {
 		return
+	}
+	for _, i := range r.p.Tenjin {
+		if strings.HasPrefix(i.Package, "com.tenjin:android-sdk") && atLeast(i.Version, bundledRulesSince) {
+			r.pass("android.proguard", project.Android, "The SDK brings its own keep rules ("+bundledRulesSince+" and later)", i.Source, 0)
+			return
+		}
 	}
 	matches, _ := filepath.Glob(filepath.Join(r.p.Root, filepath.FromSlash(t.Android.ModuleDir), "*.pro"))
 	for _, m := range matches {
@@ -186,7 +196,7 @@ func (r *runner) checkProguard(t *project.Target) {
 	r.add(Finding{
 		ID: "android.proguard", Severity: Warning, Platform: project.Android,
 		Title:  "Code shrinking is on and there are no keep rules for Tenjin",
-		Detail: "The SDK reaches Play Services by reflection. Without keep rules, release builds can lose the advertising ID or the install referrer, or crash.",
+		Detail: "The SDK reaches Play Services by reflection. Without keep rules, release builds can lose the advertising ID or the install referrer, or crash. The native Android SDK brings its own from " + bundledRulesSince + ", so updating it is the other fix.",
 		File:   t.Android.BuildFile,
 		Fix:    "Add these lines to " + t.Android.ModuleDir + "/proguard-rules.pro:\n" + proguardRules,
 	})

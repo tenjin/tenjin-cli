@@ -8,6 +8,7 @@ project_name: tenjin
 before:
   hooks:
     - ./scripts/completions.sh
+    - ./scripts/notices.sh
 
 builds:
   - id: tenjin
@@ -38,6 +39,7 @@ archives:
     files:
       - README.md
       - LICENSE*
+      - THIRD_PARTY_NOTICES.md
       - completions/*
 
 checksum:

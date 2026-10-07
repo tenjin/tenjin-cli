@@ -16,7 +16,7 @@ func TestSDKGuideByName(t *testing.T) {
 	}
 	lacks(t, stdout,
 		"tenjin/sdk-llm-guides at ",
-		"Where this guide says `<TENJIN_SDK_VERSION>`, use **1.24.0**",
+		"Where this guide says `<TENJIN_SDK_VERSION>`, use **2.0.0**",
 		"write the build's placeholder",
 		"Tenjin Android SDK",
 	)

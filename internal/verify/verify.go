@@ -53,6 +53,8 @@ type Report struct {
 	Project  *project.Project `json:"project"`
 	Findings []Finding        `json:"findings"`
 	Summary  Summary          `json:"summary"`
+	// latest is Options.Latest, for the guide built from the report.
+	latest map[string]string
 }
 
 // KeyChecker asks Tenjin whether an SDK key is valid for an app.
@@ -75,6 +77,11 @@ type Options struct {
 	// project.Feature). A chosen feature that is not sent is a warning; nil
 	// means no choice was made, and unsent features are only suggested.
 	Features []string
+	// Latest holds newer SDK releases found in the registries, keyed by
+	// package prefix (see sdkrelease). One counts only within the major
+	// version this CLI knows: a new major can change what the checks look
+	// for. Nil keeps to the versions the CLI was built with.
+	Latest map[string]string
 }
 
 // GivenKey is an SDK key supplied from outside the project.
@@ -111,7 +118,7 @@ func (g GivenKeys) For(build string) (GivenKey, bool) {
 // Run checks the project and returns what it found. Frameworks that are not
 // checked yet produce a single informational finding saying so.
 func Run(ctx context.Context, p *project.Project, opts Options) *Report {
-	r := &runner{ctx: ctx, p: p, opts: opts, report: &Report{Project: p, Findings: []Finding{}}}
+	r := &runner{ctx: ctx, p: p, opts: opts, report: &Report{Project: p, Findings: []Finding{}, latest: opts.Latest}}
 	r.run()
 	for _, f := range r.report.Findings {
 		switch f.Severity {
@@ -221,7 +228,7 @@ func (r *runner) checkDependency(spec frameworkSpec, platform project.Platform) 
 		Severity: Error,
 		Platform: platform,
 		Title:    "The Tenjin SDK is not a dependency of this project",
-		Fix:      spec.installFix,
+		Fix:      installFix(spec, r.opts.Latest),
 	})
 }
 

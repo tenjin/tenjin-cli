@@ -146,7 +146,7 @@ func skillRun(t *testing.T, bin, claude string, served bool) {
 		activity = "app/src/main/java/com/example/sample/MainActivity.kt"
 	)
 	dir := testproject.Write(t, base.With(testproject.Files{
-		build:    strings.Replace(base[build], `    implementation("com.tenjin:android-sdk:1.24.0")`+"\n", "", 1),
+		build:    strings.Replace(base[build], `    implementation("com.tenjin:android-sdk:2.0.0")`+"\n", "", 1),
 		manifest: strings.Replace(base[manifest], `    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />`+"\n", "", 1),
 		activity: "package com.example.sample\n\nimport android.app.Activity\n\nclass MainActivity : Activity()\n",
 	}))
@@ -215,7 +215,7 @@ func skillRun(t *testing.T, bin, claude string, served bool) {
 	if strings.Contains(transcript, testproject.Key) {
 		t.Error("the whole SDK key reached the agent")
 	}
-	if build, _ := os.ReadFile(filepath.Join(dir, "app/build.gradle.kts")); !strings.Contains(string(build), "com.tenjin:android-sdk:1.24.0") {
+	if build, _ := os.ReadFile(filepath.Join(dir, "app/build.gradle.kts")); !strings.Contains(string(build), "com.tenjin:android-sdk:2.0.0") {
 		t.Errorf("the SDK was not added at the version the doctor named:\n%s", build)
 	}
 
