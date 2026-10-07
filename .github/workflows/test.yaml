@@ -6,6 +6,9 @@ on:
   pull_request:
     branches:
       - main
+  # The release workflow runs these first, so a tag is published only from
+  # a commit that passes them.
+  workflow_call:
 jobs:
   test:
     name: Test (${{ matrix.os }})
@@ -95,15 +98,15 @@ jobs:
         run: |
           version=$(python3 -c 'import json; print(json.load(open("dist/metadata.json"))["version"])' 2>/dev/null ||
             python -c 'import json; print(json.load(open("dist/metadata.json"))["version"])')
-          mkdir -p "site/download/v$version"
-          cp dist/*.tar.gz dist/*.zip dist/checksums.txt "site/download/v$version/"
-          cp install.sh install.ps1 site/
+          mkdir site
+          cp dist/*.tar.gz dist/*.zip dist/checksums.txt install.sh install.ps1 site/
           echo "TENJIN_VERSION=$version" >> "$GITHUB_ENV"
           echo "TENJIN_RELEASES_URL=http://127.0.0.1:8765" >> "$GITHUB_ENV"
       - name: install.sh
         if: runner.os != 'Windows'
         run: |
-          python3 -m http.server -d site -b 127.0.0.1 8765 &
+          # Served as GitHub serves a release, /latest redirect included.
+          python3 scripts/serve-release.py site "$TENJIN_VERSION" 8765 &
           until curl -fs http://127.0.0.1:8765/install.sh > /dev/null; do sleep 1; done
           curl -fsSL http://127.0.0.1:8765/install.sh | TENJIN_INSTALL_DIR="$RUNNER_TEMP/bin" TENJIN_NO_MODIFY_PATH=1 sh
           "$RUNNER_TEMP/bin/tenjin" version | grep -F "Tenjin CLI $TENJIN_VERSION"
@@ -114,9 +117,10 @@ jobs:
           for shell in $shells; do
             home="$RUNNER_TEMP/home-$shell"
             mkdir -p "$home"
+            # No version given, as a person runs it: the latest is looked up.
             curl -fsSL http://127.0.0.1:8765/install.sh |
               env -i HOME="$home" PATH=/usr/bin:/bin SHELL="/bin/$shell" \
-                TENJIN_RELEASES_URL="$TENJIN_RELEASES_URL" TENJIN_VERSION="$TENJIN_VERSION" sh
+                TENJIN_RELEASES_URL="$TENJIN_RELEASES_URL" sh
             # Once more: nothing is added twice.
             curl -fsSL http://127.0.0.1:8765/install.sh |
               env -i HOME="$home" PATH=/usr/bin:/bin SHELL="/bin/$shell" \
@@ -142,7 +146,7 @@ jobs:
           brew tap-new --no-git tenjin/local
           tap="$(brew --repository tenjin/local)"
           mkdir -p "$tap/Casks"
-          sed -E "s#https://github.com/tenjin/tenjin-cli/releases/download/[^/]+/#file://$PWD/site/download/v$TENJIN_VERSION/#" \
+          sed -E "s#https://github.com/tenjin/tenjin-cli/releases/download/[^/]+/#file://$PWD/site/#" \
             dist/homebrew/Casks/tenjin.rb > "$tap/Casks/tenjin.rb"
           brew install --cask tenjin/local/tenjin
           "$(brew --prefix)/bin/tenjin" version | grep -F "Tenjin CLI $TENJIN_VERSION"
@@ -151,7 +155,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          Start-Process -FilePath python -ArgumentList '-m', 'http.server', '-d', 'site', '-b', '127.0.0.1', '8765' -WindowStyle Hidden
+          Start-Process -FilePath python -ArgumentList 'scripts/serve-release.py', 'site', $env:TENJIN_VERSION, '8765' -WindowStyle Hidden
           for ($i = 0; $i -lt 30; $i++) {
             try { Invoke-WebRequest -Uri 'http://127.0.0.1:8765/install.ps1' -UseBasicParsing | Out-Null; break } catch { Start-Sleep -Seconds 1 }
           }
@@ -167,13 +171,17 @@ jobs:
         shell: pwsh
         run: |
           try { Invoke-WebRequest -Uri 'http://127.0.0.1:8765/install.ps1' | Out-Null } catch {
-            Start-Process -FilePath python -ArgumentList '-m', 'http.server', '-d', 'site', '-b', '127.0.0.1', '8765' -WindowStyle Hidden
+            Start-Process -FilePath python -ArgumentList 'scripts/serve-release.py', 'site', $env:TENJIN_VERSION, '8765' -WindowStyle Hidden
             for ($i = 0; $i -lt 30; $i++) {
               try { Invoke-WebRequest -Uri 'http://127.0.0.1:8765/install.ps1' | Out-Null; break } catch { Start-Sleep -Seconds 1 }
             }
           }
+          # No version given: the latest is looked up, through the redirect.
+          $version = $env:TENJIN_VERSION
+          $env:TENJIN_VERSION = $null
           irm http://127.0.0.1:8765/install.ps1 | iex
           $saved = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
           $dir = Join-Path $env:LOCALAPPDATA 'Programs\tenjin'
+          if (-not ((& (Join-Path $dir 'tenjin.exe') version) -like "Tenjin CLI $version *")) { throw 'the latest was not installed' }
           if ((@($saved -split ';') | Where-Object { $_ -eq $dir }).Count -ne 1) { throw "PATH should hold $dir once: $saved" }
           & (Join-Path $dir 'tenjin.exe') version

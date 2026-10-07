@@ -78,16 +78,37 @@
 		$binary = Join-Path $tmp 'out\tenjin.exe'
 		if (-not (Test-Path $binary)) { Fail 'the archive has no tenjin.exe' }
 
-		$dir = if ($env:TENJIN_INSTALL_DIR) { $env:TENJIN_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs\tenjin' }
+		# The folder: the one asked for; or where tenjin already is, when that
+		# is the user's own, so an update replaces it and no older copy is
+		# left ahead of it on PATH; or the usual one.
+		$dir = $env:TENJIN_INSTALL_DIR
+		if (-not $dir) {
+			$existing = Get-Command tenjin -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+			if ($existing -and $existing.Source.StartsWith($env:LOCALAPPDATA, [StringComparison]::OrdinalIgnoreCase)) {
+				$dir = Split-Path -Parent $existing.Source
+			}
+		}
+		if (-not $dir) { $dir = Join-Path $env:LOCALAPPDATA 'Programs\tenjin' }
+		# A relative folder would put a relative entry on PATH.
+		$dir = [System.IO.Path]::GetFullPath($dir)
 		New-Item -ItemType Directory -Path $dir -Force | Out-Null
 		$target = Join-Path $dir 'tenjin.exe'
 		# Windows cannot overwrite a running program but can rename it, so the
-		# old one is moved aside first.
+		# old one is moved aside first, under a name of its own in case an
+		# earlier one is still held by a program that is running.
+		$aside = $null
 		if (Test-Path $target) {
-			Move-Item -Path $target -Destination "$target.old" -Force
+			$aside = "$target.old-" + [System.Guid]::NewGuid().ToString('N').Substring(0, 8)
+			Move-Item -Path $target -Destination $aside
 		}
-		Copy-Item -Path $binary -Destination $target
-		Remove-Item -Path "$target.old" -Force -ErrorAction SilentlyContinue
+		try {
+			Copy-Item -Path $binary -Destination $target
+		} catch {
+			# Put the old one back: a failed update must not leave no tenjin.
+			if ($aside) { Move-Item -Path $aside -Destination $target -Force -ErrorAction SilentlyContinue }
+			Fail "could not write $target; the version installed before is unchanged"
+		}
+		Get-ChildItem -Path $dir -Filter 'tenjin.exe.old-*' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 
 		# The user's PATH is read and written unexpanded, so entries such as
 		# %USERPROFILE%\bin stay as they are.

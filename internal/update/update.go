@@ -192,7 +192,8 @@ func Command(executable, goos string, getenv func(string) string) string {
 	case inGoBin(path, getenv):
 		return "go install github.com/tenjin/tenjin-cli/cmd/tenjin@latest"
 	case goos == "windows":
-		return "irm https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.ps1 | iex"
+		// Through powershell, so it works typed into cmd.exe as well.
+		return `powershell -c "irm https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.ps1 | iex"`
 	default:
 		return "curl -fsSL https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.sh | sh"
 	}

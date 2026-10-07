@@ -127,7 +127,7 @@ func TestTheUpdateCommandFollowsTheInstall(t *testing.T) {
 		{"/opt/homebrew/Caskroom/tenjin/0.1.0/tenjin", "darwin", "brew upgrade tenjin"},
 		{"/home/linuxbrew/.linuxbrew/Caskroom/tenjin/0.1.0/tenjin", "linux", "brew upgrade tenjin"},
 		{filepath.Join(gopath, "bin", "tenjin"), "linux", "go install github.com/tenjin/tenjin-cli/cmd/tenjin@latest"},
-		{`C:\Users\dev\AppData\Local\Programs\tenjin\tenjin.exe`, "windows", "irm https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.ps1 | iex"},
+		{`C:\Users\dev\AppData\Local\Programs\tenjin\tenjin.exe`, "windows", `powershell -c "irm https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.ps1 | iex"`},
 		{"/home/dev/.local/bin/tenjin", "linux", "curl -fsSL https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.sh | sh"},
 	} {
 		if got := Command(c.exe, c.goos, env); got != c.want {

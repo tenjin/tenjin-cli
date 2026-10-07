@@ -6,8 +6,12 @@ on:
 permissions:
   contents: write
 jobs:
+  test:
+    # Every test, install and snapshot job, on Linux, macOS and Windows.
+    uses: ./.github/workflows/test.yaml
   release:
     name: Release
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,8 +22,21 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Test
-        run: make test
+      - name: Check the tap can be updated
+        # GoReleaser publishes the GitHub release before it pushes the cask,
+        # so a tap it cannot push to would leave a release without its cask.
+        # This catches a missing or wrong token before anything is published.
+        # The token must also be allowed past the tap's branch protection,
+        # which only a push shows: it is tenjin-kraken's. Pre-releases leave
+        # the tap alone (skip_upload: auto).
+        if: ${{ !contains(github.ref_name, '-') }}
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          test -n "$GH_TOKEN" || { echo "::error::The HOMEBREW_TAP_TOKEN secret is not set."; exit 1; }
+          push=$(gh api repos/tenjin/homebrew-tap --jq .permissions.push) ||
+            { echo "::error::tenjin/homebrew-tap cannot be read with HOMEBREW_TAP_TOKEN."; exit 1; }
+          test "$push" = true || { echo "::error::HOMEBREW_TAP_TOKEN cannot push to tenjin/homebrew-tap."; exit 1; }
       - name: Release
         uses: goreleaser/goreleaser-action@v6
         with:

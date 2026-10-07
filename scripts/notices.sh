@@ -44,5 +44,8 @@ trap 'rm -f "$tmp"' EXIT
 	done
 } > "$tmp"
 
+# mktemp makes the file readable by its owner only; the archives carry it
+# for everyone.
+chmod 0644 "$tmp"
 mv "$tmp" "$out"
 trap - EXIT
