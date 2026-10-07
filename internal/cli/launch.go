@@ -166,6 +166,7 @@ func deviceFinding(r *verify.Report, id string) *verify.Finding {
 }
 
 func (s *setup) writeDeviceFindings(r *verify.Report) {
+	r = forPeople(r)
 	var b strings.Builder
 	for _, f := range r.Findings {
 		writeFinding(&b, s.style, f, render.TextWidth(s.out))

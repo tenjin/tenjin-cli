@@ -136,10 +136,42 @@ func (t Target) path(loc Location) (string, error) {
 	if loc.Global {
 		base = loc.Home
 	}
+	path := filepath.Join(base, "AGENTS.md")
 	if t.ID == "claude" {
-		return filepath.Join(base, ".claude", "skills", Name, "SKILL.md"), nil
+		path = filepath.Join(base, ".claude", "skills", Name, "SKILL.md")
 	}
-	return filepath.Join(base, "AGENTS.md"), nil
+	if !loc.Global {
+		if err := noLinks(base, path); err != nil {
+			return "", err
+		}
+	}
+	return path, nil
+}
+
+// noLinks refuses a path inside a project that goes through a symbolic
+// link: a repository could point one at a file outside it, such as a shell
+// startup file, which would then be overwritten. In the home folder links
+// are left to be followed, since dotfile managers make them on purpose.
+func noLinks(base, path string) error {
+	rel, err := filepath.Rel(base, path)
+	if err != nil {
+		return err
+	}
+	current := base
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		current = filepath.Join(current, part)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("%s is a symbolic link; the Tenjin CLI writes only files that are in the project itself. Replace the link with a file, or add the instructions by hand (tenjin agent skill prints them)", current)
+		}
+	}
+	return nil
 }
 
 // skillFile is the whole file a skill-aware agent reads.

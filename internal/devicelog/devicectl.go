@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -12,6 +13,10 @@ import (
 // as stop reports true for a line of it. Stopping the program is not an
 // error.
 type Streamer func(ctx context.Context, name string, args []string, stop func(line string) bool) ([]byte, error)
+
+// bundleIDPattern is what an iOS bundle ID can be. It also keeps one that
+// starts with a dash from being taken for an option of devicectl.
+var bundleIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]*$`)
 
 // iPhoneLaunchWindow is how long a launch is read for, at most. Tenjin
 // usually answers within a second of the app starting.
@@ -82,7 +87,7 @@ func ReadIPhone(ctx context.Context, stream Streamer, xcrun string, phone IPhone
 			Fix:    "Turn it on in Settings → Privacy & Security → Developer Mode, then run this again.",
 		}
 	}
-	if bundleID == "" {
+	if !bundleIDPattern.MatchString(bundleID) {
 		return nil, &Unavailable{Reason: "The app's bundle ID could not be read, so it cannot be launched on " + phone.Name}
 	}
 	ctx, cancel := context.WithTimeout(ctx, iPhoneLaunchWindow)

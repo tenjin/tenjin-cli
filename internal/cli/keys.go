@@ -69,7 +69,7 @@ func givenKeys(flags []string, getenv func(string) string) (verify.GivenKeys, er
 		platform, variant, _ := strings.Cut(name, ":")
 		platform = strings.ToLower(platform)
 		if platform != string(project.Android) && platform != string(project.IOS) {
-			return given, clierr.New(clierr.Usage, "--sdk-key %s: unknown platform %q", value, platform).
+			return given, clierr.New(clierr.Usage, "--sdk-key %s=…: unknown platform %q", name, platform).
 				WithHint("Use --sdk-key android=<key>, --sdk-key ios=<key>, --sdk-key android:<variant>=<key>, or --sdk-key <key> for a key that serves every app.")
 		}
 		id := platform
@@ -98,8 +98,11 @@ func resolveGiven(given *verify.GivenKeys, p *project.Project, getenv func(strin
 		switch {
 		case ok:
 			resolved[canonical] = key
-		case !strings.Contains(id, ":"):
+		case !strings.Contains(id, ":") && p.Target(project.Platform(id)) != nil:
 			resolved[id] = key // a platform's main build, even when unread
+		case !strings.Contains(id, ":"):
+			return clierr.New(clierr.Usage, "--sdk-key %s=…: this project does not build for %s", id, platformNames[project.Platform(id)]).
+				WithHint("Its builds: %s.", strings.Join(names, ", "))
 		default:
 			return clierr.New(clierr.Usage, "--sdk-key %s=…: this project has no build %q", id, id).
 				WithHint("Its builds: %s.", strings.Join(names, ", "))

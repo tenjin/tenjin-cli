@@ -2,6 +2,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"strings"
@@ -37,8 +39,10 @@ var production = Endpoints{
 // TENJIN_DASHBOARD_URL, TENJIN_API_URL, TENJIN_TRACK_URL and
 // TENJIN_RESOURCE_URL each replace one address, for running against a local
 // or a test copy of that service. With any of them set, the environment is
-// called "custom", so the session kept for it is its own: a token issued by
-// production is never sent to an address that was substituted.
+// named after its addresses ("custom-" and a hash), so each
+// combination keeps a session of its own. A token issued by production is
+// never sent to an address that was substituted: the API and the resource
+// cannot be replaced while sign-in stays with production's dashboard.
 func Resolve(getenv func(string) string) (Endpoints, error) {
 	e := production
 	for _, override := range []struct {
@@ -59,6 +63,13 @@ func Resolve(getenv func(string) string) (Endpoints, error) {
 		}
 		*override.address = value
 		e.Name = "custom"
+	}
+	if e.Issuer == production.Issuer && (e.API != production.API || e.Resource != production.Resource) {
+		return Endpoints{}, fmt.Errorf("TENJIN_API_URL and TENJIN_RESOURCE_URL need TENJIN_DASHBOARD_URL as well: otherwise a token issued by Tenjin's production dashboard would be sent to another address")
+	}
+	if e.Name == "custom" {
+		sum := sha256.Sum256([]byte(e.Issuer + "\n" + e.API + "\n" + e.Resource + "\n" + e.Track))
+		e.Name = "custom-" + hex.EncodeToString(sum[:4])
 	}
 	return e, nil
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -245,5 +246,27 @@ func TestDetect(t *testing.T) {
 func TestDescriptionIsAPlainYAMLScalar(t *testing.T) {
 	if strings.Contains(description, ": ") || strings.ContainsAny(description, "\n#") || len(description) > 1024 {
 		t.Errorf("description would not survive as an unquoted YAML value: %q", description)
+	}
+}
+
+// A project's AGENTS.md that links outside the project is not written to.
+func TestInstallRefusesALinkOutOfTheProject(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need privileges on Windows")
+	}
+	project, outside := t.TempDir(), t.TempDir()
+	target := filepath.Join(outside, "dotfile")
+	if err := os.WriteFile(target, []byte("mine\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(project, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	codex, _ := FindTarget("codex")
+	if _, err := PlanInstall(codex, Location{ProjectDir: project}); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("err = %v", err)
+	}
+	if got, _ := os.ReadFile(target); string(got) != "mine\n" {
+		t.Errorf("the outside file was changed: %q", got)
 	}
 }

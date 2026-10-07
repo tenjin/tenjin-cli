@@ -9,6 +9,7 @@ import (
 
 	"github.com/tenjin/tenjin-cli/internal/keyfill"
 	"github.com/tenjin/tenjin-cli/internal/project"
+	"github.com/tenjin/tenjin-cli/internal/testproject"
 )
 
 // Where Tenjin's API serves SDK keys, nobody copies one: setup fetches the
@@ -140,5 +141,25 @@ func TestAppsKeysListShowsTheKeysMasked(t *testing.T) {
 	lacks(t, text, "SDK keys of Sample (android, com.example.sample):", "  …GOOD  SDK Key 1")
 	if strings.Contains(stdout+text, goodKey) {
 		t.Error("the whole key was printed")
+	}
+}
+
+// A mistyped --sdk-key is refused without printing the key.
+func TestAMistypedSDKKeyFlagHidesTheKey(t *testing.T) {
+	dir := testproject.Write(t, testproject.AndroidNative())
+	const key = "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+	code, stdout, stderr := newHarness(t).run("doctor", dir, "--offline", "--json", "--sdk-key", "andriod="+key)
+	if code != 2 || strings.Contains(stdout+stderr, key) {
+		t.Errorf("exit = %d, output = %q %q", code, stdout, stderr)
+	}
+}
+
+// A key for a platform the project does not build for is a usage error, not
+// silently ignored.
+func TestAKeyForAMissingPlatformIsRefused(t *testing.T) {
+	dir := testproject.Write(t, testproject.AndroidNative())
+	code, _, stderr := newHarness(t).run("doctor", dir, "--offline", "--sdk-key", "ios=ABCDEFGHIJKLMNOPQRSTUVWXYZ123456")
+	if code != 2 || !strings.Contains(stderr, "does not build for iOS") {
+		t.Errorf("exit = %d, stderr = %q", code, stderr)
 	}
 }
