@@ -18,6 +18,10 @@ type fakeAgent struct {
 }
 
 const fakeAgentScript = `#!/bin/sh
+if [ "$1" = "--help" ]; then
+  echo "  --restricted    Restricted mode"
+  exit 0
+fi
 printf '%s\n' "$@" > "$FAKE_AGENT_DIR/args"
 cat > "$FAKE_AGENT_DIR/prompt"
 echo "$PATH" > "$FAKE_AGENT_DIR/path"

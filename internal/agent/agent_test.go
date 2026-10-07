@@ -1,8 +1,11 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -166,5 +169,27 @@ func TestTheAgentInheritsNoSDKKey(t *testing.T) {
 	got := withoutKeys([]string{"HOME=/h", "TENJIN_SDK_KEY=abc", "TENJIN_SDK_KEY_ANDROID=def", "TENJIN_SDK_KEY_IOS=ghi", "TENJIN_SDK_KEY_ANDROID_AMAZON=jkl", "TENJIN_API_TOKEN=tok", "TENJIN_API_URL=http://x"})
 	if strings.Join(got, " ") != "HOME=/h TENJIN_API_URL=http://x" {
 		t.Errorf("env = %q", got)
+	}
+}
+
+// A Claude Code too old to be confined is not started at all.
+func TestAClaudeCodeWithoutRestrictedModeIsRefused(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake agent is a shell script")
+	}
+	dir := t.TempDir()
+	ran := filepath.Join(dir, "ran")
+	script := filepath.Join(dir, "claude")
+	body := "#!/bin/sh\nif [ \"$1\" = --help ]; then echo '  --print'; exit 0; fi\ntouch " + ran + "\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := Find(func(string) (string, error) { return script, nil })[0]
+	_, err := a.Run(context.Background(), Task{Dir: dir, Prompt: "x"}, nil)
+	if err == nil || !strings.Contains(err.Error(), "claude update") {
+		t.Fatalf("err = %v", err)
+	}
+	if _, statErr := os.Stat(ran); statErr == nil {
+		t.Error("the agent was started")
 	}
 }

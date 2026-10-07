@@ -21,6 +21,10 @@ var codex = driver{
 		return []string{
 			"exec", "--json",
 			"--sandbox", "workspace-write",
+			// Pinned here, so that the developer's own Codex configuration
+			// cannot open the sandbox to the network or to other folders.
+			"-c", "sandbox_workspace_write.network_access=false",
+			"-c", "sandbox_workspace_write.writable_roots=[]",
 			// A project need not be a Git repository to be integrated.
 			"--skip-git-repo-check",
 			// The developer's connectors have no part in this task. The rest

@@ -210,3 +210,54 @@ func TestIOSAdvertisingID(t *testing.T) {
 	}
 	expect(t, r, "device.connect", project.IOS, verify.Pass)
 }
+
+// The connect that counts is this project's app's, the newest of them; one
+// from another app on the device stands for nothing.
+func TestTheConnectThatCountsIsThisApps(t *testing.T) {
+	other := strings.Replace(connectParams, "bundle_id=com.example.sample", "bundle_id=com.other.game", 1)
+	debug := strings.Replace(connectParams, "bundle_id=com.example.sample", "bundle_id=com.example.sample.debug", 1)
+	cases := []struct {
+		name, log string
+		severity  verify.Severity
+		title     string
+	}{
+		{"refused here, accepted elsewhere",
+			deviceLog(connectURL, connectParams, `{"code":401,"message":"unauthorized"}`) + deviceLog(connectURL, other, `{"code":200,"success":true}`),
+			verify.Error, "does not accept this SDK key"},
+		{"only another app",
+			deviceLog(connectURL, other, `{"code":200,"success":true}`),
+			verify.Warning, "connects only from other apps (com.other.game)"},
+		{"a debug suffix is this app",
+			deviceLog(connectURL, debug, `{"code":200,"success":true}`),
+			verify.Pass, "Tenjin accepted the app's connect request"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := expect(t, withDevice(t, c.log, nil), "device.connect", project.Android, c.severity)
+			if !strings.Contains(f.Title, c.title) {
+				t.Errorf("title = %q", f.Title)
+			}
+		})
+	}
+}
+
+// A connect the SDK skipped after the last one it sent is what the newest
+// launch did, and an earlier refusal is not reported as this launch's.
+func TestADedupAfterTheConnectWins(t *testing.T) {
+	log := deviceLog(connectURL, connectParams, `{"code":401,"message":"unauthorized"}`) +
+		"D/TenjinSDK( 1): Connect deduped by persisted timestamp\n"
+	r := withDevice(t, log, nil)
+	expect(t, r, "device.connect.deduped", project.Android, verify.Info)
+	if find(r, "device.connect", project.Android) != nil {
+		t.Error("the earlier connect was reported")
+	}
+}
+
+// When the device logged it is said, so an old launch shows as old.
+func TestAConnectSaysWhenItWasSent(t *testing.T) {
+	log := "10-02 15:07:34.121 " + strings.TrimSuffix(deviceLog(connectURL, connectParams, `{"code":401,"message":"unauthorized"}`), "\n")
+	f := expect(t, withDevice(t, log+"\n", nil), "device.connect", project.Android, verify.Error)
+	if !strings.Contains(f.Detail, "Sent at 10-02 15:07:34.121.") {
+		t.Errorf("detail = %q", f.Detail)
+	}
+}

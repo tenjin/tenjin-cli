@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // iosLogWindow is how far back a simulator's log is read. It covers a launch
@@ -23,6 +24,13 @@ type Simulator struct {
 // ReadIPhone instead. The error is an *Unavailable when there is nothing to
 // read from.
 func ReadIOSSimulator(ctx context.Context, run Runner, xcrun, udid string) ([]byte, error) {
+	return ReadIOSSimulatorSince(ctx, run, xcrun, udid, time.Time{})
+}
+
+// ReadIOSSimulatorSince is ReadIOSSimulator for what was logged since a
+// moment, or in the last ten minutes when since is zero. A simulator logs
+// to this Mac's own log, on its clock.
+func ReadIOSSimulatorSince(ctx context.Context, run Runner, xcrun, udid string, since time.Time) ([]byte, error) {
 	out, err := run(ctx, xcrun, "simctl", "list", "devices", "booted", "-j")
 	if err != nil {
 		return nil, &Unavailable{
@@ -61,8 +69,13 @@ func ReadIOSSimulator(ctx context.Context, run Runner, xcrun, udid string) ([]by
 		}
 	}
 
-	log, err := run(ctx, xcrun, "simctl", "spawn", udid, "log", "show",
-		"--last", iosLogWindow, "--style", "compact", "--predicate", `eventMessage CONTAINS "`+iosTag+`"`)
+	window := []string{"--last", iosLogWindow}
+	if !since.IsZero() {
+		window = []string{"--start", since.Format("2006-01-02 15:04:05")}
+	}
+	args := append([]string{"simctl", "spawn", udid, "log", "show"}, window...)
+	args = append(args, "--style", "compact", "--predicate", `eventMessage CONTAINS "`+iosTag+`"`)
+	log, err := run(ctx, xcrun, args...)
 	if err != nil {
 		return nil, &Unavailable{Reason: fmt.Sprintf("Could not read the log of the simulator %s: %v", udid, err)}
 	}

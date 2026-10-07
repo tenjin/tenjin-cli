@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/tenjin/tenjin-cli/internal/devicelog"
 	"github.com/tenjin/tenjin-cli/internal/testproject"
 )
 
@@ -86,7 +88,7 @@ func TestSetupReadsTheDeviceAgainAfterAFailedLaunch(t *testing.T) {
 		"Fix what is marked above, rebuild and relaunch the app",
 		"Skipped. After launching the app, run tenjin doctor --device",
 	)
-	if reads := len(*calls) / 2; reads != 1 {
+	if reads := logReads(*calls); reads != 1 {
 		t.Errorf("device read %d times, want 1", reads)
 	}
 }
@@ -97,7 +99,7 @@ func TestSetupLaunchCanBeSkipped(t *testing.T) {
 
 	code, stdout, _ := h.typing("", "s").run("setup", dir)
 	lacks(t, stdout, "Skipped. After launching the app, run tenjin doctor --device to see Tenjin's answer.")
-	if code != 0 || len(*calls) != 0 {
+	if code != 0 || logReads(*calls) != 0 {
 		t.Errorf("exit = %d, adb calls = %q", code, *calls)
 	}
 }
@@ -110,7 +112,54 @@ func TestSetupWithoutATerminalLeavesTheLaunchToTheDeveloper(t *testing.T) {
 
 	code, stdout, _ := h.run("setup", dir)
 	lacks(t, stdout, "Launch a debug build on an Android device or emulator, then run tenjin doctor --device")
-	if code != 0 || len(*calls) != 0 {
+	if code != 0 || logReads(*calls) != 0 {
 		t.Errorf("exit = %d, adb calls = %q", code, *calls)
 	}
+}
+
+// Step 7 reads only the launch it asked for: an earlier launch's refused
+// connect, still in the device's log, does not stand for it.
+func TestSetupReadsOnlyTheNewLaunch(t *testing.T) {
+	h, dir := correctAndroid(t)
+	h.fake.installs[capturedInstall] = "Organic"
+	launch := readCapturedLog(t)
+	earlier := strings.ReplaceAll(strings.ReplaceAll(launch, "10-01 21:", "10-01 20:"),
+		`{"code":200,"success":true}`, `{"code":401,"message":"invalid api key"}`)
+	h.connectDevice(earlier + launch)
+	run := h.env.run
+	h.env.run = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		for _, a := range args {
+			if a == "-t" {
+				// Before this launch, the log ended with the earlier one.
+				return []byte(devicelog.LastLine([]byte(earlier)) + "\n"), nil
+			}
+		}
+		return run(ctx, name, args...)
+	}
+
+	code, stdout, stderr := h.typing("", "").run("setup", dir)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	lacks(t, stdout, "Tenjin accepted the app's connect request (SDK 1.23.0)", "The integration works end to end.")
+	if strings.Contains(stdout, "invalid api key") {
+		t.Errorf("the earlier launch was read:\n%s", stdout)
+	}
+}
+
+// logReads counts the reads of a device's whole log among adb calls, leaving
+// out the look at its newest line that setup takes before each launch.
+func logReads(calls [][]string) int {
+	n := 0
+	for _, args := range calls {
+		read, mark := false, false
+		for _, a := range args {
+			read = read || a == "logcat"
+			mark = mark || a == "-t"
+		}
+		if read && !mark {
+			n++
+		}
+	}
+	return n
 }

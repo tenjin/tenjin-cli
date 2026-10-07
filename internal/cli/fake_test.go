@@ -419,6 +419,13 @@ func (h *harness) connectDevice(log string) *[][]string {
 		if len(args) == 1 && args[0] == "devices" {
 			return []byte("List of devices attached\nemulator-5554\tdevice\n\n"), nil
 		}
+		// The newest line, which setup notes before asking for a launch: the
+		// log held nothing of the SDK's before it.
+		for _, a := range args {
+			if a == "-t" {
+				return []byte("--------- beginning of main\n"), nil
+			}
+		}
 		return []byte(log), nil
 	}
 	return calls
