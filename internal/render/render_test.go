@@ -146,7 +146,7 @@ func TestCleanRemovesControlCharacters(t *testing.T) {
 		Next:   &inner{"tab\tand\nline"},
 	}
 	CleanAll(&v)
-	if strings.ContainsAny(v.Title+v.Items[0].Name+v.Params["k"], "\x1b\x07\x9b") {
+	if left := v.Title + v.Items[0].Name + v.Params["k"]; strings.ContainsAny(left, "\x1b\x07") || strings.IndexByte(left, 0x9b) >= 0 {
 		t.Errorf("left: %q %q %q", v.Title, v.Items[0].Name, v.Params["k"])
 	}
 	if v.Next.Name != "tab\tand\nline" {

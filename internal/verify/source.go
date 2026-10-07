@@ -287,7 +287,7 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 			Title:  spec.connectName + " is called only in debug builds",
 			Detail: "Every call is inside #if DEBUG, so release builds, the ones people install, never connect.",
 			File:   c.File, Line: c.Line,
-			Fix:    "Move " + spec.connectName + " out of the #if DEBUG block, so that every build calls it.",
+			Fix: "Move " + spec.connectName + " out of the #if DEBUG block, so that every build calls it.",
 		})
 	} else {
 		r.pass("sdk.connect", platform, spec.connectName+" is called", src.connects[0].File, src.connects[0].Line)
