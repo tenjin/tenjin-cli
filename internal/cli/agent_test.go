@@ -42,6 +42,9 @@ if [ "$n" -ge "${FAKE_AGENT_FIX_ON_RUN:-1}" ]; then
   echo "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Edit\",\"input\":{\"file_path\":\"$PWD/app/src/main/AndroidManifest.xml\"}}]}}"
 fi
 echo '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"tenjin doctor --json ."}}]}}'
+if [ -n "$FAKE_AGENT_SAYS_KEY" ]; then
+  echo "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Bash\",\"input\":{\"command\":\"grep -r $FAKE_AGENT_SAYS_KEY .\"}}]}}"
+fi
 echo "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"Added the INTERNET permission. Key used: $FAKE_AGENT_SAYS_KEY\",\"permission_denials\":[]}"
 `
 
@@ -155,6 +158,7 @@ func TestSetupIntegratesUsingTheAgent(t *testing.T) {
 		"Integrate the Tenjin SDK using Claude Code? [Y/n]",
 		"· edit app/src/main/AndroidManifest.xml",
 		"· run tenjin doctor --json .",
+		"· run grep -r …EFGH .",
 		"1 file changed:",
 		"Claude Code reports:",
 		"Added the INTERNET permission. Key used: …EFGH",

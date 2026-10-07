@@ -417,3 +417,18 @@ func TestVerboseShowsEachRequest(t *testing.T) {
 		t.Errorf("stderr:\n%s", stderr)
 	}
 }
+
+// A project's files cannot write escape sequences to the terminal through
+// the CLI's output.
+func TestProjectTextIsCleanedForPeople(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	evil := strings.Replace(base[build], `applicationId = "com.example.sample"`, "applicationId = \"com.example.sample\x1b]52;c;cHduZWQ=\x07\x1b[1A\"", 1)
+	dir := testproject.Write(t, base.With(testproject.Files{build: evil}))
+	for _, args := range [][]string{{"project", "detect", dir}, {"doctor", dir, "--offline"}} {
+		_, stdout, stderr := newHarness(t).run(args...)
+		if strings.ContainsAny(stdout+stderr, "\x1b\x07") {
+			t.Errorf("%v wrote control characters:\n%q", args, stdout)
+		}
+	}
+}

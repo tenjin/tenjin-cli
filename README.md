@@ -196,7 +196,7 @@ The instructions are part of the binary, so they describe the commands your vers
 | `TENJIN_SDK_KEY` | The SDK key, when the project does not hold it as a string literal |
 | `TENJIN_SDK_KEY_ANDROID`, `TENJIN_SDK_KEY_IOS` | The same, per platform |
 | `TENJIN_SDK_KEY_ANDROID_<VARIANT>` | The same, for another build, such as `TENJIN_SDK_KEY_ANDROID_AMAZON` |
-| `TENJIN_DASHBOARD_URL`, `TENJIN_API_URL`, `TENJIN_COLLECTOR_URL`, `TENJIN_RESOURCE_URL` | Replace one of Tenjin's addresses, for a local or test copy of a service. The session for them is kept apart from production's |
+| `TENJIN_DASHBOARD_URL`, `TENJIN_API_URL`, `TENJIN_COLLECTOR_URL`, `TENJIN_RESOURCE_URL` | Replace one of Tenjin's addresses, for a local or test copy of a service. Each set of addresses keeps its own session, apart from production's; the API and resource addresses need the dashboard's replaced too |
 | `NO_COLOR` | Disable colour and the wordmark |
 | `CLICOLOR_FORCE` | Keep colour when the output is piped, for example into `less -R` |
 

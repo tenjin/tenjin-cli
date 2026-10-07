@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -79,6 +80,7 @@ var frameworkNames = map[project.Framework]string{
 }
 
 func writeProject(w io.Writer, p *project.Project) error {
+	p = forPeople(p)
 	style := render.NewStyler(w)
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s\n", style.Bold("Project   "), p.Root)
@@ -210,4 +212,21 @@ func withFile(what, file string) string {
 		return what
 	}
 	return what + " (" + file + ")"
+}
+
+// forPeople returns a copy of a result with the control characters taken out
+// of every string, for writing to a terminal: names, paths and values in it
+// come from the project's files, which could carry escape sequences. JSON
+// output escapes them itself.
+func forPeople[T any](v *T) *T {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return v
+	}
+	var c T
+	if err := json.Unmarshal(raw, &c); err != nil {
+		return v
+	}
+	render.CleanAll(&c)
+	return &c
 }

@@ -686,13 +686,16 @@ func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
 
 	s.say("\n%s is working on the integration. This can take a few minutes.", s.helper.Name)
 	before := project.Fingerprint(p.Root)
+	// The agent is never given a key, but it can come across one already in
+	// the project; anything shaped like a key is masked, in its progress
+	// and its errors as in its report.
 	result, runErr := s.helper.Run(s.cmd.Context(), task, func(a agent.Action) {
-		s.say("  %s %s %s", s.style.Dim("·"), a.Verb, a.Detail)
+		s.say("  %s %s %s", s.style.Dim("·"), a.Verb, render.Clean(keyLike.ReplaceAllStringFunc(a.Detail, maskKey)))
 	})
 	changed := project.Changed(before, project.Fingerprint(p.Root))
 
 	if runErr != nil {
-		s.say("%s %s did not finish: %v", s.style.Yellow("!"), s.helper.Name, runErr)
+		s.say("%s %s did not finish: %s", s.style.Yellow("!"), s.helper.Name, render.Clean(keyLike.ReplaceAllStringFunc(runErr.Error(), maskKey)))
 	}
 	if len(changed) == 0 {
 		s.say("\nNo files were changed.")
@@ -704,9 +707,7 @@ func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
 	}
 	if result.Summary != "" {
 		s.say("\n%s", s.style.Bold(s.helper.Name+" reports:"))
-		// The agent is never given a key, but it can read one already in
-		// the project; anything shaped like a key is masked.
-		summary := keyLike.ReplaceAllStringFunc(result.Summary, maskKey)
+		summary := render.Clean(keyLike.ReplaceAllStringFunc(result.Summary, maskKey))
 		for _, line := range strings.Split(summary, "\n") {
 			s.say("  %s", line)
 		}

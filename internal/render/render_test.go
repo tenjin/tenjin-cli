@@ -130,3 +130,26 @@ func TestTrueColourTerminalsGetTheExactPalette(t *testing.T) {
 		t.Errorf("Dim = %q", got)
 	}
 }
+
+// Text from a project cannot move the cursor or set the clipboard.
+func TestCleanRemovesControlCharacters(t *testing.T) {
+	type inner struct{ Name string }
+	v := struct {
+		Title  string
+		Items  []inner
+		Params map[string]string
+		Next   *inner
+	}{
+		Title:  "com.evil\x1b]52;c;cHduZWQ=\x07\x1b[2K\x1b[1A spoofed",
+		Items:  []inner{{"a\x1b[32m✓"}},
+		Params: map[string]string{"k": "v\x9b"},
+		Next:   &inner{"tab\tand\nline"},
+	}
+	CleanAll(&v)
+	if strings.ContainsAny(v.Title+v.Items[0].Name+v.Params["k"], "\x1b\x07\x9b") {
+		t.Errorf("left: %q %q %q", v.Title, v.Items[0].Name, v.Params["k"])
+	}
+	if v.Next.Name != "tab\tand\nline" {
+		t.Errorf("Next = %q", v.Next.Name)
+	}
+}

@@ -357,6 +357,7 @@ func plural(n int, noun string) string {
 }
 
 func writeReport(w io.Writer, report *verify.Report, offline bool) error {
+	report = forPeople(report)
 	style, width := render.NewStyler(w), render.TextWidth(w)
 	var b strings.Builder
 	p := report.Project
