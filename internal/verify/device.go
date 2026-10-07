@@ -95,6 +95,23 @@ func (r *runner) checkDevice(t *project.Target, src source) {
 			Detail: detail,
 			Fix:    "Wait 30 seconds, launch the app again, then run this again.",
 		})
+	case platform == project.IOS && refusedUnread(d.Log) != nil:
+		// Whatever it was, a refusal says the key or the app is wrong.
+		req := refusedUnread(d.Log)
+		f := Finding{
+			ID: "device.connect", Severity: Error, Platform: platform,
+			Title:  fmt.Sprintf("Tenjin refused the app's request with HTTP %d", req.Code),
+			Detail: "Without TenjinSDK.debugLogs() the request's contents are not logged. A 401 means Tenjin does not accept the SDK key for this app; a 404, that it has no app with this bundle ID.",
+			Fix:    "Check that the SDK key is this app's, from its page in the Tenjin dashboard. To see the whole answer, call TenjinSDK.debugLogs() inside #if DEBUG … #endif and launch again.",
+		}
+		r.add(f)
+	case platform == project.IOS && hasUnread(d.Log):
+		r.add(Finding{
+			ID: "device.no_debug_logs", Severity: Warning, Platform: platform,
+			Title:  "The SDK sent requests, but their contents are not in the log",
+			Detail: "Without TenjinSDK.debugLogs() the iOS SDK logs only that a request was sent and its HTTP status, so a connect cannot be told from an event.",
+			Fix:    "In the iOS app's launch code, call TenjinSDK.debugLogs() inside #if DEBUG … #endif, launch the app again, then run this again.",
+		})
 	default:
 		r.add(Finding{
 			ID: "device.no_connect", Severity: Warning, Platform: platform,
@@ -326,14 +343,36 @@ func (r *runner) checkProcessed(t *project.Target, src source, c *devicelog.Requ
 	if len(t.Builds) == 0 {
 		keys, _ = r.candidateKeys(src, string(t.Platform), false)
 	}
-	if lookup == nil || installationID == "" || bundle == "" || len(keys) == 0 {
+	unchecked := func(why string) {
+		r.add(Finding{
+			ID: "device.processed.unchecked", Severity: Info, Platform: t.Platform,
+			Title: "Whether Tenjin processed the install was not checked: " + why,
+		})
+	}
+	switch {
+	case lookup == nil:
+		unchecked("the check was offline")
+		return
+	case installationID == "":
+		unchecked("the request carries no installation ID")
+		return
+	case bundle == "":
+		unchecked("the bundle ID is not known")
+		return
+	case len(keys) == 0:
+		unchecked("no SDK key was found to ask with")
 		return
 	}
+	var failed error
 	for _, k := range keys {
 		attribution, err := lookup.LookupDevice(r.ctx, k.Value, bundle, platform, installationID)
 		if err != nil {
-			continue // a key for another platform, or a collector hiccup
+			// A key for another platform, or a collector hiccup: another
+			// key may still answer.
+			failed = err
+			continue
 		}
+		failed = nil
 		if attribution.Known {
 			title := "Tenjin has processed this device's install"
 			if source := firstNonEmpty(attribution.CampaignName, attribution.AdNetwork); source != "" {
@@ -342,6 +381,15 @@ func (r *runner) checkProcessed(t *project.Target, src source, c *devicelog.Requ
 			r.pass("device.processed", t.Platform, title, "", 0)
 			return
 		}
+	}
+	if failed != nil {
+		r.add(Finding{
+			ID: "device.lookup", Severity: Warning, Platform: t.Platform,
+			Title:  "Tenjin could not be asked whether it processed the install",
+			Detail: "The lookup failed: " + failed.Error() + ".",
+			Fix:    "Check the network, and that the SDK key in the project is this app's, then run this again.",
+		})
+		return
 	}
 	r.add(Finding{
 		ID: "device.processed", Severity: Info, Platform: t.Platform,
@@ -428,4 +476,25 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// hasUnread reports whether the log has requests whose contents were not
+// logged.
+func hasUnread(log *devicelog.Log) bool {
+	for _, req := range log.Requests {
+		if req.Unread {
+			return true
+		}
+	}
+	return false
+}
+
+// refusedUnread is the newest unread request Tenjin refused, or nil.
+func refusedUnread(log *devicelog.Log) *devicelog.Request {
+	for i := len(log.Requests) - 1; i >= 0; i-- {
+		if req := &log.Requests[i]; req.Unread && req.Code != 0 && !req.Accepted() {
+			return req
+		}
+	}
+	return nil
 }

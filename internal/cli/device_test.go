@@ -104,7 +104,7 @@ func TestDoctorOfflineReadsTheLogWithoutAskingTenjin(t *testing.T) {
 	if code != 0 || len(h.fake.installsAsked) != 0 || len(h.fake.keysAsked) != 0 {
 		t.Errorf("exit = %d, lookups = %q, key checks = %q", code, h.fake.installsAsked, h.fake.keysAsked)
 	}
-	if !strings.Contains(stdout, "Tenjin accepted the app's connect request") || strings.Contains(stdout, "processed") {
+	if !strings.Contains(stdout, "Tenjin accepted the app's connect request") || !strings.Contains(stdout, "was not checked: the check was offline") {
 		t.Errorf("stdout:\n%s", stdout)
 	}
 }

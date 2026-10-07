@@ -64,7 +64,7 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		return nil
 	}
 	if platform == project.IOS {
-		s.say("On an iPhone connected by cable, the Tenjin CLI launches the app itself to read its console: install a debug build on it first (run it once from Xcode). On a simulator, launch the app yourself. Either way, debug builds must call TenjinSDK.debugLogs(), as the checks above say.")
+		s.say("On an iPhone connected by cable, the Tenjin CLI launches the app itself to read its console: install a debug build on it first (run it once from Xcode), keep the phone unlocked, and answer the tracking prompt if the app shows one. On a simulator, launch the app yourself. Either way, debug builds must call TenjinSDK.debugLogs(), as the checks above say.")
 	}
 
 	for {
@@ -100,9 +100,12 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		}
 
 		report := s.deviceReport(p, log, platform)
-		if connectAccepted(report) && !installProcessed(report) && !s.offline {
+		// Wait only when Tenjin answered that it has not processed the
+		// install yet: a lookup that failed, or could not be made, will not
+		// come right by waiting.
+		if connectAccepted(report) && notProcessedYet(report) {
 			s.say("Tenjin accepted the app's request. Waiting for it to process the install…")
-			for i := 0; i < processingPolls && !installProcessed(report); i++ {
+			for i := 0; i < processingPolls && notProcessedYet(report); i++ {
 				if err := s.env.pause(processingPoll); err != nil {
 					return err
 				}
@@ -149,6 +152,13 @@ func (s *setup) deviceReport(p *project.Project, log *devicelog.Log, platform pr
 func connectAccepted(r *verify.Report) bool {
 	f := deviceFinding(r, "device.connect")
 	return f != nil && f.Severity == verify.Pass
+}
+
+// notProcessedYet is Tenjin's answer that it has not processed the install,
+// as opposed to having done so or not having been asked.
+func notProcessedYet(r *verify.Report) bool {
+	f := deviceFinding(r, "device.processed")
+	return f != nil && f.Severity == verify.Info
 }
 
 func installProcessed(r *verify.Report) bool {

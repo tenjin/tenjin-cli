@@ -34,7 +34,7 @@ func ReadIOSSimulatorSince(ctx context.Context, run Runner, xcrun, udid string, 
 	out, err := run(ctx, xcrun, "simctl", "list", "devices", "booted", "-j")
 	if err != nil {
 		return nil, &Unavailable{
-			Reason: fmt.Sprintf("Xcode's simctl could not list simulators: %v", err),
+			Reason: "Xcode's simctl could not list simulators: " + describe(err),
 			Fix:    "Check that Xcode is installed and selected: run 'xcrun simctl list devices'.",
 		}
 	}
@@ -77,7 +77,7 @@ func ReadIOSSimulatorSince(ctx context.Context, run Runner, xcrun, udid string, 
 	args = append(args, "--style", "compact", "--predicate", `eventMessage CONTAINS "`+iosTag+`"`)
 	log, err := run(ctx, xcrun, args...)
 	if err != nil {
-		return nil, &Unavailable{Reason: fmt.Sprintf("Could not read the log of the simulator %s: %v", udid, err)}
+		return nil, &Unavailable{Reason: fmt.Sprintf("Could not read the log of the simulator %s: %s", udid, describe(err))}
 	}
 	return log, nil
 }

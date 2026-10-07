@@ -356,6 +356,10 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	if err == nil {
 		return 0
 	}
+	// Whatever a Ctrl-C cut short failed because of it.
+	if ctx.Err() != nil {
+		err = errInterrupted()
+	}
 	e := clierr.From(err)
 	writeError(stderr, e, wantsJSON(args))
 	return e.Kind.ExitCode()
