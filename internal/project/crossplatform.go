@@ -9,17 +9,20 @@ import (
 )
 
 var (
-	flutterSDK      = regexp.MustCompile(`(?m)^\s+sdk:\s*flutter\s*$`)
-	pubspecTenjin   = regexp.MustCompile(`(?m)^\s+tenjin_plugin\s*:`)
-	pubLockTenjin   = regexp.MustCompile(`(?s)\n  tenjin_plugin:\n.*?\n    version: "([^"]+)"`)
-	capacitorAppID  = regexp.MustCompile(`["']?appId["']?\s*:\s*["']([^"']+)["']`)
-	cordovaWidget   = regexp.MustCompile(`<widget[^>]*\sid="([^"]+)"`)
-	unityIdentifier = regexp.MustCompile(`(?m)^  applicationIdentifier:\n((?:    .+\n)+)`)
-	unityIDLine     = regexp.MustCompile(`(?m)^    (\w+): (.+)$`)
-	unityGitTag     = regexp.MustCompile(`#v?([0-9][0-9A-Za-z.\-]*)$`)
-	iniBundleID     = regexp.MustCompile(`(?m)^BundleIdentifier=(.+)$`)
-	iniPackageName  = regexp.MustCompile(`(?m)^PackageName=(.+)$`)
-	upluginVersion  = regexp.MustCompile(`"VersionName"\s*:\s*"([^"]+)"`)
+	flutterSDK    = regexp.MustCompile(`(?m)^\s+sdk:\s*flutter\s*$`)
+	pubspecTenjin = regexp.MustCompile(`(?m)^\s+tenjin_plugin\s*:`)
+	// tenjin_sdk is a community plugin (github.com/thize/flutter_tenjin_sdk),
+	// not Tenjin's.
+	pubspecCommunityTenjin = regexp.MustCompile(`(?m)^\s+tenjin_sdk\s*:\s*\^?([0-9][\w.+-]*)?`)
+	pubLockTenjin          = regexp.MustCompile(`(?s)\n  tenjin_plugin:\n.*?\n    version: "([^"]+)"`)
+	capacitorAppID         = regexp.MustCompile(`["']?appId["']?\s*:\s*["']([^"']+)["']`)
+	cordovaWidget          = regexp.MustCompile(`<widget[^>]*\sid="([^"]+)"`)
+	unityIdentifier        = regexp.MustCompile(`(?m)^  applicationIdentifier:\n((?:    .+\n)+)`)
+	unityIDLine            = regexp.MustCompile(`(?m)^    (\w+): (.+)$`)
+	unityGitTag            = regexp.MustCompile(`#v?([0-9][0-9A-Za-z.\-]*)$`)
+	iniBundleID            = regexp.MustCompile(`(?m)^BundleIdentifier=(.+)$`)
+	iniPackageName         = regexp.MustCompile(`(?m)^PackageName=(.+)$`)
+	upluginVersion         = regexp.MustCompile(`"VersionName"\s*:\s*"([^"]+)"`)
 )
 
 // packageJSON is the part of package.json detection needs.
@@ -51,11 +54,15 @@ func (d *detector) nativeTargets() {
 	if d.isDir("android") {
 		if t, ok := d.androidTarget("android"); ok {
 			d.p.Targets = append(d.p.Targets, t)
+			// Some apps add the native SDK straight to the native project
+			// instead of through the framework's package.
+			d.androidIntegration(t.Android)
 		}
 	}
 	if d.isDir("ios") {
 		if t, ok := d.iosTarget("ios"); ok {
 			d.p.Targets = append(d.p.Targets, t)
+			d.iosIntegration(t.IOS)
 		}
 	}
 }
@@ -74,9 +81,15 @@ func (d *detector) flutter() bool {
 			i.Version = m[1]
 		}
 		d.found(i)
+	} else if m := pubspecCommunityTenjin.FindStringSubmatch(pubspec); m != nil {
+		d.found(Integration{Package: CommunityFlutterPackage, Version: m[1], Source: "pubspec.yaml"})
 	}
 	return true
 }
+
+// CommunityFlutterPackage is how a project's dependency on the community
+// tenjin_sdk plugin is recorded.
+const CommunityFlutterPackage = "tenjin_sdk (community plugin)"
 
 func (d *detector) reactNative() bool {
 	pkg, ok := d.packageJSON()

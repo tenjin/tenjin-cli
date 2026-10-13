@@ -73,8 +73,13 @@ func (s frameworkSpec) ownsPackage(pkg string) bool {
 var nativeSpecs = map[project.Platform]frameworkSpec{
 	project.Android: {
 		exts: []string{".kt", ".java"},
+		// The app module's code, and that of the modules it depends on.
 		sourceDirs: func(t *project.Target) []string {
-			return []string{t.Android.ModuleDir + "/src"}
+			dirs := []string{t.Android.ModuleDir + "/src"}
+			for _, m := range t.Android.LibraryModules {
+				dirs = append(dirs, m+"/src")
+			}
+			return dirs
 		},
 		packages:    []string{"com.tenjin:android-sdk", "tenjin.aar", "tenjin.jar"},
 		installFix:  `Add implementation("com.tenjin:android-sdk:` + sdkVersionToken + `") to the app module's dependencies, and make sure mavenCentral() is a repository.`,

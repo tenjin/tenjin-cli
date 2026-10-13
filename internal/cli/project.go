@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -58,6 +59,9 @@ func loadProject(args []string) (*project.Project, error) {
 	}
 	if p.Framework == project.Unknown {
 		e := clierr.New(clierr.NotFound, "no mobile project found in %s", p.Root)
+		if below := project.Below(p.Root); len(below) > 0 {
+			return nil, e.WithHint("There is one in %s: pass its path, such as %s.", strings.Join(below, ", "), filepath.Join(dir, below[0]))
+		}
 		if len(p.Notes) > 0 {
 			return nil, e.WithHint("%s", strings.Join(p.Notes, "\n"))
 		}

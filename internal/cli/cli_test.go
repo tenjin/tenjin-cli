@@ -2,6 +2,8 @@ package cli
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -430,5 +432,23 @@ func TestProjectTextIsCleanedForPeople(t *testing.T) {
 		if strings.ContainsAny(stdout+stderr, "\x1b\x07") {
 			t.Errorf("%v wrote control characters:\n%q", args, stdout)
 		}
+	}
+}
+
+// A repository that keeps its app in a folder of its own is pointed to it.
+func TestAProjectInAFolderIsPointedTo(t *testing.T) {
+	root := t.TempDir()
+	for name, content := range testproject.Flutter() {
+		path := filepath.Join(root, "mobile", filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	code, _, stderr := newHarness(t).run("doctor", root, "--offline")
+	if code != 5 || !strings.Contains(stderr, "There is one in mobile") {
+		t.Errorf("exit = %d, stderr = %q", code, stderr)
 	}
 }

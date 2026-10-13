@@ -666,3 +666,58 @@ func TestFlutterReleaseBuildsAreShrunk(t *testing.T) {
 		t.Errorf("checked with shrinking off: %+v", f)
 	}
 }
+
+// Tenjin used from a library module the app depends on is the app's
+// integration: the build merges the module's dependencies, code and
+// manifest into the app.
+func TestTenjinInALibraryModule(t *testing.T) {
+	base := testproject.AndroidNative()
+	const (
+		build    = "app/build.gradle.kts"
+		activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	)
+	files := testproject.Files{}
+	for name, content := range base {
+		files[name] = content
+	}
+	files[build] = strings.Replace(base[build], `implementation("com.tenjin:android-sdk:2.0.0")`, `implementation(project(":ads"))`, 1)
+	files["ads/build.gradle.kts"] = "plugins { id(\"com.android.library\") }\ndependencies {\n    implementation(\"com.tenjin:android-sdk:2.0.0\")\n}\n"
+	files["ads/src/main/java/com/example/ads/Ads.kt"] = base[activity]
+	files[activity] = "package com.example.sample\nclass MainActivity : android.app.Activity()\n"
+	r := run(t, files, verify.Options{})
+	for _, id := range []string{"sdk.dependency", "sdk.init", "sdk.connect"} {
+		if f := expect(t, r, id, project.Android, verify.Pass); !strings.HasPrefix(f.File, "ads/") {
+			t.Errorf("%s at %s", id, f.File)
+		}
+	}
+}
+
+// Checks that came from public projects using the SDK.
+func TestShapesFromRealProjects(t *testing.T) {
+	android := testproject.AndroidNative()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+
+	// A Capacitor app with the native Android SDK added straight to android/.
+	capacitor := testproject.Files{
+		"package.json":          `{"dependencies": {"@capacitor/core": "6.0.0", "@capacitor/android": "6.0.0"}}`,
+		"capacitor.config.json": `{"appId": "com.example.sample"}`,
+	}
+	for name, content := range android {
+		capacitor["android/"+name] = content
+	}
+	r := run(t, capacitor, verify.Options{})
+	expect(t, r, "sdk.native_in_wrapper", "", verify.Info)
+	expect(t, r, "sdk.dependency", project.Android, verify.Pass)
+	expect(t, r, "sdk.connect", project.Android, verify.Pass)
+
+	// The community tenjin_sdk Flutter plugin is named as such.
+	flutter := testproject.Flutter()
+	community := flutter.With(testproject.Files{"pubspec.yaml": strings.Replace(flutter["pubspec.yaml"], "tenjin_plugin:", "tenjin_sdk:", 1)})
+	if f := expect(t, run(t, community, verify.Options{}), "sdk.dependency", "", verify.Warning); !strings.Contains(f.Title, "community plugin") {
+		t.Errorf("title = %q", f.Title)
+	}
+
+	// Kotlin's by lazy keeps the receiver too.
+	lazy := strings.Replace(android[activity], `val tenjin = TenjinSDK.getInstance(this, "`+testproject.Key+`")`, `val tenjin by lazy { TenjinSDK.getInstance(this, "`+testproject.Key+`") }`, 1)
+	expect(t, run(t, android.With(testproject.Files{activity: lazy}), verify.Options{}), "sdk.connect", project.Android, verify.Pass)
+}
