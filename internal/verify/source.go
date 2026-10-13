@@ -264,6 +264,17 @@ func (r *runner) scanSource(spec frameworkSpec, dirs []string) source {
 
 // checkCalls reports whether the SDK is initialised and connected.
 func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Platform) {
+	// The SDK may come with a published library whose code is not in the
+	// project: if so, its calls may be made in there, out of sight.
+	if lib := r.publishedLibrary(spec); lib != "" && (len(src.inits) == 0 || len(src.connects) == 0) {
+		r.add(Finding{
+			ID: "sdk.init", Severity: Info, Platform: platform,
+			Title:  "The SDK comes with " + lib + ", whose code is not in the project, so whether it initialises and connects was not checked",
+			Detail: "If the library calls " + spec.initName + " and " + spec.connectName + " itself, nothing is missing here; if it leaves them to the app, they are.",
+			Fix:    "Check the library's instructions; if the app is to make the calls, " + strings.ToLower(spec.connectFix[:1]) + spec.connectFix[1:],
+		})
+		return
+	}
 	if len(src.inits) == 0 {
 		r.add(Finding{
 			ID: "sdk.init", Severity: Error, Platform: platform,
@@ -352,4 +363,16 @@ func allDebugOnly(calls []call) bool {
 		}
 	}
 	return len(calls) > 0
+}
+
+// publishedLibrary names the published library the SDK comes with, when the
+// app does not declare it itself and the library's code is not in the
+// project; "" otherwise.
+func (r *runner) publishedLibrary(spec frameworkSpec) string {
+	for _, i := range r.p.Tenjin {
+		if spec.ownsPackage(i.Package) && i.Through != "" && !i.Local {
+			return i.Through
+		}
+	}
+	return ""
 }

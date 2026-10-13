@@ -206,6 +206,13 @@ func (s *setup) run() error {
 	if err := writeProject(s.out, p); err != nil {
 		return err
 	}
+	if lib := p.Library; lib != nil {
+		e := clierr.New(clierr.Usage, "this is a %s that wraps the Tenjin SDK, not an app, so there is no app to set up", project.LibraryKindName(lib.Kind))
+		if lib.Example != "" {
+			return e.WithHint("Run tenjin setup %s for the example app, or in an app that uses the library.", lib.Example)
+		}
+		return e.WithHint("Run tenjin setup in an app that uses the library.")
+	}
 	if !p.Supported {
 		return clierr.New(clierr.NotFound, "%s", strings.Join(p.Notes, " "))
 	}

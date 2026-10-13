@@ -132,7 +132,7 @@ Each problem comes with a fix that can be applied as written: where a dependency
 
 For Unity it also checks that the External Dependency Manager is there to add Tenjin's Android libraries, finds the `TenjinObject` component in scenes as well as calls in code, reads a key kept in a C# constant, and checks that a build script points SKAdNetwork postbacks at Tenjin, which the Unity package does not do.
 
-The key check sends one request to Tenjin's collector and no event. `--offline` skips it and the registry lookup. Unreal projects are detected but not checked yet.
+The key check sends one request to Tenjin's collector and no event. `--offline` skips it and the registry lookup. Unreal projects are detected but not checked yet. A library that wraps the SDK (a pod, a Swift package, an Android library, a Flutter plugin, a React Native package) is reported as one: what an app needs is checked in the app that uses it, and an app that gets the SDK through such a library has the library's own code read for the calls when it is in the project.
 
 
 It also reports, for each feature beyond app opens, whether the project sends it to Tenjin: ad revenue per ad network, purchases, subscriptions and the rest, by the SDK's own calls. With `--features`, a chosen feature that nothing sends is a warning; without it, a feature the project suggests is a suggestion, and one it does not suggest is not mentioned.

@@ -448,7 +448,7 @@ func TestAProjectInAFolderIsPointedTo(t *testing.T) {
 		}
 	}
 	code, _, stderr := newHarness(t).run("doctor", root, "--offline")
-	if code != 5 || !strings.Contains(stderr, "There is one in mobile") {
+	if code != 5 || !strings.Contains(stderr, "Found: mobile (flutter)") {
 		t.Errorf("exit = %d, stderr = %q", code, stderr)
 	}
 }
