@@ -29,7 +29,7 @@ func TestLibrariesThatWrapTheSDK(t *testing.T) {
 			"package.json": `{"name": "rn-ads-kit", "peerDependencies": {"react-native": "*"}, "dependencies": {"react-native-tenjin": "^1.7.0"}}`,
 		}, "react_native_library", "react-native-tenjin 1.7.0"},
 		{"Android library", testproject.Files{
-			"settings.gradle.kts": "include(\":ads\")\n",
+			"settings.gradle.kts":  "include(\":ads\")\n",
 			"ads/build.gradle.kts": "plugins { id(\"com.android.library\") }\ndependencies { implementation(\"com.tenjin:android-sdk:2.0.0\") }\n",
 		}, "android_library", "com.tenjin:android-sdk 2.0.0"},
 	}
