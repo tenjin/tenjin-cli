@@ -656,8 +656,8 @@ func (d *detector) throughPods(info *IOSInfo) bool {
 
 // podLockParent is a pod in Podfile.lock that depends on TenjinSDK:
 //
-//	- SomeAds (1.2.0):
-//	  - TenjinSDK (~> 1.15)
+//   - SomeAds (1.2.0):
+//   - TenjinSDK (~> 1.15)
 var podLockParent = regexp.MustCompile(`(?m)^  - ([\w/.+-]+) \([^)]*\):\n(?:    - .*\n)*?    - TenjinSDK\b`)
 
 var rubyComment = regexp.MustCompile(`(?m)^\s*#.*$`)
