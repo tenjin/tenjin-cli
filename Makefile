@@ -31,7 +31,7 @@ fmt-check:
 # Keep the version in sync with golangci-lint-action's `version` in
 # .github/workflows/linter.yaml so local and CI enforce the same rules.
 lint: fmt-check
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.0 run
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run
 
 GORELEASER := go run github.com/goreleaser/goreleaser/v2@v2.18.2
 
