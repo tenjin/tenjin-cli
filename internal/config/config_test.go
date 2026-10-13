@@ -37,7 +37,7 @@ func TestAnOverriddenAddressGetsItsOwnSession(t *testing.T) {
 		t.Errorf("SDK keys page = %q", got)
 	}
 
-	for _, bad := range []string{"track.example.com", "ftp://example.com", "http://"} {
+	for _, bad := range []string{"track.example.com", "ftp://example.com", "http://", "http://api.example.com", "http://10.0.0.1:8080"} {
 		if _, err := Resolve(env(map[string]string{"TENJIN_API_URL": bad, "TENJIN_DASHBOARD_URL": "http://127.0.0.1:1"})); err == nil || !strings.Contains(err.Error(), "TENJIN_API_URL") {
 			t.Errorf("%q: err = %v", bad, err)
 		}
@@ -54,5 +54,19 @@ func TestEachSetOfAddressesHasItsOwnSession(t *testing.T) {
 	}
 	if _, err := Resolve(env(map[string]string{"TENJIN_API_URL": "http://127.0.0.1:2"})); err == nil || !strings.Contains(err.Error(), "TENJIN_DASHBOARD_URL") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// A token or an SDK key goes to these addresses, so plain http is accepted
+// only where nobody else on the network can read it.
+func TestPlainHTTPOnlyOnThisMachine(t *testing.T) {
+	for _, ok := range []string{"http://127.0.0.1:3999", "http://localhost:3000", "http://[::1]:8080", "http://tracker.localhost", "https://api.example.com/v2"} {
+		if _, err := Resolve(env(map[string]string{"TENJIN_DASHBOARD_URL": "https://dashboard.example.com", "TENJIN_API_URL": ok})); err != nil {
+			t.Errorf("%q: %v", ok, err)
+		}
+	}
+	_, err := Resolve(env(map[string]string{"TENJIN_COLLECTOR_URL": "http://track.example.com"}))
+	if err == nil || !strings.Contains(err.Error(), "must be an https address") {
+		t.Errorf("plain http collector: err = %v", err)
 	}
 }
