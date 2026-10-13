@@ -27,9 +27,5 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v8
         with:
-          version: v2.13.0
-          # Built with this job's Go, as `make lint` builds it locally: a
-          # prebuilt binary from an older Go cannot read what a newer Go
-          # toolchain writes, and fails on every package.
-          install-mode: goinstall
+          version: v2.14.0
           args: --timeout=5m
