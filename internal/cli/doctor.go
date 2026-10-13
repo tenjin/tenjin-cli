@@ -370,7 +370,11 @@ func writeReport(w io.Writer, report *verify.Report, offline bool) error {
 	style, width := render.NewStyler(w), render.TextWidth(w)
 	var b strings.Builder
 	p := report.Project
-	fmt.Fprintf(&b, "%s %s (%s)\n", style.Bold("Checking"), p.Root, frameworkNames[p.Framework])
+	kind := frameworkNames[p.Framework]
+	if p.Library != nil {
+		kind = project.LibraryKindName(p.Library.Kind)
+	}
+	fmt.Fprintf(&b, "%s %s (%s)\n", style.Bold("Checking"), p.Root, kind)
 
 	// What the device log says is its own section: it is about the build
 	// that ran, which is not always the project on disk.
@@ -397,6 +401,9 @@ func writeReport(w io.Writer, report *verify.Report, offline bool) error {
 			continue
 		}
 		title := section.title
+		if p.Library != nil && section.platform == "" && !section.device {
+			title = "Library"
+		}
 		if t := p.Target(section.platform); t != nil && t.BundleID != "" && !section.device {
 			title += " · " + t.BundleID
 		}

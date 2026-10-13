@@ -3,6 +3,7 @@ package project
 import (
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -83,9 +84,46 @@ func (d *detector) flutter() bool {
 		d.found(i)
 	} else if m := pubspecCommunityTenjin.FindStringSubmatch(pubspec); m != nil {
 		d.found(Integration{Package: CommunityFlutterPackage, Version: m[1], Source: "pubspec.yaml"})
+	} else {
+		d.flutterThroughPackage(pubspec)
 	}
 	return true
 }
+
+// pubspecPathDependency is a dependency taken from a folder:
+//
+//	my_ads:
+//	  path: ../my_ads
+var pubspecPathDependency = regexp.MustCompile(`(?m)^[ \t]+([\w]+):[ \t]*\n[ \t]+path:[ \t]*["']?([^"'\n]+?)["']?[ \t]*$`)
+
+// flutterThroughPackage records the SDK when the app gets tenjin_plugin
+// through another package: a local one, whose code is read for the calls,
+// or a published one, which pubspec.lock shows.
+func (d *detector) flutterThroughPackage(pubspec string) {
+	version, transitive := "", false
+	if m := pubLockTransitive.FindStringSubmatch(d.read("pubspec.lock")); m != nil {
+		version, transitive = m[1], true
+	} else if m := pubLockTenjin.FindStringSubmatch(d.read("pubspec.lock")); m != nil {
+		version = m[1]
+	}
+	for _, m := range pubspecPathDependency.FindAllStringSubmatch(pubspec, -1) {
+		dir := path.Clean(m[2])
+		if pubspecTenjin.MatchString(d.read(path.Join(dir, "pubspec.yaml"))) {
+			d.found(Integration{Package: "tenjin_plugin (through " + m[1] + ")", Version: version, Source: path.Join(dir, "pubspec.yaml"), Through: m[1], Local: true})
+			d.p.LibraryCode = append(d.p.LibraryCode, path.Join(dir, "lib"))
+			return
+		}
+	}
+	// Only a transitive entry: a direct one the pubspec no longer has is a
+	// lock out of date.
+	if transitive {
+		d.found(Integration{Package: "tenjin_plugin (through another package)", Version: version, Source: "pubspec.lock", Through: "another package"})
+	}
+}
+
+// pubLockTransitive is tenjin_plugin in pubspec.lock as another package's
+// dependency.
+var pubLockTransitive = regexp.MustCompile(`(?m)^  tenjin_plugin:\n    dependency: transitive\n(?: {4,}.*\n)*? {4}version: "([^"]+)"`)
 
 // CommunityFlutterPackage is how a project's dependency on the community
 // tenjin_sdk plugin is recorded.
@@ -113,6 +151,8 @@ func (d *detector) reactNative() bool {
 	}
 	if v, ok := pkg.dependency("react-native-tenjin"); ok {
 		d.found(Integration{Package: "react-native-tenjin", Version: v, Source: "package.json"})
+	} else {
+		d.reactNativeThroughPackage(pkg)
 	}
 	return true
 }
@@ -155,6 +195,36 @@ func (d *detector) expoTargets() {
 	}
 	if id := app.Expo.IOS.BundleIdentifier; id != "" {
 		d.p.Targets = append(d.p.Targets, Target{Platform: IOS, BundleID: id, Source: "app.json"})
+	}
+}
+
+// reactNativeThroughPackage records the SDK when the app gets
+// react-native-tenjin through another package: a local one (file:, link:,
+// portal:), whose code is read, or a published one, which the lockfile
+// shows.
+func (d *detector) reactNativeThroughPackage(pkg packageJSON) {
+	for name, spec := range pkg.Dependencies {
+		for _, scheme := range []string{"file:", "link:", "portal:"} {
+			if !strings.HasPrefix(spec, scheme) {
+				continue
+			}
+			dir := path.Clean(strings.TrimPrefix(spec, scheme))
+			var local packageJSON
+			if json.Unmarshal([]byte(d.read(path.Join(dir, "package.json"))), &local) != nil {
+				continue
+			}
+			if v, ok := local.dependency("react-native-tenjin"); ok {
+				d.found(Integration{Package: "react-native-tenjin (through " + name + ")", Version: v, Source: path.Join(dir, "package.json"), Through: name, Local: true})
+				d.p.LibraryCode = append(d.p.LibraryCode, dir)
+				return
+			}
+		}
+	}
+	for _, lock := range []string{"package-lock.json", "yarn.lock", "pnpm-lock.yaml"} {
+		if strings.Contains(d.read(lock), "react-native-tenjin") {
+			d.found(Integration{Package: "react-native-tenjin (through another package)", Source: lock, Through: "another package"})
+			return
+		}
 	}
 }
 

@@ -163,6 +163,10 @@ func (r *runner) run() {
 			Title: "The device log is from " + platformName(d.Platform) + ", and this project does not build for " + platformName(d.Platform),
 		})
 	}
+	if r.p.Library != nil {
+		r.checkLibrary(r.p.Library)
+		return
+	}
 	framework := r.p.Framework
 	if wrapper, ok := wrapperSpecs[framework]; ok && !r.declares(wrapper) && r.declaresNative() {
 		// The native SDKs added straight to the native projects, with no
@@ -181,7 +185,9 @@ func (r *runner) run() {
 			t := &r.p.Targets[i]
 			spec := nativeSpecs[t.Platform]
 			r.checkDependency(spec, t.Platform)
-			src := r.scanSource(spec, spec.sourceDirs(t))
+			// The code of a local library the app gets the SDK through is
+			// the app's too.
+			src := r.scanSource(spec, append(spec.sourceDirs(t), r.p.LibraryCode...))
 			r.checkCalls(spec, src, t.Platform)
 			r.checkPlatform(spec, t, src)
 			r.checkKey(t, src)
@@ -190,7 +196,7 @@ func (r *runner) run() {
 		// One shared codebase drives both platforms.
 		spec := wrapperSpecs[r.p.Framework]
 		r.checkDependency(spec, "")
-		src := r.scanSource(spec, spec.sourceDirs(nil))
+		src := r.scanSource(spec, append(spec.sourceDirs(nil), r.p.LibraryCode...))
 		r.checkCalls(spec, src, "")
 		native := false
 		for i := range r.p.Targets {
@@ -241,21 +247,27 @@ func (r *runner) checkPlatform(spec frameworkSpec, t *project.Target, src source
 
 // checkDependency reports whether the SDK package is declared. For native
 // projects platform selects which SDK to look for; wrappers pass "".
-// declares reports whether the project declares this spec's package.
+// declares reports whether the project declares this spec's package. The
+// community Flutter plugin counts as Flutter's: it is checked as one, and
+// named.
 func (r *runner) declares(spec frameworkSpec) bool {
 	for _, i := range r.p.Tenjin {
-		if spec.ownsPackage(i.Package) {
+		if spec.ownsPackage(i.Package) || (i.Package == project.CommunityFlutterPackage && spec.ownsPackage("tenjin_plugin")) {
 			return true
 		}
 	}
 	return false
 }
 
-// declaresNative reports whether the project declares a native SDK.
+// declaresNative reports whether the project's native projects declare a
+// native SDK themselves. One a framework plugin brings (Flutter and React
+// Native plugins are pods) does not count: it is the plugin's.
 func (r *runner) declaresNative() bool {
 	for _, spec := range nativeSpecs {
-		if r.declares(spec) {
-			return true
+		for _, i := range r.p.Tenjin {
+			if spec.ownsPackage(i.Package) && i.Through == "" {
+				return true
+			}
 		}
 	}
 	return false

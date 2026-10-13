@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -57,11 +56,8 @@ func loadProject(args []string) (*project.Project, error) {
 	if err != nil {
 		return nil, clierr.Wrap(clierr.NotFound, err, "cannot read %s: %v", dir, err)
 	}
-	if p.Framework == project.Unknown {
+	if p.Framework == project.Unknown && p.Library == nil {
 		e := clierr.New(clierr.NotFound, "no mobile project found in %s", p.Root)
-		if below := project.Below(p.Root); len(below) > 0 {
-			return nil, e.WithHint("There is one in %s: pass its path, such as %s.", strings.Join(below, ", "), filepath.Join(dir, below[0]))
-		}
 		if len(p.Notes) > 0 {
 			return nil, e.WithHint("%s", strings.Join(p.Notes, "\n"))
 		}
@@ -88,6 +84,20 @@ func writeProject(w io.Writer, p *project.Project) error {
 	style := render.NewStyler(w)
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s\n", style.Bold("Project   "), p.Root)
+	// A library is not an app: what an app would show here is the example
+	// app's, which is a project of its own.
+	if lib := p.Library; lib != nil {
+		name := project.LibraryKindName(lib.Kind)
+		if lib.Name != "" {
+			name = lib.Name + ", a " + name
+		}
+		fmt.Fprintf(&b, "%s %s that wraps %s %s\n", style.Bold("Library   "), name, strings.TrimSpace(lib.Tenjin.Package+" "+lib.Tenjin.Version), style.Dim("("+lib.Source+")"))
+		if lib.Example != "" {
+			fmt.Fprintf(&b, "%s %s %s\n", style.Bold("Example   "), lib.Example, style.Dim("(an app of its own: pass its path to see it)"))
+		}
+		_, err := io.WriteString(w, b.String())
+		return err
+	}
 	fmt.Fprintf(&b, "%s %s\n", style.Bold("Framework "), style.Accent(frameworkNames[p.Framework]))
 
 	if len(p.Tenjin) == 0 {

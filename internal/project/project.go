@@ -59,7 +59,14 @@ type Project struct {
 	// Features are the parts of the SDK an integration can include, each
 	// suggested or not from what the project already does.
 	Features []Feature `json:"features"`
-	Notes    []string  `json:"notes"`
+	// LibraryCode are the folders of local libraries the app gets the SDK
+	// through (a pod or a package by path), relative to the root and
+	// possibly above it: their calls are the app's.
+	LibraryCode []string `json:"-"`
+	// Library is set when the project is a library that wraps the Tenjin
+	// SDK rather than an app.
+	Library *Library `json:"library,omitempty"`
+	Notes   []string `json:"notes"`
 	// Omitted are the builds KeepBuilds left out: their keys and
 	// placeholders are not this run's to settle.
 	Omitted []Build `json:"-"`
@@ -128,6 +135,11 @@ type Integration struct {
 	Package string `json:"package"`
 	Version string `json:"version,omitempty"`
 	Source  string `json:"source"`
+	// Through names the library the SDK comes with, when the app does not
+	// declare it itself. Local is true when that library's code is in the
+	// project, where its calls can be read.
+	Through string `json:"through,omitempty"`
+	Local   bool   `json:"local,omitempty"`
 }
 
 // Build returns the build with this ID, or nil.
@@ -232,12 +244,51 @@ func Detect(dir string) (*Project, error) {
 
 	p := &Project{Root: root, Framework: Unknown, Targets: []Target{}, Tenjin: []Integration{}, AdSDKs: []AdSDK{}, Features: []Feature{}, Notes: []string{}}
 	d := &detector{root: root, p: p}
-	if d.detect() {
+	lib := d.library()
+	matched := d.detect()
+	if matched {
 		d.finish()
-	} else {
+	}
+	if lib == nil && (!matched || len(p.Targets) == 0) {
+		lib = d.androidLibrary()
+	}
+	if lib != nil {
+		lib.Example = d.exampleApp()
+		p.Library = lib
+		p.Supported = true
+		return p, nil
+	}
+	if !matched {
 		d.suggestSubprojects()
 	}
 	return p, nil
+}
+
+// exampleApp finds the app a library's repository keeps to show it, in one
+// of the folders such apps are usually in.
+func (d *detector) exampleApp() string {
+	// Names as the folder has them: a file system that ignores case would
+	// otherwise answer for Example when asked about example.
+	entries, err := os.ReadDir(d.root)
+	if err != nil {
+		return ""
+	}
+	has := map[string]bool{}
+	for _, e := range entries {
+		if e.IsDir() {
+			has[e.Name()] = true
+		}
+	}
+	for _, name := range []string{"example", "Example", "sample", "Sample", "demo", "Demo", "app"} {
+		if !has[name] {
+			continue
+		}
+		sub := &detector{root: d.path(name), p: &Project{}}
+		if sub.wrapper() || sub.native() {
+			return name
+		}
+	}
+	return ""
 }
 
 // detect tries each kind of project in turn and reports whether one matched.
