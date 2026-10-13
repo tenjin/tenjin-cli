@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 )
@@ -58,8 +59,12 @@ func Resolve(getenv func(string) string) (Endpoints, error) {
 		if value == "" {
 			continue
 		}
-		if u, err := url.Parse(value); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		u, err := url.Parse(value)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return Endpoints{}, fmt.Errorf("%s must be an http or https address, not %q", override.variable, value)
+		}
+		if u.Scheme == "http" && !loopback(u.Hostname()) {
+			return Endpoints{}, fmt.Errorf("%s must be an https address: plain http is for this machine only (127.0.0.1, localhost), not %q", override.variable, value)
 		}
 		*override.address = value
 		e.Name = "custom"
@@ -72,6 +77,16 @@ func Resolve(getenv func(string) string) (Endpoints, error) {
 		e.Name = "custom-" + hex.EncodeToString(sum[:4])
 	}
 	return e, nil
+}
+
+// loopback reports whether host is this machine, where plain http cannot be
+// read by anyone else on the network.
+func loopback(host string) bool {
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // SDKKeysURL is the dashboard page that shows an app's SDK keys, in the
