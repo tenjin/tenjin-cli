@@ -261,7 +261,7 @@ func (r *runner) checkAutoTracking(code *tenjinCode) {
 		return
 	}
 	if t := r.p.Target(project.Android); t != nil && t.Android != nil {
-		deps := r.readRel(t.Android.BuildFile) + r.readRel(t.Android.VersionCatalog)
+		deps := r.androidDeps(t)
 		if !strings.Contains(deps, "com.android.billingclient") && !strings.Contains(deps, "billing-ktx") {
 			r.add(Finding{
 				ID: "feature.auto_tracking.billing", Severity: Warning, Platform: project.Android,

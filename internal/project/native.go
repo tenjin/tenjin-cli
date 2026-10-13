@@ -202,6 +202,7 @@ func (d *detector) androidTarget(rel string) (Target, bool) {
 	if manifest := path.Join(info.ModuleDir, "src/main/AndroidManifest.xml"); d.exists(manifest) {
 		info.Manifest = manifest
 	}
+	info.LibraryModules = d.libraryModules(info.ModuleDir, content)
 
 	d.androidShape(info, content)
 
@@ -292,7 +293,14 @@ func countModules(buildFiles []string, d *detector) int {
 
 // androidIntegration records how the Tenjin Android SDK is declared, if it is.
 func (d *detector) androidIntegration(info *AndroidInfo) {
-	for _, rel := range dedupe([]string{info.BuildFile, info.VersionCatalog}) {
+	files := []string{info.BuildFile, info.VersionCatalog}
+	for _, m := range info.LibraryModules {
+		files = append(files, moduleBuildFile(d, m))
+	}
+	for _, rel := range dedupe(files) {
+		if rel == "" {
+			continue
+		}
 		content := stripComments(d.read(rel))
 		loc := tenjinMaven.FindStringSubmatchIndex(content)
 		if loc == nil {
@@ -317,6 +325,47 @@ func (d *detector) androidIntegration(info *AndroidInfo) {
 			return
 		}
 	}
+}
+
+// projectDependency is a dependency on another module of the build:
+// project(":ads"), project(path = ":libs:ads").
+var projectDependency = regexp.MustCompile(`project\(\s*(?:path\s*[:=]\s*)?["']:([\w.:-]+)["']`)
+
+// libraryModules follows a module's dependencies on the build's own
+// modules, and theirs, a few levels down. Module :libs:ads is in libs/ads
+// under the folder the app module sits in.
+func (d *detector) libraryModules(moduleDir, content string) []string {
+	root := path.Dir(moduleDir)
+	var found []string
+	seen := map[string]bool{moduleDir: true}
+	var follow func(content string, depth int)
+	follow = func(content string, depth int) {
+		if depth > 3 {
+			return
+		}
+		for _, m := range projectDependency.FindAllStringSubmatch(content, -1) {
+			dir := path.Join(root, strings.ReplaceAll(m[1], ":", "/"))
+			build := moduleBuildFile(d, dir)
+			if seen[dir] || build == "" {
+				continue
+			}
+			seen[dir] = true
+			found = append(found, dir)
+			follow(stripComments(d.read(build)), depth+1)
+		}
+	}
+	follow(content, 0)
+	return found
+}
+
+// moduleBuildFile is a module's build file, or "".
+func moduleBuildFile(d *detector, dir string) string {
+	for _, name := range []string{"build.gradle.kts", "build.gradle"} {
+		if f := path.Join(dir, name); d.exists(f) {
+			return f
+		}
+	}
+	return ""
 }
 
 var (

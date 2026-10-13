@@ -15,9 +15,10 @@ import (
 // not. Line breaks are never touched, so line numbers stay right.
 
 var (
-	// Kotlin `val tenjin = TenjinSDK.getInstance(…)` or `tenjin: TenjinSDK`,
-	// Java `TenjinSDK tenjin = …`.
-	androidAlias = regexp.MustCompile(`\b(\w+)\s*(?::\s*TenjinSDK\b[?!]?\s*)?=\s*TenjinSDK\.getInstance|\b(\w+)\s*:\s*TenjinSDK\b|\bTenjinSDK[ \t]+(\w+)[ \t]*[=;)]`)
+	// Kotlin `val tenjin = TenjinSDK.getInstance(…)`, `tenjin: TenjinSDK`
+	// or `val tenjin by lazy { TenjinSDK.getInstance(…) }`, Java
+	// `TenjinSDK tenjin = …`.
+	androidAlias = regexp.MustCompile(`\b(\w+)\s*(?::\s*TenjinSDK\b[?!]?\s*)?=\s*TenjinSDK\.getInstance|\b(\w+)\s*:\s*TenjinSDK\b|\bTenjinSDK[ \t]+(\w+)[ \t]*[=;)]|\b(\w+)\s+by\s+lazy\s*\{\s*TenjinSDK\.getInstance`)
 	// A call chained on getInstance: TenjinSDK.getInstance(…).connect().
 	androidChained = regexp.MustCompile(`TenjinSDK\.getInstance\w*\((?:[^()]|\([^()]*\))*\)\s*\.connect\(`)
 	flutterAlias   = regexp.MustCompile(`\b(\w+)\s*=\s*TenjinSDK\.instance\b`)

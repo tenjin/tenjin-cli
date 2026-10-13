@@ -49,7 +49,7 @@ func (r *runner) checkAndroid(spec frameworkSpec, t *project.Target, src source)
 		})
 		return
 	}
-	r.checkAndroidManifest(t)
+	r.checkAndroidManifest(t, spec)
 	r.checkStores(t)
 	if !spec.bundlesPlayServices {
 		r.checkPlayServices(t)
@@ -60,7 +60,7 @@ func (r *runner) checkAndroid(spec frameworkSpec, t *project.Target, src source)
 	}
 }
 
-func (r *runner) checkAndroidManifest(t *project.Target) {
+func (r *runner) checkAndroidManifest(t *project.Target, spec frameworkSpec) {
 	file := t.Android.Manifest
 	if file == "" {
 		r.add(Finding{
@@ -79,8 +79,19 @@ func (r *runner) checkAndroidManifest(t *project.Target) {
 		})
 		return
 	}
-	deps := r.readRel(t.Android.BuildFile) + "\n" + r.readRel(t.Android.VersionCatalog)
+	deps := r.androidDeps(t)
 	declared, removed := map[string]bool{}, map[string]bool{}
+	// The build merges the library modules' manifests into the app's.
+	for _, m := range t.Android.LibraryModules {
+		var lib androidManifest
+		if raw, err := os.ReadFile(filepath.Join(r.p.Root, filepath.FromSlash(m), "src", "main", "AndroidManifest.xml")); err == nil && xml.Unmarshal(raw, &lib) == nil {
+			for _, p := range lib.Permissions {
+				if p.Node != "remove" {
+					declared[p.Name] = true
+				}
+			}
+		}
+	}
 	for _, p := range manifest.Permissions {
 		if p.Node == "remove" {
 			removed[p.Name] = true
@@ -127,6 +138,10 @@ func (r *runner) checkAndroidManifest(t *project.Target) {
 		})
 	case declared[permAdID]:
 		r.pass("android.permission.ad_id", project.Android, "AD_ID permission is declared", file, 0)
+	case spec.bundlesPlayServices:
+		// The wrapper depends on play-services-ads-identifier, which
+		// declares the permission.
+		r.pass("android.permission.ad_id", project.Android, "AD_ID permission comes with the Tenjin plugin's play-services-ads-identifier", t.Android.BuildFile, 0)
 	case adIDFromLibrary(deps) == "yes":
 		// play-services-ads-identifier declares it in its own manifest from
 		// 17.1.0, which the build merges into the app's.
@@ -161,7 +176,7 @@ func (r *runner) checkAndroidManifest(t *project.Target) {
 }
 
 func (r *runner) checkPlayServices(t *project.Target) {
-	build := r.readRel(t.Android.BuildFile) + "\n" + r.readRel(t.Android.VersionCatalog)
+	build := r.androidDeps(t)
 	file := t.Android.BuildFile
 
 	if strings.Contains(build, "play-services-ads-identifier") {
@@ -394,3 +409,16 @@ func (r *runner) storeSetInCode() string {
 
 // stripCode is a build file without its comments, for matching settings.
 func stripCode(s string) string { return project.BlankComments(s) }
+
+// androidDeps is the text of every file that declares the app's
+// dependencies: its build file, the version catalog, and the build files of
+// the library modules it depends on.
+func (r *runner) androidDeps(t *project.Target) string {
+	parts := []string{r.readRel(t.Android.BuildFile), r.readRel(t.Android.VersionCatalog)}
+	for _, m := range t.Android.LibraryModules {
+		for _, name := range []string{"build.gradle.kts", "build.gradle"} {
+			parts = append(parts, r.readRel(path.Join(m, name)))
+		}
+	}
+	return strings.Join(parts, "\n")
+}

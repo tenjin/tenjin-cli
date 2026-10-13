@@ -99,6 +99,10 @@ type AndroidInfo struct {
 	LauncherSource   string `json:"launcher_source,omitempty"`
 	Minify           bool   `json:"minify"`
 	Flavors          bool   `json:"flavors"`
+	// LibraryModules are the folders of the project's own modules the app
+	// depends on (project(":ads")), directly or through each other. Their
+	// dependencies, code and manifests become the app's when it is built.
+	LibraryModules []string `json:"library_modules,omitempty"`
 }
 
 // IOSInfo locates the files of an Xcode project. Paths are relative to the

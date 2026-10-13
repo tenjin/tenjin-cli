@@ -163,7 +163,18 @@ func (r *runner) run() {
 			Title: "The device log is from " + platformName(d.Platform) + ", and this project does not build for " + platformName(d.Platform),
 		})
 	}
-	switch r.p.Framework {
+	framework := r.p.Framework
+	if wrapper, ok := wrapperSpecs[framework]; ok && !r.declares(wrapper) && r.declaresNative() {
+		// The native SDKs added straight to the native projects, with no
+		// framework package: checked as the native apps they are.
+		r.add(Finding{
+			ID: "sdk.native_in_wrapper", Severity: Info,
+			Title:  "The Tenjin SDK is added to the native projects directly, not through " + wrapper.packages[0] + ", so they are checked as native apps",
+			Detail: "That works; the framework's own code cannot call the SDK then, only the native code can.",
+		})
+		framework = project.Native
+	}
+	switch framework {
 	case project.Native:
 		// Each platform has its own SDK, its own source and its own key.
 		for i := range r.p.Targets {
@@ -230,7 +241,39 @@ func (r *runner) checkPlatform(spec frameworkSpec, t *project.Target, src source
 
 // checkDependency reports whether the SDK package is declared. For native
 // projects platform selects which SDK to look for; wrappers pass "".
+// declares reports whether the project declares this spec's package.
+func (r *runner) declares(spec frameworkSpec) bool {
+	for _, i := range r.p.Tenjin {
+		if spec.ownsPackage(i.Package) {
+			return true
+		}
+	}
+	return false
+}
+
+// declaresNative reports whether the project declares a native SDK.
+func (r *runner) declaresNative() bool {
+	for _, spec := range nativeSpecs {
+		if r.declares(spec) {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *runner) checkDependency(spec frameworkSpec, platform project.Platform) {
+	for _, i := range r.p.Tenjin {
+		if i.Package == project.CommunityFlutterPackage {
+			r.add(Finding{
+				ID: "sdk.dependency", Severity: Warning, Platform: platform,
+				Title:  "The project uses tenjin_sdk, a community plugin, not Tenjin's own tenjin_plugin",
+				Detail: "Tenjin does not publish or support tenjin_sdk, and these checks follow tenjin_plugin's API.",
+				File:   i.Source,
+				Fix:    "Replace tenjin_sdk with tenjin_plugin in pubspec.yaml (flutter pub add tenjin_plugin), and change the import to package:tenjin_plugin/tenjin_sdk.dart.",
+			})
+			return
+		}
+	}
 	for _, i := range r.p.Tenjin {
 		if !spec.ownsPackage(i.Package) {
 			continue
