@@ -67,10 +67,19 @@ homebrew_casks:
     repository:
       owner: tenjin
       name: homebrew-tap
+      # A Code Ops app token (release.yaml). The tap's main is protected, so
+      # each release proposes its cask in a pull request for someone to merge.
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      branch: "tenjin-{{ .Version }}"
+      pull_request:
+        enabled: true
+        base:
+          owner: tenjin
+          name: homebrew-tap
+          branch: main
+    # Committed and signed as the app.
     commit_author:
-      name: tenjin-kraken
-      email: 45712589+tenjin-kraken@users.noreply.github.com
+      use_github_app_token: true
     homepage: https://github.com/tenjin/tenjin-cli
     description: Integrate and verify the Tenjin SDK from your terminal
     # Pre-releases stay out of the tap.

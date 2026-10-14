@@ -211,7 +211,7 @@ make lint
 make release-snapshot   # every release archive and the Homebrew cask, into dist/; publishes nothing
 ```
 
-A release is made by pushing a tag such as `v0.1.0`: the release workflow tests, builds the archives for macOS, Linux and Windows with GoReleaser (`.goreleaser.yaml`), publishes them with their checksums on GitHub, and updates the cask in `tenjin/homebrew-tap`.
+A release is made by pushing a tag such as `v0.1.0`: the release workflow tests, builds the archives for macOS, Linux and Windows with GoReleaser (`.goreleaser.yaml`), publishes them with their checksums on GitHub, and opens a pull request with the new cask in `tenjin/homebrew-tap`. `brew upgrade` finds the release once that pull request is merged.
 
 ## Layout
 

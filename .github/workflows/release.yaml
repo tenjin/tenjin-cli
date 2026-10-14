@@ -14,36 +14,34 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
+      - name: Token for the tap
+        # The organization's Code Ops app, as the SDK releases use it: a token
+        # for tenjin/homebrew-tap alone, which expires within the hour. It is
+        # made before anything is published, so a missing app or permission
+        # stops the release here and not between the release and its cask.
+        id: tap-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ vars.CODE_OPS_APP_ID }}
+          private-key: ${{ secrets.CODE_OPS_APP_PRIVATE_KEY }}
+          owner: tenjin
+          repositories: homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-      - name: Check the tap can be updated
-        # GoReleaser publishes the GitHub release before it pushes the cask,
-        # so a tap it cannot push to would leave a release without its cask.
-        # This catches a missing or wrong token before anything is published.
-        # The token is tenjin-kraken's, inherited from the organization: the
-        # tap lets that account push to main without a pull request, which
-        # only a push shows. Pre-releases leave the tap alone (skip_upload: auto).
-        if: ${{ !contains(github.ref_name, '-') }}
-        env:
-          GH_TOKEN: ${{ secrets.TENJIN_BOT_PRIVATE_ACCESS_TOKEN }}
-        run: |
-          test -n "$GH_TOKEN" || { echo "::error::The TENJIN_BOT_PRIVATE_ACCESS_TOKEN secret is not available."; exit 1; }
-          push=$(gh api repos/tenjin/homebrew-tap --jq .permissions.push) ||
-            { echo "::error::tenjin/homebrew-tap cannot be read with TENJIN_BOT_PRIVATE_ACCESS_TOKEN."; exit 1; }
-          test "$push" = true || { echo "::error::TENJIN_BOT_PRIVATE_ACCESS_TOKEN cannot push to tenjin/homebrew-tap."; exit 1; }
       - name: Release
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
           distribution: goreleaser
           version: v2.18.2
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # tenjin-kraken's, which can push to tenjin/homebrew-tap.
-          HOMEBREW_TAP_TOKEN: ${{ secrets.TENJIN_BOT_PRIVATE_ACCESS_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ steps.tap-token.outputs.token }}
