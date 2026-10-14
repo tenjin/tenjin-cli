@@ -26,17 +26,17 @@ jobs:
         # GoReleaser publishes the GitHub release before it pushes the cask,
         # so a tap it cannot push to would leave a release without its cask.
         # This catches a missing or wrong token before anything is published.
-        # The token must also be allowed past the tap's branch protection,
-        # which only a push shows: it is tenjin-kraken's. Pre-releases leave
-        # the tap alone (skip_upload: auto).
+        # The token is tenjin-kraken's, inherited from the organization: the
+        # tap lets that account push to main without a pull request, which
+        # only a push shows. Pre-releases leave the tap alone (skip_upload: auto).
         if: ${{ !contains(github.ref_name, '-') }}
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ secrets.TENJIN_BOT_PRIVATE_ACCESS_TOKEN }}
         run: |
-          test -n "$GH_TOKEN" || { echo "::error::The HOMEBREW_TAP_TOKEN secret is not set."; exit 1; }
+          test -n "$GH_TOKEN" || { echo "::error::The TENJIN_BOT_PRIVATE_ACCESS_TOKEN secret is not available."; exit 1; }
           push=$(gh api repos/tenjin/homebrew-tap --jq .permissions.push) ||
-            { echo "::error::tenjin/homebrew-tap cannot be read with HOMEBREW_TAP_TOKEN."; exit 1; }
-          test "$push" = true || { echo "::error::HOMEBREW_TAP_TOKEN cannot push to tenjin/homebrew-tap."; exit 1; }
+            { echo "::error::tenjin/homebrew-tap cannot be read with TENJIN_BOT_PRIVATE_ACCESS_TOKEN."; exit 1; }
+          test "$push" = true || { echo "::error::TENJIN_BOT_PRIVATE_ACCESS_TOKEN cannot push to tenjin/homebrew-tap."; exit 1; }
       - name: Release
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -45,5 +45,5 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # A token that can push to tenjin/homebrew-tap.
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          # tenjin-kraken's, which can push to tenjin/homebrew-tap.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.TENJIN_BOT_PRIVATE_ACCESS_TOKEN }}

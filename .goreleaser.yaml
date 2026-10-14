@@ -68,6 +68,9 @@ homebrew_casks:
       owner: tenjin
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    commit_author:
+      name: tenjin-kraken
+      email: 45712589+tenjin-kraken@users.noreply.github.com
     homepage: https://github.com/tenjin/tenjin-cli
     description: Integrate and verify the Tenjin SDK from your terminal
     # Pre-releases stay out of the tap.
