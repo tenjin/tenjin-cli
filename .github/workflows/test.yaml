@@ -143,6 +143,10 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: |
           if ! command -v brew > /dev/null; then eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"; fi
+          # The Homebrew people have, not the runner image's. tap-new turns on
+          # developer mode, where a deprecated cask stanza is an error.
+          brew update --quiet
+          brew --version
           brew tap-new --no-git tenjin/local
           tap="$(brew --repository tenjin/local)"
           mkdir -p "$tap/Casks"
@@ -150,6 +154,9 @@ jobs:
             dist/homebrew/Casks/tenjin.rb > "$tap/Casks/tenjin.rb"
           brew install --cask tenjin/local/tenjin
           "$(brew --prefix)/bin/tenjin" version | grep -F "Tenjin CLI $TENJIN_VERSION"
+          if [ "$(uname)" = Darwin ] && xattr -p com.apple.quarantine "$(brew --prefix)/Caskroom/tenjin/$TENJIN_VERSION/tenjin" 2> /dev/null; then
+            echo "the binary is still quarantined"; exit 1
+          fi
           ls "$(brew --prefix)/share/zsh/site-functions" "$(brew --prefix)/etc/bash_completion.d" "$(brew --prefix)/share/fish/vendor_completions.d" | grep -i tenjin
       - name: install.ps1, Windows PowerShell
         if: runner.os == 'Windows'
