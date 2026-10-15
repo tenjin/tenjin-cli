@@ -1,0 +1,22 @@
+name: Pull request title
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, edited, reopened, synchronize]
+permissions:
+  pull-requests: read
+jobs:
+  title:
+    # A pull request is squashed into one commit titled after it, and
+    # release-please reads those titles for the version and the changelog.
+    name: Conventional title
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        with:
+          # A one-commit pull request is squashed under that commit's message.
+          validateSingleCommit: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

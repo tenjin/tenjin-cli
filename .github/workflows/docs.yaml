@@ -35,5 +35,5 @@ jobs:
         with:
           args: >-
             --offline --include-fragments --no-progress
-            README.md CONTRIBUTING.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md 'docs/adr/*.md'
+            README.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md 'docs/adr/*.md'
           fail: true

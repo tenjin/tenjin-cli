@@ -24,3 +24,5 @@ ignores:
   - "CLAUDE.local.md"
   - "THIRD_PARTY_NOTICES.md"
   - "completions/**"
+  # Written by release-please.
+  - "CHANGELOG.md"

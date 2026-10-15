@@ -57,13 +57,15 @@ The reasoning behind the language, the repository and the scope is in [docs/adr/
 
 ## Releases
 
-A maintainer pushes a tag such as `v0.1.0`. The release workflow runs the tests, builds the archives for macOS, Linux and Windows with GoReleaser (`.goreleaser.yaml`), publishes them on GitHub with their checksums, and opens a pull request with the new cask in [tenjin/homebrew-tap](https://github.com/tenjin/homebrew-tap). Homebrew users get the release once that pull request is merged. Add the release's changes to [CHANGELOG.md](CHANGELOG.md) before tagging.
+Releases are made with [release-please](https://github.com/googleapis/release-please), from the titles of the commits on `main`. It keeps a pull request open with the next version and its changelog: a `feat:` raises the minor version, a `fix:` the patch version, and a breaking change (`feat!:`) the minor version until 1.0. `chore:`, `ci:`, `docs:`, `test:` and `refactor:` make no release.
+
+Merging that pull request tags the release as a draft. The release workflow then runs the tests on the tagged commit, builds the archives for macOS, Linux and Windows with GoReleaser (`.goreleaser.yaml`), uploads them with their checksums, opens a pull request with the new cask in [tenjin/homebrew-tap](https://github.com/tenjin/homebrew-tap), and only then publishes the release. Homebrew users get it once the cask's pull request is merged. If the release workflow fails, run it again from the Actions tab with the draft's tag.
 
 ## Pull requests
 
 - Keep each pull request to one change, with tests.
 - `make test` and `make lint` pass, on macOS, Linux and Windows (CI runs all three).
-- Write commit messages that say what changed and why.
+- Title the pull request as a [conventional commit](https://www.conventionalcommits.org/) (`feat: …`, `fix: …`, `docs: …`): squashed, it becomes the commit's title, and CI checks it. Its description says what changed and why.
 - Device log captures added as test fixtures must have every identifier, receipt, signature, key and location replaced first.
 
 By contributing, you agree that your contribution is licensed under the [MIT License](LICENSE).

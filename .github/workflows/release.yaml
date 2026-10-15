@@ -1,14 +1,27 @@
 name: Release
 on:
-  push:
-    tags:
-      - "v*"
+  # From release-please.yaml, once its pull request is merged.
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  # To run a failed release again, while it is still a draft.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The draft release's tag, such as v0.1.0
+        type: string
+        required: true
 permissions:
   contents: write
 jobs:
   test:
-    # Every test, install and snapshot job, on Linux, macOS and Windows.
+    # Every test, install and snapshot job, on Linux, macOS and Windows, on
+    # the tagged commit.
     uses: ./.github/workflows/test.yaml
+    with:
+      ref: ${{ inputs.tag }}
   release:
     name: Release
     needs: test
@@ -31,6 +44,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
@@ -43,5 +57,14 @@ jobs:
           version: v2.18.2
           args: release --clean
         env:
+          GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ steps.tap-token.outputs.token }}
+      - name: Publish
+        # GoReleaser fills release-please's draft and leaves it a draft, so
+        # the release goes public, and becomes the latest the install scripts
+        # and the update notice find, only once its archives and cask exist.
+        run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+        env:
+          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
