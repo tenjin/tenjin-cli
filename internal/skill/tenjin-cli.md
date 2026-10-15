@@ -10,7 +10,7 @@ Do not run `tenjin setup` yourself. It is the same sequence for a person at a te
 
 ### 1. Find out what the project is
 
-```
+```sh
 tenjin project detect --json
 ```
 
@@ -28,7 +28,7 @@ Read from the result:
 
 ### 2. Check the sign-in
 
-```
+```sh
 tenjin auth status --json
 ```
 
@@ -38,7 +38,7 @@ Exit status 3 means nobody is signed in. Ask the developer to run `tenjin login`
 
 A Tenjin app is one bundle ID on one platform, and an Android build for another store is an app of its own. Run this once for every entry in `targets[].builds`; ask the developer first which builds ship, if there is more than one per platform:
 
-```
+```sh
 tenjin apps ensure --bundle-id <bundle_id> --platform <tenjin_platform> --json
 ```
 
@@ -57,7 +57,7 @@ In a cross-platform project, choose between them at runtime, as you would betwee
 
 Once the placeholders are written, have the CLI fill them:
 
-```
+```sh
 tenjin project set-keys --json
 ```
 
@@ -67,7 +67,7 @@ Never pass it `--sdk-key`. When the developer is signed in and Tenjin serves the
 
 Read the integration guide first:
 
-```
+```sh
 tenjin sdk guide
 ```
 
@@ -75,7 +75,7 @@ It prints the guide for the project in the current folder (name the platform, `t
 
 Make the changes, then run, with the features the developer chose:
 
-```
+```sh
 tenjin doctor --json --features <id,id,...>
 ```
 
@@ -89,7 +89,7 @@ End by telling the developer to run `tenjin setup` in the project. It writes any
 
 If the keys are already in the project and the developer asks you to check a launch, run this after a debug build has been launched on a connected Android device or emulator, or on an iOS simulator, or installed on an iPhone connected by cable:
 
-```
+```sh
 tenjin doctor --device --json
 ```
 

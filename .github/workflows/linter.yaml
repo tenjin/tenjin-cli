@@ -1,5 +1,16 @@
 name: Lint
 on:
+  # On main too, so the README's badge shows main's state.
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.go'
+      - go.mod
+      - go.sum
+      - .golangci.yml
+      - Makefile
+      - .github/workflows/linter.yaml
   pull_request:
     branches:
       - main

@@ -12,11 +12,14 @@ Thanks for helping improve the Tenjin CLI. Bug reports, fixes and new checks are
 
 Requires Go 1.27 (see `go.mod`).
 
+```sh
+make build              # bin/tenjin, with the version stamped in
+make test               # go test -race ./...
+make lint               # gofmt check and golangci-lint
+make release-snapshot   # every release archive and the Homebrew cask, into dist/; publishes nothing
 ```
-make build      # bin/tenjin, with the version stamped in
-make test       # go test -race ./...
-make lint       # gofmt check and golangci-lint
-```
+
+The Markdown files are linted and their links checked in CI too. To run the lint locally: `npx markdownlint-cli2`.
 
 The tests need no Tenjin account and make no network requests: Tenjin's services are faked (`internal/cli/fake_test.go`), and devices are faked through `adb`, `simctl` and `devicectl` stand-ins. Project fixtures come from `internal/testproject`: start from a correct integration and change one thing.
 
@@ -27,6 +30,34 @@ The tests need no Tenjin account and make no network requests: Tenjin's services
 - A fix names the file, the line and the version, so it can be applied as written.
 - Credentials and whole SDK keys are never printed, and SDK keys are never given to a coding agent.
 - The JSON of `project detect` and `doctor` is a contract: add fields, do not rename or remove them. Accept a deliberate change to the golden files with `go test ./internal/cli -run JSONOutputIsStable -update`.
+
+## Layout
+
+```text
+cmd/tenjin          entry point; only calls cli.Execute
+internal/cli        command tree; commands parse flags, call one operation and render
+internal/project    detects what a project is; reads files only
+internal/verify     the doctor checks
+internal/agent      hands a task to an installed coding agent
+internal/skill      the instructions for coding agents, and their installer
+internal/keyfill    finds the SDK key placeholders agents leave, and fills them
+internal/devicelog  reads the SDK's lines from a device log
+internal/collector  asks Tenjin's collector about an SDK key or a device
+internal/transport  HTTP retries and the --verbose log
+internal/tenjinapi  operations on the Tenjin API
+internal/oauth      browser sign-in
+internal/session    stored credentials and token refresh
+internal/config     service URLs
+internal/render     output: table, JSON and colour
+internal/clierr     error kinds and exit codes
+docs/adr            architecture decisions
+```
+
+The reasoning behind the language, the repository and the scope is in [docs/adr/0001-language-repository-and-scope.md](docs/adr/0001-language-repository-and-scope.md).
+
+## Releases
+
+A maintainer pushes a tag such as `v0.1.0`. The release workflow runs the tests, builds the archives for macOS, Linux and Windows with GoReleaser (`.goreleaser.yaml`), publishes them on GitHub with their checksums, and opens a pull request with the new cask in [tenjin/homebrew-tap](https://github.com/tenjin/homebrew-tap). Homebrew users get the release once that pull request is merged. Add the release's changes to [CHANGELOG.md](CHANGELOG.md) before tagging.
 
 ## Pull requests
 

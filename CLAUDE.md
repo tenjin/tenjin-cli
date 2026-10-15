@@ -6,7 +6,7 @@ This repository is meant to be public. Keep internal details (private repos, int
 
 ## Commands
 
-```
+```sh
 make build      # bin/tenjin, with version stamped in
 make test       # go test -race ./...
 make lint       # gofmt check + golangci-lint
@@ -21,7 +21,7 @@ Go 1.27 (see `go.mod`).
 
 ## Layout
 
-```
+```text
 cmd/tenjin            entry point; only calls cli.Execute
 internal/cli          command tree; root.go holds shared flags and the environment
 internal/project      detection: framework, platforms, bundle IDs. Reads files only, no network
@@ -68,6 +68,7 @@ docs/adr              architecture decisions
 - **Ctrl-C stops everything.** Prompts and waits end on it (exit 130, `interrupted`), and programs the CLI starts run in their own process group (`internal/proc`).
 - **A fix must be usable as written.** Name the file, the line and the version; never "the latest". The SDK versions fixes name come from `internal/verify/versions.go`, which is also the offline answer; online, `internal/sdkrelease` finds newer releases once a day, and `verify` takes one only within the major version the table knows. A new major SDK version is a CLI change: read its changelog, adjust the checks, then move the table.
 - **No dead flags or code.** Add a flag in the change that gives it behaviour.
+- **The README describes this binary too.** `TestTheReadmeOnlyNamesCommandsThatExist` checks every command and flag it names, and `TestTheReadmeListsEveryExitCode` its exit codes against `clierr`. The Markdown is linted and its links checked in CI (`.github/workflows/docs.yaml`, `.markdownlint-cli2.yaml`).
 - **The skill describes this binary.** `internal/skill/tenjin-cli.md` is what agents are told. When a command or flag it mentions changes, change it too; `TestTheSkillOnlyNamesCommandsThatExist` fails if it names something that is not there.
 - **JSON output is a contract.** `project detect --json` and `doctor --json` are pinned by golden files in `internal/cli/testdata`. Add fields; do not rename or remove them.
 - **`agent install` writes only what it lists.** It owns one file (the Claude Code skill) and one marked section (in `AGENTS.md`), and removes exactly those.
@@ -77,6 +78,7 @@ docs/adr              architecture decisions
 - `.goreleaser.yaml` builds six targets (macOS, Linux and Windows, each on amd64 and arm64), archives named `tenjin_<version>_<os>_<arch>`, `checksums.txt`, and the Homebrew cask. `install.sh` and `install.ps1` build the same archive names; change all three together. CI builds a snapshot on every pull request and installs it with both scripts and the cask, on each OS.
 - A release proposes its cask to `tenjin/homebrew-tap` as a pull request, with a token from the organization's Code Ops GitHub App limited to the tap; someone merges it. Pin every action by commit SHA: the release job holds that token.
 - The cask removes macOS's quarantine mark after install, because the binaries are not notarized yet. Drop that step once they are. It is a `postflight_steps` block in `custom_block` (Homebrew deprecated `postflight`); move it to `hooks.post.install_steps` with GoReleaser v2.19.
+- The README's "Pre-release" note goes with the first tag.
 - A local snapshot shows `commit none` and a `v0.0.0` download address while the repository has no remote and no tag. A tagged release in CI fills both in.
 
 ## Tests
