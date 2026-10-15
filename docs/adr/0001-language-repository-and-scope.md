@@ -48,7 +48,7 @@ A noun-verb surface with generated help and shell completions is what `cobra` is
 
 ### 6. Layout and the rule that keeps it extensible
 
-```
+```text
 cmd/tenjin          entry point
 internal/cli        command tree, one file per noun
 internal/project    detects what a project is; reads files only

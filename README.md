@@ -1,70 +1,228 @@
 # Tenjin CLI
 
-Developer tools for integrating and verifying the [Tenjin](https://tenjin.com) SDK from the terminal.
+[![Test](https://github.com/tenjin/tenjin-cli/actions/workflows/test.yaml/badge.svg?branch=main)](https://github.com/tenjin/tenjin-cli/actions/workflows/test.yaml)
+[![Lint](https://github.com/tenjin/tenjin-cli/actions/workflows/linter.yaml/badge.svg?branch=main)](https://github.com/tenjin/tenjin-cli/actions/workflows/linter.yaml)
+[![Docs](https://github.com/tenjin/tenjin-cli/actions/workflows/docs.yaml/badge.svg?branch=main)](https://github.com/tenjin/tenjin-cli/actions/workflows/docs.yaml)
+[![Release](https://img.shields.io/github/v/release/tenjin/tenjin-cli?sort=semver)](https://github.com/tenjin/tenjin-cli/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Status: proof of concept.** The commands below work; nothing is released yet, and registering test devices and tailing live events are not here yet.
+Integrate and verify the [Tenjin](https://tenjin.com) SDK from your terminal.
+
+The Tenjin CLI covers the parts of SDK onboarding that happen on your machine:
+
+- **Detect** what your project is: framework, platforms, bundle IDs, the file the app starts in, ad SDKs.
+- **Set up** the Tenjin app for each build, and its SDK key.
+- **Check** the integration and explain, with a fix you can apply as written, why it would send nothing.
+- **Verify** a real launch: read what the SDK sent from a device, and confirm Tenjin processed the install.
+
+It does not write your integration. You do, or your own coding agent does: `tenjin setup` can hand the work to Claude Code or Codex, and checks the result itself.
+
+> **Pre-release.** The first release is in preparation. Until it is published, [build from source](CONTRIBUTING.md#developing).
+
+## Contents
+
+- [Quick start](#quick-start)
+- [Install](#install)
+- [Requirements](#requirements)
+- [Usage](#usage)
+- [Scripts, CI and coding agents](#scripts-ci-and-coding-agents)
+- [Configuration](#configuration)
+- [Privacy and security](#privacy-and-security)
+- [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Quick start
+
+```sh
+brew install tenjin/tap/tenjin
+cd path/to/your/app
+tenjin setup
+```
+
+`setup` walks you from sign-in to a launch Tenjin has processed. Every step is also a command of its own; see [Commands](#commands).
 
 ## Install
 
-Not released yet. Once it is:
+| Platform | Command |
+| --- | --- |
+| macOS, Linux | `brew install tenjin/tap/tenjin` |
+| macOS, Linux | `curl -fsSL https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.sh \| sh` |
+| Windows (PowerShell) | `irm https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.ps1 \| iex` |
+| Anywhere with Go | `go install github.com/tenjin/tenjin-cli/cmd/tenjin@latest` |
 
+Archives for macOS, Linux and Windows (Intel and ARM) are also on the [releases page](https://github.com/tenjin/tenjin-cli/releases), with a `checksums.txt`. Both install scripts check each download against it, and neither needs sudo or administrator rights.
+
+<details>
+<summary>What the install scripts do, and how to change it</summary>
+
+| Variable | Effect |
+| --- | --- |
+| `TENJIN_VERSION` | Install this version (for example `v0.1.0`) instead of the latest |
+| `TENJIN_INSTALL_DIR` | Install into this folder |
+| `TENJIN_NO_MODIFY_PATH=1` | Never edit shell startup files (`install.sh`) |
+
+**`install.sh`** installs where `tenjin` already is, or in a folder already on your PATH (`~/.local/bin`, `~/bin`, or `/usr/local/bin` when it can be written to). Otherwise it uses `~/.local/bin` and adds it to PATH for zsh (`.zshenv`), bash (`.bashrc` and the login profile), fish (`conf.d/tenjin.fish`) and `.profile`, each line marked `# Added by the Tenjin CLI installer`. bash reads those files only for login and interactive shells, so a script run with `bash -c` needs the full path. If the CLI was installed with Homebrew, the script stops and points to `brew upgrade tenjin`.
+
+**`install.ps1`** installs `tenjin.exe` in `%LOCALAPPDATA%\Programs\tenjin` and adds that folder to your user PATH.
+
+</details>
+
+### Update
+
+The CLI tells you when a newer release is out, with the command that updates it the way you installed it:
+
+```sh
+brew upgrade tenjin                    # Homebrew
+curl -fsSL https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.sh | sh   # install script
 ```
-brew install tenjin/tap/tenjin                                                    # macOS and Linux
-curl -fsSL https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.sh | sh   # macOS and Linux
-go install github.com/tenjin/tenjin-cli/cmd/tenjin@latest                          # anywhere with Go
+
+It checks at most once a day, and only when a person is at the terminal: never with `--json`, in CI, or when stderr is not a terminal. `TENJIN_NO_UPDATE_CHECK=1` turns it off.
+
+### Uninstall
+
+```sh
+tenjin logout                          # forget the session and revoke it
+brew uninstall tenjin                  # Homebrew; or delete the tenjin binary
 ```
 
-On Windows, in PowerShell:
+Then remove the CLI's folder (see [Files](#files)) and, for `install.sh`, the lines marked `# Added by the Tenjin CLI installer` in your shell startup files. If you ran `tenjin agent install`, run `tenjin agent uninstall` first.
 
-```
-irm https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.ps1 | iex
-```
+### Shell completions
 
-It installs `tenjin.exe` in `%LOCALAPPDATA%\Programs\tenjin` and adds that folder to your PATH, without administrator rights. The zips are also on the releases page. On an older Windows whose PowerShell reports a TLS error, run `[Net.ServicePointManager]::SecurityProtocol = 'Tls12'` first.
+Homebrew installs completions for bash, zsh and fish. Otherwise, `tenjin completion <bash|zsh|fish|powershell> --help` says how to load them, and the release archives carry them under `completions/`.
 
-Both install scripts check each download against the release's `checksums.txt`, and neither uses sudo or administrator rights. `TENJIN_VERSION` picks a version and `TENJIN_INSTALL_DIR` the folder.
+## Requirements
 
-The shell script installs where `tenjin` already is, or in a folder that is already on your PATH (`~/.local/bin`, `~/bin`, or `/usr/local/bin` when it can be written to). Otherwise it uses `~/.local/bin` and adds it to PATH for zsh (`.zshenv`), bash (`.bashrc` and the login profile), fish (`conf.d/tenjin.fish`) and `.profile`, each marked `# Added by the Tenjin CLI installer`, so the command works in every new terminal; with `ZDOTDIR` set, zsh's line goes in both `.zshenv` files. Another copy found elsewhere on PATH is pointed out. bash reads those files only for login and interactive shells, so a script run with `bash -c` needs the full path or its own PATH. `TENJIN_NO_MODIFY_PATH=1` leaves those files alone. If the CLI was installed with Homebrew, the script stops and points to `brew upgrade tenjin`.
+- A Tenjin account, for anything that signs in: apps and SDK keys. Detecting and checking a project work without one.
+- To verify a launch: `adb` for an Android device or emulator, or Xcode for an iPhone or an iOS simulator.
+- Optional: [Claude Code](https://claude.com/claude-code) or [Codex](https://github.com/openai/codex), for `setup` to integrate with.
 
-### Updates
+| Project | Detect | Check | Verify a launch |
+| --- | --- | --- | --- |
+| Native Android (Kotlin, Java) | ✓ | ✓ | ✓ |
+| Native iOS (Swift, Objective-C) | ✓ | ✓ | ✓ |
+| Flutter | ✓ | ✓ | ✓ |
+| React Native | ✓ | ✓ | ✓ |
+| Capacitor | ✓ | ✓ | ✓ |
+| Unity | ✓ | ✓ | ✓ |
+| Unreal | ✓ | | |
 
-When a newer release is out, the CLI says so after a command, with the command that updates it the way it was installed (`brew upgrade tenjin`, the install script, or `go install`). It asks GitHub at most once a day, alongside the command, and only when a person is at the terminal: never for `--json`, in CI, or when stderr is not a terminal, so scripts and coding agents never see it. `TENJIN_NO_UPDATE_CHECK=1` turns it off.
+## Usage
 
-Homebrew installs shell completions for bash, zsh and fish. Otherwise, `tenjin completion <bash|zsh|fish|powershell> --help` says how to load them; the release archives also carry them, under `completions/`.
-
-## What it does
-
-The parts of SDK onboarding that happen on your machine:
-
-- work out what your project is, and its bundle IDs;
-- find or create the Tenjin app for each platform;
-- check the integration and explain why it would send nothing;
-- read what the SDK sent from a device, and what Tenjin answered.
-
-The Tenjin CLI does not write your integration. The code changes are made by you, or by your own coding agent: if Claude Code or Codex is installed, `tenjin setup` offers to hand it the integration, and `tenjin agent install` teaches any agent to use the CLI on its own. The CLI handles the Tenjin side and the checking. The one change it makes to your files is to write an SDK key where a coding agent left a placeholder for it, so that the key never passes through the agent.
-
-## Commands
+### Commands
 
 | Command | What it does |
 | --- | --- |
-| `tenjin setup [path]` | The guided path, from sign-in to a launch Tenjin has processed: runs the steps below in order, offers to integrate using your coding agent, and re-checks after each change |
+| `tenjin setup [path]` | The guided path, from sign-in to a launch Tenjin has processed |
 | `tenjin project detect [path]` | Framework, platforms, bundle IDs, where the app starts, ad SDKs, any Tenjin SDK already declared |
-| `tenjin doctor [path]` | Check the integration on disk and the SDK key against Tenjin |
-| `tenjin doctor --device` | Also read a connected Android device or an iOS simulator: what the SDK sent and what Tenjin answered |
-| `tenjin login`, `logout`, `auth status` | Sign in through the browser; session kept in the system keychain |
+| `tenjin doctor [path]` | Check the integration on disk, and each SDK key against Tenjin |
+| `tenjin doctor --device` | Also read a connected device: what the SDK sent and what Tenjin answered |
+| `tenjin login`, `tenjin logout`, `tenjin auth status` | Sign in through the browser (`--no-browser` over SSH), sign out, see who is signed in |
 | `tenjin apps list` | The apps in your organization; `--platform` and `--bundle-id` narrow it |
 | `tenjin apps get <id>` | One app, and whether Tenjin is receiving its events |
 | `tenjin apps create` | Create an app from `--name`, `--bundle-id` and `--platform`, or from `--store-url` |
-| `tenjin apps ensure --bundle-id … --platform …` | Find the app, or create it. Safe to repeat |
-| `tenjin apps keys list --app <id>` | The app's SDK keys, by their last four characters, and how to copy one from the dashboard |
-| `tenjin project set-keys [path]` | Write SDK keys where a coding agent left placeholders, fetching them from Tenjin where it can. `setup` does this itself; the command is for scripts and agents |
-| `tenjin sdk guide [platform]` | The SDK integration guide for the project, or a named platform, as tested with this version; works offline |
-| `tenjin agent install [path]` | Give your coding agent the instructions for this CLI |
+| `tenjin apps ensure --bundle-id <id> --platform <platform>` | Find the app, or create it. Safe to repeat |
+| `tenjin apps keys list --app <id>` | The app's SDK keys, by their last four characters |
+| `tenjin project set-keys [path]` | Write SDK keys where a coding agent left placeholders |
+| `tenjin sdk guide [platform]` | The SDK integration guide, as tested with this version; works offline |
+| `tenjin agent install [path]` | Teach your coding agent to use this CLI |
 | `tenjin version` | Version, commit and build date |
 
-`setup` is for people. Every other command accepts `--json`, never prompts when stdin is not a terminal, and exits with a stable code, so scripts and coding agents can drive them:
+`tenjin <command> --help` describes every flag.
 
-| Exit | Meaning |
+### The steps of setup
+
+1. **Your project.** What `project detect` reports, and which Tenjin features to integrate. App opens are always included. Purchases, subscriptions, ad revenue, consent, deep links, SKAdNetwork conversion values, custom events and the customer user ID are offered, and the ones the project shows a reason for are suggested. `--features` chooses without asking.
+2. **Sign in**, through the browser, if there is no session.
+3. **Tenjin apps.** Finds the app for each build, or creates it after asking (`--yes` to skip the question).
+4. **SDK keys.** Fetches each app's key from Tenjin, or says where to copy it in the dashboard, and checks it at once, so a wrong key, or the other platform's, is caught before a build.
+5. **Add the SDK**, with your coding agent or by hand: `setup` lists what is left to add and where.
+6. **Check.** Runs `doctor`, and again after each change, until it is clean.
+7. **Verify a launch.** Asks you to launch a debug build, reads the device's log, and ends when Tenjin has processed the install. Without `adb` or Xcode, it says how to check later.
+
+### Checking a project
+
+`tenjin doctor` checks native Android, native iOS, Flutter, React Native, Capacitor and Unity projects:
+
+- the SDK dependency, and whether it is an old release;
+- the initialise and connect calls, and the features you chose (purchases, ad revenue per ad network, and so on);
+- Android permissions, Play Services libraries and ProGuard rules;
+- the iOS tracking and SKAdNetwork `Info.plist` keys;
+- for Unity, the External Dependency Manager, the `TenjinObject` component and SKAdNetwork postbacks;
+- whether Tenjin accepts each SDK key for its build's bundle ID.
+
+Every problem comes with a fix that names the file, the line and the version. The key check sends one request to Tenjin and no event; `--offline` skips it, along with the once-a-day lookup of the newest SDK releases. `--strict` also fails on warnings.
+
+### Verifying a launch
+
+```sh
+tenjin doctor --device            # a connected Android device or emulator, an iPhone on a cable, or a running iOS simulator
+tenjin doctor --logs logcat.txt   # a saved log; - reads standard input
+```
+
+Launch a debug build first. `doctor` reports what Tenjin answered to the SDK, why a request was refused, whether the build that ran has the application ID the project declares, and whether Tenjin has processed the install. `--serial` picks a device when several are connected.
+
+On iOS, the SDK logs its requests only when the build calls `TenjinSDK.debugLogs()`; `doctor` checks that debug builds do and release builds don't. Tenjin accepts a simulator's requests, but its installs have not been seen to be processed, so an iPhone is what confirms the install.
+
+### Builds and SDK keys
+
+A Tenjin app is one bundle ID on one platform, with its own SDK key. A project for Android and iOS has two. An Android build for another store, such as the Amazon Appstore, is an app of its own too, even with the same bundle ID, and so is a product flavor with its own application ID.
+
+`project detect` lists these builds, each with an ID (`android`, `ios`, `android:<variant>`). `setup` and `doctor` check each build's key against its own app, so the Google Play key in the Amazon build is caught. A key can be passed instead of pasted:
+
+```sh
+tenjin doctor --sdk-key <key>                              # one build
+tenjin doctor --sdk-key android=<key> --sdk-key ios=<key>  # one per build
+tenjin doctor --sdk-key android:amazon=<key> --build android:amazon
+```
+
+Once the key is in the source, `doctor` reads it from there.
+
+### Integrating with a coding agent
+
+At the "Add the SDK" step, `setup` looks for Claude Code and Codex, and asks:
+
+```text
+Integrate the Tenjin SDK using Claude Code? [Y/n]
+```
+
+On yes, it starts the agent in your project, under your own account, with the open findings as its task. Each agent is confined as tightly as it allows:
+
+| Agent | Confined to | Checks its work with |
+| --- | --- | --- |
+| Claude Code | Reading and editing files in the project, and running `tenjin doctor` and `tenjin sdk guide`. No other command, and no settings or hooks from the project or your own configuration | `tenjin doctor` |
+| Codex | Its sandbox: files in this project only, no network | `tenjin doctor --offline` |
+
+`setup` then lists the files that changed and runs the checks itself; the agent's word is not taken for it. It prints the command that reopens the conversation, so you can ask the agent why something changed.
+
+**The agent never sees an SDK key.** It writes a placeholder (`__TENJIN_ANDROID_SDK_KEY__`, `__TENJIN_IOS_SDK_KEY__`) where the key belongs, and `setup` writes the key over it afterwards.
+
+`--agent claude`, `--agent codex` or `--agent none` skips the question. Without a terminal, an agent starts only when `--agent` names one, and never when `tenjin` is itself run by an agent.
+
+### Teaching your agent the CLI
+
+An agent you already use can drive the CLI itself, once it knows how:
+
+```sh
+tenjin agent install     # lists the files it would write, and asks
+tenjin agent status
+tenjin agent uninstall
+```
+
+For Claude Code, this writes a skill to `.claude/skills/tenjin-cli/` in the project (`--global` for your home folder). For Codex, Cursor and other agents that read `AGENTS.md`, it adds a marked section to that file. `tenjin agent skill` prints the instructions for anything else. They describe the commands of the installed version, so run `tenjin agent install` again after updating.
+
+## Scripts, CI and coding agents
+
+Every command except `setup` is built to be driven by a program:
+
+- `--json` (or `-o json`) writes only the result to stdout; everything else goes to stderr.
+- A command never prompts when stdin is not a terminal. Anything that creates something needs `--yes` or a flag.
+- A failure with `--json` is written to stderr as `{"error": {"code", "message", "hint"}}`.
+- The JSON of `project detect` and `doctor` is stable: fields are added, never renamed or removed.
+- `TENJIN_API_TOKEN`, an access token from the dashboard, signs in without a browser.
+
+| Exit code | Meaning |
 | --- | --- |
 | 0 | Success |
 | 1 | Unexpected error |
@@ -78,165 +236,64 @@ The Tenjin CLI does not write your integration. The code changes are made by you
 | 10 | Already exists |
 | 130 | Stopped with Ctrl-C |
 
-With `--json`, a failure is written to stderr as `{"error": {"code", "message", "hint"}}`.
+`--verbose` (`-v`) writes a line to stderr for each request to Tenjin and each program run, with the address, the answer and the time taken. It never shows a credential or a request body, so it is safe to paste into a support request. Requests that fail in transit are retried up to twice when that is safe.
 
-`--verbose` (`-v`) writes a line to stderr for each request to Tenjin and each program run on your behalf, with the address, the answer and the time taken. It never shows a credential or a request body, so the output can be pasted into a support ticket. A request that fails in transit, or meets a gateway error, is sent again up to twice when that is safe: reads, and the SDK key check.
+## Configuration
 
-### The steps of setup
-
-1. **Your project.** What `project detect` reports, and which Tenjin features to integrate. App opens are always included; purchases, subscriptions, ad revenue, consent, deep links, SKAdNetwork conversion values, custom events and the customer user ID are offered, and the ones the project shows a reason for are suggested: Google Play Billing or StoreKit for purchases, an ad SDK for ad revenue, a consent SDK for consent. Enter accepts the suggestion; `--features` chooses without asking.
-2. **Sign in.** Through the browser, if there is no session.
-3. **Tenjin apps.** Finds the app for each platform, or creates it after asking.
-4. **SDK keys.** Where Tenjin's API serves SDK keys, `setup` fetches each app's key and checks it, and there is nothing to copy. Otherwise it says where to copy each one from: the app's page in the dashboard, in the "SDK Keys" card. It asks Tenjin about a key as soon as you paste it, so a wrong one, or the other platform's, is caught here and not after a build. A key that is already in the project and accepted is left alone. If a coding agent has already left a placeholder for it, the key is written there.
-5. **Add the SDK.** With your coding agent, or by hand: `setup` lists what is still to add and the file the app starts in. An agent writes a placeholder where the key belongs, and `setup` writes the key there when the agent is done.
-6. **Check.** Runs `doctor`, and again after each change until it is clean.
-7. **Check a real launch.** Asks you to launch a debug build on an Android device or emulator, or to install one on an iPhone connected by cable (the CLI launches it) or launch it on an iOS simulator. It reads the device's log (through adb, or Xcode's `devicectl` and `simctl`) and says what Tenjin answered. It ends when Tenjin has processed the device's install, which shows the integration works end to end; if the launch was refused, it says why and reads the next one. A project for both platforms is checked on each. Without adb or Xcode it says how to check later.
-
-### SDK keys
-
-A Tenjin app is one bundle ID on one platform, and each app has its own SDK key. A project that builds for Android and iOS therefore has two. An Android build for another store is an app of its own too: Tenjin files a build under `amazon` or `android_other` when it declares `TENJIN_APP_STORE`, so an app shipped to Google Play and the Amazon Appstore has two Android apps and two keys, even with one bundle ID. The same goes for product flavors with their own application ID.
-
-`project detect` lists these builds, each with an ID (`android`, `ios`, or `android:<variant>`) and the placeholder for its key. `setup` asks which of them ship (or takes `--build`), creates an app for each, and checks each key against that build's own app, so the Google Play key in the Amazon build is caught before anything is built. `doctor` checks each build's key the same way, including keys kept in a flavor's `buildConfigField`, and warns when a flavor named for another store does not declare it.
-
-A key can be passed to `setup` and `doctor` instead of pasted:
-
-```
-tenjin doctor --sdk-key <key>                               # one platform, or a key that serves all
-tenjin doctor --sdk-key android=<key> --sdk-key ios=<key>   # one per platform
-tenjin doctor --sdk-key android:amazon=<key>                # one per build, as project detect lists them
-tenjin doctor --build android:amazon                        # check one build only
-```
-
-`doctor` then says whether Tenjin accepts each key for its platform's bundle ID. Once a key is a string literal in the source, `doctor` reads it from there and the flag is not needed; `setup` checks the one in the source in preference to one passed in, since that is what the app will send.
-
-A coding agent never gets the key. Where it belongs, the agent writes `__TENJIN_ANDROID_SDK_KEY__` or `__TENJIN_IOS_SDK_KEY__`, and `doctor` reports each one still in place as `sdk.key.unfilled`. `setup` writes the keys over them. So can `project set-keys`, with each key checked against Tenjin before it is written and nothing else in the project changed:
-
-```
-tenjin project set-keys                                         # fetches the keys from Tenjin, when signed in
-tenjin project set-keys --sdk-key android=<key> --sdk-key ios=<key>
-```
-
-Fetching is what lets an agent finish the job without seeing a key: it runs `tenjin project set-keys` and is shown only the last four characters. Doing the integration by hand works the same way: write the placeholder where the guide says `<SDK_KEY>`, and `setup` fills it.
-
-### What project detect reports
-
-For each platform: the bundle ID and where it was read, plus every other ID a build of the app can have (a debug suffix, a product flavor), since Tenjin treats each as a different app. For Android: the Gradle DSL, the version catalog, the launcher Activity and its file, code shrinking. For iOS: CocoaPods or Swift packages, the entry point (SwiftUI `App` or app delegate), a generated Info.plist. For the project: the JavaScript package manager, the ad SDKs among the dependencies, and where the app already asks for tracking permission.
-
-It says so when a project is not one to integrate into: a build exported from Unity, a Cordova app, a Kotlin Multiplatform app, a .NET app. Run above the project, as in a monorepo, it names the projects it found up to two levels down.
-
-### What doctor checks
-
-Native Android, native iOS, Flutter, React Native, Capacitor and Unity projects: the SDK dependency and whether it is an old release, the initialise and connect calls, a placeholder key, Android permissions and Play Services libraries, ProGuard rules, the iOS tracking and SKAdNetwork plist keys, and whether Tenjin accepts the SDK key for each platform's bundle ID.
-
-Each problem comes with a fix that can be applied as written: where a dependency is missing, the fix names the version to add. Once a day `doctor` asks each SDK's public registry (Maven Central, pub.dev, npm, GitHub) for its newest release, and names it when it is of the major version this CLI was built for; offline, or for a new major version, it names the newest release it was built with.
-
-For Unity it also checks that the External Dependency Manager is there to add Tenjin's Android libraries, finds the `TenjinObject` component in scenes as well as calls in code, reads a key kept in a C# constant, and checks that a build script points SKAdNetwork postbacks at Tenjin, which the Unity package does not do.
-
-The key check sends one request to Tenjin and no event. `--offline` skips it and the registry lookup. Unreal projects are detected but not checked yet. A library that wraps the SDK (a pod, a Swift package, an Android library, a Flutter plugin, a React Native package) is reported as one: what an app needs is checked in the app that uses it, and an app that gets the SDK through such a library has the library's own code read for the calls when it is in the project.
-
-
-It also reports, for each feature beyond app opens, whether the project sends it to Tenjin: ad revenue per ad network, purchases, subscriptions and the rest, by the SDK's own calls. With `--features`, a chosen feature that nothing sends is a warning; without it, a feature the project suggests is a suggestion, and one it does not suggest is not mentioned.
-### Checking a real launch
-
-The checks above read the project. `--device` reads what happened when the app ran:
-
-```
-tenjin doctor --device            # the connected Android device or emulator (adb), or the running iOS simulator (simctl)
-tenjin doctor --logs logcat.txt   # a saved log, from logcat or a simulator; - reads standard input
-```
-
-Launch a debug build first. `doctor` then reports what Tenjin answered to the SDK's connect request and why a refusal happened, whether the build that ran has the application ID the project declares, the device's advertising ID, and the other requests the SDK sent. When the connect was accepted it asks Tenjin whether the install was processed, and to what it was attributed. `--serial` picks a device when several are connected: an adb serial, or an iPhone's or a simulator's UDID; `setup` takes it too. A project for both platforms is read from an Android device when one is connected, and from a simulator otherwise.
-
-On iOS the SDK logs its requests only when the build calls `TenjinSDK.debugLogs()`; `doctor` checks that debug builds do, and that release builds do not. An iPhone connected by cable is read by launching the installed app with its console attached (`xcrun devicectl`); the app is left running. A running simulator is read from its log. Tenjin accepts a simulator's requests, but its installs have not been seen to be processed, so an iPhone is what confirms the install.
-
-A device that cannot be read is a warning in the report, not a failure of the command.
-
-### Integrating with a coding agent
-
-At the "Add the SDK" step, `setup` looks for Claude Code and Codex. With one installed it asks:
-
-```
-Integrate the Tenjin SDK using Claude Code? [Y/n]
-```
-
-With both, it asks which. On yes it starts that agent in the project with the open findings as its task. The agent runs under your own account, and each is kept to the task in the way that agent supports:
-
-| | How it is confined | What it runs to check itself |
-| --- | --- | --- |
-| Claude Code | May read and edit files and run `tenjin doctor` and `tenjin sdk guide`. No other command | `tenjin doctor` |
-| Codex | Its own sandbox: it can change files in this project only, and has no network access | `tenjin doctor --offline` |
-
-Neither is given your connectors. Claude Code cannot commit; Codex is told not to.
-
-`setup` then lists the files that changed and runs the checks itself, including the SDK key check against Tenjin; the agent's word is not taken for it. It also prints the command that reopens the conversation (`claude --resume <id>` or `codex resume <id>`): the agent keeps it on your machine, so you can open it in another terminal to ask why something changed, or to carry on from there. That resumed session is an ordinary one, under your own settings, not the confined run `setup` started.
-
-Pass `--agent claude` or `--agent codex` to skip the question, or `--agent none` to do the integration by hand. Without a terminal, an agent is started only when `--agent` names one. If `tenjin` is itself being run by a coding agent, no second one is started.
-
-The task does not include the SDK key. The agent writes a placeholder where the key belongs, and `setup` writes the key there once the agent has finished, so the key never enters the agent's context, its transcript or its provider's logs.
-
-### Teaching your agent the CLI
-
-`setup` starts the agent for you. The other way round also works: an agent you are already using can drive the CLI itself, once it knows how.
-
-```
-tenjin agent install          # lists the files it would write, and asks
-tenjin agent status
-tenjin agent uninstall
-```
-
-For Claude Code this writes a skill to `.claude/skills/tenjin-cli/` in the project, or to your home directory with `--global`. For Codex, Cursor and other agents that read `AGENTS.md`, it adds a marked section to that file and leaves the rest as it is. `--agent claude` or `--agent agents-md` picks one; by default it uses the ones it finds. `tenjin agent skill` prints the instructions for anything else.
-
-The instructions are part of the binary, so they describe the commands your version has. Run `tenjin agent install` again after updating.
-
-### Environment
+### Environment variables
 
 | Variable | Use |
 | --- | --- |
-| `TENJIN_API_TOKEN` | An access token from the dashboard, used instead of a browser sign-in. For CI |
-| `TENJIN_SDK_KEY` | The SDK key, when the project does not hold it as a string literal |
+| `TENJIN_API_TOKEN` | An access token from the dashboard, used instead of a browser sign-in |
+| `TENJIN_SDK_KEY` | The SDK key, when the project does not contain it |
 | `TENJIN_SDK_KEY_ANDROID`, `TENJIN_SDK_KEY_IOS` | The same, per platform |
 | `TENJIN_SDK_KEY_ANDROID_<VARIANT>` | The same, for another build, such as `TENJIN_SDK_KEY_ANDROID_AMAZON` |
-| `TENJIN_DASHBOARD_URL`, `TENJIN_API_URL`, `TENJIN_TRACK_URL`, `TENJIN_RESOURCE_URL` | Replace one of Tenjin's addresses, for a local or test copy of a service. Each set of addresses keeps its own session, apart from production's; the API and resource addresses need the dashboard's replaced too. Each must be `https`, except on this machine (`127.0.0.1`, `localhost`) |
-| `NO_COLOR` | Disable colour and the wordmark |
-| `CLICOLOR_FORCE` | Keep colour when the output is piped, for example into `less -R` |
+| `TENJIN_NO_UPDATE_CHECK` | `1` turns off the new-release notice |
+| `TENJIN_DASHBOARD_URL`, `TENJIN_API_URL`, `TENJIN_TRACK_URL`, `TENJIN_RESOURCE_URL` | Point at another copy of a Tenjin service. Each must be `https`, except on this machine |
+| `NO_COLOR` | Turn off colour |
+| `CLICOLOR_FORCE` | Keep colour when output is piped, for example into `less -R` |
 
-## Build
+### Files
 
-Requires Go 1.27.
+The CLI keeps a few small files in a `tenjin` folder in your user configuration directory:
 
-```
-make build              # bin/tenjin
+| System | Folder |
+| --- | --- |
+| macOS | `~/Library/Application Support/tenjin` |
+| Linux | `$XDG_CONFIG_HOME/tenjin`, or `~/.config/tenjin` |
+| Windows | `%AppData%\tenjin` |
+
+It holds the time of the last update check and the newest SDK releases it found. Your session is kept in the system keychain (macOS Keychain, Windows Credential Manager, the Secret Service on Linux), or in this folder, readable only by you, where there is no keychain.
+
+## Privacy and security
+
+- **No analytics.** The CLI sends no telemetry.
+- **What it contacts:** Tenjin's dashboard, API and Tenjin's tracking service for the commands you run; GitHub, once a day, for the newest release of the CLI; and, once a day for `doctor`, the public registries of the Tenjin SDKs (Maven Central, pub.dev, npm, GitHub). `--offline` keeps `doctor` from contacting Tenjin and the registries.
+- **Credentials and SDK keys are never printed.** Keys are shown by their last four characters, in tables, JSON, `--verbose` and an agent's report.
+- **It changes your project only to write an SDK key** where a placeholder was left for it. Code changes are yours or your agent's.
+
+Report a vulnerability privately: see [SECURITY.md](SECURITY.md).
+
+## Troubleshooting
+
+- **Anything that talks to Tenjin:** run it again with `--verbose` to see each request and its answer.
+- **macOS says the binary cannot be opened** after you downloaded an archive in a browser: run `xattr -d com.apple.quarantine /path/to/tenjin`. Homebrew and `install.sh` do not need this.
+- **Windows PowerShell reports a TLS error** when installing: run `[Net.ServicePointManager]::SecurityProtocol = 'Tls12'` first.
+- **`tenjin login` on a remote machine** (SSH): use `tenjin login --no-browser`, open the address it prints in your local browser, and paste back the address you land on.
+- **`doctor --device` finds no device:** check that `adb devices` lists it, or that the simulator is booted, and pass `--serial` when there are several.
+
+Questions about your Tenjin account or integration: [support@tenjin.com](mailto:support@tenjin.com). Bugs and ideas: [open an issue](https://github.com/tenjin/tenjin-cli/issues/new/choose).
+
+## Contributing
+
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers building, testing and the project's conventions. Changes are listed in the [CHANGELOG](CHANGELOG.md), and everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+```sh
+make build   # bin/tenjin
 make test
 make lint
-make release-snapshot   # every release archive and the Homebrew cask, into dist/; publishes nothing
 ```
-
-A release is made by pushing a tag such as `v0.1.0`: the release workflow tests, builds the archives for macOS, Linux and Windows with GoReleaser (`.goreleaser.yaml`), publishes them with their checksums on GitHub, and opens a pull request with the new cask in `tenjin/homebrew-tap`. `brew upgrade` finds the release once that pull request is merged.
-
-## Layout
-
-```
-cmd/tenjin          entry point
-internal/cli        command tree, one file per noun
-internal/project    detects what a project is; reads files only
-internal/verify     the doctor checks
-internal/agent      hands a task to an installed coding agent
-internal/skill      the instructions for coding agents, and their installer
-internal/keyfill    finds the SDK key placeholders agents leave, and fills them
-internal/devicelog  reads the SDK's lines from a device log
-internal/track  asks Tenjin about an SDK key or a device
-internal/transport  HTTP retries and the --verbose log
-internal/tenjinapi  operations on the Tenjin API
-internal/oauth      browser sign-in
-internal/session    stored credentials and token refresh
-internal/config     service URLs per environment
-internal/render     output: table and JSON
-internal/clierr     error kinds and exit codes
-docs/adr            architecture decisions
-```
-
-Commands stay thin: parse flags, call one operation, render the result. See [`docs/adr/0001-language-repository-and-scope.md`](docs/adr/0001-language-repository-and-scope.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE). The SDK integration guides embedded under `internal/guides/data` come from [tenjin/sdk-llm-guides](https://github.com/tenjin/sdk-llm-guides), under the same licence.
+[MIT](LICENSE). The SDK integration guides embedded under `internal/guides/data` come from [tenjin/sdk-llm-guides](https://github.com/tenjin/sdk-llm-guides), under the same license. Release archives include the licenses of the software compiled into the binary, in `THIRD_PARTY_NOTICES.md`.
