@@ -14,6 +14,8 @@ on:
         description: The commit to test, such as a release tag
         type: string
         required: false
+permissions:
+  contents: read
 jobs:
   test:
     name: Test (${{ matrix.os }})

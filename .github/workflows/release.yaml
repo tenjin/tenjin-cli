@@ -6,6 +6,9 @@ on:
       tag:
         type: string
         required: true
+    secrets:
+      CODE_OPS_APP_PRIVATE_KEY:
+        required: true
   # To run a failed release again, while it is still a draft.
   workflow_dispatch:
     inputs:

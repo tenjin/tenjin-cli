@@ -60,7 +60,7 @@ func TestEachSetOfAddressesHasItsOwnSession(t *testing.T) {
 // A token or an SDK key goes to these addresses, so plain http is accepted
 // only where nobody else on the network can read it.
 func TestPlainHTTPOnlyOnThisMachine(t *testing.T) {
-	for _, ok := range []string{"http://127.0.0.1:3999", "http://localhost:3000", "http://[::1]:8080", "http://tracker.localhost", "https://api.example.com/v2"} {
+	for _, ok := range []string{"http://127.0.0.1:3999", "http://localhost:3000", "http://[::1]:8080", "http://tenjin.localhost", "https://api.example.com/v2"} {
 		if _, err := Resolve(env(map[string]string{"TENJIN_DASHBOARD_URL": "https://dashboard.example.com", "TENJIN_API_URL": ok})); err != nil {
 			t.Errorf("%q: %v", ok, err)
 		}

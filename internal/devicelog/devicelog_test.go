@@ -248,7 +248,7 @@ func TestParseARealIOSCapture(t *testing.T) {
 		"developer_device_id":       "AAAABBBB-CCCC-DDDD-EEEE-000000000002",
 		"advertising_id":            "00000000-0000-0000-0000-000000000000",
 		"tracking_status":           "0",
-		"timezone":                  "America/New_York",
+		"timezone":                  "UTC",
 	} {
 		if got := c.Params[key]; got != want {
 			t.Errorf("%s = %q, want %q", key, got, want)
