@@ -80,6 +80,8 @@ homebrew_casks:
     # Committed and signed as the app.
     commit_author:
       use_github_app_token: true
+    # Also the pull request's title: the tap uses Conventional Commits.
+    commit_msg_template: "chore: update tenjin to {{ .Tag }}"
     homepage: https://github.com/tenjin/tenjin-cli
     description: Integrate and verify the Tenjin SDK from your terminal
     # Pre-releases stay out of the tap.
