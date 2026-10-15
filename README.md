@@ -286,7 +286,7 @@ Questions about your Tenjin account or integration: [support@tenjin.com](mailto:
 
 ## Contributing
 
-Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers building, testing and the project's conventions. Changes are listed in the [CHANGELOG](CHANGELOG.md), and everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers building, testing and the project's conventions. Each release's changes are on the [releases page](https://github.com/tenjin/tenjin-cli/releases), and everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ```sh
 make build   # bin/tenjin

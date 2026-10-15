@@ -1,6 +1,7 @@
-# Release builds, archives and the Homebrew cask. A release is made by pushing
-# a tag such as v0.1.0 (see .github/workflows/release.yaml). To try the whole
-# pipeline locally without publishing anything: make release-snapshot
+# Release builds, archives and the Homebrew cask. A release is made by merging
+# release-please's pull request (see .github/workflows/release-please.yaml).
+# To try the whole pipeline locally without publishing anything:
+# make release-snapshot
 version: 2
 
 project_name: tenjin
@@ -48,14 +49,19 @@ checksum:
 snapshot:
   version_template: "{{ incpatch .Version }}-snapshot"
 
+# The release notes are release-please's, from the conventional commits.
 changelog:
-  use: git
-  sort: asc
+  disable: true
 
 release:
   github:
     owner: tenjin
     name: tenjin-cli
+  # Fills the draft release-please made, found by this name (v0.1.0), and
+  # leaves it a draft: release.yaml publishes it after the cask.
+  name_template: "{{ .Tag }}"
+  use_existing_draft: true
+  draft: true
   # A tag such as v0.2.0-rc.1 is a pre-release: not the latest release, so
   # the install scripts and the update notice keep to the last full one.
   prerelease: auto

@@ -75,10 +75,11 @@ docs/adr              architecture decisions
 
 ## Releases
 
+- release-please makes releases from the conventional titles of squashed pull requests (`.github/workflows/release-please.yaml`, `release-please-config.json`; `pr-title.yaml` checks titles). Merging its pull request makes a draft release and the `v` tag; `release.yaml` tests that commit, GoReleaser fills the draft (`use_existing_draft`, matched by the name `v<version>`) and opens the cask, and the draft is published last, so `releases/latest` never lacks archives. Tags keep the `v`: `install.sh`, `install.ps1`, the update notice and Go need it. `CHANGELOG.md` is release-please's; don't edit it by hand.
 - `.goreleaser.yaml` builds six targets (macOS, Linux and Windows, each on amd64 and arm64), archives named `tenjin_<version>_<os>_<arch>`, `checksums.txt`, and the Homebrew cask. `install.sh` and `install.ps1` build the same archive names; change all three together. CI builds a snapshot on every pull request and installs it with both scripts and the cask, on each OS.
 - A release proposes its cask to `tenjin/homebrew-tap` as a pull request, with a token from the organization's Code Ops GitHub App limited to the tap; someone merges it. Pin every action by commit SHA: the release job holds that token.
 - The cask removes macOS's quarantine mark after install, because the binaries are not notarized yet. Drop that step once they are. It is a `postflight_steps` block in `custom_block` (Homebrew deprecated `postflight`); move it to `hooks.post.install_steps` with GoReleaser v2.19.
-- The README's "Pre-release" note goes with the first tag.
+- The README's "Pre-release" note goes in a `docs:` pull request merged just before the first release's.
 - A local snapshot shows `commit none` and a `v0.0.0` download address while the repository has no remote and no tag. A tagged release in CI fills both in.
 
 ## Tests
