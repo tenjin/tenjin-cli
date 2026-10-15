@@ -42,6 +42,8 @@
 			Fail "could not find the latest release at $releases"
 		}
 		$final = if ($response.BaseResponse.ResponseUri) { $response.BaseResponse.ResponseUri } else { $response.BaseResponse.RequestMessage.RequestUri }
+		# With no release yet, it stays on the releases page.
+		if ($final.AbsoluteUri -notmatch '/tag/') { Fail "no release of the Tenjin CLI has been published at $releases yet" }
 		$version = $final.AbsoluteUri.TrimEnd('/').Split('/')[-1]
 	}
 	$version = $version -replace '^v', ''

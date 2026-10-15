@@ -12,9 +12,9 @@ This ADR records what the CLI is, what it is not, and how it is built.
 
 ### 1. The CLI is thin
 
-It covers the local half of SDK onboarding: the app and its SDK key, test devices, live events, and diagnosing an integration that sends nothing.
+It covers the local half of SDK onboarding: the app and its SDK key, a launch on a test device, and diagnosing an integration that sends nothing.
 
-It does not edit the developer's project itself. The developer makes the code changes, or their own coding agent does: `tenjin setup` can start an installed agent on the open findings, with the developer's consent, confined to file edits and `tenjin doctor`. The CLI then checks the result itself. It embeds no model and calls no model API.
+It does not edit the developer's project itself. The developer makes the code changes, or their own coding agent does: `tenjin setup` can start an installed agent on the open findings, with the developer's consent, confined to file edits, `tenjin doctor` and `tenjin sdk guide`. The CLI then checks the result itself. It embeds no model and calls no model API.
 
 It does not mirror the dashboard. Campaign, callback and reporting commands are out until someone needs them.
 
@@ -69,7 +69,7 @@ The rule: a command parses flags, calls one operation, and renders the result. N
 ## Not decided here
 
 - The shared module's name.
-- macOS notarization and Windows signing. Needed before a public release; unsigned binaries trip Gatekeeper.
+- macOS notarization and Windows signing. Releases ship unsigned for now; the Homebrew cask clears macOS's quarantine mark until the binaries are notarized.
 
 ## Consequences
 

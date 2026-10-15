@@ -1,6 +1,6 @@
 # Tenjin CLI
 
-A command-line tool for the parts of Tenjin SDK onboarding that happen on the developer's machine: the app and its SDK key, test devices, live events, and diagnosing an integration that sends nothing. Driven by a person (`tenjin setup`) or by a coding agent (the individual commands with `--json`).
+A command-line tool for the parts of Tenjin SDK onboarding that happen on the developer's machine: the app and its SDK key, a launch on a test device, and diagnosing an integration that sends nothing. Driven by a person (`tenjin setup`) or by a coding agent (the individual commands with `--json`).
 
 This repository is meant to be public. Keep internal details (private repos, internal hosts, ticket links, customer data) out of anything committed. Internal notes live in `CLAUDE.local.md` and the gitignored files under `docs/` and `demo/`.
 
@@ -26,6 +26,7 @@ cmd/tenjin            entry point; only calls cli.Execute
 internal/cli          command tree; root.go holds shared flags and the environment
 internal/project      detection: framework, platforms, bundle IDs. Reads files only, no network
 internal/verify       doctor checks; source.go holds the per-framework call patterns
+internal/proc         starts programs in their own process group, so Ctrl-C reaches them
 internal/agent        starts an installed coding agent on a task and follows its output; one driver each for Claude Code and Codex
 internal/guides       the SDK integration guides from sdk-llm-guides, embedded at a pinned revision (scripts/sync-guides.sh)
 internal/skill        tenjin-cli.md, the instructions for agents (embedded), and the installer behind `tenjin agent`
@@ -40,6 +41,7 @@ internal/config       service URLs per environment
 internal/render       table and JSON output, terminal colour (a muted palette, 24-bit where the terminal says it can)
 internal/sdkrelease   the newest release of each SDK, from Maven Central, pub.dev, npm and GitHub, once a day
 internal/update       the once-a-day check for a newer release, told on stderr to a person at a terminal
+internal/buildinfo    version, commit and date, stamped in by GoReleaser and make build
 internal/clierr       error kinds and their exit codes
 internal/testproject  builds sample projects on disk for tests
 docs/adr              architecture decisions
@@ -80,7 +82,7 @@ docs/adr              architecture decisions
 - A release proposes its cask to `tenjin/homebrew-tap` as a pull request, with a token from the organization's Code Ops GitHub App limited to the tap; someone merges it. Pin every action by commit SHA: the release job holds that token.
 - The cask removes macOS's quarantine mark after install, because the binaries are not notarized yet. Drop that step once they are. It is a `postflight_steps` block in `custom_block` (Homebrew deprecated `postflight`); move it to `hooks.post.install_steps` with GoReleaser v2.19.
 - The README's "Pre-release" note goes in a `docs:` pull request merged just before the first release's.
-- A local snapshot shows `commit none` and a `v0.0.0` download address while the repository has no remote and no tag. A tagged release in CI fills both in.
+- A local snapshot shows `commit none` and a `v0.0.0` download address while the repository has no tag. A release in CI fills both in.
 
 ## Tests
 

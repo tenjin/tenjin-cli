@@ -34,23 +34,29 @@ The tests need no Tenjin account and make no network requests: Tenjin's services
 ## Layout
 
 ```text
-cmd/tenjin          entry point; only calls cli.Execute
-internal/cli        command tree; commands parse flags, call one operation and render
-internal/project    detects what a project is; reads files only
-internal/verify     the doctor checks
-internal/agent      hands a task to an installed coding agent
-internal/skill      the instructions for coding agents, and their installer
-internal/keyfill    finds the SDK key placeholders agents leave, and fills them
-internal/devicelog  reads the SDK's lines from a device log
-internal/track  asks Tenjin about an SDK key or a device
-internal/transport  HTTP retries and the --verbose log
-internal/tenjinapi  operations on the Tenjin API
-internal/oauth      browser sign-in
-internal/session    stored credentials and token refresh
-internal/config     service URLs
-internal/render     output: table, JSON and colour
-internal/clierr     error kinds and exit codes
-docs/adr            architecture decisions
+cmd/tenjin            entry point; only calls cli.Execute
+internal/cli          command tree; commands parse flags, call one operation and render
+internal/project      detects what a project is; reads files only
+internal/verify       the doctor checks
+internal/agent        hands a task to an installed coding agent
+internal/proc         starts programs in their own process group, so Ctrl-C stops them
+internal/guides       the SDK integration guides, embedded
+internal/skill        the instructions for coding agents, and their installer
+internal/keyfill      finds the SDK key placeholders agents leave, and fills them
+internal/devicelog    reads the SDK's lines from a device log
+internal/track        asks Tenjin's tracking service about an SDK key or a device
+internal/transport    HTTP retries and the --verbose log
+internal/tenjinapi    operations on the Tenjin API
+internal/oauth        browser sign-in
+internal/session      stored credentials and token refresh
+internal/config       service URLs
+internal/render       output: table, JSON and colour
+internal/sdkrelease   the newest release of each SDK, once a day
+internal/update       the once-a-day check for a newer CLI release
+internal/buildinfo    the version, commit and date stamped in at build time
+internal/clierr       error kinds and exit codes
+internal/testproject  sample projects for tests
+docs/adr              architecture decisions
 ```
 
 The reasoning behind the language, the repository and the scope is in [docs/adr/0001-language-repository-and-scope.md](docs/adr/0001-language-repository-and-scope.md).
@@ -59,7 +65,7 @@ The reasoning behind the language, the repository and the scope is in [docs/adr/
 
 Releases are made with [release-please](https://github.com/googleapis/release-please), from the titles of the commits on `main`. It keeps a pull request open with the next version and its changelog: a `feat:` raises the minor version, a `fix:` the patch version, and a breaking change (`feat!:`) the minor version until 1.0. `chore:`, `ci:`, `docs:`, `test:` and `refactor:` make no release.
 
-Merging that pull request tags the release as a draft. The release workflow then runs the tests on the tagged commit, builds the archives for macOS, Linux and Windows with GoReleaser (`.goreleaser.yaml`), uploads them with their checksums, opens a pull request with the new cask in [tenjin/homebrew-tap](https://github.com/tenjin/homebrew-tap), and only then publishes the release. Homebrew users get it once the cask's pull request is merged. If the release workflow fails, run it again from the Actions tab with the draft's tag.
+Merging that pull request tags the release as a draft. The release workflow then runs the tests on the tagged commit, builds the archives for macOS, Linux and Windows with GoReleaser (`.goreleaser.yaml`), uploads them with their checksums, opens a pull request with the new cask in [tenjin/homebrew-tap](https://github.com/tenjin/homebrew-tap), and only then publishes the release. Homebrew users get it once the cask's pull request is merged. If the release workflow fails while the release is still a draft, run it again from the Actions tab with the draft's tag. If the tests fail on the tagged commit, delete the draft release and its tag, and release the fix as the next version.
 
 ## Pull requests
 

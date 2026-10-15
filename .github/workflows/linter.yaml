@@ -21,6 +21,8 @@ on:
       - .golangci.yml
       - Makefile
       - .github/workflows/linter.yaml
+permissions:
+  contents: read
 jobs:
   linter:
     name: Linter
