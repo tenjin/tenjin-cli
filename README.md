@@ -11,7 +11,7 @@ Integrate the [Tenjin](https://tenjin.com) SDK, and work with your Tenjin accoun
 | You are | Start with |
 | --- | --- |
 | An app developer adding the Tenjin SDK to an app | `tenjin setup` in the project: see [Quick start](#quick-start) |
-| Anyone with a Tenjin account, or a script working for them | `tenjin login`, then `tenjin apps list`: see [Your Tenjin data](#your-tenjin-data) |
+| Anyone with a Tenjin account, UA teams included, or a script working for them | `tenjin login`, then `tenjin campaigns list` or `tenjin reports spend`: see [Your Tenjin data](#your-tenjin-data) |
 
 For app developers, the Tenjin CLI covers the parts of SDK onboarding that happen on your machine:
 
@@ -135,7 +135,7 @@ Two of setup's steps are under [Your Tenjin data](#your-tenjin-data): `tenjin ap
 
 #### Your Tenjin data
 
-For anyone with a Tenjin account, from any directory: none of these reads a project, and each accepts `--json`. Today that is the organization's apps and their SDK keys; reports, campaigns and callbacks are in the dashboard.
+For anyone with a Tenjin account, from any directory: none of these reads a project. Each reads one thing from the [Tenjin API](https://tenjin.com/docs/automation-apis/), with its parameters as flags. At a terminal it prints a table; with `--json`, the API's answer as it is, so the API's documentation describes it. Lists show one page: `--page` and `--per-page` pick one, `--all` reads them all.
 
 | Command | What it does |
 | --- | --- |
@@ -144,6 +144,28 @@ For anyone with a Tenjin account, from any directory: none of these reads a proj
 | `tenjin apps create` | Create an app from `--name`, `--bundle-id` and `--platform`, or from `--store-url` |
 | `tenjin apps ensure --bundle-id <id> --platform <platform>` | Find the app, or create it. Safe to repeat |
 | `tenjin apps keys list --app <id>` | The app's SDK keys, by their last four characters |
+| `tenjin apps events list --app <id>` | The events the app has sent |
+| `tenjin apps callbacks list --app <id>`, `get <id>` | The app's callbacks to marketing channels; `--channel` narrows the list |
+| `tenjin apps s2s-callbacks list --app <id>`, `get <id>` | The app's server-to-server callbacks |
+| `tenjin apps callback-templates list --app <id>`, `get <id>` | The callback templates the app can use |
+| `tenjin apps callback-groups list --app <id> --channel <id>`, `get <id>` | The app's callback groups for one channel |
+| `tenjin apps callback-settings get --app <id> --channel <id>` | The app's callback settings for one channel |
+| `tenjin campaigns list`, `get <id>` | Campaigns and their tracking links; `--app`, `--channel`, `--platform` and `--query` narrow the list |
+| `tenjin channels list`, `get <id>` | Marketing channels, by ID |
+| `tenjin channels callback-group-templates <id>` | A channel's callback group templates |
+| `tenjin ad-accounts list`, `get <id>` | The ad network accounts Tenjin reads spend from |
+| `tenjin skadnetworks list`, `get <id>` | SKAdNetwork IDs |
+| `tenjin reports spend --from <date> --to <date>` | User acquisition: spend, installs and what they returned |
+| `tenjin reports ad-revenue --from <date> --to <date>` | Ad revenue, by ad network |
+| `tenjin reports skadnetwork --from <date> --to <date>`, `skan` | SKAdNetwork postbacks, as Tenjin attributes them, or as Apple sends them |
+| `tenjin saved-reports list`, `get <id>`, `run <id>` | Reports saved in the dashboard, and their data |
+
+Reports take the API's own values: `--granularity`, `--group-by`, `--apps`, `--channels` and `--metrics`. For example:
+
+```sh
+tenjin reports spend --from 2026-10-01 --to 2026-10-07 --group-by channel,app --granularity totals-daily
+tenjin campaigns list --app <app-id> --all --json | jq '.data[].attributes.name'
+```
 
 #### Your account
 
@@ -244,6 +266,7 @@ Every command except `setup` is built to be driven by a program:
 - A command never prompts when stdin is not a terminal. Anything that creates something needs `--yes` or a flag.
 - A failure with `--json` is written to stderr as `{"error": {"code", "message", "hint"}}`.
 - The JSON of `project detect` and `doctor` is stable: fields are added, never renamed or removed.
+- The data commands (campaigns, channels, reports and the others in [Your Tenjin data](#your-tenjin-data)) print the API's answer as it is.
 - `TENJIN_API_TOKEN`, an access token from the dashboard, signs in without a browser.
 
 | Exit code | Meaning |

@@ -418,8 +418,9 @@ Integrating the Tenjin SDK, for app developers: start with 'tenjin setup'. It
 works out what the project is, finds its Tenjin app and SDK key, checks the
 integration, and checks a real launch.
 
-Your Tenjin data, for anyone with a Tenjin account: today, the apps in your
-organization and their SDK keys, from a terminal or a script.
+Your Tenjin data, for anyone with a Tenjin account, UA teams included: apps,
+campaigns, channels, callbacks and reports, from a terminal or a script. Each
+command reads one thing; with --json it prints the API's own answer.
 
 Every command but setup accepts --json and never prompts when stdin is not a
 terminal, so scripts and coding agents can drive them.`,
@@ -465,7 +466,7 @@ terminal, so scripts and coding agents can drive them.`,
 		commands []*cobra.Command
 	}{
 		{"Integrate the Tenjin SDK (app developers):", []*cobra.Command{newSetupCmd(opts, env), newProjectCmd(opts, env), newDoctorCmd(opts, env), newSDKCmd(opts), newAgentCmd(opts, env)}},
-		{"Your Tenjin data:", []*cobra.Command{newAppsCmd(opts, env)}},
+		{"Your Tenjin data:", []*cobra.Command{newAppsCmd(opts, env), newCampaignsCmd(opts, env), newChannelsCmd(opts, env), newAdAccountsCmd(opts, env), newSKAdNetworksCmd(opts, env), newReportsCmd(opts, env), newSavedReportsCmd(opts, env)}},
 		{"Your account:", []*cobra.Command{newLoginCmd(opts, env), newLogoutCmd(opts, env), newAuthCmd(opts, env)}},
 	}
 	for i, g := range groups {

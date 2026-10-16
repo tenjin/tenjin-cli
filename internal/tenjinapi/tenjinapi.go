@@ -23,6 +23,7 @@ import (
 
 	"github.com/tenjin/tenjin-cli/internal/clierr"
 	"github.com/tenjin/tenjin-cli/internal/tenjinapi/cma"
+	"github.com/tenjin/tenjin-cli/internal/tenjinapi/rma"
 )
 
 // maxPageSize is the largest page the API serves. Its default is 25.
@@ -260,20 +261,38 @@ func (c *Client) CreateApp(ctx context.Context, in NewApp) (app *App, created bo
 
 // api returns the generated client, signed in for this call.
 func (c *Client) api(ctx context.Context) (*cma.ClientWithResponses, error) {
+	cl, err := c.clients(ctx)
+	return cl.cma, err
+}
+
+// clients are the generated clients of both APIs, signed in for this call.
+type clients struct {
+	cma *cma.ClientWithResponses
+	rma *rma.ClientWithResponses
+}
+
+func (c *Client) clients(ctx context.Context) (clients, error) {
 	token, err := c.Tokens.Token(ctx)
 	if err != nil {
-		return nil, err
+		return clients{}, err
 	}
 	httpClient := *c.HTTP
 	httpClient.Transport = limitedBody{next: transportOf(c.HTTP)}
-	return cma.NewClientWithResponses(c.BaseURL,
-		cma.WithHTTPClient(&httpClient),
-		cma.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
-			req.Header.Set("Authorization", "Bearer "+token)
-			req.Header.Set("Accept", "application/json")
-			req.Header.Set("User-Agent", c.UserAgent)
-			return nil
-		}))
+	sign := func(_ context.Context, req *http.Request) error {
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", c.UserAgent)
+		return nil
+	}
+	campaigns, err := cma.NewClientWithResponses(c.BaseURL, cma.WithHTTPClient(&httpClient), cma.WithRequestEditorFn(sign))
+	if err != nil {
+		return clients{}, err
+	}
+	reports, err := rma.NewClientWithResponses(c.BaseURL, rma.WithHTTPClient(&httpClient), rma.WithRequestEditorFn(sign))
+	if err != nil {
+		return clients{}, err
+	}
+	return clients{cma: campaigns, rma: reports}, nil
 }
 
 // receive reads a generated call's response into out: a request that failed

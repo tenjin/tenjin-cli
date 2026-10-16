@@ -113,6 +113,10 @@ When several devices or simulators are running, pass `--serial` with the adb ser
 
 On iOS, `doctor --device` reads an iPhone connected by cable, launching the installed debug build itself, or a running simulator. A simulator's install has not been seen to be processed, so `device.processed` from an iPhone is what confirms an iOS integration; from a simulator, say that `device.connect` passed and the install is unconfirmed.
 
+## Reading the account's data
+
+Outside an integration, the CLI also reads the signed-in organization's data, one API read per command: `tenjin campaigns list`, `tenjin channels list`, `tenjin ad-accounts list`, `tenjin apps events list --app <id>`, `tenjin apps callbacks list --app <id>`, `tenjin reports spend --from <date> --to <date>` (and `ad-revenue`, `skadnetwork`, `skan`), `tenjin saved-reports run <id>`. With `--json` each prints the API's answer as it is; lists are one page unless `--all` is given. They only read: nothing here changes the account.
+
 ## Rules
 
 - Call `connect()` on every launch, not only the first. On Android it belongs in the launcher Activity's `onResume()`, not in the `Application` class. On iOS it runs after the user has answered the tracking prompt.
