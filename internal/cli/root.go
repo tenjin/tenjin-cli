@@ -411,14 +411,18 @@ func newRootCmd(env *environment) *cobra.Command {
 	opts := &options{}
 	root := &cobra.Command{
 		Use:   "tenjin",
-		Short: "Developer tools for integrating and verifying the Tenjin SDK",
-		Long: `The Tenjin CLI covers the parts of Tenjin SDK onboarding that happen on your
-machine: working out what the project is, finding its Tenjin app, checking
-the integration, and explaining why it sends nothing.
+		Short: "Integrate the Tenjin SDK, and work with your Tenjin account, from the terminal",
+		Long: `The Tenjin CLI has two sides.
 
-Start with 'tenjin setup'. The commands under it also work on their own: each
-accepts --json and never prompts when stdin is not a terminal, so scripts and
-coding agents can drive them.`,
+Integrating the Tenjin SDK, for app developers: start with 'tenjin setup'. It
+works out what the project is, finds its Tenjin app and SDK key, checks the
+integration, and confirms a real launch.
+
+Your Tenjin data, for anyone with a Tenjin account: the apps in your
+organization and their SDK keys, from a terminal or a script.
+
+Every command accepts --json and never prompts when stdin is not a terminal,
+so scripts and coding agents can drive them.`,
 		Version:       buildinfo.Get().Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -460,8 +464,8 @@ coding agents can drive them.`,
 		title    string
 		commands []*cobra.Command
 	}{
-		{"Start here:", []*cobra.Command{newSetupCmd(opts, env)}},
-		{"The steps, one at a time:", []*cobra.Command{newProjectCmd(opts, env), newAppsCmd(opts, env), newDoctorCmd(opts, env), newSDKCmd(opts), newAgentCmd(opts, env)}},
+		{"Integrate the Tenjin SDK (app developers):", []*cobra.Command{newSetupCmd(opts, env), newProjectCmd(opts, env), newDoctorCmd(opts, env), newSDKCmd(opts), newAgentCmd(opts, env)}},
+		{"Your Tenjin data:", []*cobra.Command{newAppsCmd(opts, env)}},
 		{"Your account:", []*cobra.Command{newLoginCmd(opts, env), newLogoutCmd(opts, env), newAuthCmd(opts, env)}},
 	}
 	for i, g := range groups {

@@ -267,19 +267,24 @@ func TestDoctorRefusesAnUnsupportedProject(t *testing.T) {
 	}
 }
 
-// The first screen a new user sees must lead with setup, and must not
-// promise commands that do not exist yet.
-func TestHelpLeadsWithSetup(t *testing.T) {
+// The first screen tells app developers from everyone else: the SDK's
+// integration leads with setup, the data commands stand apart, and nothing
+// is promised that does not exist yet.
+func TestHelpSeparatesTheIntegrationFromTheData(t *testing.T) {
 	_, stdout, _ := newHarness(t).run()
-	start, steps, account := strings.Index(stdout, "Start here:"), strings.Index(stdout, "The steps, one at a time:"), strings.Index(stdout, "Your account:")
-	if start < 0 || steps < start || account < steps || !strings.Contains(stdout[start:steps], "setup") {
+	sdk, data, account := strings.Index(stdout, "Integrate the Tenjin SDK (app developers):"), strings.Index(stdout, "Your Tenjin data:"), strings.Index(stdout, "Your account:")
+	if sdk < 0 || data < sdk || account < data {
 		t.Fatalf("help is not grouped as expected:\n%s", stdout)
 	}
-	// The steps are listed in the order they are taken, not alphabetically.
-	order := stdout[steps:account]
-	project, apps, doctor := strings.Index(order, "project"), strings.Index(order, "apps"), strings.Index(order, "doctor")
-	if project > apps || apps > doctor {
-		t.Errorf("the steps are out of order:\n%s", order)
+	// The integration's commands are listed in the order they are taken,
+	// setup first, not alphabetically.
+	steps := stdout[sdk:data]
+	setup, project, doctor := strings.Index(steps, "setup"), strings.Index(steps, "project"), strings.Index(steps, "doctor")
+	if setup < 0 || setup > project || project > doctor {
+		t.Errorf("the integration's commands are out of order:\n%s", steps)
+	}
+	if !strings.Contains(stdout[data:account], "apps") {
+		t.Errorf("apps is not under the data commands:\n%s", stdout[data:account])
 	}
 	for _, notBuilt := range []string{"test devices", "live events"} {
 		if strings.Contains(stdout, notBuilt) {
@@ -333,10 +338,10 @@ func TestHelpIsStyledOnATerminal(t *testing.T) {
 	t.Setenv("COLORTERM", "")
 	_, styled, _ := newHarness(t).run()
 	for _, want := range []string{
-		"████████╗",                         // the wordmark
-		"\x1b[1;38;5;37mStart here:\x1b[0m", // a section title
-		"  \x1b[38;5;37msetup\x1b[0m",       // a command name
-		"\x1b[38;5;37m--json\x1b[0m",        // a flag
+		"████████╗",                               // the wordmark
+		"\x1b[1;38;5;37mYour Tenjin data:\x1b[0m", // a section title
+		"  \x1b[38;5;37msetup\x1b[0m",             // a command name
+		"\x1b[38;5;37m--json\x1b[0m",              // a flag
 	} {
 		if !strings.Contains(styled, want) {
 			t.Errorf("styled help lacks %q", want)
