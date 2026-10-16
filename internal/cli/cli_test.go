@@ -277,13 +277,14 @@ func TestHelpSeparatesTheIntegrationFromTheData(t *testing.T) {
 		t.Fatalf("help is not grouped as expected:\n%s", stdout)
 	}
 	// The integration's commands are listed in the order they are taken,
-	// setup first, not alphabetically.
+	// setup first, not alphabetically. Rows are matched whole: setup's own
+	// description mentions "project".
 	steps := stdout[sdk:data]
-	setup, project, doctor := strings.Index(steps, "setup"), strings.Index(steps, "project"), strings.Index(steps, "doctor")
+	setup, project, doctor := strings.Index(steps, "\n  setup "), strings.Index(steps, "\n  project "), strings.Index(steps, "\n  doctor ")
 	if setup < 0 || setup > project || project > doctor {
 		t.Errorf("the integration's commands are out of order:\n%s", steps)
 	}
-	if !strings.Contains(stdout[data:account], "apps") {
+	if !strings.Contains(stdout[data:account], "\n  apps ") {
 		t.Errorf("apps is not under the data commands:\n%s", stdout[data:account])
 	}
 	for _, notBuilt := range []string{"test devices", "live events"} {

@@ -131,9 +131,11 @@ For app developers, in the app's project.
 | `tenjin sdk guide [platform]` | The SDK integration guide, as tested with this version; works offline |
 | `tenjin agent install [path]` | Teach your coding agent to use this CLI |
 
+Two of setup's steps are under [Your Tenjin data](#your-tenjin-data): `tenjin apps ensure` finds or creates the app, and `tenjin apps keys list` reads its SDK keys.
+
 #### Your Tenjin data
 
-For anyone with a Tenjin account, from any directory: none of these reads a project. Each prints its result as a table at a terminal, or as JSON with `--json`.
+For anyone with a Tenjin account, from any directory: none of these reads a project, and each accepts `--json`. Today that is the organization's apps and their SDK keys; reports, campaigns and callbacks are in the dashboard.
 
 | Command | What it does |
 | --- | --- |
@@ -148,7 +150,8 @@ For anyone with a Tenjin account, from any directory: none of these reads a proj
 | Command | What it does |
 | --- | --- |
 | `tenjin login`, `tenjin logout`, `tenjin auth status` | Sign in through the browser (`--no-browser` over SSH), sign out, see who is signed in |
-| `tenjin version` | Version, commit and build date |
+
+`tenjin version` prints the version, commit and build date.
 
 `tenjin <command> --help` describes every flag.
 

@@ -1218,11 +1218,14 @@
           "400": {
             "description": "App not found"
           },
+          "401": {
+            "description": "Not signed in, or the token is not valid"
+          },
           "403": {
             "description": "The user's role cannot read SDK keys"
           },
           "429": {
-            "description": "More than 30 reads a minute"
+            "description": "More than 30 reads a minute; X-Retry-After says how many seconds to wait"
           }
         }
       }
