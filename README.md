@@ -6,9 +6,14 @@
 [![Release](https://img.shields.io/github/v/release/tenjin/tenjin-cli?sort=semver)](https://github.com/tenjin/tenjin-cli/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Integrate and verify the [Tenjin](https://tenjin.com) SDK from your terminal.
+Integrate the [Tenjin](https://tenjin.com) SDK, and work with your Tenjin account, from the terminal.
 
-The Tenjin CLI covers the parts of SDK onboarding that happen on your machine:
+| You are | Start with |
+| --- | --- |
+| An app developer adding the Tenjin SDK to an app | `tenjin setup` in the project: see [Quick start](#quick-start) |
+| Anyone with a Tenjin account, or a script working for them | `tenjin login`, then `tenjin apps list`: see [Your Tenjin data](#your-tenjin-data) |
+
+For app developers, the Tenjin CLI covers the parts of SDK onboarding that happen on your machine:
 
 - **Detect** what your project is: framework, platforms, bundle IDs, the file the app starts in, ad SDKs.
 - **Set up** the Tenjin app for each build, and its SDK key.
@@ -112,21 +117,37 @@ Homebrew installs completions for bash, zsh and fish. Otherwise, `tenjin complet
 
 ### Commands
 
+#### Integrating the SDK
+
+For app developers, in the app's project.
+
 | Command | What it does |
 | --- | --- |
 | `tenjin setup [path]` | The guided path, from sign-in to a launch Tenjin has processed |
 | `tenjin project detect [path]` | Framework, platforms, bundle IDs, where the app starts, ad SDKs, any Tenjin SDK already declared |
 | `tenjin doctor [path]` | Check the integration on disk, and each SDK key against Tenjin |
 | `tenjin doctor --device` | Also read a connected device: what the SDK sent and what Tenjin answered |
-| `tenjin login`, `tenjin logout`, `tenjin auth status` | Sign in through the browser (`--no-browser` over SSH), sign out, see who is signed in |
+| `tenjin project set-keys [path]` | Write SDK keys where a coding agent left placeholders |
+| `tenjin sdk guide [platform]` | The SDK integration guide, as tested with this version; works offline |
+| `tenjin agent install [path]` | Teach your coding agent to use this CLI |
+
+#### Your Tenjin data
+
+For anyone with a Tenjin account, from any directory: none of these reads a project. Each prints its result as a table at a terminal, or as JSON with `--json`.
+
+| Command | What it does |
+| --- | --- |
 | `tenjin apps list` | The apps in your organization; `--platform` and `--bundle-id` narrow it |
 | `tenjin apps get <id>` | One app, and whether Tenjin is receiving its events |
 | `tenjin apps create` | Create an app from `--name`, `--bundle-id` and `--platform`, or from `--store-url` |
 | `tenjin apps ensure --bundle-id <id> --platform <platform>` | Find the app, or create it. Safe to repeat |
 | `tenjin apps keys list --app <id>` | The app's SDK keys, by their last four characters |
-| `tenjin project set-keys [path]` | Write SDK keys where a coding agent left placeholders |
-| `tenjin sdk guide [platform]` | The SDK integration guide, as tested with this version; works offline |
-| `tenjin agent install [path]` | Teach your coding agent to use this CLI |
+
+#### Your account
+
+| Command | What it does |
+| --- | --- |
+| `tenjin login`, `tenjin logout`, `tenjin auth status` | Sign in through the browser (`--no-browser` over SSH), sign out, see who is signed in |
 | `tenjin version` | Version, commit and build date |
 
 `tenjin <command> --help` describes every flag.
