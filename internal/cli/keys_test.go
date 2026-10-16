@@ -61,7 +61,7 @@ func TestSetupWalksThroughGettingTheKey(t *testing.T) {
 		"Android (the app starts in app/src/main/java/com/example/sample/MainActivity.kt)",
 		`1. In the launcher Activity's onResume(), call TenjinSDK.getInstance(this, "<SDK_KEY>").connect().`,
 		"Where a step says <SDK_KEY>, write __TENJIN_ANDROID_SDK_KEY__ for Android exactly.",
-		"https://github.com/tenjin/tenjin-android-sdk",
+		"tenjin sdk guide android",
 
 		// The key is not in the source yet; the pasted one is checked, and
 		// the report says which key that was.
@@ -82,7 +82,12 @@ func TestSetupWalksThroughGettingTheKey(t *testing.T) {
 func TestSetupKeyCanBeSkipped(t *testing.T) {
 	h, dir := placeholderAndroid(t)
 	_, stdout, _ := h.typing("", "", "q").run("setup", dir)
-	lacks(t, stdout, "Skipped. The placeholder stays where the key belongs", "The SDK key was not checked")
+	// The placeholder finding says what to do; "not checked" beside it would
+	// say nothing more.
+	lacks(t, stdout, "Skipped. The placeholder stays where the key belongs", "The SDK key is still a placeholder")
+	if strings.Contains(stdout, "The SDK key was not checked") {
+		t.Errorf("the placeholder is also reported as an unchecked key:\n%s", stdout)
+	}
 	if len(h.fake.keysAsked) != 0 {
 		t.Errorf("Tenjin was asked about %q with no key given", h.fake.keysAsked)
 	}
@@ -308,5 +313,14 @@ func TestSetupFillsAPlaceholderAnAgentLeft(t *testing.T) {
 	lacks(t, stdout, "✓ Wrote the Android SDK key at "+androidActivity, "Nothing here would stop events reaching Tenjin")
 	if strings.Contains(stdout, "set-keys") || strings.Contains(stdout, goodKey) {
 		t.Errorf("setup sent the developer elsewhere, or printed the key:\n%s", stdout)
+	}
+}
+
+// Something that cannot be a key is not sent to Tenjin to check.
+func TestPastedTextThatIsNotAKey(t *testing.T) {
+	h, dir := placeholderAndroid(t)
+	_, stdout, _ := h.typing("", "q", "", "q").run("setup", dir)
+	if !strings.Contains(stdout, "That is not an SDK key") || len(h.fake.keysAsked) != 0 {
+		t.Errorf("keys asked = %q\n%s", h.fake.keysAsked, stdout)
 	}
 }

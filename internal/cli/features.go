@@ -12,8 +12,10 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/project"
 )
 
-func addFeaturesFlag(cmd *cobra.Command, into *[]string) {
-	cmd.Flags().StringSliceVar(into, "features", nil, "the SDK features to integrate, besides app opens: "+strings.Join(project.FeatureIDs()[1:], ", ")+"; none for app opens only (default: the ones the project suggests)")
+// addFeaturesFlag adds --features; verb says what is done with them, such as
+// "integrate" or "check".
+func addFeaturesFlag(cmd *cobra.Command, into *[]string, verb string) {
+	cmd.Flags().StringSliceVar(into, "features", nil, "the SDK features to "+verb+", besides app opens: "+strings.Join(project.FeatureIDs()[1:], ", ")+"; none for app opens only (default: the ones the project suggests)")
 }
 
 // chosenFeatures checks the features named with --features against the

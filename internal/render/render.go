@@ -4,6 +4,7 @@
 package render
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,15 +21,30 @@ type Format string
 const (
 	Table Format = "table"
 	JSON  Format = "json"
+	// CSV is for the data commands: rows for a spreadsheet.
+	CSV Format = "csv"
 )
 
 // ParseFormat validates a user-supplied format name.
 func ParseFormat(s string) (Format, error) {
 	switch Format(s) {
-	case Table, JSON:
+	case Table, JSON, CSV:
 		return Format(s), nil
 	}
-	return "", fmt.Errorf("unknown output format %q (use %q or %q)", s, Table, JSON)
+	return "", fmt.Errorf("unknown output format %q (use %q, %q, or %q for the data commands)", s, Table, JSON, CSV)
+}
+
+// WriteCSV writes a header and rows as CSV.
+func WriteCSV(w io.Writer, header []string, rows [][]string) error {
+	cw := csv.NewWriter(w)
+	if err := cw.Write(header); err != nil {
+		return err
+	}
+	if err := cw.WriteAll(rows); err != nil {
+		return err
+	}
+	cw.Flush()
+	return cw.Error()
 }
 
 // WriteJSON writes v as indented JSON followed by a newline.

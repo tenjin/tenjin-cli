@@ -178,3 +178,14 @@ func TestWriteAnswers(t *testing.T) {
 		t.Errorf("refused delete: exit = %d, stderr = %q", code, stderr)
 	}
 }
+
+// An answer that is neither yes nor no is asked again.
+func TestUnclearAnswerIsAskedAgain(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	h.typing("sure", "y")
+	code, _, stderr := h.run("campaigns", "delete", testOther)
+	if code != 0 || len(h.fake.writes) != 1 || !strings.Contains(stderr, "Answer y or n:") {
+		t.Errorf("exit = %d, %d writes, stderr = %q", code, len(h.fake.writes), stderr)
+	}
+}

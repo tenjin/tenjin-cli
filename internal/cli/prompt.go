@@ -68,30 +68,38 @@ func (e *environment) interrupted() error {
 
 func errInterrupted() error { return clierr.New(clierr.Interrupted, "stopped") }
 
-// confirm asks a yes/no question. An empty answer takes the default.
+// confirm asks a yes/no question. An empty answer takes the default; an
+// answer that is neither is asked again.
 func (e *environment) confirm(w io.Writer, question string, def bool) (bool, error) {
 	suffix := " [y/N] "
 	if def {
 		suffix = " [Y/n] "
 	}
 	_, _ = fmt.Fprint(w, question+suffix)
-	answer, err := e.readLine()
-	// Input that ends is a no, whatever the default: nothing is created or
-	// started on an answer nobody gave.
-	if errors.Is(err, io.EOF) {
-		_, _ = fmt.Fprintln(w)
-		return false, nil
+	for {
+		answer, err := e.readLine()
+		// Input that ends is a no, whatever the default: nothing is created
+		// or started on an answer nobody gave.
+		if errors.Is(err, io.EOF) && strings.TrimSpace(answer) == "" {
+			_, _ = fmt.Fprintln(w)
+			return false, nil
+		}
+		if err != nil && !errors.Is(err, io.EOF) {
+			return false, err
+		}
+		switch strings.ToLower(strings.TrimSpace(answer)) {
+		case "":
+			return def, nil
+		case "y", "yes":
+			return true, nil
+		case "n", "no":
+			return false, nil
+		}
+		if errors.Is(err, io.EOF) {
+			return false, nil
+		}
+		_, _ = fmt.Fprint(w, "Answer y or n:"+suffix)
 	}
-	if err != nil {
-		return false, err
-	}
-	switch strings.ToLower(strings.TrimSpace(answer)) {
-	case "":
-		return def, nil
-	case "y", "yes":
-		return true, nil
-	}
-	return false, nil
 }
 
 // ask prompts for a line of text.

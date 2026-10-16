@@ -12,6 +12,7 @@ import (
 
 	"github.com/tenjin/tenjin-cli/internal/agent"
 	"github.com/tenjin/tenjin-cli/internal/clierr"
+	"github.com/tenjin/tenjin-cli/internal/guides"
 	"github.com/tenjin/tenjin-cli/internal/keyfill"
 	"github.com/tenjin/tenjin-cli/internal/project"
 	"github.com/tenjin/tenjin-cli/internal/render"
@@ -25,11 +26,6 @@ var guideURLs = map[project.Framework]string{
 	project.Capacitor:   "https://github.com/tenjin/tenjin-ionic-sdk",
 	project.Unity:       "https://github.com/tenjin/tenjin-unity-sdk",
 	project.Unreal:      "https://github.com/tenjin/tenjin-unreal-sdk",
-}
-
-var nativeGuides = map[project.Platform]string{
-	project.Android: "https://github.com/tenjin/tenjin-android-sdk",
-	project.IOS:     "https://github.com/tenjin/tenjin-ios-sdk",
 }
 
 var platformNames = map[project.Platform]string{project.Android: "Android", project.IOS: "iOS"}
@@ -111,7 +107,7 @@ with --yes and starts an agent only with --agent.`,
 	cmd.Flags().StringVar(&agentFlag, "agent", "", "coding agent to integrate with: "+strings.Join(agent.IDs(), ", ")+", or none to do it by hand (default: ask)")
 	cmd.Flags().StringVar(&serial, "serial", "", serialUsage)
 	addBuildFlag(cmd, &builds)
-	addFeaturesFlag(cmd, &features)
+	addFeaturesFlag(cmd, &features, "integrate")
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		// An empty --features means app opens only, not "not given".
 		if cmd.Flags().Changed("features") && features == nil {
@@ -701,12 +697,17 @@ func (s *setup) manualGuide(report *verify.Report) {
 	if len(s.features) > 1 {
 		s.say("%s", render.Indent("Also integrate the features chosen in step 1: "+featureList(s.features[1:])+". Each has its own section in the guide.", 2, width))
 	}
+	// The guide this version checks against, offline, before the public
+	// repository it comes from.
 	s.say("The full guide:")
-	if p.Framework == project.Native {
+	switch name := guides.ForProject(p); {
+	case name != "":
+		s.say("  %s", s.style.Accent("tenjin sdk guide "+name))
+	case p.Framework == project.Native:
 		for _, t := range p.Targets {
-			s.say("  %s: %s", platformNames[t.Platform], nativeGuides[t.Platform])
+			s.say("  %s: %s", platformNames[t.Platform], s.style.Accent("tenjin sdk guide "+string(t.Platform)))
 		}
-	} else {
+	default:
 		s.say("  %s", guideURLs[p.Framework])
 	}
 	s.say("The next step lists everything that is missing, with the fix for each item.")

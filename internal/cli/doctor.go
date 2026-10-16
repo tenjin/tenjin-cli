@@ -177,11 +177,11 @@ otherwise. With --strict, warnings count too.`,
 	addSDKKeyFlag(cmd, &sdkKeys)
 	cmd.Flags().BoolVar(&offline, "offline", false, "skip the SDK key check against Tenjin, and the look for newer SDK releases")
 	cmd.Flags().BoolVar(&strict, "strict", false, "exit non-zero on warnings as well as errors")
-	cmd.Flags().BoolVar(&device, "device", false, "also read the log of a connected Android device or emulator, or of a running iOS simulator")
+	cmd.Flags().BoolVar(&device, "device", false, "also read what the app's last launch sent: from a connected Android device or emulator, an iPhone connected by cable, or a running iOS simulator")
 	cmd.Flags().StringVar(&serial, "serial", "", serialUsage)
 	cmd.Flags().StringVar(&logs, "logs", "", "also read a saved device log (logcat or iOS simulator), or - for standard input")
 	addBuildFlag(cmd, &builds)
-	addFeaturesFlag(cmd, &features)
+	addFeaturesFlag(cmd, &features, "check")
 	return cmd
 }
 
@@ -288,7 +288,7 @@ func readDevice(cmd *cobra.Command, env *environment, p *project.Project, serial
 	case logs != "":
 		b, err := os.ReadFile(logs)
 		if err != nil {
-			return nil, clierr.Wrap(clierr.NotFound, err, "cannot read %s: %v", logs, err)
+			return nil, clierr.Wrap(clierr.NotFound, err, "cannot read %s: %v", logs, plainOSError(err))
 		}
 		raw = b
 	default:

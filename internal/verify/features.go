@@ -203,7 +203,7 @@ func (r *runner) checkAdRevenue(f project.Feature, chosen bool, code *tenjinCode
 			r.pass("feature.ad_revenue", "", "Ad revenue from "+e.What+" is sent to Tenjin", file, line)
 			continue
 		}
-		r.unsent(f, chosen, "Ad revenue from "+e.What, e.What+" is in "+e.File)
+		r.unsent(f, chosen, "Ad revenue from "+e.What, e.What+" ("+e.File+")")
 	}
 }
 

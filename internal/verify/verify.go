@@ -120,6 +120,7 @@ func (g GivenKeys) For(build string) (GivenKey, bool) {
 func Run(ctx context.Context, p *project.Project, opts Options) *Report {
 	r := &runner{ctx: ctx, p: p, opts: opts, report: &Report{Project: p, Findings: []Finding{}, latest: opts.Latest}}
 	r.run()
+	r.dropUncheckedBesidePlaceholders()
 	for _, f := range r.report.Findings {
 		switch f.Severity {
 		case Error:
@@ -145,6 +146,26 @@ type runner struct {
 	// autoTrackingChecked is set once automatic purchase tracking is looked
 	// at, which purchases and subscriptions share.
 	autoTrackingChecked bool
+}
+
+// dropUncheckedBesidePlaceholders leaves out "the key was not checked"
+// where a finding already says the key is a placeholder: there is no key to
+// check, and the placeholder finding says what to do.
+func (r *runner) dropUncheckedBesidePlaceholders() {
+	placeholder := map[project.Platform]bool{}
+	for _, f := range r.report.Findings {
+		if f.ID == "sdk.key.placeholder" || f.ID == "sdk.key.unfilled" {
+			placeholder[f.Platform] = true
+		}
+	}
+	kept := r.report.Findings[:0]
+	for _, f := range r.report.Findings {
+		if f.ID == "key.unchecked" && (placeholder[f.Platform] || placeholder[""]) {
+			continue
+		}
+		kept = append(kept, f)
+	}
+	r.report.Findings = kept
 }
 
 func (r *runner) add(f Finding) {

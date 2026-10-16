@@ -71,10 +71,10 @@ func (r *runner) checkBuildKey(t *project.Target, b project.Build, src source, m
 		f.ID, f.Severity = "key.unchecked", Info
 		f.Title = "The SDK key was not checked" + label
 		f.Detail = "It is not written as a string literal in the source."
-		f.Fix = "Pass --sdk-key, or set TENJIN_SDK_KEY, to check it against Tenjin."
+		f.Fix = "To check it against Tenjin, give the key with --sdk-key <key> or TENJIN_SDK_KEY."
 		if multi {
 			f.Detail = "No key Tenjin could check for this build was found in the project."
-			f.Fix = "Pass --sdk-key " + b.ID + "=<key>, or set " + KeyVariable(b.ID) + ", to check it against Tenjin."
+			f.Fix = "To check it against Tenjin, give the key with --sdk-key " + b.ID + "=<key> or " + KeyVariable(b.ID) + "."
 		}
 		r.add(f)
 		return true

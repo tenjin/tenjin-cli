@@ -55,12 +55,13 @@ site ID everywhere unless --app, --campaign or --channel narrows it to one.
 					}
 				}
 			}
-			if dryRun {
-				return render.WriteJSON(cmd.OutOrStdout(), map[string]any{"rules": rules, "clear": replace})
-			}
 			what := "Block " + strings.Join(args, ", ") + scope(app, campaign, cmd.Flags().Changed("channel"), channel)
 			if replace {
 				what += ", removing every other rule"
+			}
+			if dryRun {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Would %s. Nothing was sent; the body it would send:\n", lowerFirst(render.Clean(what)))
+				return render.WriteJSON(cmd.OutOrStdout(), map[string]any{"rules": rules, "clear": replace})
 			}
 			if err := confirmChange(cmd, env, yes, what, replace); err != nil {
 				return err
@@ -91,6 +92,7 @@ site ID everywhere unless --app, --campaign or --channel narrows it to one.
 				return err
 			}
 			if reinstateDry {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Would remove every rule for %s. Nothing was sent; the body it would send:\n", render.Clean(strings.Join(args, ", ")))
 				return render.WriteJSON(cmd.OutOrStdout(), map[string]any{"siteIds": args})
 			}
 			if err := confirmChange(cmd, env, reinstateYes, "Remove every rule for "+strings.Join(args, ", "), false); err != nil {
