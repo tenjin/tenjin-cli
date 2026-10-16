@@ -23,6 +23,10 @@ type Endpoints struct {
 	// Resource is the audience tokens are issued for. Tenjin's authorization
 	// server accepts one audience today, the MCP server's.
 	Resource string
+	// SiteIDs is the Site ID Optimization service, a Connect RPC host.
+	SiteIDs string
+	// Docs is Tenjin's public documentation site, searched without a token.
+	Docs string
 }
 
 // production is where Tenjin's services live.
@@ -32,13 +36,16 @@ var production = Endpoints{
 	API:       "https://api.tenjin.com/v2",
 	Track:     "https://track.tenjin.com",
 	Resource:  "https://mcp.tenjin.com",
+	SiteIDs:   "https://connect.tenjin.com",
+	Docs:      "https://tenjin.com",
 }
 
 // Resolve returns the endpoints the environment variables ask for: Tenjin's
 // production services, unless an address is replaced.
 //
-// TENJIN_DASHBOARD_URL, TENJIN_API_URL, TENJIN_TRACK_URL and
-// TENJIN_RESOURCE_URL each replace one address, for running against a local
+// TENJIN_DASHBOARD_URL, TENJIN_API_URL, TENJIN_TRACK_URL,
+// TENJIN_RESOURCE_URL, TENJIN_SITE_IDS_URL and TENJIN_DOCS_URL each replace one
+// address, for running against a local
 // or a test copy of that service. With any of them set, the environment is
 // named after its addresses ("custom-" and a hash), so each
 // combination keeps a session of its own. A token issued by production is
@@ -54,6 +61,8 @@ func Resolve(getenv func(string) string) (Endpoints, error) {
 		{"TENJIN_API_URL", &e.API},
 		{"TENJIN_TRACK_URL", &e.Track},
 		{"TENJIN_RESOURCE_URL", &e.Resource},
+		{"TENJIN_SITE_IDS_URL", &e.SiteIDs},
+		{"TENJIN_DOCS_URL", &e.Docs},
 	} {
 		value := strings.TrimSuffix(getenv(override.variable), "/")
 		if value == "" {
@@ -69,11 +78,11 @@ func Resolve(getenv func(string) string) (Endpoints, error) {
 		*override.address = value
 		e.Name = "custom"
 	}
-	if e.Issuer == production.Issuer && (e.API != production.API || e.Resource != production.Resource) {
-		return Endpoints{}, fmt.Errorf("TENJIN_API_URL and TENJIN_RESOURCE_URL need TENJIN_DASHBOARD_URL as well: otherwise a token issued by Tenjin's production dashboard would be sent to another address")
+	if e.Issuer == production.Issuer && (e.API != production.API || e.Resource != production.Resource || e.SiteIDs != production.SiteIDs) {
+		return Endpoints{}, fmt.Errorf("TENJIN_API_URL, TENJIN_RESOURCE_URL and TENJIN_SITE_IDS_URL need TENJIN_DASHBOARD_URL as well: otherwise a token issued by Tenjin's production dashboard would be sent to another address")
 	}
 	if e.Name == "custom" {
-		sum := sha256.Sum256([]byte(e.Issuer + "\n" + e.API + "\n" + e.Resource + "\n" + e.Track))
+		sum := sha256.Sum256([]byte(e.Issuer + "\n" + e.API + "\n" + e.Resource + "\n" + e.Track + "\n" + e.SiteIDs))
 		e.Name = "custom-" + hex.EncodeToString(sum[:4])
 	}
 	return e, nil

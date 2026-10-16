@@ -1,0 +1,37 @@
+{
+  "ad_revenue": {
+    "name": "Reported Ad Revenue (Ad Network)",
+    "description": "Ad Revenue (Ad Network) Amount ($)",
+    "categories": [
+      "Monetization"
+    ]
+  },
+  "clicks": {
+    "name": "Reported Monetization Clicks",
+    "description": "Number of Reported Clicks",
+    "categories": [
+      "Monetization"
+    ]
+  },
+  "impressions": {
+    "name": "Reported Monetization Impressions",
+    "description": "Number of Reported Impressions",
+    "categories": [
+      "Monetization"
+    ]
+  },
+  "ecpm": {
+    "name": "Effective Cost per Mille (eCPM)",
+    "description": "Ad Revenue (Ad Network) per 1000 Impressions ($)",
+    "categories": [
+      "Monetization"
+    ]
+  },
+  "ecpc": {
+    "name": "Effective Cost per Click (eCPC)",
+    "description": "Ad Revenue (Ad Network) per Click ($)",
+    "categories": [
+      "Monetization"
+    ]
+  }
+}

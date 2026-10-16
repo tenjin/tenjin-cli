@@ -531,6 +531,7 @@ metric names. Left out, each is the API's default.`,
 		})
 	}
 	return group("reports", "Spend, ad revenue and SKAdNetwork reports",
+		newMetricsCmd(opts),
 		report(tenjinapi.ReportSpend, "User acquisition: spend, installs and what they returned", "daily, weekly, monthly, totals-daily", "app, channel, country, site, campaign, campaign,country, channel,app, channel,app,country, creative"),
 		report(tenjinapi.ReportAdRevenue, "Ad revenue, by ad network", "daily, weekly, monthly, totals-daily", "app, channel, country, channel,app, channel,app,country, ad_placement"),
 		report(tenjinapi.ReportSKAdNetwork, "SKAdNetwork postbacks, as Tenjin attributes them", "daily", "app, channel, campaign, sk_ad_network, sk_campaign, sk_source_app, fidelity_type, conversion_value"),

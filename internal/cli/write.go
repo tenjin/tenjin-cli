@@ -164,17 +164,8 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 			if dryRun {
 				return render.WriteJSON(cmd.OutOrStdout(), body)
 			}
-			if !yes {
-				if !env.interactive {
-					return clierr.New(clierr.Usage, "this changes your Tenjin account and needs confirmation").WithHint("Pass --yes to %s.", lowerFirst(what))
-				}
-				ok, err := env.confirm(cmd.ErrOrStderr(), render.Clean(what)+"?", !s.destructive)
-				if err != nil {
-					return err
-				}
-				if !ok {
-					return clierr.New(clierr.Internal, "nothing was changed")
-				}
+			if err := confirmChange(cmd, env, yes, what, s.destructive); err != nil {
+				return err
 			}
 			doc, err := s.send(cmd.Context(), env.api(), args, body)
 			if err != nil {
@@ -198,6 +189,25 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do it without asking")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the request body and send nothing")
 	return cmd
+}
+
+// confirmChange asks before a change to the account: at a terminal, with
+// no as the default for a destructive one; elsewhere it needs --yes.
+func confirmChange(cmd *cobra.Command, env *environment, yes bool, what string, destructive bool) error {
+	if yes {
+		return nil
+	}
+	if !env.interactive {
+		return clierr.New(clierr.Usage, "this changes your Tenjin account and needs confirmation").WithHint("Pass --yes to %s.", lowerFirst(what))
+	}
+	ok, err := env.confirm(cmd.ErrOrStderr(), render.Clean(what)+"?", !destructive)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return clierr.New(clierr.Internal, "nothing was changed")
+	}
+	return nil
 }
 
 // hasData reports whether an answer holds a resource: a delete's does not.

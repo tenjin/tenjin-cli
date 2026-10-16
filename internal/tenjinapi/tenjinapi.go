@@ -39,10 +39,12 @@ type TokenSource interface {
 
 // Client calls the API.
 type Client struct {
-	BaseURL   string
-	UserAgent string
-	Tokens    TokenSource
-	HTTP      *http.Client
+	BaseURL string
+	// SiteIDsURL is the Site ID Optimization service's address.
+	SiteIDsURL string
+	UserAgent  string
+	Tokens     TokenSource
+	HTTP       *http.Client
 }
 
 // New returns a client for the API at baseURL.

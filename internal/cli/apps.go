@@ -23,6 +23,12 @@ func newAppsCmd(opts *options, env *environment) *cobra.Command {
 	writes := appWriteCmds(opts, env)
 	for _, c := range sub {
 		c.AddCommand(writes[c.Name()]...)
+		switch c.Name() {
+		case "s2s-callbacks":
+			c.AddCommand(newMacrosCmd(opts))
+		case "callback-groups":
+			c.AddCommand(newInspectIntegrationCmd(opts, env))
+		}
 	}
 	return group("apps", "Your apps, and their keys, events and callbacks",
 		append([]*cobra.Command{
