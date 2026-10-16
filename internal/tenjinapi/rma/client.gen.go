@@ -84,21 +84,6 @@ func (e AdRevenueDataGroupedByAdPlacementMetaGranularity) Valid() bool {
 	}
 }
 
-// Defines values for AdRevenueDataGroupedByAdPlacementMetaGroupBy.
-const (
-	AdRevenueDataGroupedByAdPlacementMetaGroupByAdPlacement AdRevenueDataGroupedByAdPlacementMetaGroupBy = "ad_placement"
-)
-
-// Valid indicates whether the value is a known member of the AdRevenueDataGroupedByAdPlacementMetaGroupBy enum.
-func (e AdRevenueDataGroupedByAdPlacementMetaGroupBy) Valid() bool {
-	switch e {
-	case AdRevenueDataGroupedByAdPlacementMetaGroupByAdPlacement:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for AdRevenueDataGroupedByAppData0AttributesPlatform.
 const (
 	AdRevenueDataGroupedByAppData0AttributesPlatformAmazon  AdRevenueDataGroupedByAppData0AttributesPlatform = "amazon"
@@ -162,21 +147,6 @@ func (e AdRevenueDataGroupedByAppMetaGranularity) Valid() bool {
 	}
 }
 
-// Defines values for AdRevenueDataGroupedByAppMetaGroupBy.
-const (
-	AdRevenueDataGroupedByAppMetaGroupByAppId AdRevenueDataGroupedByAppMetaGroupBy = "app_id"
-)
-
-// Valid indicates whether the value is a known member of the AdRevenueDataGroupedByAppMetaGroupBy enum.
-func (e AdRevenueDataGroupedByAppMetaGroupBy) Valid() bool {
-	switch e {
-	case AdRevenueDataGroupedByAppMetaGroupByAppId:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for AdRevenueDataGroupedByChannelData0Type.
 const (
 	AdRevenueDataGroupedByChannelData0TypeReport AdRevenueDataGroupedByChannelData0Type = "report"
@@ -210,21 +180,6 @@ func (e AdRevenueDataGroupedByChannelMetaGranularity) Valid() bool {
 	case AdRevenueDataGroupedByChannelMetaGranularityTotalsDaily:
 		return true
 	case AdRevenueDataGroupedByChannelMetaGranularityWeekly:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for AdRevenueDataGroupedByChannelMetaGroupBy.
-const (
-	AdRevenueDataGroupedByChannelMetaGroupByAdNetworkId AdRevenueDataGroupedByChannelMetaGroupBy = "ad_network_id"
-)
-
-// Valid indicates whether the value is a known member of the AdRevenueDataGroupedByChannelMetaGroupBy enum.
-func (e AdRevenueDataGroupedByChannelMetaGroupBy) Valid() bool {
-	switch e {
-	case AdRevenueDataGroupedByChannelMetaGroupByAdNetworkId:
 		return true
 	default:
 		return false
@@ -294,24 +249,6 @@ func (e AdRevenueDataGroupedByChannelAppMetaGranularity) Valid() bool {
 	}
 }
 
-// Defines values for AdRevenueDataGroupedByChannelAppMetaGroupBy.
-const (
-	AdRevenueDataGroupedByChannelAppMetaGroupByAdNetworkId AdRevenueDataGroupedByChannelAppMetaGroupBy = "ad_network_id"
-	AdRevenueDataGroupedByChannelAppMetaGroupByAppId       AdRevenueDataGroupedByChannelAppMetaGroupBy = "app_id"
-)
-
-// Valid indicates whether the value is a known member of the AdRevenueDataGroupedByChannelAppMetaGroupBy enum.
-func (e AdRevenueDataGroupedByChannelAppMetaGroupBy) Valid() bool {
-	switch e {
-	case AdRevenueDataGroupedByChannelAppMetaGroupByAdNetworkId:
-		return true
-	case AdRevenueDataGroupedByChannelAppMetaGroupByAppId:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for AdRevenueDataGroupedByChannelAppCountryData0AttributesPlatform.
 const (
 	AdRevenueDataGroupedByChannelAppCountryData0AttributesPlatformAmazon  AdRevenueDataGroupedByChannelAppCountryData0AttributesPlatform = "amazon"
@@ -375,27 +312,6 @@ func (e AdRevenueDataGroupedByChannelAppCountryMetaGranularity) Valid() bool {
 	}
 }
 
-// Defines values for AdRevenueDataGroupedByChannelAppCountryMetaGroupBy.
-const (
-	AdRevenueDataGroupedByChannelAppCountryMetaGroupByAdNetworkId AdRevenueDataGroupedByChannelAppCountryMetaGroupBy = "ad_network_id"
-	AdRevenueDataGroupedByChannelAppCountryMetaGroupByAppId       AdRevenueDataGroupedByChannelAppCountryMetaGroupBy = "app_id"
-	AdRevenueDataGroupedByChannelAppCountryMetaGroupByCountry     AdRevenueDataGroupedByChannelAppCountryMetaGroupBy = "country"
-)
-
-// Valid indicates whether the value is a known member of the AdRevenueDataGroupedByChannelAppCountryMetaGroupBy enum.
-func (e AdRevenueDataGroupedByChannelAppCountryMetaGroupBy) Valid() bool {
-	switch e {
-	case AdRevenueDataGroupedByChannelAppCountryMetaGroupByAdNetworkId:
-		return true
-	case AdRevenueDataGroupedByChannelAppCountryMetaGroupByAppId:
-		return true
-	case AdRevenueDataGroupedByChannelAppCountryMetaGroupByCountry:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for AdRevenueDataGroupedByCountryData0Type.
 const (
 	AdRevenueDataGroupedByCountryData0TypeReport AdRevenueDataGroupedByCountryData0Type = "report"
@@ -429,21 +345,6 @@ func (e AdRevenueDataGroupedByCountryMetaGranularity) Valid() bool {
 	case AdRevenueDataGroupedByCountryMetaGranularityTotalsDaily:
 		return true
 	case AdRevenueDataGroupedByCountryMetaGranularityWeekly:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for AdRevenueDataGroupedByCountryMetaGroupBy.
-const (
-	AdRevenueDataGroupedByCountryMetaGroupByCountry AdRevenueDataGroupedByCountryMetaGroupBy = "country"
-)
-
-// Valid indicates whether the value is a known member of the AdRevenueDataGroupedByCountryMetaGroupBy enum.
-func (e AdRevenueDataGroupedByCountryMetaGroupBy) Valid() bool {
-	switch e {
-	case AdRevenueDataGroupedByCountryMetaGroupByCountry:
 		return true
 	default:
 		return false
@@ -537,42 +438,6 @@ const (
 func (e SKAdNetworkDataMetaGranularity) Valid() bool {
 	switch e {
 	case SKAdNetworkDataMetaGranularityDaily:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for SKAdNetworkDataMetaGroupBy.
-const (
-	SKAdNetworkDataMetaGroupByAdNetworkId     SKAdNetworkDataMetaGroupBy = "ad_network_id"
-	SKAdNetworkDataMetaGroupByAppId           SKAdNetworkDataMetaGroupBy = "app_id"
-	SKAdNetworkDataMetaGroupByCampaignId      SKAdNetworkDataMetaGroupBy = "campaign_id"
-	SKAdNetworkDataMetaGroupByConversionValue SKAdNetworkDataMetaGroupBy = "conversion_value"
-	SKAdNetworkDataMetaGroupByFidelityType    SKAdNetworkDataMetaGroupBy = "fidelity_type"
-	SKAdNetworkDataMetaGroupBySkAdNetworkId   SKAdNetworkDataMetaGroupBy = "sk_ad_network_id"
-	SKAdNetworkDataMetaGroupBySkCampaignId    SKAdNetworkDataMetaGroupBy = "sk_campaign_id"
-	SKAdNetworkDataMetaGroupBySkSourceAppId   SKAdNetworkDataMetaGroupBy = "sk_source_app_id"
-)
-
-// Valid indicates whether the value is a known member of the SKAdNetworkDataMetaGroupBy enum.
-func (e SKAdNetworkDataMetaGroupBy) Valid() bool {
-	switch e {
-	case SKAdNetworkDataMetaGroupByAdNetworkId:
-		return true
-	case SKAdNetworkDataMetaGroupByAppId:
-		return true
-	case SKAdNetworkDataMetaGroupByCampaignId:
-		return true
-	case SKAdNetworkDataMetaGroupByConversionValue:
-		return true
-	case SKAdNetworkDataMetaGroupByFidelityType:
-		return true
-	case SKAdNetworkDataMetaGroupBySkAdNetworkId:
-		return true
-	case SKAdNetworkDataMetaGroupBySkCampaignId:
-		return true
-	case SKAdNetworkDataMetaGroupBySkSourceAppId:
 		return true
 	default:
 		return false
@@ -1218,39 +1083,6 @@ func (e SkanAppleDataMetaGranularity) Valid() bool {
 	}
 }
 
-// Defines values for SkanAppleDataMetaGroupBy.
-const (
-	SkanAppleDataMetaGroupByAdNetworkId     SkanAppleDataMetaGroupBy = "ad_network_id"
-	SkanAppleDataMetaGroupByAppId           SkanAppleDataMetaGroupBy = "app_id"
-	SkanAppleDataMetaGroupByConversionValue SkanAppleDataMetaGroupBy = "conversion_value"
-	SkanAppleDataMetaGroupByFidelityType    SkanAppleDataMetaGroupBy = "fidelity_type"
-	SkanAppleDataMetaGroupBySkAdNetworkId   SkanAppleDataMetaGroupBy = "sk_ad_network_id"
-	SkanAppleDataMetaGroupBySkCampaignId    SkanAppleDataMetaGroupBy = "sk_campaign_id"
-	SkanAppleDataMetaGroupBySkSourceAppId   SkanAppleDataMetaGroupBy = "sk_source_app_id"
-)
-
-// Valid indicates whether the value is a known member of the SkanAppleDataMetaGroupBy enum.
-func (e SkanAppleDataMetaGroupBy) Valid() bool {
-	switch e {
-	case SkanAppleDataMetaGroupByAdNetworkId:
-		return true
-	case SkanAppleDataMetaGroupByAppId:
-		return true
-	case SkanAppleDataMetaGroupByConversionValue:
-		return true
-	case SkanAppleDataMetaGroupByFidelityType:
-		return true
-	case SkanAppleDataMetaGroupBySkAdNetworkId:
-		return true
-	case SkanAppleDataMetaGroupBySkCampaignId:
-		return true
-	case SkanAppleDataMetaGroupBySkSourceAppId:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SkanAppleDataMetaMetrics.
 const (
 	SkanAppleDataMetaMetricsAssists              SkanAppleDataMetaMetrics = "assists"
@@ -1362,21 +1194,6 @@ func (e SpendDataGroupedByAppMetaGranularity) Valid() bool {
 	}
 }
 
-// Defines values for SpendDataGroupedByAppMetaGroupBy.
-const (
-	SpendDataGroupedByAppMetaGroupByAppId SpendDataGroupedByAppMetaGroupBy = "app_id"
-)
-
-// Valid indicates whether the value is a known member of the SpendDataGroupedByAppMetaGroupBy enum.
-func (e SpendDataGroupedByAppMetaGroupBy) Valid() bool {
-	switch e {
-	case SpendDataGroupedByAppMetaGroupByAppId:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SpendDataGroupedByCampaignData0AttributesPlatform.
 const (
 	SpendDataGroupedByCampaignData0AttributesPlatformAmazon  SpendDataGroupedByCampaignData0AttributesPlatform = "amazon"
@@ -1434,21 +1251,6 @@ func (e SpendDataGroupedByCampaignMetaGranularity) Valid() bool {
 	case SpendDataGroupedByCampaignMetaGranularityTotalsDaily:
 		return true
 	case SpendDataGroupedByCampaignMetaGranularityWeekly:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for SpendDataGroupedByCampaignMetaGroupBy.
-const (
-	CampaignId SpendDataGroupedByCampaignMetaGroupBy = "campaign_id"
-)
-
-// Valid indicates whether the value is a known member of the SpendDataGroupedByCampaignMetaGroupBy enum.
-func (e SpendDataGroupedByCampaignMetaGroupBy) Valid() bool {
-	switch e {
-	case CampaignId:
 		return true
 	default:
 		return false
@@ -1518,21 +1320,6 @@ func (e SpendDataGroupedByCampaignCountryMetaGranularity) Valid() bool {
 	}
 }
 
-// Defines values for SpendDataGroupedByCampaignCountryMetaGroupBy.
-const (
-	CampaignCountry SpendDataGroupedByCampaignCountryMetaGroupBy = "campaign_country"
-)
-
-// Valid indicates whether the value is a known member of the SpendDataGroupedByCampaignCountryMetaGroupBy enum.
-func (e SpendDataGroupedByCampaignCountryMetaGroupBy) Valid() bool {
-	switch e {
-	case CampaignCountry:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SpendDataGroupedByChannelData0Type.
 const (
 	SpendDataGroupedByChannelData0TypeReport SpendDataGroupedByChannelData0Type = "report"
@@ -1566,21 +1353,6 @@ func (e SpendDataGroupedByChannelMetaGranularity) Valid() bool {
 	case SpendDataGroupedByChannelMetaGranularityTotalsDaily:
 		return true
 	case SpendDataGroupedByChannelMetaGranularityWeekly:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for SpendDataGroupedByChannelMetaGroupBy.
-const (
-	AdNetworkId SpendDataGroupedByChannelMetaGroupBy = "ad_network_id"
-)
-
-// Valid indicates whether the value is a known member of the SpendDataGroupedByChannelMetaGroupBy enum.
-func (e SpendDataGroupedByChannelMetaGroupBy) Valid() bool {
-	switch e {
-	case AdNetworkId:
 		return true
 	default:
 		return false
@@ -1650,21 +1422,6 @@ func (e SpendDataGroupedByChannelAppMetaGranularity) Valid() bool {
 	}
 }
 
-// Defines values for SpendDataGroupedByChannelAppMetaGroupBy.
-const (
-	AdNetworkApp SpendDataGroupedByChannelAppMetaGroupBy = "ad_network_app"
-)
-
-// Valid indicates whether the value is a known member of the SpendDataGroupedByChannelAppMetaGroupBy enum.
-func (e SpendDataGroupedByChannelAppMetaGroupBy) Valid() bool {
-	switch e {
-	case AdNetworkApp:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SpendDataGroupedByChannelAppCountryData0AttributesPlatform.
 const (
 	Amazon  SpendDataGroupedByChannelAppCountryData0AttributesPlatform = "amazon"
@@ -1728,21 +1485,6 @@ func (e SpendDataGroupedByChannelAppCountryMetaGranularity) Valid() bool {
 	}
 }
 
-// Defines values for SpendDataGroupedByChannelAppCountryMetaGroupBy.
-const (
-	AdNetworkAppCountry SpendDataGroupedByChannelAppCountryMetaGroupBy = "ad_network_app_country"
-)
-
-// Valid indicates whether the value is a known member of the SpendDataGroupedByChannelAppCountryMetaGroupBy enum.
-func (e SpendDataGroupedByChannelAppCountryMetaGroupBy) Valid() bool {
-	switch e {
-	case AdNetworkAppCountry:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SpendDataGroupedByCountryData0Type.
 const (
 	SpendDataGroupedByCountryData0TypeReport SpendDataGroupedByCountryData0Type = "report"
@@ -1782,21 +1524,6 @@ func (e SpendDataGroupedByCountryMetaGranularity) Valid() bool {
 	}
 }
 
-// Defines values for SpendDataGroupedByCountryMetaGroupBy.
-const (
-	SpendDataGroupedByCountryMetaGroupByCountry SpendDataGroupedByCountryMetaGroupBy = "country"
-)
-
-// Valid indicates whether the value is a known member of the SpendDataGroupedByCountryMetaGroupBy enum.
-func (e SpendDataGroupedByCountryMetaGroupBy) Valid() bool {
-	switch e {
-	case SpendDataGroupedByCountryMetaGroupByCountry:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for SpendDataGroupedBySiteData0Type.
 const (
 	SpendDataGroupedBySiteData0TypeReport SpendDataGroupedBySiteData0Type = "report"
@@ -1830,21 +1557,6 @@ func (e SpendDataGroupedBySiteMetaGranularity) Valid() bool {
 	case SpendDataGroupedBySiteMetaGranularityTotalsDaily:
 		return true
 	case SpendDataGroupedBySiteMetaGranularityWeekly:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for SpendDataGroupedBySiteMetaGroupBy.
-const (
-	SiteId SpendDataGroupedBySiteMetaGroupBy = "site_id"
-)
-
-// Valid indicates whether the value is a known member of the SpendDataGroupedBySiteMetaGroupBy enum.
-func (e SpendDataGroupedBySiteMetaGroupBy) Valid() bool {
-	switch e {
-	case SiteId:
 		return true
 	default:
 		return false
@@ -2195,7 +1907,9 @@ type AdRevenueDataGroupedByAdPlacement struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                               `json:"end_date,omitempty"`
 		Granularity *AdRevenueDataGroupedByAdPlacementMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *[]AdRevenueDataGroupedByAdPlacementMetaGroupBy   `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *AdRevenueDataGroupedByAdPlacement_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#ad_revenue' title='Ad Revenue Metric Definitions'>Ad Revenue Metric Definitions</a> page.
 		Metrics        *AdRevenueMetrics   `json:"metrics,omitempty"`
@@ -2278,8 +1992,16 @@ type AdRevenueDataGroupedByAdPlacement_Links struct {
 // AdRevenueDataGroupedByAdPlacementMetaGranularity defines model for AdRevenueDataGroupedByAdPlacement.Meta.Granularity.
 type AdRevenueDataGroupedByAdPlacementMetaGranularity string
 
-// AdRevenueDataGroupedByAdPlacementMetaGroupBy defines model for AdRevenueDataGroupedByAdPlacement.Meta.GroupBy.
-type AdRevenueDataGroupedByAdPlacementMetaGroupBy string
+// AdRevenueDataGroupedByAdPlacementMetaGroupBy0 defines model for .
+type AdRevenueDataGroupedByAdPlacementMetaGroupBy0 = string
+
+// AdRevenueDataGroupedByAdPlacementMetaGroupBy1 defines model for .
+type AdRevenueDataGroupedByAdPlacementMetaGroupBy1 = []string
+
+// AdRevenueDataGroupedByAdPlacement_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type AdRevenueDataGroupedByAdPlacement_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // AdRevenueDataGroupedByApp defines model for AdRevenueDataGroupedByApp.
 type AdRevenueDataGroupedByApp struct {
@@ -2292,7 +2014,9 @@ type AdRevenueDataGroupedByApp struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                       `json:"end_date,omitempty"`
 		Granularity *AdRevenueDataGroupedByAppMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *AdRevenueDataGroupedByAppMetaGroupBy     `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *AdRevenueDataGroupedByApp_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#ad_revenue' title='Ad Revenue Metric Definitions'>Ad Revenue Metric Definitions</a> page.
 		Metrics        *AdRevenueMetrics   `json:"metrics,omitempty"`
@@ -2354,8 +2078,16 @@ type AdRevenueDataGroupedByApp_Links struct {
 // AdRevenueDataGroupedByAppMetaGranularity defines model for AdRevenueDataGroupedByApp.Meta.Granularity.
 type AdRevenueDataGroupedByAppMetaGranularity string
 
-// AdRevenueDataGroupedByAppMetaGroupBy defines model for AdRevenueDataGroupedByApp.Meta.GroupBy.
-type AdRevenueDataGroupedByAppMetaGroupBy string
+// AdRevenueDataGroupedByAppMetaGroupBy0 defines model for .
+type AdRevenueDataGroupedByAppMetaGroupBy0 = string
+
+// AdRevenueDataGroupedByAppMetaGroupBy1 defines model for .
+type AdRevenueDataGroupedByAppMetaGroupBy1 = []string
+
+// AdRevenueDataGroupedByApp_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type AdRevenueDataGroupedByApp_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // AdRevenueDataGroupedByChannel defines model for AdRevenueDataGroupedByChannel.
 type AdRevenueDataGroupedByChannel struct {
@@ -2368,7 +2100,9 @@ type AdRevenueDataGroupedByChannel struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                           `json:"end_date,omitempty"`
 		Granularity *AdRevenueDataGroupedByChannelMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *AdRevenueDataGroupedByChannelMetaGroupBy     `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *AdRevenueDataGroupedByChannel_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#ad_revenue' title='Ad Revenue Metric Definitions'>Ad Revenue Metric Definitions</a> page.
 		Metrics        *AdRevenueMetrics   `json:"metrics,omitempty"`
@@ -2426,8 +2160,16 @@ type AdRevenueDataGroupedByChannel_Links struct {
 // AdRevenueDataGroupedByChannelMetaGranularity defines model for AdRevenueDataGroupedByChannel.Meta.Granularity.
 type AdRevenueDataGroupedByChannelMetaGranularity string
 
-// AdRevenueDataGroupedByChannelMetaGroupBy defines model for AdRevenueDataGroupedByChannel.Meta.GroupBy.
-type AdRevenueDataGroupedByChannelMetaGroupBy string
+// AdRevenueDataGroupedByChannelMetaGroupBy0 defines model for .
+type AdRevenueDataGroupedByChannelMetaGroupBy0 = string
+
+// AdRevenueDataGroupedByChannelMetaGroupBy1 defines model for .
+type AdRevenueDataGroupedByChannelMetaGroupBy1 = []string
+
+// AdRevenueDataGroupedByChannel_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type AdRevenueDataGroupedByChannel_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // AdRevenueDataGroupedByChannelApp defines model for AdRevenueDataGroupedByChannel+App.
 type AdRevenueDataGroupedByChannelApp struct {
@@ -2440,7 +2182,9 @@ type AdRevenueDataGroupedByChannelApp struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                              `json:"end_date,omitempty"`
 		Granularity *AdRevenueDataGroupedByChannelAppMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *[]AdRevenueDataGroupedByChannelAppMetaGroupBy   `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *AdRevenueDataGroupedByChannelApp_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#ad_revenue' title='Ad Revenue Metric Definitions'>Ad Revenue Metric Definitions</a> page.
 		Metrics        *AdRevenueMetrics   `json:"metrics,omitempty"`
@@ -2517,8 +2261,16 @@ type AdRevenueDataGroupedByChannelApp_Links struct {
 // AdRevenueDataGroupedByChannelAppMetaGranularity defines model for AdRevenueDataGroupedByChannelApp.Meta.Granularity.
 type AdRevenueDataGroupedByChannelAppMetaGranularity string
 
-// AdRevenueDataGroupedByChannelAppMetaGroupBy defines model for AdRevenueDataGroupedByChannelApp.Meta.GroupBy.
-type AdRevenueDataGroupedByChannelAppMetaGroupBy string
+// AdRevenueDataGroupedByChannelAppMetaGroupBy0 defines model for .
+type AdRevenueDataGroupedByChannelAppMetaGroupBy0 = string
+
+// AdRevenueDataGroupedByChannelAppMetaGroupBy1 defines model for .
+type AdRevenueDataGroupedByChannelAppMetaGroupBy1 = []string
+
+// AdRevenueDataGroupedByChannelApp_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type AdRevenueDataGroupedByChannelApp_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // AdRevenueDataGroupedByChannelAppCountry defines model for AdRevenueDataGroupedByChannel+App+Country.
 type AdRevenueDataGroupedByChannelAppCountry struct {
@@ -2531,7 +2283,9 @@ type AdRevenueDataGroupedByChannelAppCountry struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                                     `json:"end_date,omitempty"`
 		Granularity *AdRevenueDataGroupedByChannelAppCountryMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *[]AdRevenueDataGroupedByChannelAppCountryMetaGroupBy   `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#ad_revenue' title='Ad Revenue Metric Definitions'>Ad Revenue Metric Definitions</a> page.
 		Metrics        *AdRevenueMetrics   `json:"metrics,omitempty"`
@@ -2611,8 +2365,16 @@ type AdRevenueDataGroupedByChannelAppCountry_Links struct {
 // AdRevenueDataGroupedByChannelAppCountryMetaGranularity defines model for AdRevenueDataGroupedByChannelAppCountry.Meta.Granularity.
 type AdRevenueDataGroupedByChannelAppCountryMetaGranularity string
 
-// AdRevenueDataGroupedByChannelAppCountryMetaGroupBy defines model for AdRevenueDataGroupedByChannelAppCountry.Meta.GroupBy.
-type AdRevenueDataGroupedByChannelAppCountryMetaGroupBy string
+// AdRevenueDataGroupedByChannelAppCountryMetaGroupBy0 defines model for .
+type AdRevenueDataGroupedByChannelAppCountryMetaGroupBy0 = string
+
+// AdRevenueDataGroupedByChannelAppCountryMetaGroupBy1 defines model for .
+type AdRevenueDataGroupedByChannelAppCountryMetaGroupBy1 = []string
+
+// AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // AdRevenueDataGroupedByCountry defines model for AdRevenueDataGroupedByCountry.
 type AdRevenueDataGroupedByCountry struct {
@@ -2625,7 +2387,9 @@ type AdRevenueDataGroupedByCountry struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                           `json:"end_date,omitempty"`
 		Granularity *AdRevenueDataGroupedByCountryMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *[]AdRevenueDataGroupedByCountryMetaGroupBy   `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *AdRevenueDataGroupedByCountry_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#ad_revenue' title='Ad Revenue Metric Definitions'>Ad Revenue Metric Definitions</a> page.
 		Metrics        *AdRevenueMetrics   `json:"metrics,omitempty"`
@@ -2671,8 +2435,16 @@ type AdRevenueDataGroupedByCountry_Links struct {
 // AdRevenueDataGroupedByCountryMetaGranularity defines model for AdRevenueDataGroupedByCountry.Meta.Granularity.
 type AdRevenueDataGroupedByCountryMetaGranularity string
 
-// AdRevenueDataGroupedByCountryMetaGroupBy defines model for AdRevenueDataGroupedByCountry.Meta.GroupBy.
-type AdRevenueDataGroupedByCountryMetaGroupBy string
+// AdRevenueDataGroupedByCountryMetaGroupBy0 defines model for .
+type AdRevenueDataGroupedByCountryMetaGroupBy0 = string
+
+// AdRevenueDataGroupedByCountryMetaGroupBy1 defines model for .
+type AdRevenueDataGroupedByCountryMetaGroupBy1 = []string
+
+// AdRevenueDataGroupedByCountry_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type AdRevenueDataGroupedByCountry_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // AdRevenueDataShared defines model for AdRevenueDataShared.
 type AdRevenueDataShared struct {
@@ -2722,8 +2494,8 @@ type DefaultLinks struct {
 
 // EmptyResponse defines model for EmptyResponse.
 type EmptyResponse struct {
-	Data  *map[string]interface{} `json:"data,omitempty"`
-	Links *DefaultLinks           `json:"links,omitempty"`
+	Data  *[]interface{} `json:"data,omitempty"`
+	Links *DefaultLinks  `json:"links,omitempty"`
 }
 
 // LinksWithPagination defines model for LinksWithPagination.
@@ -2781,8 +2553,10 @@ type SKAdNetworkData struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date             `json:"end_date,omitempty"`
 		Granularity *SKAdNetworkDataMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *[]SKAdNetworkDataMetaGroupBy   `json:"group_by,omitempty"`
-		Metrics     *[]SKAdNetworkDataMetaMetrics   `json:"metrics,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *SKAdNetworkData_Meta_GroupBy `json:"group_by,omitempty"`
+		Metrics *[]SKAdNetworkDataMetaMetrics `json:"metrics,omitempty"`
 
 		// OrganizationId The ID of your Organization.
 		OrganizationId *openapi_types.UUID `json:"organization_id,omitempty"`
@@ -2896,8 +2670,16 @@ type SKAdNetworkData_Links struct {
 // SKAdNetworkDataMetaGranularity defines model for SKAdNetworkData.Meta.Granularity.
 type SKAdNetworkDataMetaGranularity string
 
-// SKAdNetworkDataMetaGroupBy defines model for SKAdNetworkData.Meta.GroupBy.
-type SKAdNetworkDataMetaGroupBy string
+// SKAdNetworkDataMetaGroupBy0 defines model for .
+type SKAdNetworkDataMetaGroupBy0 = string
+
+// SKAdNetworkDataMetaGroupBy1 defines model for .
+type SKAdNetworkDataMetaGroupBy1 = []string
+
+// SKAdNetworkData_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type SKAdNetworkData_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // SKAdNetworkDataMetaMetrics defines model for SKAdNetworkData.Meta.Metrics.
 type SKAdNetworkDataMetaMetrics string
@@ -3170,8 +2952,10 @@ type SkanAppleData struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date           `json:"end_date,omitempty"`
 		Granularity *SkanAppleDataMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *[]SkanAppleDataMetaGroupBy   `json:"group_by,omitempty"`
-		Metrics     *[]SkanAppleDataMetaMetrics   `json:"metrics,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *SkanAppleData_Meta_GroupBy `json:"group_by,omitempty"`
+		Metrics *[]SkanAppleDataMetaMetrics `json:"metrics,omitempty"`
 
 		// OrganizationId The ID of your Organization.
 		OrganizationId *openapi_types.UUID `json:"organization_id,omitempty"`
@@ -3285,8 +3069,16 @@ type SkanAppleData_Links struct {
 // SkanAppleDataMetaGranularity defines model for SkanAppleData.Meta.Granularity.
 type SkanAppleDataMetaGranularity string
 
-// SkanAppleDataMetaGroupBy defines model for SkanAppleData.Meta.GroupBy.
-type SkanAppleDataMetaGroupBy string
+// SkanAppleDataMetaGroupBy0 defines model for .
+type SkanAppleDataMetaGroupBy0 = string
+
+// SkanAppleDataMetaGroupBy1 defines model for .
+type SkanAppleDataMetaGroupBy1 = []string
+
+// SkanAppleData_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type SkanAppleData_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // SkanAppleDataMetaMetrics defines model for SkanAppleData.Meta.Metrics.
 type SkanAppleDataMetaMetrics string
@@ -3302,7 +3094,9 @@ type SpendDataGroupedByApp struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                   `json:"end_date,omitempty"`
 		Granularity *SpendDataGroupedByAppMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *SpendDataGroupedByAppMetaGroupBy     `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *SpendDataGroupedByApp_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#spend' title='Spend Metric Definitions'>Spend Metric Definitions</a> page.
 		Metrics        *SpendMetrics       `json:"metrics,omitempty"`
@@ -3364,8 +3158,16 @@ type SpendDataGroupedByApp_Links struct {
 // SpendDataGroupedByAppMetaGranularity defines model for SpendDataGroupedByApp.Meta.Granularity.
 type SpendDataGroupedByAppMetaGranularity string
 
-// SpendDataGroupedByAppMetaGroupBy defines model for SpendDataGroupedByApp.Meta.GroupBy.
-type SpendDataGroupedByAppMetaGroupBy string
+// SpendDataGroupedByAppMetaGroupBy0 defines model for .
+type SpendDataGroupedByAppMetaGroupBy0 = string
+
+// SpendDataGroupedByAppMetaGroupBy1 defines model for .
+type SpendDataGroupedByAppMetaGroupBy1 = []string
+
+// SpendDataGroupedByApp_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type SpendDataGroupedByApp_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // SpendDataGroupedByCampaign defines model for SpendDataGroupedByCampaign.
 type SpendDataGroupedByCampaign struct {
@@ -3378,7 +3180,9 @@ type SpendDataGroupedByCampaign struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                        `json:"end_date,omitempty"`
 		Granularity *SpendDataGroupedByCampaignMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *SpendDataGroupedByCampaignMetaGroupBy     `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *SpendDataGroupedByCampaign_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#spend' title='Spend Metric Definitions'>Spend Metric Definitions</a> page.
 		Metrics        *SpendMetrics       `json:"metrics,omitempty"`
@@ -3458,8 +3262,16 @@ type SpendDataGroupedByCampaign_Links struct {
 // SpendDataGroupedByCampaignMetaGranularity defines model for SpendDataGroupedByCampaign.Meta.Granularity.
 type SpendDataGroupedByCampaignMetaGranularity string
 
-// SpendDataGroupedByCampaignMetaGroupBy defines model for SpendDataGroupedByCampaign.Meta.GroupBy.
-type SpendDataGroupedByCampaignMetaGroupBy string
+// SpendDataGroupedByCampaignMetaGroupBy0 defines model for .
+type SpendDataGroupedByCampaignMetaGroupBy0 = string
+
+// SpendDataGroupedByCampaignMetaGroupBy1 defines model for .
+type SpendDataGroupedByCampaignMetaGroupBy1 = []string
+
+// SpendDataGroupedByCampaign_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type SpendDataGroupedByCampaign_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // SpendDataGroupedByCampaignCountry defines model for SpendDataGroupedByCampaign+Country.
 type SpendDataGroupedByCampaignCountry struct {
@@ -3472,7 +3284,9 @@ type SpendDataGroupedByCampaignCountry struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                               `json:"end_date,omitempty"`
 		Granularity *SpendDataGroupedByCampaignCountryMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *SpendDataGroupedByCampaignCountryMetaGroupBy     `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *SpendDataGroupedByCampaignCountry_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#spend' title='Spend Metric Definitions'>Spend Metric Definitions</a> page.
 		Metrics        *SpendMetrics       `json:"metrics,omitempty"`
@@ -3555,8 +3369,16 @@ type SpendDataGroupedByCampaignCountry_Links struct {
 // SpendDataGroupedByCampaignCountryMetaGranularity defines model for SpendDataGroupedByCampaignCountry.Meta.Granularity.
 type SpendDataGroupedByCampaignCountryMetaGranularity string
 
-// SpendDataGroupedByCampaignCountryMetaGroupBy defines model for SpendDataGroupedByCampaignCountry.Meta.GroupBy.
-type SpendDataGroupedByCampaignCountryMetaGroupBy string
+// SpendDataGroupedByCampaignCountryMetaGroupBy0 defines model for .
+type SpendDataGroupedByCampaignCountryMetaGroupBy0 = string
+
+// SpendDataGroupedByCampaignCountryMetaGroupBy1 defines model for .
+type SpendDataGroupedByCampaignCountryMetaGroupBy1 = []string
+
+// SpendDataGroupedByCampaignCountry_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type SpendDataGroupedByCampaignCountry_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // SpendDataGroupedByChannel defines model for SpendDataGroupedByChannel.
 type SpendDataGroupedByChannel struct {
@@ -3569,7 +3391,9 @@ type SpendDataGroupedByChannel struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                       `json:"end_date,omitempty"`
 		Granularity *SpendDataGroupedByChannelMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *SpendDataGroupedByChannelMetaGroupBy     `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *SpendDataGroupedByChannel_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#spend' title='Spend Metric Definitions'>Spend Metric Definitions</a> page.
 		Metrics        *SpendMetrics       `json:"metrics,omitempty"`
@@ -3627,8 +3451,16 @@ type SpendDataGroupedByChannel_Links struct {
 // SpendDataGroupedByChannelMetaGranularity defines model for SpendDataGroupedByChannel.Meta.Granularity.
 type SpendDataGroupedByChannelMetaGranularity string
 
-// SpendDataGroupedByChannelMetaGroupBy defines model for SpendDataGroupedByChannel.Meta.GroupBy.
-type SpendDataGroupedByChannelMetaGroupBy string
+// SpendDataGroupedByChannelMetaGroupBy0 defines model for .
+type SpendDataGroupedByChannelMetaGroupBy0 = string
+
+// SpendDataGroupedByChannelMetaGroupBy1 defines model for .
+type SpendDataGroupedByChannelMetaGroupBy1 = []string
+
+// SpendDataGroupedByChannel_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type SpendDataGroupedByChannel_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // SpendDataGroupedByChannelApp defines model for SpendDataGroupedByChannel+App.
 type SpendDataGroupedByChannelApp struct {
@@ -3641,7 +3473,9 @@ type SpendDataGroupedByChannelApp struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                          `json:"end_date,omitempty"`
 		Granularity *SpendDataGroupedByChannelAppMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *SpendDataGroupedByChannelAppMetaGroupBy     `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *SpendDataGroupedByChannelApp_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#spend' title='Spend Metric Definitions'>Spend Metric Definitions</a> page.
 		Metrics        *SpendMetrics       `json:"metrics,omitempty"`
@@ -3712,8 +3546,16 @@ type SpendDataGroupedByChannelApp_Links struct {
 // SpendDataGroupedByChannelAppMetaGranularity defines model for SpendDataGroupedByChannelApp.Meta.Granularity.
 type SpendDataGroupedByChannelAppMetaGranularity string
 
-// SpendDataGroupedByChannelAppMetaGroupBy defines model for SpendDataGroupedByChannelApp.Meta.GroupBy.
-type SpendDataGroupedByChannelAppMetaGroupBy string
+// SpendDataGroupedByChannelAppMetaGroupBy0 defines model for .
+type SpendDataGroupedByChannelAppMetaGroupBy0 = string
+
+// SpendDataGroupedByChannelAppMetaGroupBy1 defines model for .
+type SpendDataGroupedByChannelAppMetaGroupBy1 = []string
+
+// SpendDataGroupedByChannelApp_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type SpendDataGroupedByChannelApp_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // SpendDataGroupedByChannelAppCountry defines model for SpendDataGroupedByChannel+App+Country.
 type SpendDataGroupedByChannelAppCountry struct {
@@ -3726,7 +3568,9 @@ type SpendDataGroupedByChannelAppCountry struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                                 `json:"end_date,omitempty"`
 		Granularity *SpendDataGroupedByChannelAppCountryMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *SpendDataGroupedByChannelAppCountryMetaGroupBy     `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *SpendDataGroupedByChannelAppCountry_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#spend' title='Spend Metric Definitions'>Spend Metric Definitions</a> page.
 		Metrics        *SpendMetrics       `json:"metrics,omitempty"`
@@ -3800,8 +3644,16 @@ type SpendDataGroupedByChannelAppCountry_Links struct {
 // SpendDataGroupedByChannelAppCountryMetaGranularity defines model for SpendDataGroupedByChannelAppCountry.Meta.Granularity.
 type SpendDataGroupedByChannelAppCountryMetaGranularity string
 
-// SpendDataGroupedByChannelAppCountryMetaGroupBy defines model for SpendDataGroupedByChannelAppCountry.Meta.GroupBy.
-type SpendDataGroupedByChannelAppCountryMetaGroupBy string
+// SpendDataGroupedByChannelAppCountryMetaGroupBy0 defines model for .
+type SpendDataGroupedByChannelAppCountryMetaGroupBy0 = string
+
+// SpendDataGroupedByChannelAppCountryMetaGroupBy1 defines model for .
+type SpendDataGroupedByChannelAppCountryMetaGroupBy1 = []string
+
+// SpendDataGroupedByChannelAppCountry_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type SpendDataGroupedByChannelAppCountry_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // SpendDataGroupedByCountry defines model for SpendDataGroupedByCountry.
 type SpendDataGroupedByCountry struct {
@@ -3814,7 +3666,9 @@ type SpendDataGroupedByCountry struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                       `json:"end_date,omitempty"`
 		Granularity *SpendDataGroupedByCountryMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *SpendDataGroupedByCountryMetaGroupBy     `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *SpendDataGroupedByCountry_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#spend' title='Spend Metric Definitions'>Spend Metric Definitions</a> page.
 		Metrics        *SpendMetrics       `json:"metrics,omitempty"`
@@ -3863,8 +3717,16 @@ type SpendDataGroupedByCountry_Links struct {
 // SpendDataGroupedByCountryMetaGranularity defines model for SpendDataGroupedByCountry.Meta.Granularity.
 type SpendDataGroupedByCountryMetaGranularity string
 
-// SpendDataGroupedByCountryMetaGroupBy defines model for SpendDataGroupedByCountry.Meta.GroupBy.
-type SpendDataGroupedByCountryMetaGroupBy string
+// SpendDataGroupedByCountryMetaGroupBy0 defines model for .
+type SpendDataGroupedByCountryMetaGroupBy0 = string
+
+// SpendDataGroupedByCountryMetaGroupBy1 defines model for .
+type SpendDataGroupedByCountryMetaGroupBy1 = []string
+
+// SpendDataGroupedByCountry_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type SpendDataGroupedByCountry_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // SpendDataGroupedBySite defines model for SpendDataGroupedBySite.
 type SpendDataGroupedBySite struct {
@@ -3877,7 +3739,9 @@ type SpendDataGroupedBySite struct {
 		// EndDate Latest date for reporting data.
 		EndDate     *openapi_types.Date                    `json:"end_date,omitempty"`
 		Granularity *SpendDataGroupedBySiteMetaGranularity `json:"granularity,omitempty"`
-		GroupBy     *SpendDataGroupedBySiteMetaGroupBy     `json:"group_by,omitempty"`
+
+		// GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+		GroupBy *SpendDataGroupedBySite_Meta_GroupBy `json:"group_by,omitempty"`
 
 		// Metrics To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#spend' title='Spend Metric Definitions'>Spend Metric Definitions</a> page.
 		Metrics        *SpendMetrics       `json:"metrics,omitempty"`
@@ -3926,8 +3790,16 @@ type SpendDataGroupedBySite_Links struct {
 // SpendDataGroupedBySiteMetaGranularity defines model for SpendDataGroupedBySite.Meta.Granularity.
 type SpendDataGroupedBySiteMetaGranularity string
 
-// SpendDataGroupedBySiteMetaGroupBy defines model for SpendDataGroupedBySite.Meta.GroupBy.
-type SpendDataGroupedBySiteMetaGroupBy string
+// SpendDataGroupedBySiteMetaGroupBy0 defines model for .
+type SpendDataGroupedBySiteMetaGroupBy0 = string
+
+// SpendDataGroupedBySiteMetaGroupBy1 defines model for .
+type SpendDataGroupedBySiteMetaGroupBy1 = []string
+
+// SpendDataGroupedBySite_Meta_GroupBy What each row is grouped by: one name, or a list of names when the report is grouped by several.
+type SpendDataGroupedBySite_Meta_GroupBy struct {
+	union json.RawMessage
+}
 
 // SpendDataShared defines model for SpendDataShared.
 type SpendDataShared struct {
@@ -6604,6 +6476,68 @@ func (t *AdRevenueDataGroupedByAdPlacement_Links) UnmarshalJSON(b []byte) error 
 	return err
 }
 
+// AsAdRevenueDataGroupedByAdPlacementMetaGroupBy0 returns the union data inside the AdRevenueDataGroupedByAdPlacement_Meta_GroupBy as a AdRevenueDataGroupedByAdPlacementMetaGroupBy0
+func (t AdRevenueDataGroupedByAdPlacement_Meta_GroupBy) AsAdRevenueDataGroupedByAdPlacementMetaGroupBy0() (AdRevenueDataGroupedByAdPlacementMetaGroupBy0, error) {
+	var body AdRevenueDataGroupedByAdPlacementMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdRevenueDataGroupedByAdPlacementMetaGroupBy0 overwrites any union data inside the AdRevenueDataGroupedByAdPlacement_Meta_GroupBy as the provided AdRevenueDataGroupedByAdPlacementMetaGroupBy0
+func (t *AdRevenueDataGroupedByAdPlacement_Meta_GroupBy) FromAdRevenueDataGroupedByAdPlacementMetaGroupBy0(v AdRevenueDataGroupedByAdPlacementMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdRevenueDataGroupedByAdPlacementMetaGroupBy0 performs a merge with any union data inside the AdRevenueDataGroupedByAdPlacement_Meta_GroupBy, using the provided AdRevenueDataGroupedByAdPlacementMetaGroupBy0
+func (t *AdRevenueDataGroupedByAdPlacement_Meta_GroupBy) MergeAdRevenueDataGroupedByAdPlacementMetaGroupBy0(v AdRevenueDataGroupedByAdPlacementMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAdRevenueDataGroupedByAdPlacementMetaGroupBy1 returns the union data inside the AdRevenueDataGroupedByAdPlacement_Meta_GroupBy as a AdRevenueDataGroupedByAdPlacementMetaGroupBy1
+func (t AdRevenueDataGroupedByAdPlacement_Meta_GroupBy) AsAdRevenueDataGroupedByAdPlacementMetaGroupBy1() (AdRevenueDataGroupedByAdPlacementMetaGroupBy1, error) {
+	var body AdRevenueDataGroupedByAdPlacementMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdRevenueDataGroupedByAdPlacementMetaGroupBy1 overwrites any union data inside the AdRevenueDataGroupedByAdPlacement_Meta_GroupBy as the provided AdRevenueDataGroupedByAdPlacementMetaGroupBy1
+func (t *AdRevenueDataGroupedByAdPlacement_Meta_GroupBy) FromAdRevenueDataGroupedByAdPlacementMetaGroupBy1(v AdRevenueDataGroupedByAdPlacementMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdRevenueDataGroupedByAdPlacementMetaGroupBy1 performs a merge with any union data inside the AdRevenueDataGroupedByAdPlacement_Meta_GroupBy, using the provided AdRevenueDataGroupedByAdPlacementMetaGroupBy1
+func (t *AdRevenueDataGroupedByAdPlacement_Meta_GroupBy) MergeAdRevenueDataGroupedByAdPlacementMetaGroupBy1(v AdRevenueDataGroupedByAdPlacementMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AdRevenueDataGroupedByAdPlacement_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AdRevenueDataGroupedByAdPlacement_Meta_GroupBy) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsAdRevenueDataGroupedByAppData0 returns the union data inside the AdRevenueDataGroupedByApp_Data_Item as a AdRevenueDataGroupedByAppData0
 func (t AdRevenueDataGroupedByApp_Data_Item) AsAdRevenueDataGroupedByAppData0() (AdRevenueDataGroupedByAppData0, error) {
 	var body AdRevenueDataGroupedByAppData0
@@ -6698,6 +6632,68 @@ func (t AdRevenueDataGroupedByApp_Links) MarshalJSON() ([]byte, error) {
 }
 
 func (t *AdRevenueDataGroupedByApp_Links) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsAdRevenueDataGroupedByAppMetaGroupBy0 returns the union data inside the AdRevenueDataGroupedByApp_Meta_GroupBy as a AdRevenueDataGroupedByAppMetaGroupBy0
+func (t AdRevenueDataGroupedByApp_Meta_GroupBy) AsAdRevenueDataGroupedByAppMetaGroupBy0() (AdRevenueDataGroupedByAppMetaGroupBy0, error) {
+	var body AdRevenueDataGroupedByAppMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdRevenueDataGroupedByAppMetaGroupBy0 overwrites any union data inside the AdRevenueDataGroupedByApp_Meta_GroupBy as the provided AdRevenueDataGroupedByAppMetaGroupBy0
+func (t *AdRevenueDataGroupedByApp_Meta_GroupBy) FromAdRevenueDataGroupedByAppMetaGroupBy0(v AdRevenueDataGroupedByAppMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdRevenueDataGroupedByAppMetaGroupBy0 performs a merge with any union data inside the AdRevenueDataGroupedByApp_Meta_GroupBy, using the provided AdRevenueDataGroupedByAppMetaGroupBy0
+func (t *AdRevenueDataGroupedByApp_Meta_GroupBy) MergeAdRevenueDataGroupedByAppMetaGroupBy0(v AdRevenueDataGroupedByAppMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAdRevenueDataGroupedByAppMetaGroupBy1 returns the union data inside the AdRevenueDataGroupedByApp_Meta_GroupBy as a AdRevenueDataGroupedByAppMetaGroupBy1
+func (t AdRevenueDataGroupedByApp_Meta_GroupBy) AsAdRevenueDataGroupedByAppMetaGroupBy1() (AdRevenueDataGroupedByAppMetaGroupBy1, error) {
+	var body AdRevenueDataGroupedByAppMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdRevenueDataGroupedByAppMetaGroupBy1 overwrites any union data inside the AdRevenueDataGroupedByApp_Meta_GroupBy as the provided AdRevenueDataGroupedByAppMetaGroupBy1
+func (t *AdRevenueDataGroupedByApp_Meta_GroupBy) FromAdRevenueDataGroupedByAppMetaGroupBy1(v AdRevenueDataGroupedByAppMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdRevenueDataGroupedByAppMetaGroupBy1 performs a merge with any union data inside the AdRevenueDataGroupedByApp_Meta_GroupBy, using the provided AdRevenueDataGroupedByAppMetaGroupBy1
+func (t *AdRevenueDataGroupedByApp_Meta_GroupBy) MergeAdRevenueDataGroupedByAppMetaGroupBy1(v AdRevenueDataGroupedByAppMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AdRevenueDataGroupedByApp_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AdRevenueDataGroupedByApp_Meta_GroupBy) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -6800,6 +6796,68 @@ func (t *AdRevenueDataGroupedByChannel_Links) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsAdRevenueDataGroupedByChannelMetaGroupBy0 returns the union data inside the AdRevenueDataGroupedByChannel_Meta_GroupBy as a AdRevenueDataGroupedByChannelMetaGroupBy0
+func (t AdRevenueDataGroupedByChannel_Meta_GroupBy) AsAdRevenueDataGroupedByChannelMetaGroupBy0() (AdRevenueDataGroupedByChannelMetaGroupBy0, error) {
+	var body AdRevenueDataGroupedByChannelMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdRevenueDataGroupedByChannelMetaGroupBy0 overwrites any union data inside the AdRevenueDataGroupedByChannel_Meta_GroupBy as the provided AdRevenueDataGroupedByChannelMetaGroupBy0
+func (t *AdRevenueDataGroupedByChannel_Meta_GroupBy) FromAdRevenueDataGroupedByChannelMetaGroupBy0(v AdRevenueDataGroupedByChannelMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdRevenueDataGroupedByChannelMetaGroupBy0 performs a merge with any union data inside the AdRevenueDataGroupedByChannel_Meta_GroupBy, using the provided AdRevenueDataGroupedByChannelMetaGroupBy0
+func (t *AdRevenueDataGroupedByChannel_Meta_GroupBy) MergeAdRevenueDataGroupedByChannelMetaGroupBy0(v AdRevenueDataGroupedByChannelMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAdRevenueDataGroupedByChannelMetaGroupBy1 returns the union data inside the AdRevenueDataGroupedByChannel_Meta_GroupBy as a AdRevenueDataGroupedByChannelMetaGroupBy1
+func (t AdRevenueDataGroupedByChannel_Meta_GroupBy) AsAdRevenueDataGroupedByChannelMetaGroupBy1() (AdRevenueDataGroupedByChannelMetaGroupBy1, error) {
+	var body AdRevenueDataGroupedByChannelMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdRevenueDataGroupedByChannelMetaGroupBy1 overwrites any union data inside the AdRevenueDataGroupedByChannel_Meta_GroupBy as the provided AdRevenueDataGroupedByChannelMetaGroupBy1
+func (t *AdRevenueDataGroupedByChannel_Meta_GroupBy) FromAdRevenueDataGroupedByChannelMetaGroupBy1(v AdRevenueDataGroupedByChannelMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdRevenueDataGroupedByChannelMetaGroupBy1 performs a merge with any union data inside the AdRevenueDataGroupedByChannel_Meta_GroupBy, using the provided AdRevenueDataGroupedByChannelMetaGroupBy1
+func (t *AdRevenueDataGroupedByChannel_Meta_GroupBy) MergeAdRevenueDataGroupedByChannelMetaGroupBy1(v AdRevenueDataGroupedByChannelMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AdRevenueDataGroupedByChannel_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AdRevenueDataGroupedByChannel_Meta_GroupBy) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsAdRevenueDataGroupedByChannelAppData0 returns the union data inside the AdRevenueDataGroupedByChannelApp_Data_Item as a AdRevenueDataGroupedByChannelAppData0
 func (t AdRevenueDataGroupedByChannelApp_Data_Item) AsAdRevenueDataGroupedByChannelAppData0() (AdRevenueDataGroupedByChannelAppData0, error) {
 	var body AdRevenueDataGroupedByChannelAppData0
@@ -6894,6 +6952,68 @@ func (t AdRevenueDataGroupedByChannelApp_Links) MarshalJSON() ([]byte, error) {
 }
 
 func (t *AdRevenueDataGroupedByChannelApp_Links) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsAdRevenueDataGroupedByChannelAppMetaGroupBy0 returns the union data inside the AdRevenueDataGroupedByChannelApp_Meta_GroupBy as a AdRevenueDataGroupedByChannelAppMetaGroupBy0
+func (t AdRevenueDataGroupedByChannelApp_Meta_GroupBy) AsAdRevenueDataGroupedByChannelAppMetaGroupBy0() (AdRevenueDataGroupedByChannelAppMetaGroupBy0, error) {
+	var body AdRevenueDataGroupedByChannelAppMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdRevenueDataGroupedByChannelAppMetaGroupBy0 overwrites any union data inside the AdRevenueDataGroupedByChannelApp_Meta_GroupBy as the provided AdRevenueDataGroupedByChannelAppMetaGroupBy0
+func (t *AdRevenueDataGroupedByChannelApp_Meta_GroupBy) FromAdRevenueDataGroupedByChannelAppMetaGroupBy0(v AdRevenueDataGroupedByChannelAppMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdRevenueDataGroupedByChannelAppMetaGroupBy0 performs a merge with any union data inside the AdRevenueDataGroupedByChannelApp_Meta_GroupBy, using the provided AdRevenueDataGroupedByChannelAppMetaGroupBy0
+func (t *AdRevenueDataGroupedByChannelApp_Meta_GroupBy) MergeAdRevenueDataGroupedByChannelAppMetaGroupBy0(v AdRevenueDataGroupedByChannelAppMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAdRevenueDataGroupedByChannelAppMetaGroupBy1 returns the union data inside the AdRevenueDataGroupedByChannelApp_Meta_GroupBy as a AdRevenueDataGroupedByChannelAppMetaGroupBy1
+func (t AdRevenueDataGroupedByChannelApp_Meta_GroupBy) AsAdRevenueDataGroupedByChannelAppMetaGroupBy1() (AdRevenueDataGroupedByChannelAppMetaGroupBy1, error) {
+	var body AdRevenueDataGroupedByChannelAppMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdRevenueDataGroupedByChannelAppMetaGroupBy1 overwrites any union data inside the AdRevenueDataGroupedByChannelApp_Meta_GroupBy as the provided AdRevenueDataGroupedByChannelAppMetaGroupBy1
+func (t *AdRevenueDataGroupedByChannelApp_Meta_GroupBy) FromAdRevenueDataGroupedByChannelAppMetaGroupBy1(v AdRevenueDataGroupedByChannelAppMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdRevenueDataGroupedByChannelAppMetaGroupBy1 performs a merge with any union data inside the AdRevenueDataGroupedByChannelApp_Meta_GroupBy, using the provided AdRevenueDataGroupedByChannelAppMetaGroupBy1
+func (t *AdRevenueDataGroupedByChannelApp_Meta_GroupBy) MergeAdRevenueDataGroupedByChannelAppMetaGroupBy1(v AdRevenueDataGroupedByChannelAppMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AdRevenueDataGroupedByChannelApp_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AdRevenueDataGroupedByChannelApp_Meta_GroupBy) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -6996,6 +7116,68 @@ func (t *AdRevenueDataGroupedByChannelAppCountry_Links) UnmarshalJSON(b []byte) 
 	return err
 }
 
+// AsAdRevenueDataGroupedByChannelAppCountryMetaGroupBy0 returns the union data inside the AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy as a AdRevenueDataGroupedByChannelAppCountryMetaGroupBy0
+func (t AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy) AsAdRevenueDataGroupedByChannelAppCountryMetaGroupBy0() (AdRevenueDataGroupedByChannelAppCountryMetaGroupBy0, error) {
+	var body AdRevenueDataGroupedByChannelAppCountryMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdRevenueDataGroupedByChannelAppCountryMetaGroupBy0 overwrites any union data inside the AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy as the provided AdRevenueDataGroupedByChannelAppCountryMetaGroupBy0
+func (t *AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy) FromAdRevenueDataGroupedByChannelAppCountryMetaGroupBy0(v AdRevenueDataGroupedByChannelAppCountryMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdRevenueDataGroupedByChannelAppCountryMetaGroupBy0 performs a merge with any union data inside the AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy, using the provided AdRevenueDataGroupedByChannelAppCountryMetaGroupBy0
+func (t *AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy) MergeAdRevenueDataGroupedByChannelAppCountryMetaGroupBy0(v AdRevenueDataGroupedByChannelAppCountryMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAdRevenueDataGroupedByChannelAppCountryMetaGroupBy1 returns the union data inside the AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy as a AdRevenueDataGroupedByChannelAppCountryMetaGroupBy1
+func (t AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy) AsAdRevenueDataGroupedByChannelAppCountryMetaGroupBy1() (AdRevenueDataGroupedByChannelAppCountryMetaGroupBy1, error) {
+	var body AdRevenueDataGroupedByChannelAppCountryMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdRevenueDataGroupedByChannelAppCountryMetaGroupBy1 overwrites any union data inside the AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy as the provided AdRevenueDataGroupedByChannelAppCountryMetaGroupBy1
+func (t *AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy) FromAdRevenueDataGroupedByChannelAppCountryMetaGroupBy1(v AdRevenueDataGroupedByChannelAppCountryMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdRevenueDataGroupedByChannelAppCountryMetaGroupBy1 performs a merge with any union data inside the AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy, using the provided AdRevenueDataGroupedByChannelAppCountryMetaGroupBy1
+func (t *AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy) MergeAdRevenueDataGroupedByChannelAppCountryMetaGroupBy1(v AdRevenueDataGroupedByChannelAppCountryMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AdRevenueDataGroupedByChannelAppCountry_Meta_GroupBy) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsAdRevenueDataGroupedByCountryData0 returns the union data inside the AdRevenueDataGroupedByCountry_Data_Item as a AdRevenueDataGroupedByCountryData0
 func (t AdRevenueDataGroupedByCountry_Data_Item) AsAdRevenueDataGroupedByCountryData0() (AdRevenueDataGroupedByCountryData0, error) {
 	var body AdRevenueDataGroupedByCountryData0
@@ -7090,6 +7272,68 @@ func (t AdRevenueDataGroupedByCountry_Links) MarshalJSON() ([]byte, error) {
 }
 
 func (t *AdRevenueDataGroupedByCountry_Links) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsAdRevenueDataGroupedByCountryMetaGroupBy0 returns the union data inside the AdRevenueDataGroupedByCountry_Meta_GroupBy as a AdRevenueDataGroupedByCountryMetaGroupBy0
+func (t AdRevenueDataGroupedByCountry_Meta_GroupBy) AsAdRevenueDataGroupedByCountryMetaGroupBy0() (AdRevenueDataGroupedByCountryMetaGroupBy0, error) {
+	var body AdRevenueDataGroupedByCountryMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdRevenueDataGroupedByCountryMetaGroupBy0 overwrites any union data inside the AdRevenueDataGroupedByCountry_Meta_GroupBy as the provided AdRevenueDataGroupedByCountryMetaGroupBy0
+func (t *AdRevenueDataGroupedByCountry_Meta_GroupBy) FromAdRevenueDataGroupedByCountryMetaGroupBy0(v AdRevenueDataGroupedByCountryMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdRevenueDataGroupedByCountryMetaGroupBy0 performs a merge with any union data inside the AdRevenueDataGroupedByCountry_Meta_GroupBy, using the provided AdRevenueDataGroupedByCountryMetaGroupBy0
+func (t *AdRevenueDataGroupedByCountry_Meta_GroupBy) MergeAdRevenueDataGroupedByCountryMetaGroupBy0(v AdRevenueDataGroupedByCountryMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAdRevenueDataGroupedByCountryMetaGroupBy1 returns the union data inside the AdRevenueDataGroupedByCountry_Meta_GroupBy as a AdRevenueDataGroupedByCountryMetaGroupBy1
+func (t AdRevenueDataGroupedByCountry_Meta_GroupBy) AsAdRevenueDataGroupedByCountryMetaGroupBy1() (AdRevenueDataGroupedByCountryMetaGroupBy1, error) {
+	var body AdRevenueDataGroupedByCountryMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAdRevenueDataGroupedByCountryMetaGroupBy1 overwrites any union data inside the AdRevenueDataGroupedByCountry_Meta_GroupBy as the provided AdRevenueDataGroupedByCountryMetaGroupBy1
+func (t *AdRevenueDataGroupedByCountry_Meta_GroupBy) FromAdRevenueDataGroupedByCountryMetaGroupBy1(v AdRevenueDataGroupedByCountryMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeAdRevenueDataGroupedByCountryMetaGroupBy1 performs a merge with any union data inside the AdRevenueDataGroupedByCountry_Meta_GroupBy, using the provided AdRevenueDataGroupedByCountryMetaGroupBy1
+func (t *AdRevenueDataGroupedByCountry_Meta_GroupBy) MergeAdRevenueDataGroupedByCountryMetaGroupBy1(v AdRevenueDataGroupedByCountryMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AdRevenueDataGroupedByCountry_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AdRevenueDataGroupedByCountry_Meta_GroupBy) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -7312,6 +7556,68 @@ func (t SKAdNetworkData_Links) MarshalJSON() ([]byte, error) {
 }
 
 func (t *SKAdNetworkData_Links) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsSKAdNetworkDataMetaGroupBy0 returns the union data inside the SKAdNetworkData_Meta_GroupBy as a SKAdNetworkDataMetaGroupBy0
+func (t SKAdNetworkData_Meta_GroupBy) AsSKAdNetworkDataMetaGroupBy0() (SKAdNetworkDataMetaGroupBy0, error) {
+	var body SKAdNetworkDataMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSKAdNetworkDataMetaGroupBy0 overwrites any union data inside the SKAdNetworkData_Meta_GroupBy as the provided SKAdNetworkDataMetaGroupBy0
+func (t *SKAdNetworkData_Meta_GroupBy) FromSKAdNetworkDataMetaGroupBy0(v SKAdNetworkDataMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSKAdNetworkDataMetaGroupBy0 performs a merge with any union data inside the SKAdNetworkData_Meta_GroupBy, using the provided SKAdNetworkDataMetaGroupBy0
+func (t *SKAdNetworkData_Meta_GroupBy) MergeSKAdNetworkDataMetaGroupBy0(v SKAdNetworkDataMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSKAdNetworkDataMetaGroupBy1 returns the union data inside the SKAdNetworkData_Meta_GroupBy as a SKAdNetworkDataMetaGroupBy1
+func (t SKAdNetworkData_Meta_GroupBy) AsSKAdNetworkDataMetaGroupBy1() (SKAdNetworkDataMetaGroupBy1, error) {
+	var body SKAdNetworkDataMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSKAdNetworkDataMetaGroupBy1 overwrites any union data inside the SKAdNetworkData_Meta_GroupBy as the provided SKAdNetworkDataMetaGroupBy1
+func (t *SKAdNetworkData_Meta_GroupBy) FromSKAdNetworkDataMetaGroupBy1(v SKAdNetworkDataMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSKAdNetworkDataMetaGroupBy1 performs a merge with any union data inside the SKAdNetworkData_Meta_GroupBy, using the provided SKAdNetworkDataMetaGroupBy1
+func (t *SKAdNetworkData_Meta_GroupBy) MergeSKAdNetworkDataMetaGroupBy1(v SKAdNetworkDataMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SKAdNetworkData_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *SKAdNetworkData_Meta_GroupBy) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -7600,6 +7906,68 @@ func (t *SkanAppleData_Links) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsSkanAppleDataMetaGroupBy0 returns the union data inside the SkanAppleData_Meta_GroupBy as a SkanAppleDataMetaGroupBy0
+func (t SkanAppleData_Meta_GroupBy) AsSkanAppleDataMetaGroupBy0() (SkanAppleDataMetaGroupBy0, error) {
+	var body SkanAppleDataMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSkanAppleDataMetaGroupBy0 overwrites any union data inside the SkanAppleData_Meta_GroupBy as the provided SkanAppleDataMetaGroupBy0
+func (t *SkanAppleData_Meta_GroupBy) FromSkanAppleDataMetaGroupBy0(v SkanAppleDataMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSkanAppleDataMetaGroupBy0 performs a merge with any union data inside the SkanAppleData_Meta_GroupBy, using the provided SkanAppleDataMetaGroupBy0
+func (t *SkanAppleData_Meta_GroupBy) MergeSkanAppleDataMetaGroupBy0(v SkanAppleDataMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSkanAppleDataMetaGroupBy1 returns the union data inside the SkanAppleData_Meta_GroupBy as a SkanAppleDataMetaGroupBy1
+func (t SkanAppleData_Meta_GroupBy) AsSkanAppleDataMetaGroupBy1() (SkanAppleDataMetaGroupBy1, error) {
+	var body SkanAppleDataMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSkanAppleDataMetaGroupBy1 overwrites any union data inside the SkanAppleData_Meta_GroupBy as the provided SkanAppleDataMetaGroupBy1
+func (t *SkanAppleData_Meta_GroupBy) FromSkanAppleDataMetaGroupBy1(v SkanAppleDataMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSkanAppleDataMetaGroupBy1 performs a merge with any union data inside the SkanAppleData_Meta_GroupBy, using the provided SkanAppleDataMetaGroupBy1
+func (t *SkanAppleData_Meta_GroupBy) MergeSkanAppleDataMetaGroupBy1(v SkanAppleDataMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SkanAppleData_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *SkanAppleData_Meta_GroupBy) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsSpendDataGroupedByAppData0 returns the union data inside the SpendDataGroupedByApp_Data_Item as a SpendDataGroupedByAppData0
 func (t SpendDataGroupedByApp_Data_Item) AsSpendDataGroupedByAppData0() (SpendDataGroupedByAppData0, error) {
 	var body SpendDataGroupedByAppData0
@@ -7694,6 +8062,68 @@ func (t SpendDataGroupedByApp_Links) MarshalJSON() ([]byte, error) {
 }
 
 func (t *SpendDataGroupedByApp_Links) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsSpendDataGroupedByAppMetaGroupBy0 returns the union data inside the SpendDataGroupedByApp_Meta_GroupBy as a SpendDataGroupedByAppMetaGroupBy0
+func (t SpendDataGroupedByApp_Meta_GroupBy) AsSpendDataGroupedByAppMetaGroupBy0() (SpendDataGroupedByAppMetaGroupBy0, error) {
+	var body SpendDataGroupedByAppMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByAppMetaGroupBy0 overwrites any union data inside the SpendDataGroupedByApp_Meta_GroupBy as the provided SpendDataGroupedByAppMetaGroupBy0
+func (t *SpendDataGroupedByApp_Meta_GroupBy) FromSpendDataGroupedByAppMetaGroupBy0(v SpendDataGroupedByAppMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByAppMetaGroupBy0 performs a merge with any union data inside the SpendDataGroupedByApp_Meta_GroupBy, using the provided SpendDataGroupedByAppMetaGroupBy0
+func (t *SpendDataGroupedByApp_Meta_GroupBy) MergeSpendDataGroupedByAppMetaGroupBy0(v SpendDataGroupedByAppMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSpendDataGroupedByAppMetaGroupBy1 returns the union data inside the SpendDataGroupedByApp_Meta_GroupBy as a SpendDataGroupedByAppMetaGroupBy1
+func (t SpendDataGroupedByApp_Meta_GroupBy) AsSpendDataGroupedByAppMetaGroupBy1() (SpendDataGroupedByAppMetaGroupBy1, error) {
+	var body SpendDataGroupedByAppMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByAppMetaGroupBy1 overwrites any union data inside the SpendDataGroupedByApp_Meta_GroupBy as the provided SpendDataGroupedByAppMetaGroupBy1
+func (t *SpendDataGroupedByApp_Meta_GroupBy) FromSpendDataGroupedByAppMetaGroupBy1(v SpendDataGroupedByAppMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByAppMetaGroupBy1 performs a merge with any union data inside the SpendDataGroupedByApp_Meta_GroupBy, using the provided SpendDataGroupedByAppMetaGroupBy1
+func (t *SpendDataGroupedByApp_Meta_GroupBy) MergeSpendDataGroupedByAppMetaGroupBy1(v SpendDataGroupedByAppMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SpendDataGroupedByApp_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *SpendDataGroupedByApp_Meta_GroupBy) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -7796,6 +8226,68 @@ func (t *SpendDataGroupedByCampaign_Links) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsSpendDataGroupedByCampaignMetaGroupBy0 returns the union data inside the SpendDataGroupedByCampaign_Meta_GroupBy as a SpendDataGroupedByCampaignMetaGroupBy0
+func (t SpendDataGroupedByCampaign_Meta_GroupBy) AsSpendDataGroupedByCampaignMetaGroupBy0() (SpendDataGroupedByCampaignMetaGroupBy0, error) {
+	var body SpendDataGroupedByCampaignMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByCampaignMetaGroupBy0 overwrites any union data inside the SpendDataGroupedByCampaign_Meta_GroupBy as the provided SpendDataGroupedByCampaignMetaGroupBy0
+func (t *SpendDataGroupedByCampaign_Meta_GroupBy) FromSpendDataGroupedByCampaignMetaGroupBy0(v SpendDataGroupedByCampaignMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByCampaignMetaGroupBy0 performs a merge with any union data inside the SpendDataGroupedByCampaign_Meta_GroupBy, using the provided SpendDataGroupedByCampaignMetaGroupBy0
+func (t *SpendDataGroupedByCampaign_Meta_GroupBy) MergeSpendDataGroupedByCampaignMetaGroupBy0(v SpendDataGroupedByCampaignMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSpendDataGroupedByCampaignMetaGroupBy1 returns the union data inside the SpendDataGroupedByCampaign_Meta_GroupBy as a SpendDataGroupedByCampaignMetaGroupBy1
+func (t SpendDataGroupedByCampaign_Meta_GroupBy) AsSpendDataGroupedByCampaignMetaGroupBy1() (SpendDataGroupedByCampaignMetaGroupBy1, error) {
+	var body SpendDataGroupedByCampaignMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByCampaignMetaGroupBy1 overwrites any union data inside the SpendDataGroupedByCampaign_Meta_GroupBy as the provided SpendDataGroupedByCampaignMetaGroupBy1
+func (t *SpendDataGroupedByCampaign_Meta_GroupBy) FromSpendDataGroupedByCampaignMetaGroupBy1(v SpendDataGroupedByCampaignMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByCampaignMetaGroupBy1 performs a merge with any union data inside the SpendDataGroupedByCampaign_Meta_GroupBy, using the provided SpendDataGroupedByCampaignMetaGroupBy1
+func (t *SpendDataGroupedByCampaign_Meta_GroupBy) MergeSpendDataGroupedByCampaignMetaGroupBy1(v SpendDataGroupedByCampaignMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SpendDataGroupedByCampaign_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *SpendDataGroupedByCampaign_Meta_GroupBy) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsSpendDataGroupedByCampaignCountryData0 returns the union data inside the SpendDataGroupedByCampaignCountry_Data_Item as a SpendDataGroupedByCampaignCountryData0
 func (t SpendDataGroupedByCampaignCountry_Data_Item) AsSpendDataGroupedByCampaignCountryData0() (SpendDataGroupedByCampaignCountryData0, error) {
 	var body SpendDataGroupedByCampaignCountryData0
@@ -7890,6 +8382,68 @@ func (t SpendDataGroupedByCampaignCountry_Links) MarshalJSON() ([]byte, error) {
 }
 
 func (t *SpendDataGroupedByCampaignCountry_Links) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsSpendDataGroupedByCampaignCountryMetaGroupBy0 returns the union data inside the SpendDataGroupedByCampaignCountry_Meta_GroupBy as a SpendDataGroupedByCampaignCountryMetaGroupBy0
+func (t SpendDataGroupedByCampaignCountry_Meta_GroupBy) AsSpendDataGroupedByCampaignCountryMetaGroupBy0() (SpendDataGroupedByCampaignCountryMetaGroupBy0, error) {
+	var body SpendDataGroupedByCampaignCountryMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByCampaignCountryMetaGroupBy0 overwrites any union data inside the SpendDataGroupedByCampaignCountry_Meta_GroupBy as the provided SpendDataGroupedByCampaignCountryMetaGroupBy0
+func (t *SpendDataGroupedByCampaignCountry_Meta_GroupBy) FromSpendDataGroupedByCampaignCountryMetaGroupBy0(v SpendDataGroupedByCampaignCountryMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByCampaignCountryMetaGroupBy0 performs a merge with any union data inside the SpendDataGroupedByCampaignCountry_Meta_GroupBy, using the provided SpendDataGroupedByCampaignCountryMetaGroupBy0
+func (t *SpendDataGroupedByCampaignCountry_Meta_GroupBy) MergeSpendDataGroupedByCampaignCountryMetaGroupBy0(v SpendDataGroupedByCampaignCountryMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSpendDataGroupedByCampaignCountryMetaGroupBy1 returns the union data inside the SpendDataGroupedByCampaignCountry_Meta_GroupBy as a SpendDataGroupedByCampaignCountryMetaGroupBy1
+func (t SpendDataGroupedByCampaignCountry_Meta_GroupBy) AsSpendDataGroupedByCampaignCountryMetaGroupBy1() (SpendDataGroupedByCampaignCountryMetaGroupBy1, error) {
+	var body SpendDataGroupedByCampaignCountryMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByCampaignCountryMetaGroupBy1 overwrites any union data inside the SpendDataGroupedByCampaignCountry_Meta_GroupBy as the provided SpendDataGroupedByCampaignCountryMetaGroupBy1
+func (t *SpendDataGroupedByCampaignCountry_Meta_GroupBy) FromSpendDataGroupedByCampaignCountryMetaGroupBy1(v SpendDataGroupedByCampaignCountryMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByCampaignCountryMetaGroupBy1 performs a merge with any union data inside the SpendDataGroupedByCampaignCountry_Meta_GroupBy, using the provided SpendDataGroupedByCampaignCountryMetaGroupBy1
+func (t *SpendDataGroupedByCampaignCountry_Meta_GroupBy) MergeSpendDataGroupedByCampaignCountryMetaGroupBy1(v SpendDataGroupedByCampaignCountryMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SpendDataGroupedByCampaignCountry_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *SpendDataGroupedByCampaignCountry_Meta_GroupBy) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -7992,6 +8546,68 @@ func (t *SpendDataGroupedByChannel_Links) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsSpendDataGroupedByChannelMetaGroupBy0 returns the union data inside the SpendDataGroupedByChannel_Meta_GroupBy as a SpendDataGroupedByChannelMetaGroupBy0
+func (t SpendDataGroupedByChannel_Meta_GroupBy) AsSpendDataGroupedByChannelMetaGroupBy0() (SpendDataGroupedByChannelMetaGroupBy0, error) {
+	var body SpendDataGroupedByChannelMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByChannelMetaGroupBy0 overwrites any union data inside the SpendDataGroupedByChannel_Meta_GroupBy as the provided SpendDataGroupedByChannelMetaGroupBy0
+func (t *SpendDataGroupedByChannel_Meta_GroupBy) FromSpendDataGroupedByChannelMetaGroupBy0(v SpendDataGroupedByChannelMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByChannelMetaGroupBy0 performs a merge with any union data inside the SpendDataGroupedByChannel_Meta_GroupBy, using the provided SpendDataGroupedByChannelMetaGroupBy0
+func (t *SpendDataGroupedByChannel_Meta_GroupBy) MergeSpendDataGroupedByChannelMetaGroupBy0(v SpendDataGroupedByChannelMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSpendDataGroupedByChannelMetaGroupBy1 returns the union data inside the SpendDataGroupedByChannel_Meta_GroupBy as a SpendDataGroupedByChannelMetaGroupBy1
+func (t SpendDataGroupedByChannel_Meta_GroupBy) AsSpendDataGroupedByChannelMetaGroupBy1() (SpendDataGroupedByChannelMetaGroupBy1, error) {
+	var body SpendDataGroupedByChannelMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByChannelMetaGroupBy1 overwrites any union data inside the SpendDataGroupedByChannel_Meta_GroupBy as the provided SpendDataGroupedByChannelMetaGroupBy1
+func (t *SpendDataGroupedByChannel_Meta_GroupBy) FromSpendDataGroupedByChannelMetaGroupBy1(v SpendDataGroupedByChannelMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByChannelMetaGroupBy1 performs a merge with any union data inside the SpendDataGroupedByChannel_Meta_GroupBy, using the provided SpendDataGroupedByChannelMetaGroupBy1
+func (t *SpendDataGroupedByChannel_Meta_GroupBy) MergeSpendDataGroupedByChannelMetaGroupBy1(v SpendDataGroupedByChannelMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SpendDataGroupedByChannel_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *SpendDataGroupedByChannel_Meta_GroupBy) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsSpendDataGroupedByChannelAppData0 returns the union data inside the SpendDataGroupedByChannelApp_Data_Item as a SpendDataGroupedByChannelAppData0
 func (t SpendDataGroupedByChannelApp_Data_Item) AsSpendDataGroupedByChannelAppData0() (SpendDataGroupedByChannelAppData0, error) {
 	var body SpendDataGroupedByChannelAppData0
@@ -8086,6 +8702,68 @@ func (t SpendDataGroupedByChannelApp_Links) MarshalJSON() ([]byte, error) {
 }
 
 func (t *SpendDataGroupedByChannelApp_Links) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsSpendDataGroupedByChannelAppMetaGroupBy0 returns the union data inside the SpendDataGroupedByChannelApp_Meta_GroupBy as a SpendDataGroupedByChannelAppMetaGroupBy0
+func (t SpendDataGroupedByChannelApp_Meta_GroupBy) AsSpendDataGroupedByChannelAppMetaGroupBy0() (SpendDataGroupedByChannelAppMetaGroupBy0, error) {
+	var body SpendDataGroupedByChannelAppMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByChannelAppMetaGroupBy0 overwrites any union data inside the SpendDataGroupedByChannelApp_Meta_GroupBy as the provided SpendDataGroupedByChannelAppMetaGroupBy0
+func (t *SpendDataGroupedByChannelApp_Meta_GroupBy) FromSpendDataGroupedByChannelAppMetaGroupBy0(v SpendDataGroupedByChannelAppMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByChannelAppMetaGroupBy0 performs a merge with any union data inside the SpendDataGroupedByChannelApp_Meta_GroupBy, using the provided SpendDataGroupedByChannelAppMetaGroupBy0
+func (t *SpendDataGroupedByChannelApp_Meta_GroupBy) MergeSpendDataGroupedByChannelAppMetaGroupBy0(v SpendDataGroupedByChannelAppMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSpendDataGroupedByChannelAppMetaGroupBy1 returns the union data inside the SpendDataGroupedByChannelApp_Meta_GroupBy as a SpendDataGroupedByChannelAppMetaGroupBy1
+func (t SpendDataGroupedByChannelApp_Meta_GroupBy) AsSpendDataGroupedByChannelAppMetaGroupBy1() (SpendDataGroupedByChannelAppMetaGroupBy1, error) {
+	var body SpendDataGroupedByChannelAppMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByChannelAppMetaGroupBy1 overwrites any union data inside the SpendDataGroupedByChannelApp_Meta_GroupBy as the provided SpendDataGroupedByChannelAppMetaGroupBy1
+func (t *SpendDataGroupedByChannelApp_Meta_GroupBy) FromSpendDataGroupedByChannelAppMetaGroupBy1(v SpendDataGroupedByChannelAppMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByChannelAppMetaGroupBy1 performs a merge with any union data inside the SpendDataGroupedByChannelApp_Meta_GroupBy, using the provided SpendDataGroupedByChannelAppMetaGroupBy1
+func (t *SpendDataGroupedByChannelApp_Meta_GroupBy) MergeSpendDataGroupedByChannelAppMetaGroupBy1(v SpendDataGroupedByChannelAppMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SpendDataGroupedByChannelApp_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *SpendDataGroupedByChannelApp_Meta_GroupBy) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }
@@ -8188,6 +8866,68 @@ func (t *SpendDataGroupedByChannelAppCountry_Links) UnmarshalJSON(b []byte) erro
 	return err
 }
 
+// AsSpendDataGroupedByChannelAppCountryMetaGroupBy0 returns the union data inside the SpendDataGroupedByChannelAppCountry_Meta_GroupBy as a SpendDataGroupedByChannelAppCountryMetaGroupBy0
+func (t SpendDataGroupedByChannelAppCountry_Meta_GroupBy) AsSpendDataGroupedByChannelAppCountryMetaGroupBy0() (SpendDataGroupedByChannelAppCountryMetaGroupBy0, error) {
+	var body SpendDataGroupedByChannelAppCountryMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByChannelAppCountryMetaGroupBy0 overwrites any union data inside the SpendDataGroupedByChannelAppCountry_Meta_GroupBy as the provided SpendDataGroupedByChannelAppCountryMetaGroupBy0
+func (t *SpendDataGroupedByChannelAppCountry_Meta_GroupBy) FromSpendDataGroupedByChannelAppCountryMetaGroupBy0(v SpendDataGroupedByChannelAppCountryMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByChannelAppCountryMetaGroupBy0 performs a merge with any union data inside the SpendDataGroupedByChannelAppCountry_Meta_GroupBy, using the provided SpendDataGroupedByChannelAppCountryMetaGroupBy0
+func (t *SpendDataGroupedByChannelAppCountry_Meta_GroupBy) MergeSpendDataGroupedByChannelAppCountryMetaGroupBy0(v SpendDataGroupedByChannelAppCountryMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSpendDataGroupedByChannelAppCountryMetaGroupBy1 returns the union data inside the SpendDataGroupedByChannelAppCountry_Meta_GroupBy as a SpendDataGroupedByChannelAppCountryMetaGroupBy1
+func (t SpendDataGroupedByChannelAppCountry_Meta_GroupBy) AsSpendDataGroupedByChannelAppCountryMetaGroupBy1() (SpendDataGroupedByChannelAppCountryMetaGroupBy1, error) {
+	var body SpendDataGroupedByChannelAppCountryMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByChannelAppCountryMetaGroupBy1 overwrites any union data inside the SpendDataGroupedByChannelAppCountry_Meta_GroupBy as the provided SpendDataGroupedByChannelAppCountryMetaGroupBy1
+func (t *SpendDataGroupedByChannelAppCountry_Meta_GroupBy) FromSpendDataGroupedByChannelAppCountryMetaGroupBy1(v SpendDataGroupedByChannelAppCountryMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByChannelAppCountryMetaGroupBy1 performs a merge with any union data inside the SpendDataGroupedByChannelAppCountry_Meta_GroupBy, using the provided SpendDataGroupedByChannelAppCountryMetaGroupBy1
+func (t *SpendDataGroupedByChannelAppCountry_Meta_GroupBy) MergeSpendDataGroupedByChannelAppCountryMetaGroupBy1(v SpendDataGroupedByChannelAppCountryMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SpendDataGroupedByChannelAppCountry_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *SpendDataGroupedByChannelAppCountry_Meta_GroupBy) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsSpendDataGroupedByCountryData0 returns the union data inside the SpendDataGroupedByCountry_Data_Item as a SpendDataGroupedByCountryData0
 func (t SpendDataGroupedByCountry_Data_Item) AsSpendDataGroupedByCountryData0() (SpendDataGroupedByCountryData0, error) {
 	var body SpendDataGroupedByCountryData0
@@ -8286,6 +9026,68 @@ func (t *SpendDataGroupedByCountry_Links) UnmarshalJSON(b []byte) error {
 	return err
 }
 
+// AsSpendDataGroupedByCountryMetaGroupBy0 returns the union data inside the SpendDataGroupedByCountry_Meta_GroupBy as a SpendDataGroupedByCountryMetaGroupBy0
+func (t SpendDataGroupedByCountry_Meta_GroupBy) AsSpendDataGroupedByCountryMetaGroupBy0() (SpendDataGroupedByCountryMetaGroupBy0, error) {
+	var body SpendDataGroupedByCountryMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByCountryMetaGroupBy0 overwrites any union data inside the SpendDataGroupedByCountry_Meta_GroupBy as the provided SpendDataGroupedByCountryMetaGroupBy0
+func (t *SpendDataGroupedByCountry_Meta_GroupBy) FromSpendDataGroupedByCountryMetaGroupBy0(v SpendDataGroupedByCountryMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByCountryMetaGroupBy0 performs a merge with any union data inside the SpendDataGroupedByCountry_Meta_GroupBy, using the provided SpendDataGroupedByCountryMetaGroupBy0
+func (t *SpendDataGroupedByCountry_Meta_GroupBy) MergeSpendDataGroupedByCountryMetaGroupBy0(v SpendDataGroupedByCountryMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSpendDataGroupedByCountryMetaGroupBy1 returns the union data inside the SpendDataGroupedByCountry_Meta_GroupBy as a SpendDataGroupedByCountryMetaGroupBy1
+func (t SpendDataGroupedByCountry_Meta_GroupBy) AsSpendDataGroupedByCountryMetaGroupBy1() (SpendDataGroupedByCountryMetaGroupBy1, error) {
+	var body SpendDataGroupedByCountryMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedByCountryMetaGroupBy1 overwrites any union data inside the SpendDataGroupedByCountry_Meta_GroupBy as the provided SpendDataGroupedByCountryMetaGroupBy1
+func (t *SpendDataGroupedByCountry_Meta_GroupBy) FromSpendDataGroupedByCountryMetaGroupBy1(v SpendDataGroupedByCountryMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedByCountryMetaGroupBy1 performs a merge with any union data inside the SpendDataGroupedByCountry_Meta_GroupBy, using the provided SpendDataGroupedByCountryMetaGroupBy1
+func (t *SpendDataGroupedByCountry_Meta_GroupBy) MergeSpendDataGroupedByCountryMetaGroupBy1(v SpendDataGroupedByCountryMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SpendDataGroupedByCountry_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *SpendDataGroupedByCountry_Meta_GroupBy) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
 // AsSpendDataGroupedBySiteData0 returns the union data inside the SpendDataGroupedBySite_Data_Item as a SpendDataGroupedBySiteData0
 func (t SpendDataGroupedBySite_Data_Item) AsSpendDataGroupedBySiteData0() (SpendDataGroupedBySiteData0, error) {
 	var body SpendDataGroupedBySiteData0
@@ -8380,6 +9182,68 @@ func (t SpendDataGroupedBySite_Links) MarshalJSON() ([]byte, error) {
 }
 
 func (t *SpendDataGroupedBySite_Links) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsSpendDataGroupedBySiteMetaGroupBy0 returns the union data inside the SpendDataGroupedBySite_Meta_GroupBy as a SpendDataGroupedBySiteMetaGroupBy0
+func (t SpendDataGroupedBySite_Meta_GroupBy) AsSpendDataGroupedBySiteMetaGroupBy0() (SpendDataGroupedBySiteMetaGroupBy0, error) {
+	var body SpendDataGroupedBySiteMetaGroupBy0
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedBySiteMetaGroupBy0 overwrites any union data inside the SpendDataGroupedBySite_Meta_GroupBy as the provided SpendDataGroupedBySiteMetaGroupBy0
+func (t *SpendDataGroupedBySite_Meta_GroupBy) FromSpendDataGroupedBySiteMetaGroupBy0(v SpendDataGroupedBySiteMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedBySiteMetaGroupBy0 performs a merge with any union data inside the SpendDataGroupedBySite_Meta_GroupBy, using the provided SpendDataGroupedBySiteMetaGroupBy0
+func (t *SpendDataGroupedBySite_Meta_GroupBy) MergeSpendDataGroupedBySiteMetaGroupBy0(v SpendDataGroupedBySiteMetaGroupBy0) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsSpendDataGroupedBySiteMetaGroupBy1 returns the union data inside the SpendDataGroupedBySite_Meta_GroupBy as a SpendDataGroupedBySiteMetaGroupBy1
+func (t SpendDataGroupedBySite_Meta_GroupBy) AsSpendDataGroupedBySiteMetaGroupBy1() (SpendDataGroupedBySiteMetaGroupBy1, error) {
+	var body SpendDataGroupedBySiteMetaGroupBy1
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromSpendDataGroupedBySiteMetaGroupBy1 overwrites any union data inside the SpendDataGroupedBySite_Meta_GroupBy as the provided SpendDataGroupedBySiteMetaGroupBy1
+func (t *SpendDataGroupedBySite_Meta_GroupBy) FromSpendDataGroupedBySiteMetaGroupBy1(v SpendDataGroupedBySiteMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeSpendDataGroupedBySiteMetaGroupBy1 performs a merge with any union data inside the SpendDataGroupedBySite_Meta_GroupBy, using the provided SpendDataGroupedBySiteMetaGroupBy1
+func (t *SpendDataGroupedBySite_Meta_GroupBy) MergeSpendDataGroupedBySiteMetaGroupBy1(v SpendDataGroupedBySiteMetaGroupBy1) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t SpendDataGroupedBySite_Meta_GroupBy) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *SpendDataGroupedBySite_Meta_GroupBy) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }

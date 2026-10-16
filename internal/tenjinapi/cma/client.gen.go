@@ -5520,7 +5520,7 @@ func (r GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsResponse) ContentType
 type PostAppsAppIdIntegrationsIntegrationIdCallbackGroupsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *CallbackGroup
+	JSON201      *CallbackGroup
 }
 
 // Status returns HTTPResponse.Status
@@ -6936,12 +6936,12 @@ func ParsePostAppsAppIdIntegrationsIntegrationIdCallbackGroupsResponse(rsp *http
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
 		var dest CallbackGroup
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
-		response.JSON200 = &dest
+		response.JSON201 = &dest
 
 	}
 

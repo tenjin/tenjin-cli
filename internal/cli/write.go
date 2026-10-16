@@ -207,7 +207,7 @@ func hasData(doc tenjinapi.Document) bool {
 	}
 	_ = json.Unmarshal(doc, &body)
 	data := strings.TrimSpace(string(body.Data))
-	return data != "" && data != "null"
+	return data != "" && data != "null" && data != "[]"
 }
 
 func lowerFirst(s string) string {
@@ -375,9 +375,9 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 		return newFieldSet(
 			field{flag: "url", name: "url", usage: "where the callback is sent", required: create},
 			field{flag: "event", name: "event", usage: "the event that triggers it, such as open or purchase", required: create},
-			field{flag: "name", name: "name", usage: "the callback's name"},
+			field{flag: "name", name: "name", usage: "the callback's name", required: create},
 			field{flag: "http-method", name: "http_method", usage: "GET or POST"},
-			field{flag: "action", name: "action", usage: "ping, or ping_on_first for the first event only"},
+			field{flag: "action", name: "action", usage: "ping, or ping_on_first for the first event only", required: create},
 			field{flag: "active", name: "active", usage: "whether it is sent", kind: boolField},
 			field{flag: "advertising-id-filter", name: "advertising_id_filter", usage: "only for users with a known advertising ID", kind: boolField},
 			field{flag: "user-filter", name: "user_filter", usage: "only for users attributed to these channels, by ID", kind: numbersField},
@@ -406,7 +406,25 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 					return "Create a callback on app " + app + ": " + describe(body), checkApp()
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, _ []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
-					return api.CreateAppCallback(ctx, app, body)
+					doc, err := api.CreateAppCallback(ctx, app, body)
+					if err != nil || body["active"] != false {
+						return doc, err
+					}
+					// The API creates a callback active whatever it is sent; one
+					// asked for inactive is switched off at once, before it can
+					// send anything to the channel.
+					var created struct {
+						Data struct {
+							ID         string `json:"id"`
+							Attributes struct {
+								Active bool `json:"active"`
+							} `json:"attributes"`
+						} `json:"data"`
+					}
+					if json.Unmarshal(doc, &created) != nil || !created.Data.Attributes.Active || created.Data.ID == "" {
+						return doc, nil
+					}
+					return api.UpdateAppCallback(ctx, app, created.Data.ID, tenjinapi.Fields{"active": false})
 				},
 			}),
 			writeCmd(opts, env, writeSpec{
@@ -423,7 +441,7 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 		},
 		"s2s-callbacks": {
 			writeCmd(opts, env, writeSpec{
-				use: "create --app <app-id> --url <url> --event <event>", short: "Create a server-to-server callback",
+				use: "create --app <app-id> --url <url> --event <event> --name <name> --action <action>", short: "Create a server-to-server callback",
 				fields: s2sFields(true), flags: needApp,
 				prepare: func(_ []string, body tenjinapi.Fields) (string, error) {
 					return "Create a server-to-server callback on app " + app + ": " + describe(body), checkApp()

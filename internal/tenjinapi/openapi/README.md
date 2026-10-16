@@ -20,7 +20,7 @@ constructs and a few structures that `oapi-codegen` (strict OAS3) cannot
 process. The vendored copies here include the minimal edits below. **Edits 1 to 4
 are structural / codegen-facing and preserve the HTTP wire contract**: no path,
 query/parameter name, JSON property name, or type constraint that affects what
-the client sends or receives was changed. Edit 5 corrects a response shape, and
+the client sends or receives was changed. Edits 5, 7 and 8 correct response shapes, and
 edit 6 adds an endpoint.
 
 1. **Root-level `parameters` → `components.parameters`** (both specs). OAS3
@@ -62,6 +62,18 @@ edit 6 adds an endpoint.
    after these specs were taken. The shape follows the API's serializer: type
    `sdk_key`, an integer ID written as a string, and `name`, `key` and
    `created_at` attributes.
+
+7. **`meta.group_by` of every report is a name or a list of names**
+   (rma.json: the `Spend…`, `AdRevenue…`, `SKAdNetworkData` and
+   `SkanAppleData` schemas). Production answers with a string for one grouping
+   (`"app_id"`) and a list for several (`["app_id", "ad_network_id"]`); the
+   specs declared one or the other per report, so the generated types failed
+   to decode real answers. Found by the live API test on 16 October 2026.
+
+8. **Write answers as production sends them** (found the same way):
+   creating a callback group answers 201, not 200 (cma.json); a deleted
+   saved report answers `{"data": []}`, so the reporting API's
+   `EmptyResponse.data` is a list, as in cma.json (rma.json).
 
 When refreshing these specs from upstream, re-apply the equivalent edits (or fix
 them upstream) so `oapi-codegen` can run.

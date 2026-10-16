@@ -140,7 +140,13 @@ func writeItems(w io.Writer, items []item, v view) error {
 	}
 	columns := v.columns
 	if len(columns) == 0 {
-		columns = orderedKeys(items[0].Attributes)
+		// Every attribute, but the image addresses reports carry for the
+		// dashboard: they make a table too wide to read. --json keeps them.
+		for _, k := range orderedKeys(items[0].Attributes) {
+			if !strings.HasSuffix(k, "icon_url") {
+				columns = append(columns, k)
+			}
+		}
 	}
 	header := make([]string, 0, len(columns)+1)
 	for _, c := range columns {

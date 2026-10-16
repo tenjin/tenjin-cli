@@ -1404,8 +1404,8 @@
           "$ref": "#/components/requestBodies/CallbackGroupBody"
         },
         "responses": {
-          "200": {
-            "description": "Successfully created a callback group",
+          "201": {
+            "description": "Successfully created a callback group (sent as 201)",
             "content": {
               "application/json": {
                 "schema": {
