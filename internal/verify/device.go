@@ -317,6 +317,24 @@ func (r *runner) checkIOSIdentifiers(c *devicelog.Request) {
 // accepted request has only been queued; this is the confirmation that it
 // came out the other end.
 func (r *runner) checkProcessed(t *project.Target, src source, c *devicelog.Request) {
+	// The SDKs mark requests from a simulator or an emulator they recognise
+	// with device_info=true (iOS: every simulator; Android: what its check
+	// takes for an emulator), and Tenjin leaves those out of attribution on
+	// purpose: an accepted request is all such a device can show, and
+	// waiting changes nothing.
+	if c.Params["device_info"] == "true" {
+		f := Finding{
+			ID: "device.simulator", Severity: Info, Platform: t.Platform,
+			Title:  "Tenjin does not process installs from a simulator or emulator",
+			Detail: "The Tenjin SDK marked this device as one (device_info=true), and Tenjin leaves such installs out of attribution by design. That Tenjin accepted the request is what it can confirm.",
+			Fix:    "To see an install processed, run a debug build on a physical Android device, then run tenjin doctor --device.",
+		}
+		if t.Platform == project.IOS {
+			f.Fix = "To see an install processed, run a debug build on an iPhone connected by cable, then run tenjin doctor --device."
+		}
+		r.add(f)
+		return
+	}
 	lookup := r.opts.Device.Lookup
 	installationID := c.Params["analytics_installation_id"]
 	bundle := c.Params["bundle_id"]

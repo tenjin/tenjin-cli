@@ -61,9 +61,9 @@ iPhone connected by cable, or a running iOS simulator. On an iPhone, doctor
 launches the installed app itself to read its console, and leaves it
 running. A project that builds for both platforms is read from an Android
 device when one is connected, and from iOS otherwise. On iOS the SDK logs its
-requests only when the build calls TenjinSDK.debugLogs(); installs from a
-simulator have not been seen to be processed, so an iPhone is the check
-that confirms one.
+requests only when the build calls TenjinSDK.debugLogs(). Tenjin leaves
+installs from a simulator out of attribution by design (the SDK marks them),
+so an iPhone is the check that confirms one.
 
 --logs reads a saved log instead, from logcat or from an iOS simulator, or
 standard input with "-".

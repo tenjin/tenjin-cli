@@ -126,8 +126,12 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 			s.say("\n%s Tenjin received this device's install and processed it. The integration works end to end.", s.style.Green("✓"))
 			s.testDevicePages()
 			return nil
-		case connectAccepted(report) && from == fromSimulator:
-			s.say("\nTenjin accepted the app's request, and has not processed the install. Installs from an iOS simulator have not been seen to be processed; a launch on an iPhone connected by cable confirms it. Run %s with one connected.", s.style.Accent("tenjin doctor --device"))
+		case connectAccepted(report) && (from == fromSimulator || deviceFinding(report, "device.simulator") != nil):
+			physical := "an iPhone connected by cable"
+			if platform == project.Android {
+				physical = "a physical Android device"
+			}
+			s.say("\nTenjin accepted the app's request. That is as far as a simulator or emulator goes: the SDK marks its installs, and Tenjin leaves them out of attribution by design. To see an install processed, run a debug build on %s, then %s.", physical, s.style.Accent("tenjin doctor --device"))
 			s.testDevicePages()
 			return nil
 		case connectAccepted(report):
