@@ -168,7 +168,7 @@ ensure' to get the app whether or not it exists.`,
 					return err
 				}
 				if !ok {
-					return clierr.New(clierr.Internal, "nothing was created")
+					return declined("Nothing was created.")
 				}
 			}
 			app, created, err := env.api().CreateApp(cmd.Context(), in)

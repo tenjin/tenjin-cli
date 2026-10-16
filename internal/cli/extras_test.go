@@ -37,7 +37,7 @@ func TestSiteIDs(t *testing.T) {
 		t.Errorf("reinstate: exit = %d, rules = %v", code, h.fake.siteIDRules)
 	}
 	h.typing("")
-	if code, _, stderr := h.run("site-ids", "clear"); code == 0 || len(h.fake.siteIDRules) != 1 || !strings.Contains(stderr, "[y/N]") {
+	if code, _, stderr := h.run("site-ids", "clear"); code != 0 || len(h.fake.siteIDRules) != 1 || !strings.Contains(stderr, "[y/N]") || !strings.Contains(stderr, "Nothing was changed.") {
 		t.Errorf("Enter on clear: exit = %d, rules = %v", code, h.fake.siteIDRules)
 	}
 	if code, _, _ := h.run("site-ids", "clear", "--yes"); code != 0 || len(h.fake.siteIDRules) != 0 {

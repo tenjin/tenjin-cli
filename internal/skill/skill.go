@@ -54,10 +54,11 @@ var Targets = []Target{
 	{ID: "agents-md", Name: "AGENTS.md (Codex, Cursor and others)", binaries: []string{"codex", "cursor-agent", "cursor"}, markers: []string{"AGENTS.md"}},
 }
 
-// FindTarget returns the target with the given ID.
+// FindTarget returns the target with the given ID. An agent that reads
+// AGENTS.md, such as codex or cursor, names that target too.
 func FindTarget(id string) (Target, bool) {
 	for _, t := range Targets {
-		if t.ID == id {
+		if t.ID == id || contains(t.binaries, id) {
 			return t, true
 		}
 	}
@@ -349,4 +350,13 @@ func withoutBlock(content string) (string, bool) {
 		after = after[1:]
 	}
 	return before + after, true
+}
+
+func contains(values []string, v string) bool {
+	for _, x := range values {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }

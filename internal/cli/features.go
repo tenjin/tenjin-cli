@@ -65,17 +65,53 @@ func containsString(values []string, v string) bool {
 }
 
 // chooseFeatures settles which features setup integrates: the ones named
-// with --features, or at a terminal the ones the developer picks from a list
-// with the suggested ones marked, or without a terminal the suggested ones.
+// with --features; at a terminal, the suggested ones changed one by one until
+// the developer presses Enter; without a terminal, the suggested ones.
+// Whichever it is, the choice is said back.
 func (s *setup) chooseFeatures(p *project.Project) error {
 	if s.features != nil {
 		return nil
 	}
-	suggested := suggestedFeatures(p)
-	s.say("\nTenjin features this integration can include:")
+	chosen := map[string]bool{}
+	for _, id := range suggestedFeatures(p) {
+		chosen[id] = true
+	}
+	s.say("\nTenjin features for this integration (%s = included):", s.style.Green("✓"))
+	s.listFeatures(p, chosen)
+	if !s.env.interactive {
+		s.features = inOrder(p, chosen)
+		s.say("Integrating: %s. To choose, pass --features, such as --features %s.", featureList(s.features), featureExample(p))
+		return nil
+	}
+	for {
+		answer, err := s.env.ask(s.out, "\nType numbers to add or remove (such as 3, or 3,4), all or none. Press Enter when the "+s.style.Green("✓")+" list is right:")
+		if err != nil && !errors.Is(err, io.EOF) {
+			return err
+		}
+		answer = strings.ToLower(strings.TrimSpace(answer))
+		if answer == "" {
+			s.features = inOrder(p, chosen)
+			s.say("Integrating: %s.", featureList(s.features))
+			return nil
+		}
+		if message := toggleFeatures(p, chosen, answer); message != "" {
+			s.say("  %s", message)
+		} else {
+			s.listFeatures(p, chosen)
+		}
+		if errors.Is(err, io.EOF) {
+			s.features = inOrder(p, chosen)
+			s.say("Integrating: %s.", featureList(s.features))
+			return nil
+		}
+	}
+}
+
+// listFeatures prints the project's features, the chosen ones ticked.
+func (s *setup) listFeatures(p *project.Project, chosen map[string]bool) {
 	for i, f := range p.Features {
 		mark := " "
-		if containsString(suggested, f.ID) {
+		if chosen[f.ID] || f.Required {
 			mark = s.style.Green("✓")
 		}
 		line := fmt.Sprintf("  %s %d) %s", mark, i+1, f.Name)
@@ -91,51 +127,64 @@ func (s *setup) chooseFeatures(p *project.Project) error {
 		}
 		s.say("%s", line)
 	}
-	if !s.env.interactive {
-		s.features = suggested
-		example := project.FeaturePurchases
-		if len(suggested) > 1 {
-			example = strings.Join(suggested[1:], ",")
-		}
-		s.say("The ones marked are included. To choose, pass --features, such as --features %s.", example)
-		return nil
-	}
-	for {
-		answer, err := s.env.ask(s.out, "\nPress Enter for the ones marked, or give the numbers you want, such as 2,4 (0 for app opens only):")
-		if err != nil && !errors.Is(err, io.EOF) {
-			return err
-		}
-		answer = strings.ToLower(strings.TrimSpace(answer))
-		if answer == "" || answer == "y" || answer == "yes" || errors.Is(err, io.EOF) && answer == "" {
-			s.features = suggested
-			return nil
-		}
-		if picked, ok := pickFeatures(p, answer); ok {
-			s.features = picked
-			return nil
-		}
-		if errors.Is(err, io.EOF) {
-			s.features = suggested
-			return nil
-		}
-		s.say("  Give numbers from the list, separated by commas, or press Enter for the ones marked.")
-	}
 }
 
-// pickFeatures reads the numbers given for features, with app opens always
-// included.
-func pickFeatures(p *project.Project, answer string) ([]string, bool) {
-	picked := []string{project.FeatureOpens}
-	for _, part := range strings.FieldsFunc(answer, func(r rune) bool { return r == ',' || r == ' ' }) {
-		n := -1
-		if _, err := fmt.Sscan(part, &n); err != nil || n < 0 || n > len(p.Features) {
-			return nil, false
+// toggleFeatures applies an answer to the choice: numbers add or remove,
+// all and none set it. It returns what to tell the developer when the
+// answer cannot be applied, or "" when it was.
+func toggleFeatures(p *project.Project, chosen map[string]bool, answer string) string {
+	switch answer {
+	case "all":
+		for _, f := range p.Features {
+			chosen[f.ID] = true
 		}
-		if n > 0 && !containsString(picked, p.Features[n-1].ID) {
-			picked = append(picked, p.Features[n-1].ID)
+		return ""
+	case "none", "0":
+		for id := range chosen {
+			delete(chosen, id)
+		}
+		return ""
+	}
+	var numbers []int
+	for _, part := range strings.FieldsFunc(answer, func(r rune) bool { return r == ',' || r == ' ' }) {
+		n := 0
+		if _, err := fmt.Sscan(part, &n); err != nil || n < 1 || n > len(p.Features) || fmt.Sprint(n) != part {
+			return fmt.Sprintf("%q is not in the list. Type numbers from 1 to %d, all or none, or press Enter.", part, len(p.Features))
+		}
+		numbers = append(numbers, n)
+	}
+	for _, n := range numbers {
+		f := p.Features[n-1]
+		if f.Required {
+			if len(numbers) == 1 {
+				return f.Name + " are always included."
+			}
+			continue
+		}
+		chosen[f.ID] = !chosen[f.ID]
+	}
+	return ""
+}
+
+// inOrder is the chosen features in the project's order, required ones
+// included.
+func inOrder(p *project.Project, chosen map[string]bool) []string {
+	var out []string
+	for _, f := range p.Features {
+		if chosen[f.ID] || f.Required {
+			out = append(out, f.ID)
 		}
 	}
-	return picked, true
+	return out
+}
+
+func featureExample(p *project.Project) string {
+	for _, f := range p.Features {
+		if !f.Required {
+			return f.ID
+		}
+	}
+	return "none"
 }
 
 // featureList names the chosen features for people.

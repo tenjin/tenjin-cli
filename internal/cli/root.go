@@ -360,9 +360,21 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	if err == nil {
 		return 0
 	}
+	// A no at a question is not a failure: nothing went wrong, and nothing
+	// was done.
+	var no declined
+	if errors.As(err, &no) && ctx.Err() == nil {
+		_, _ = fmt.Fprintln(stderr, string(no))
+		return 0
+	}
 	// Whatever a Ctrl-C cut short failed because of it.
 	if ctx.Err() != nil {
 		err = errInterrupted()
+	}
+	// Input that ended where a person was to answer.
+	if errors.Is(err, io.EOF) {
+		err = clierr.New(clierr.Usage, "the input ended before an answer was given").
+			WithHint("Run it in a terminal to answer, or give the answers as flags (see --help).")
 	}
 	e := clierr.From(err)
 	writeError(stderr, e, wantsJSON(args))
@@ -508,6 +520,11 @@ func group(use, short string, subcommands ...*cobra.Command) *cobra.Command {
 	cmd.AddCommand(subcommands...)
 	return cmd
 }
+
+// declined is a no at a confirmation, said back to the person.
+type declined string
+
+func (d declined) Error() string { return string(d) }
 
 // noArgs rejects positional arguments as a usage error.
 func noArgs(cmd *cobra.Command, args []string) error {

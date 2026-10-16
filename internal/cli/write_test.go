@@ -85,7 +85,7 @@ func TestWritesAskFirst(t *testing.T) {
 	h = newHarness(t)
 	h.signIn()
 	h.typing("")
-	if code, _, stderr := h.run("campaigns", "delete", testOther); code == 0 || len(h.fake.writes) != 0 || !strings.Contains(stderr, "[y/N]") {
+	if code, _, stderr := h.run("campaigns", "delete", testOther); code != 0 || len(h.fake.writes) != 0 || !strings.Contains(stderr, "[y/N]") || !strings.Contains(stderr, "Nothing was changed.") {
 		t.Errorf("Enter on a delete: exit = %d, %d writes, stderr = %q", code, len(h.fake.writes), stderr)
 	}
 

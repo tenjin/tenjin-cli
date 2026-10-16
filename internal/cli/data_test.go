@@ -42,7 +42,7 @@ func TestDataCommandsReadTheirEndpoints(t *testing.T) {
 		{"apps callback-groups list --app " + testApp + " --channel 18", "/v2/apps/" + testApp + "/integrations/18/callback_groups", nil},
 		{"apps callback-groups get " + testOther + " --app " + testApp + " --channel 18", "/v2/apps/" + testApp + "/integrations/18/callback_groups/" + testOther, nil},
 		{"apps callback-settings get --app " + testApp + " --channel 18", "/v2/apps/" + testApp + "/integrations/18/callback_settings", nil},
-		{"reports spend --from 2026-10-01 --to 2026-10-07 --granularity totals-daily --group-by channel,app --apps " + testApp + " --channels 1,2 --metrics spend,installs", "/v2/reports/spend",
+		{"reports spend --from 2026-10-01 --to 2026-10-07 --granularity totals-daily --group-by channel,app --app " + testApp + " --channel 1 --channel 2 --metrics spend,installs", "/v2/reports/spend",
 			map[string]string{"start_date": "2026-10-01", "end_date": "2026-10-07", "granularity": "totals-daily", "group_by": "channel,app", "app_ids": testApp, "channel_ids": "1,2", "metrics": "spend,installs"}},
 		{"reports ad-revenue --from 2026-10-01 --to 2026-10-02", "/v2/reports/ad_revenue", map[string]string{"start_date": "2026-10-01", "end_date": "2026-10-02"}},
 		{"reports skadnetwork --from 2026-10-01 --to 2026-10-02 --group-by conversion_value", "/v2/reports/sk_ad_network", map[string]string{"group_by": "conversion_value"}},
@@ -217,5 +217,30 @@ func TestDataErrors(t *testing.T) {
 	signedOut := newHarness(t)
 	if code, _, _ := signedOut.run("campaigns", "list"); code != 3 {
 		t.Errorf("signed out: exit = %d, want 3", code)
+	}
+}
+
+// A report shows every row unless a page is asked for.
+func TestReportsReadEveryPage(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	h.fake.data = map[string]func(*http.Request) (int, any){"/v2/reports/spend": func(r *http.Request) (int, any) {
+		doc := map[string]any{"data": []any{map[string]any{"type": "report", "attributes": map[string]any{"date": "2026-10-0" + r.URL.Query().Get("page")}}}}
+		if r.URL.Query().Get("page") != "2" {
+			doc["links"] = map[string]string{"next": "/v2/reports/spend?page=2"}
+		}
+		return http.StatusOK, doc
+	}}
+	code, stdout, _ := h.run("reports", "spend", "--from", "2026-10-01", "--to", "2026-10-02")
+	if code != 0 || !strings.Contains(stdout, "2026-10-01") || !strings.Contains(stdout, "2026-10-02") {
+		t.Errorf("exit = %d:\n%s", code, stdout)
+	}
+	h.fake.dataAsked = nil
+	_, _, stderr := h.run("reports", "spend", "--from", "2026-10-01", "--to", "2026-10-02", "--per-page", "1")
+	if len(h.fake.dataAsked) != 1 || !strings.Contains(stderr, "--page 2") {
+		t.Errorf("--per-page: %d reads, stderr = %q", len(h.fake.dataAsked), stderr)
+	}
+	if code, _, _ := h.run("channels", "list", "--per-page", "5000"); code != 2 {
+		t.Errorf("--per-page 5000: exit = %d", code)
 	}
 }

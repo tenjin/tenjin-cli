@@ -379,8 +379,9 @@ func TestSetupChecksAgainAfterAFix(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
 	}
-	if strings.Count(stdout, "Checking ") != 2 {
-		t.Errorf("expected two rounds of checks:\n%s", stdout)
+	// The whole report the first time; after the fix, only the outcome.
+	if strings.Count(stdout, "Checking ") != 1 || strings.Index(stdout, "INTERNET permission is missing") > strings.Index(stdout, "Nothing here would stop events") {
+		t.Errorf("expected one full report, then the outcome:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "INTERNET permission is missing") || !strings.Contains(stdout, "Nothing here would stop events") {
 		t.Errorf("output:\n%s", stdout)
@@ -509,8 +510,8 @@ func TestAppsCreate(t *testing.T) {
 			t.Errorf("no terminal: exit = %d, apps = %d, stderr = %q", code, len(h.fake.apps), stderr)
 		}
 		h.typing("n")
-		if code, _, _ := h.run(create...); code != 1 || len(h.fake.apps) != 0 {
-			t.Errorf("answered no: exit = %d, apps = %d", code, len(h.fake.apps))
+		if code, _, stderr := h.run(create...); code != 0 || len(h.fake.apps) != 0 || !strings.Contains(stderr, "Nothing was created.") {
+			t.Errorf("answered no: exit = %d, apps = %d, stderr = %q", code, len(h.fake.apps), stderr)
 		}
 		h.typing("y")
 		code, stdout, stderr := h.run(create...)
@@ -662,5 +663,16 @@ func TestLoginNoBrowserTakesThePastedAddress(t *testing.T) {
 	}
 	if code, _, _ := h.run("auth", "status"); code != 0 {
 		t.Error("not signed in after pasting the address")
+	}
+}
+
+// Input that ends where an answer was due says so, as a usage error.
+func TestInputEndingAtAPrompt(t *testing.T) {
+	h := newHarness(t)
+	h.env.interactive = true
+	dir := testproject.Write(t, testproject.AndroidNative())
+	code, _, stderr := h.run("setup", dir, "--features", "none")
+	if code != 2 || !strings.Contains(stderr, "input ended before an answer") || strings.Contains(stderr, "EOF") {
+		t.Errorf("exit = %d, stderr = %q", code, stderr)
 	}
 }

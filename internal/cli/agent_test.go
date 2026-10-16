@@ -331,10 +331,21 @@ func TestSetupContinuesWithTheAgentFromTheCheck(t *testing.T) {
 	if code != 0 || agent.runs() != "2" {
 		t.Fatalf("exit = %d, runs = %q, stderr = %q\n%s", code, agent.runs(), stderr, stdout)
 	}
-	for _, want := range []string{"No files were changed.", "a to continue with Claude Code", "1 file changed:"} {
+	for _, want := range []string{"No files were changed.", "a to have Claude Code fix them", "1 file changed:"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("output lacks %q", want)
 		}
+	}
+}
+
+// A developer who said no to the agent in step 5 can still call it in from
+// the check.
+func TestSetupOffersTheAgentAgainAtTheCheck(t *testing.T) {
+	h, dir := brokenAndroid(t)
+	agent := h.installAgent()
+	code, stdout, stderr := h.typing("", "n", "a").run("setup", dir)
+	if agent.runs() != "1" || !strings.Contains(stdout, "a to have Claude Code fix them") {
+		t.Fatalf("exit = %d, runs = %q, stderr = %q\n%s", code, agent.runs(), stderr, stdout)
 	}
 }
 
@@ -495,5 +506,39 @@ func TestARefusedGivenKeyIsAskedForAgain(t *testing.T) {
 	}
 	if !strings.Contains(step4, "Paste the") {
 		t.Errorf("step 4 did not ask for the key:\n%s", step4)
+	}
+}
+
+// doctor offers to fix what it found with the developer's agent, defaults
+// to no, and checks again after a yes.
+func TestDoctorOffersToFix(t *testing.T) {
+	h, dir := brokenAndroid(t)
+	agent := h.installAgent()
+
+	code, stdout, _ := h.typing("").run("doctor", dir, "--offline")
+	if code != 9 || agent.runs() != "" || !strings.Contains(stdout, "Fix them with Claude Code? [y/N]") {
+		t.Fatalf("Enter: exit = %d, runs = %q\n%s", code, agent.runs(), stdout)
+	}
+
+	code, stdout, stderr := h.typing("y").run("doctor", dir, "--offline")
+	if agent.runs() != "1" || !strings.Contains(stdout, "Checking again") || !strings.Contains(stdout, "INTERNET permission is declared") {
+		t.Fatalf("yes: exit = %d, runs = %q, stderr = %q\n%s", code, agent.runs(), stderr, stdout)
+	}
+	if again := stdout[strings.Index(stdout, "Checking again"):]; strings.Contains(again, "INTERNET permission is missing") {
+		t.Errorf("the second check still lacks the permission:\n%s", again)
+	}
+}
+
+// Without a terminal doctor never asks, and says how to get the fixes made.
+func TestDoctorWithoutATerminalSaysHowToFix(t *testing.T) {
+	h, dir := brokenAndroid(t)
+	agent := h.installAgent()
+	code, stdout, stderr := h.run("doctor", dir, "--offline")
+	if code != 9 || agent.runs() != "" || strings.Contains(stdout, "Fix them") || !strings.Contains(stderr, "tenjin setup") {
+		t.Errorf("exit = %d, runs = %q, stderr = %q", code, agent.runs(), stderr)
+	}
+	// --agent claude fixes without asking; --agent none never offers.
+	if code, _, stderr := h.run("doctor", dir, "--offline", "--agent", "claude"); agent.runs() != "1" {
+		t.Errorf("--agent claude: exit = %d, runs = %q, stderr = %q", code, agent.runs(), stderr)
 	}
 }

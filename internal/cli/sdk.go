@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -43,7 +44,8 @@ CLI was tested with. It is part of the binary, so it works offline and
 matches what 'tenjin doctor' checks.
 
 With no platform named, the guide for the project in --path (the current
-folder by default) is printed.`,
+folder by default) is printed. A folder given in place of a platform is
+taken as that project.`,
 		Args: maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, err := opts.format(cmd)
@@ -51,6 +53,13 @@ folder by default) is printed.`,
 				return err
 			}
 			name := ""
+			if len(args) == 1 {
+				if _, known := guides.For(args[0]); !known {
+					if info, err := os.Stat(args[0]); err == nil && info.IsDir() {
+						path, args = args[0], nil
+					}
+				}
+			}
 			if len(args) == 1 {
 				name = args[0]
 			} else {

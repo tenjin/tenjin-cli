@@ -320,7 +320,7 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 				Title:  "The SDK key is still a placeholder",
 				Detail: "Found " + quote(k.Value) + " where the key should be.",
 				File:   k.File, Line: k.Line,
-				Fix: "Replace it with the app's SDK key from the Tenjin dashboard.",
+				Fix: "Replace " + quote(k.Value) + " with " + keyfill.Placeholder(platform) + ", then run 'tenjin project set-keys' (in 'tenjin setup', press Enter at the check): it gets the app's key from Tenjin, checks it, and writes it there.",
 			})
 		}
 	}

@@ -35,8 +35,10 @@ type dataSpec struct {
 	use, short, long string
 	args             cobra.PositionalArgs
 	view             view
-	// paged adds --page, --per-page and --all.
-	paged bool
+	// paged adds --page, --per-page and --all; allPages makes --all the
+	// default, unless a page is asked for.
+	paged    bool
+	allPages bool
 	flags func(*pflag.FlagSet)
 	fetch func(ctx context.Context, api *tenjinapi.Client, args []string, p tenjinapi.Paging) (tenjinapi.Document, error)
 }
@@ -59,6 +61,12 @@ func dataCmd(opts *options, env *environment, s dataSpec) *cobra.Command {
 			}
 			if paging.All && (paging.Page > 0 || paging.PerPage > 0) {
 				return clierr.New(clierr.Usage, "--all reads every page: leave out --page and --per-page")
+			}
+			if paging.PerPage > 1000 {
+				return clierr.New(clierr.Usage, "--per-page is at most 1000")
+			}
+			if s.allPages && !cmd.Flags().Changed("page") && !cmd.Flags().Changed("per-page") {
+				paging.All = true
 			}
 			doc, err := s.fetch(cmd.Context(), env.api(), args, paging)
 			if err != nil {
@@ -504,25 +512,29 @@ func appDataCmds(opts *options, env *environment) []*cobra.Command {
 func newReportsCmd(opts *options, env *environment) *cobra.Command {
 	report := func(name tenjinapi.Report, short, granularities, groupings string) *cobra.Command {
 		var q tenjinapi.ReportQuery
+		var apps, channels, metrics []string
 		return dataCmd(opts, env, dataSpec{
-			use: string(name) + " --from <date> --to <date>", short: short, paged: true,
+			use: string(name) + " --from <date> --to <date>", short: short, paged: true, allPages: true,
 			long: short + `, for the dates from --from to --to (YYYY-MM-DD), both included.
+Every row is shown: --page and --per-page show one page instead.
 
 The other flags take the API's own values and are passed as they are:
 --granularity is one of ` + granularities + `, and --group-by one of ` + groupings + `.
---apps and --channels take comma-separated IDs, and --metrics comma-separated
-metric names. Left out, each is the API's default.`,
+--app, --channel and --metrics can be repeated or given comma-separated; find
+metric names with 'tenjin reports metrics'. Left out, each is the API's
+default.`,
 			view: view{noun: "rows"},
 			flags: func(f *pflag.FlagSet) {
 				f.StringVar(&q.From, "from", "", "the first day, YYYY-MM-DD (required)")
 				f.StringVar(&q.To, "to", "", "the last day, YYYY-MM-DD (required)")
 				f.StringVar(&q.Granularity, "granularity", "", "how the days are grouped: "+granularities)
 				f.StringVar(&q.GroupBy, "group-by", "", "what each row is: "+groupings)
-				f.StringVar(&q.Apps, "apps", "", "only these apps, by comma-separated IDs")
-				f.StringVar(&q.Channels, "channels", "", "only these marketing channels, by comma-separated IDs")
-				f.StringVar(&q.Metrics, "metrics", "", "the metrics to report, comma-separated")
+				f.StringSliceVar(&apps, "app", nil, "only these apps, by ID")
+				f.StringSliceVar(&channels, "channel", nil, "only these marketing channels, by ID")
+				f.StringSliceVar(&metrics, "metrics", nil, "the metrics to report, from 'tenjin reports metrics'")
 			},
 			fetch: func(ctx context.Context, api *tenjinapi.Client, _ []string, p tenjinapi.Paging) (tenjinapi.Document, error) {
+				q.Apps, q.Channels, q.Metrics = strings.Join(apps, ","), strings.Join(channels, ","), strings.Join(metrics, ",")
 				if q.From == "" || q.To == "" {
 					return nil, clierr.New(clierr.Usage, "--from and --to are required").WithHint("For example: --from 2026-10-01 --to 2026-10-07")
 				}
