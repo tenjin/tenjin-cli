@@ -35,7 +35,7 @@ func (c *Client) fetch(ctx context.Context, call func(clients) (*http.Response, 
 		return nil, err
 	}
 	var doc json.RawMessage
-	if err := receive(call(cl))(&doc); err != nil {
+	if err := receive(call(cl))(&doc); err != nil { //nolint:bodyclose // receive closes it
 		return nil, err
 	}
 	return doc, nil

@@ -107,7 +107,7 @@ func (c *Client) ListApps(ctx context.Context, query string) ([]App, error) {
 				Next string `json:"next"`
 			} `json:"links"`
 		}
-		if err := receive(api.GetApps(ctx, params))(&body); err != nil {
+		if err := receive(api.GetApps(ctx, params))(&body); err != nil { //nolint:bodyclose // receive closes it
 			return nil, err
 		}
 		for _, r := range body.Data {
@@ -148,7 +148,7 @@ func (c *Client) GetApp(ctx context.Context, id string) (*App, error) {
 	var body struct {
 		Data resource `json:"data"`
 	}
-	if err := receive(api.GetAppsId(ctx, appID))(&body); err != nil {
+	if err := receive(api.GetAppsId(ctx, appID))(&body); err != nil { //nolint:bodyclose // receive closes it
 		return nil, err
 	}
 	app := body.Data.app()
@@ -193,7 +193,7 @@ func (c *Client) ListSDKKeys(ctx context.Context, appID string) ([]SDKKey, error
 			} `json:"attributes"`
 		} `json:"data"`
 	}
-	if err := receive(api.GetAppsAppIdSdkKeys(ctx, id, &cma.GetAppsAppIdSdkKeysParams{PerPage: new(maxPageSize)}))(&body); err != nil {
+	if err := receive(api.GetAppsAppIdSdkKeys(ctx, id, &cma.GetAppsAppIdSdkKeysParams{PerPage: new(maxPageSize)}))(&body); err != nil { //nolint:bodyclose // receive closes it
 		if clierr.From(err).Kind == clierr.NotFound {
 			return nil, ErrKeysNotServed
 		}
@@ -245,7 +245,7 @@ func (c *Client) CreateApp(ctx context.Context, in NewApp) (app *App, created bo
 	var body struct {
 		Data resource `json:"data"`
 	}
-	if err := receive(api.PostAppsWithBody(ctx, "application/json", bytes.NewReader(raw)))(&body); err != nil {
+	if err := receive(api.PostAppsWithBody(ctx, "application/json", bytes.NewReader(raw)))(&body); err != nil { //nolint:bodyclose // receive closes it
 		// The server reports a duplicate as a plain 400 with the existing
 		// app's ID inside the message.
 		if m := existingAppID.FindStringSubmatch(err.Error()); m != nil {

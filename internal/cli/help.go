@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"regexp"
 	"strings"
@@ -12,7 +13,7 @@ import (
 )
 
 // tagline goes under the wordmark.
-const tagline = "Integrate and verify the Tenjin SDK from your terminal"
+const tagline = "Integrate the Tenjin SDK, and work with your Tenjin account, from the terminal"
 
 var (
 	helpEntry = regexp.MustCompile(`^  (\S+)(\s{2,}\S.*)$`)
@@ -36,9 +37,6 @@ func styleHelp(root *cobra.Command) {
 		plain(cmd, args)
 		cmd.SetOut(out)
 
-		if banner := render.Banner(out, tagline); banner != "" && !cmd.HasParent() {
-			_, _ = io.WriteString(out, banner+"\n")
-		}
 		_, _ = io.WriteString(out, colourHelp(text.String(), style, cmd))
 	})
 }
@@ -74,4 +72,47 @@ func colourHelp(text string, style render.Styler, cmd *cobra.Command) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// writeLanding is what 'tenjin' alone shows: the wordmark at a terminal, then
+// where each kind of user starts, short enough to read without scrolling.
+// 'tenjin --help' lists every command.
+func writeLanding(w io.Writer) error {
+	style := render.NewStyler(w)
+	var b strings.Builder
+	if banner := render.Banner(w, tagline); banner != "" {
+		b.WriteString(banner + "\n")
+	} else {
+		b.WriteString("The Tenjin CLI: " + strings.ToLower(tagline[:1]) + tagline[1:] + ".\n\n")
+	}
+	sections := []struct {
+		title string
+		rows  [][2]string
+	}{
+		{"App developers, in your app's project:", [][2]string{
+			{"tenjin setup", "Set up Tenjin, step by step"},
+			{"tenjin doctor", "Check an integration and explain what is wrong"},
+		}},
+		{"Your Tenjin data:", [][2]string{
+			{"tenjin login", "Sign in through the browser"},
+			{"tenjin campaigns list", "Your campaigns"},
+			{"tenjin reports spend --from <date> --to <date>", "Spend, installs and what they returned"},
+		}},
+	}
+	width := 0
+	for _, s := range sections {
+		for _, r := range s.rows {
+			width = max(width, len(r[0]))
+		}
+	}
+	for _, s := range sections {
+		b.WriteString(style.Heading(s.title) + "\n")
+		for _, r := range s.rows {
+			b.WriteString("  " + style.Accent(fmt.Sprintf("%-*s", width, r[0])) + "  " + r[1] + "\n")
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString(style.Dim("Every command: tenjin --help. The documentation: tenjin docs search <words>.") + "\n")
+	_, err := io.WriteString(w, b.String())
+	return err
 }

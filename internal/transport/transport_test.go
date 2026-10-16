@@ -49,6 +49,7 @@ func TestAGetIsRetriedAfterAGatewayError(t *testing.T) {
 	if err != nil || resp.StatusCode != http.StatusOK || *calls != 3 {
 		t.Fatalf("status = %v, err = %v, calls = %d", resp, err, *calls)
 	}
+	_ = resp.Body.Close()
 	if len(*waits) != 2 || (*waits)[0] != 500*time.Millisecond || (*waits)[1] != 2*time.Second {
 		t.Errorf("waits = %v", *waits)
 	}
@@ -59,8 +60,9 @@ func TestRetriesStopAtThree(t *testing.T) {
 	c, _ := client(nil)
 	resp, err := c.Get(srv.URL)
 	if err != nil || resp.StatusCode != 503 || *calls != 3 {
-		t.Errorf("status = %d, err = %v, calls = %d", resp.StatusCode, err, *calls)
+		t.Fatalf("status = %v, err = %v, calls = %d", resp, err, *calls)
 	}
+	_ = resp.Body.Close()
 }
 
 // An answer from the service itself, even a failure, is final: retrying a
@@ -71,8 +73,9 @@ func TestServiceAnswersAreNotRetried(t *testing.T) {
 		c, _ := client(nil)
 		resp, err := c.Get(srv.URL)
 		if err != nil || resp.StatusCode != status || *calls != 1 {
-			t.Errorf("%d: calls = %d, err = %v", status, *calls, err)
+			t.Fatalf("%d: calls = %d, err = %v", status, *calls, err)
 		}
+		_ = resp.Body.Close()
 	}
 }
 
@@ -81,17 +84,19 @@ func TestServiceAnswersAreNotRetried(t *testing.T) {
 func TestAPostIsRetriedOnlyWhenMarked(t *testing.T) {
 	srv, calls, _ := server(t, 503)
 	c, _ := client(nil)
-	resp, _ := c.Post(srv.URL, "text/plain", strings.NewReader("x"))
-	if resp.StatusCode != 503 || *calls != 1 {
-		t.Errorf("unmarked: status = %d, calls = %d", resp.StatusCode, *calls)
+	resp, err := c.Post(srv.URL, "text/plain", strings.NewReader("x"))
+	if err != nil || resp.StatusCode != 503 || *calls != 1 {
+		t.Fatalf("unmarked: status = %v, err = %v, calls = %d", resp, err, *calls)
 	}
+	_ = resp.Body.Close()
 
 	srv, calls, bodies := server(t, 503)
 	req, _ := http.NewRequestWithContext(Retryable(context.Background()), http.MethodPost, srv.URL, strings.NewReader("form=1"))
-	resp, err := c.Do(req)
+	resp, err = c.Do(req)
 	if err != nil || resp.StatusCode != 200 || *calls != 2 {
 		t.Fatalf("marked: status = %v, err = %v, calls = %d", resp, err, *calls)
 	}
+	_ = resp.Body.Close()
 	// The body is sent whole every time.
 	if strings.Join(*bodies, "|") != "form=1|form=1" {
 		t.Errorf("bodies = %q", *bodies)
@@ -104,7 +109,9 @@ func TestAConnectionFailureIsRetried(t *testing.T) {
 	srv.Close()
 	var log bytes.Buffer
 	c, waits := client(&log)
-	if _, err := c.Get(url); err == nil {
+	resp, err := c.Get(url)
+	if err == nil {
+		_ = resp.Body.Close()
 		t.Fatal("expected an error")
 	}
 	if len(*waits) != 2 || strings.Count(log.String(), "failed:") != 3 || !strings.Contains(log.String(), "(attempt 3 of 3)") {
@@ -118,7 +125,11 @@ func TestACancelledRequestIsNotRetried(t *testing.T) {
 	tr := New(nil)
 	tr.wait = func(context.Context, time.Duration) error { cancel(); return context.Canceled }
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
-	if _, err := (&http.Client{Transport: tr}).Do(req); err == nil || *calls != 1 {
+	resp, err := (&http.Client{Transport: tr}).Do(req)
+	if err == nil {
+		_ = resp.Body.Close()
+	}
+	if err == nil || *calls != 1 {
 		t.Errorf("err = %v, calls = %d", err, *calls)
 	}
 }
@@ -132,9 +143,11 @@ func TestTheLogHoldsNoCredential(t *testing.T) {
 	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/v0/event?platform=android", strings.NewReader("advertising_id=SECRET-BODY"))
 	req.SetBasicAuth("SDKKEYSECRET", "")
 	req.Header.Set("Authorization", "Bearer TOKENSECRET")
-	if _, err := c.Do(req); err != nil {
+	resp, err := c.Do(req)
+	if err != nil {
 		t.Fatal(err)
 	}
+	_ = resp.Body.Close()
 	line := log.String()
 	if !strings.HasPrefix(line, "tenjin: POST "+srv.URL+"/v0/event?platform=android → 200 in ") {
 		t.Errorf("log = %q", line)
@@ -148,9 +161,11 @@ func TestTheLogHoldsNoCredential(t *testing.T) {
 	// A user name in the address is left out too.
 	log.Reset()
 	withUser := strings.Replace(srv.URL, "http://", "http://someone:password@", 1)
-	if _, err := c.Get(withUser); err != nil {
+	resp, err = c.Get(withUser)
+	if err != nil {
 		t.Fatal(err)
 	}
+	_ = resp.Body.Close()
 	if strings.Contains(log.String(), "password") || strings.Contains(log.String(), "someone") {
 		t.Errorf("log = %q", log.String())
 	}

@@ -456,7 +456,7 @@ terminal, so scripts and coding agents can drive them.`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return cmd.Help()
+				return writeLanding(cmd.OutOrStdout())
 			}
 			return unknownCommand(cmd, args[0])
 		},
