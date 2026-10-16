@@ -56,6 +56,16 @@ type fakeTenjin struct {
 	// answer for gets a one-item list. dataAsked records each read.
 	data      map[string]func(r *http.Request) (int, any)
 	dataAsked []*url.URL
+	// writes records the API writes the data commands make; writeAnswers
+	// answers them by "METHOD path", else with the body sent back as the
+	// resource (and {} for a delete).
+	writes       []apiWrite
+	writeAnswers map[string]func(r *http.Request) (int, any)
+}
+
+type apiWrite struct {
+	method, path string
+	body         map[string]any
 }
 
 func newFakeTenjin(t *testing.T) *fakeTenjin {
@@ -72,6 +82,9 @@ func newFakeTenjin(t *testing.T) *fakeTenjin {
 	mux.HandleFunc("GET /v2/apps/{id}", f.getApp)
 	mux.HandleFunc("GET /v2/apps/{id}/sdk_keys", f.listKeys)
 	mux.HandleFunc("GET /v2/", f.dataRead)
+	mux.HandleFunc("PATCH /v2/", f.dataWrite)
+	mux.HandleFunc("DELETE /v2/", f.dataWrite)
+	mux.HandleFunc("POST /v2/", f.dataWrite)
 	mux.HandleFunc("POST /v0/event", f.event)
 	mux.HandleFunc("GET /v0/user", f.user)
 	f.srv = httptest.NewServer(mux)
@@ -210,6 +223,30 @@ func (f *fakeTenjin) dataRead(w http.ResponseWriter, r *http.Request) {
 	}
 	status, body := answer(r)
 	writeJSON(w, status, body)
+}
+
+// dataWrite answers the API's writes.
+func (f *fakeTenjin) dataWrite(w http.ResponseWriter, r *http.Request) {
+	if !f.authorized(w, r) {
+		return
+	}
+	var body map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	f.mu.Lock()
+	f.writes = append(f.writes, apiWrite{method: r.Method, path: r.URL.Path, body: body})
+	answer := f.writeAnswers[r.Method+" "+r.URL.Path]
+	f.mu.Unlock()
+	switch {
+	case answer != nil:
+		status, out := answer(r)
+		writeJSON(w, status, out)
+	case r.Method == http.MethodDelete:
+		writeJSON(w, http.StatusOK, map[string]any{})
+	case r.Method == http.MethodPost:
+		writeJSON(w, http.StatusCreated, map[string]any{"data": map[string]any{"id": "00000000-0000-4000-8000-0000000000bb", "type": "thing", "attributes": body}})
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"id": "00000000-0000-4000-8000-0000000000bb", "type": "thing", "attributes": body}})
+	}
 }
 
 func (f *fakeTenjin) authorized(w http.ResponseWriter, r *http.Request) bool {

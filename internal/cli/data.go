@@ -248,7 +248,7 @@ func requireChannel(channel int) error {
 
 func newCampaignsCmd(opts *options, env *environment) *cobra.Command {
 	var q tenjinapi.CampaignQuery
-	return group("campaigns", "Your campaigns",
+	cmd := group("campaigns", "Your campaigns",
 		dataCmd(opts, env, dataSpec{
 			use: "list", short: "List campaigns", paged: true,
 			view: view{noun: "campaigns", columns: []string{"name", "platform", "channel_id", "app_id"}},
@@ -270,6 +270,8 @@ func newCampaignsCmd(opts *options, env *environment) *cobra.Command {
 			},
 		}),
 	)
+	cmd.AddCommand(newCampaignWriteCmds(opts, env)...)
+	return cmd
 }
 
 func newChannelsCmd(opts *options, env *environment) *cobra.Command {
@@ -532,7 +534,7 @@ metric names. Left out, each is the API's default.`,
 
 func newSavedReportsCmd(opts *options, env *environment) *cobra.Command {
 	var reportType string
-	return group("saved-reports", "Reports saved in the dashboard",
+	cmd := group("saved-reports", "Reports saved in the dashboard",
 		dataCmd(opts, env, dataSpec{
 			use: "list", short: "List saved reports", paged: true,
 			view: view{noun: "saved reports", columns: []string{"name", "report_type"}},
@@ -559,4 +561,6 @@ func newSavedReportsCmd(opts *options, env *environment) *cobra.Command {
 			},
 		}),
 	)
+	cmd.AddCommand(newSavedReportWriteCmds(opts, env)...)
+	return cmd
 }

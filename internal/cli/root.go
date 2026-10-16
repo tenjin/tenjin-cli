@@ -420,7 +420,8 @@ integration, and checks a real launch.
 
 Your Tenjin data, for anyone with a Tenjin account, UA teams included: apps,
 campaigns, channels, callbacks and reports, from a terminal or a script. Each
-command reads one thing; with --json it prints the API's own answer.
+command reads or changes one thing; with --json it prints the API's own
+answer. A change asks first, or needs --yes.
 
 Every command but setup accepts --json and never prompts when stdin is not a
 terminal, so scripts and coding agents can drive them.`,
