@@ -16,6 +16,7 @@ Requires Go 1.27 (see `go.mod`).
 make build              # bin/tenjin, with the version stamped in
 make test               # go test -race ./...
 make lint               # gofmt check and golangci-lint
+make generate           # regenerate the API clients from internal/tenjinapi/openapi
 make release-snapshot   # every release archive and the Homebrew cask, into dist/; publishes nothing
 ```
 
@@ -46,7 +47,7 @@ internal/keyfill      finds the SDK key placeholders agents leave, and fills the
 internal/devicelog    reads the SDK's lines from a device log
 internal/collector    asks Tenjin's collector about an SDK key or a device
 internal/transport    HTTP retries and the --verbose log
-internal/tenjinapi    operations on the Tenjin API
+internal/tenjinapi    operations on the Tenjin API, over clients generated from its specs (make generate)
 internal/oauth        browser sign-in
 internal/session      stored credentials and token refresh
 internal/config       service URLs
