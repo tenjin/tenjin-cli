@@ -159,6 +159,11 @@ For anyone with a Tenjin account, from any directory: none of these reads a proj
 | `tenjin reports ad-revenue --from <date> --to <date>` | Ad revenue, by ad network |
 | `tenjin reports skadnetwork --from <date> --to <date>`, `skan` | SKAdNetwork postbacks, as Tenjin attributes them, or as Apple sends them |
 | `tenjin saved-reports list`, `get <id>`, `run <id>` | Reports saved in the dashboard, and their data |
+| `tenjin reports metrics [words]` | The metrics each report can show, for `--metrics`; `roi_7d` finds `roi_Nd` |
+| `tenjin apps s2s-callbacks macros [words]` | The macros a callback URL can use, such as `{{country}}` |
+| `tenjin apps callback-groups inspect --app <id> --channel <id>` | An app's callbacks to one channel in one view: templates, groups with the settings each still lacks, shared settings, events |
+| `tenjin site-ids list` | Site ID Optimization: the site IDs whose installs are not attributed |
+| `tenjin docs search <words>` | Tenjin's documentation, with links |
 
 Changes are commands too. Each sends only the fields given as flags, asks before it changes anything (deletes default to no), and needs `--yes` when nothing can ask. `--dry-run` prints the request body and sends nothing.
 
@@ -172,6 +177,7 @@ Changes are commands too. Each sends only the fields given as flags, asks before
 | `tenjin apps callback-groups create --app <id> --channel <id> --template <id>`, `update <id>` | Callback groups; `--setting key=value` for their settings |
 | `tenjin apps callback-settings update --app <id> --channel <id> --setting <key=value>` | An app's callback settings for one channel |
 | `tenjin saved-reports create --type <type> --name <name> --granularity <g> --group-by <g>`, `update <id>`, `delete <id>` | Saved reports |
+| `tenjin site-ids block <site-id>...`, `reinstate <site-id>...`, `clear` | Block site IDs, everywhere or for one `--app`, `--campaign` or `--channel`; `--replace` makes them the only rules |
 
 Reports take the API's own values: `--granularity`, `--group-by`, `--apps`, `--channels` and `--metrics`. For example:
 
@@ -310,7 +316,7 @@ Every command except `setup` is built to be driven by a program:
 | `TENJIN_SDK_KEY_ANDROID`, `TENJIN_SDK_KEY_IOS` | The same, per platform |
 | `TENJIN_SDK_KEY_ANDROID_<VARIANT>` | The same, for another build, such as `TENJIN_SDK_KEY_ANDROID_AMAZON` |
 | `TENJIN_NO_UPDATE_CHECK` | `1` turns off the new-release notice |
-| `TENJIN_DASHBOARD_URL`, `TENJIN_API_URL`, `TENJIN_COLLECTOR_URL`, `TENJIN_RESOURCE_URL` | Point at another copy of a Tenjin service. Each must be `https`, except on this machine |
+| `TENJIN_DASHBOARD_URL`, `TENJIN_API_URL`, `TENJIN_COLLECTOR_URL`, `TENJIN_RESOURCE_URL`, `TENJIN_SITE_IDS_URL`, `TENJIN_DOCS_URL` | Point at another copy of a Tenjin service. Each must be `https`, except on this machine |
 | `NO_COLOR` | Turn off colour |
 | `CLICOLOR_FORCE` | Keep colour when output is piped, for example into `less -R` |
 

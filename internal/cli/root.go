@@ -325,6 +325,7 @@ func (a loginAuthority) Login(ctx context.Context, opts oauth.LoginOptions) (oau
 // api returns a client for the Campaign Management API.
 func (e *environment) api() *tenjinapi.Client {
 	api := tenjinapi.New(e.endpoints.API, userAgent(), e.session())
+	api.SiteIDsURL = e.endpoints.SiteIDs
 	api.HTTP.Transport = e.transport()
 	return api
 }
@@ -467,7 +468,7 @@ terminal, so scripts and coding agents can drive them.`,
 		commands []*cobra.Command
 	}{
 		{"Integrate the Tenjin SDK (app developers):", []*cobra.Command{newSetupCmd(opts, env), newProjectCmd(opts, env), newDoctorCmd(opts, env), newSDKCmd(opts), newAgentCmd(opts, env)}},
-		{"Your Tenjin data:", []*cobra.Command{newAppsCmd(opts, env), newCampaignsCmd(opts, env), newChannelsCmd(opts, env), newAdAccountsCmd(opts, env), newSKAdNetworksCmd(opts, env), newReportsCmd(opts, env), newSavedReportsCmd(opts, env)}},
+		{"Your Tenjin data:", []*cobra.Command{newAppsCmd(opts, env), newCampaignsCmd(opts, env), newChannelsCmd(opts, env), newAdAccountsCmd(opts, env), newSKAdNetworksCmd(opts, env), newReportsCmd(opts, env), newSavedReportsCmd(opts, env), newSiteIDsCmd(opts, env)}},
 		{"Your account:", []*cobra.Command{newLoginCmd(opts, env), newLogoutCmd(opts, env), newAuthCmd(opts, env)}},
 	}
 	for i, g := range groups {
@@ -478,7 +479,7 @@ terminal, so scripts and coding agents can drive them.`,
 			root.AddCommand(c)
 		}
 	}
-	root.AddCommand(newVersionCmd(opts))
+	root.AddCommand(newDocsCmd(opts, env), newVersionCmd(opts))
 	return root
 }
 

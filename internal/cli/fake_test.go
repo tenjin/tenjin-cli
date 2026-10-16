@@ -62,6 +62,12 @@ type fakeTenjin struct {
 	// resource (and {} for a delete).
 	writes       []apiWrite
 	writeAnswers map[string]func(r *http.Request) (int, any)
+	// siteIDRules are the Site ID Optimization rules; siteIDCalls records
+	// each call as "Method body".
+	siteIDRules []map[string]any
+	siteIDCalls []string
+	// docs answers the documentation search.
+	docs []map[string]string
 }
 
 type apiWrite struct {
@@ -86,6 +92,8 @@ func newFakeTenjin(t *testing.T) *fakeTenjin {
 	mux.HandleFunc("PATCH /v2/", f.dataWrite)
 	mux.HandleFunc("DELETE /v2/", f.dataWrite)
 	mux.HandleFunc("POST /v2/", f.dataWrite)
+	mux.HandleFunc("POST /management.v2.SiteIDFilter/{method}", f.siteIDs)
+	mux.HandleFunc("GET /wp-json/betterdocs/v1/search", f.searchDocs)
 	mux.HandleFunc("POST /v0/event", f.event)
 	mux.HandleFunc("GET /v0/user", f.user)
 	f.srv = httptest.NewServer(mux)
@@ -94,7 +102,7 @@ func newFakeTenjin(t *testing.T) *fakeTenjin {
 }
 
 func (f *fakeTenjin) endpoints() config.Endpoints {
-	return config.Endpoints{Name: "test", Issuer: f.srv.URL, API: f.srv.URL + "/v2", Collector: f.srv.URL, Resource: "https://mcp.test"}
+	return config.Endpoints{Name: "test", Issuer: f.srv.URL, API: f.srv.URL + "/v2", Collector: f.srv.URL, Resource: "https://mcp.test", SiteIDs: f.srv.URL, Docs: f.srv.URL}
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -224,6 +232,70 @@ func (f *fakeTenjin) dataRead(w http.ResponseWriter, r *http.Request) {
 	}
 	status, body := answer(r)
 	writeJSON(w, status, body)
+}
+
+// siteIDs answers the Site ID Optimization service, in Connect's JSON form.
+func (f *fakeTenjin) siteIDs(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Connect-Protocol-Version") != "1" || r.Header.Get("Content-Type") != "application/json" {
+		writeJSON(w, http.StatusUnsupportedMediaType, map[string]string{"code": "unknown", "message": "not Connect JSON"})
+		return
+	}
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	f.mu.Lock()
+	signedIn := f.jwts[token] || token == "dashboard-token"
+	f.mu.Unlock()
+	if !signedIn {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"code": "unauthenticated", "message": "invalid token"})
+		return
+	}
+	raw, _ := io.ReadAll(r.Body)
+	var body struct {
+		Rules   []map[string]any `json:"rules"`
+		Clear   bool             `json:"clear"`
+		SiteIDs []string         `json:"siteIds"`
+	}
+	_ = json.Unmarshal(raw, &body)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.siteIDCalls = append(f.siteIDCalls, r.PathValue("method")+" "+string(raw))
+	switch r.PathValue("method") {
+	case "Get":
+		if len(f.siteIDRules) == 0 {
+			writeJSON(w, http.StatusOK, map[string]any{})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"rules": f.siteIDRules})
+		return
+	case "Block":
+		if body.Clear {
+			f.siteIDRules = nil
+		}
+		f.siteIDRules = append(f.siteIDRules, body.Rules...)
+	case "Reinstate":
+		var kept []map[string]any
+		for _, rule := range f.siteIDRules {
+			if !contains(body.SiteIDs, fmt.Sprint(rule["siteId"])) {
+				kept = append(kept, rule)
+			}
+		}
+		f.siteIDRules = kept
+	case "Clear":
+		f.siteIDRules = nil
+	}
+	writeJSON(w, http.StatusOK, map[string]any{})
+}
+
+func (f *fakeTenjin) searchDocs(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Authorization") != "" {
+		f.t.Errorf("a token was sent to the public documentation")
+	}
+	out := []map[string]string{}
+	for _, d := range f.docs {
+		if strings.Contains(strings.ToLower(d["title"]), strings.ToLower(r.URL.Query().Get("s"))) {
+			out = append(out, d)
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // dataWrite answers the API's writes.
