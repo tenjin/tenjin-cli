@@ -1,3 +1,7 @@
 # Golden files, fixtures and scripts are compared or run byte for byte, so
 # they keep LF line endings on every checkout, Windows included.
 * text=auto eol=lf
+# Generated from internal/tenjinapi/openapi (make generate): folded in diffs, left out of language stats.
+internal/tenjinapi/cma/client.gen.go linguist-generated=true
+internal/tenjinapi/rma/client.gen.go linguist-generated=true
+internal/tenjinapi/openapi/*.json linguist-generated=true
