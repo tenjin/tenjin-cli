@@ -52,6 +52,10 @@ type fakeTenjin struct {
 	// it was attributed to.
 	installs      map[string]string
 	installsAsked []string
+	// data answers the data commands' reads, by path; a path it has no
+	// answer for gets a one-item list. dataAsked records each read.
+	data      map[string]func(r *http.Request) (int, any)
+	dataAsked []*url.URL
 }
 
 func newFakeTenjin(t *testing.T) *fakeTenjin {
@@ -67,6 +71,7 @@ func newFakeTenjin(t *testing.T) *fakeTenjin {
 	mux.HandleFunc("POST /v2/apps", f.createApp)
 	mux.HandleFunc("GET /v2/apps/{id}", f.getApp)
 	mux.HandleFunc("GET /v2/apps/{id}/sdk_keys", f.listKeys)
+	mux.HandleFunc("GET /v2/", f.dataRead)
 	mux.HandleFunc("POST /v0/event", f.event)
 	mux.HandleFunc("GET /v0/user", f.user)
 	f.srv = httptest.NewServer(mux)
@@ -185,6 +190,26 @@ func (f *fakeTenjin) revoke(w http.ResponseWriter, r *http.Request) {
 	}
 	f.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]string{})
+}
+
+// dataRead answers the API's other reads.
+func (f *fakeTenjin) dataRead(w http.ResponseWriter, r *http.Request) {
+	if !f.authorized(w, r) {
+		return
+	}
+	f.mu.Lock()
+	f.dataAsked = append(f.dataAsked, r.URL)
+	answer := f.data[r.URL.Path]
+	f.mu.Unlock()
+	if answer == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"data":  []any{map[string]any{"id": "00000000-0000-4000-8000-0000000000aa", "type": "thing", "attributes": map[string]any{"name": "First"}}},
+			"links": map[string]string{"self": f.srv.URL + r.URL.Path},
+		})
+		return
+	}
+	status, body := answer(r)
+	writeJSON(w, status, body)
 }
 
 func (f *fakeTenjin) authorized(w http.ResponseWriter, r *http.Request) bool {

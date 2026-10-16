@@ -19,12 +19,14 @@ import (
 var platforms = []string{"ios", "android", "amazon", "android_other"}
 
 func newAppsCmd(opts *options, env *environment) *cobra.Command {
-	return group("apps", "List, find and create Tenjin apps",
-		newAppsListCmd(opts, env),
-		newAppsGetCmd(opts, env),
-		newAppsCreateCmd(opts, env),
-		newAppsEnsureCmd(opts, env),
-		group("keys", "An app's SDK keys", newAppsKeysListCmd(opts, env)),
+	return group("apps", "Your apps, and their keys, events and callbacks",
+		append([]*cobra.Command{
+			newAppsListCmd(opts, env),
+			newAppsGetCmd(opts, env),
+			newAppsCreateCmd(opts, env),
+			newAppsEnsureCmd(opts, env),
+			group("keys", "An app's SDK keys", newAppsKeysListCmd(opts, env)),
+		}, appDataCmds(opts, env)...)...,
 	)
 }
 
