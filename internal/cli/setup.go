@@ -841,8 +841,14 @@ func (s *setup) check() error {
 			return err
 		}
 		report := s.verify(p)
-		if err := writeReport(s.out, report, s.offline); err != nil {
-			return err
+		// The whole report once; after that, only what is still open, so a
+		// round of fixes reads at a glance.
+		if round == 0 {
+			if err := writeReport(s.out, report, s.offline); err != nil {
+				return err
+			}
+		} else if report.Summary.Errors > 0 || report.Summary.Warnings > 0 {
+			s.writeOpen(report)
 		}
 		status := reportStatus(report.Summary, false)
 		if status == nil {
@@ -854,9 +860,17 @@ func (s *setup) check() error {
 		}
 
 		question := "\nFix the items marked ✗, then press Enter to check again (q to stop)."
-		canAgent := s.helper != nil && len(agentWork(report)) > 0
+		// The agent can be called in at any round, also after a no in step
+		// 5, whenever one is installed and there is code to change.
+		available := s.helper
+		if available == nil && s.agentFlag != "none" && !agent.InsideAgent(s.env.getenv) {
+			if installed := agent.Find(s.env.lookPath); len(installed) > 0 {
+				available = &installed[0]
+			}
+		}
+		canAgent := available != nil && len(agentWork(report)) > 0
 		if canAgent {
-			question = fmt.Sprintf("\nPress Enter to check again, a to continue with %s, or q to stop.", s.helper.Name)
+			question = fmt.Sprintf("\nPress Enter to check again, a to have %s fix them, or q to stop.", available.Name)
 		}
 		answer, err := s.env.ask(s.out, question)
 		if err != nil && !errors.Is(err, io.EOF) {
@@ -866,11 +880,39 @@ func (s *setup) check() error {
 		case errors.Is(err, io.EOF), strings.EqualFold(answer, "q"):
 			return status
 		case strings.EqualFold(answer, "a") && canAgent:
+			s.helper = available
 			if err := s.runAgent(p, report); err != nil {
 				return err
 			}
 		}
 	}
+}
+
+// writeOpen lists what is still open after a round of fixes: each error
+// and warning on one line, then the counts.
+func (s *setup) writeOpen(report *verify.Report) {
+	report = forPeople(report)
+	s.say("")
+	for _, f := range report.Findings {
+		mark := ""
+		switch f.Severity {
+		case verify.Error:
+			mark = s.style.Red("✗")
+		case verify.Warning:
+			mark = s.style.Yellow("!")
+		default:
+			continue
+		}
+		where := ""
+		if f.File != "" {
+			where = "  " + s.style.Dim(f.File)
+			if f.Line > 0 {
+				where += s.style.Dim(fmt.Sprintf(":%d", f.Line))
+			}
+		}
+		s.say("  %s %s%s", mark, f.Title, where)
+	}
+	s.say("\nStill open: %s", outstanding(report.Summary))
 }
 
 // agentWork is what a coding agent is asked to resolve: the errors and

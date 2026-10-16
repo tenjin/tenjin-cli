@@ -29,6 +29,9 @@ const (
 	numbersField
 	// pairsField is an object, given as repeated key=value flags.
 	pairsField
+	// listField is a comma-separated text, given as repeated or
+	// comma-separated flags.
+	listField
 )
 
 // field is one of a body's fields, set by one flag.
@@ -66,6 +69,8 @@ func (s *fieldSet) bind(f *pflag.FlagSet) {
 			s.values[fd.flag] = f.IntSlice(fd.flag, nil, usage+", comma-separated")
 		case pairsField:
 			s.values[fd.flag] = f.StringArray(fd.flag, nil, usage+", as key=value; repeat for each")
+		case listField:
+			s.values[fd.flag] = f.StringSlice(fd.flag, nil, usage+"; repeat or separate with commas")
 		}
 	}
 }
@@ -89,6 +94,10 @@ func (s *fieldSet) body(cmd *cobra.Command) (tenjinapi.Fields, error) {
 		case *[]int:
 			body[fd.name] = *v
 		case *[]string:
+			if fd.kind == listField {
+				body[fd.name] = strings.Join(*v, ",")
+				continue
+			}
 			pairs := map[string]string{}
 			for _, p := range *v {
 				key, value, ok := strings.Cut(p, "=")
@@ -205,7 +214,7 @@ func confirmChange(cmd *cobra.Command, env *environment, yes bool, what string, 
 		return err
 	}
 	if !ok {
-		return clierr.New(clierr.Internal, "nothing was changed")
+		return declined("Nothing was changed.")
 	}
 	return nil
 }
@@ -527,9 +536,9 @@ func newSavedReportWriteCmds(opts *options, env *environment) []*cobra.Command {
 			{flag: "granularity", name: "granularity", usage: "daily, weekly, monthly or totals-daily", required: create},
 			{flag: "group-by", name: "group_by", usage: "what each row is, as for 'tenjin reports'", required: create},
 			{flag: "past-days", name: "past_number_days", usage: "how many days back from today it covers (default 30)", kind: numberField},
-			{flag: "apps", name: "app_ids", usage: "only these apps, by comma-separated IDs"},
-			{flag: "channels", name: "channel_ids", usage: "only these marketing channels, by comma-separated IDs"},
-			{flag: "metrics", name: "metrics", usage: "the metrics, comma-separated"},
+			{flag: "app", name: "app_ids", usage: "only these apps, by ID", kind: listField},
+			{flag: "channel", name: "channel_ids", usage: "only these marketing channels, by ID", kind: listField},
+			{flag: "metrics", name: "metrics", usage: "the metrics, from 'tenjin reports metrics'", kind: listField},
 		}
 		if create {
 			fields = append([]field{{flag: "type", name: "report_type", usage: "user_acquisition or ad_revenue", required: true}}, fields...)

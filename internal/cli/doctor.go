@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/tenjin/tenjin-cli/internal/agent"
 	"github.com/tenjin/tenjin-cli/internal/clierr"
 	"github.com/tenjin/tenjin-cli/internal/collector"
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
@@ -32,6 +33,7 @@ func newDoctorCmd(opts *options, env *environment) *cobra.Command {
 		logs     string
 		builds   []string
 		features []string
+		fixWith  string
 	)
 	cmd := &cobra.Command{
 		Use:   "doctor [path]",
@@ -44,7 +46,13 @@ bundle ID.
 The key check sends one request to Tenjin's collector and no event. Once a
 day doctor also asks the SDKs' public registries (Maven Central, pub.dev,
 npm, GitHub) for their newest releases, so its fixes name current versions.
---offline skips both. doctor never changes the project.
+--offline skips both.
+
+doctor itself never changes the project. At a terminal, when your coding
+agent (Claude Code or Codex) is installed and there is something to fix in
+code, it offers to have the agent fix it, then checks again; --agent picks
+one without asking, and --agent none never offers. The agent works under the
+same limits as in 'tenjin setup', and is never given an SDK key.
 
 With --device, doctor also reads what the app's last launch sent and what
 Tenjin answered to each request, then asks Tenjin whether the device's
@@ -120,16 +128,52 @@ otherwise. With --strict, warnings count too.`,
 			report := verify.Run(cmd.Context(), p, vopts)
 
 			if format == render.JSON {
-				err = render.WriteJSON(cmd.OutOrStdout(), report)
-			} else {
-				err = writeReport(cmd.OutOrStdout(), report, offline)
+				if err := render.WriteJSON(cmd.OutOrStdout(), report); err != nil {
+					return err
+				}
+				return reportStatus(report.Summary, strict)
 			}
+			if err := writeReport(cmd.OutOrStdout(), report, offline); err != nil {
+				return err
+			}
+			fixer := &setup{cmd: cmd, env: env, args: args, agentFlag: fixWith, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
+				given: given, features: chosen, inProject: map[string]bool{}, keys: map[string]verify.GivenKey{}}
+			if fixer.features == nil {
+				fixer.features = suggestedFeatures(p)
+			}
+			for _, b := range p.Builds() {
+				if key, ok := given.For(b.ID); ok {
+					fixer.keys[b.ID] = key
+				}
+			}
+			fixed, offered, err := fixer.offerFix(p, report)
 			if err != nil {
 				return err
 			}
-			return reportStatus(report.Summary, strict)
+			if fixed {
+				// The agent changed the project: read it again and say what
+				// stands now.
+				if p, err = loadProject(args); err != nil {
+					return err
+				}
+				if err := narrowBuilds(p, builds); err != nil {
+					return err
+				}
+				vopts.Device = nil
+				report = verify.Run(cmd.Context(), p, vopts)
+				fixer.say("\n%s", fixer.style.Heading("Checking again"))
+				if err := writeReport(cmd.OutOrStdout(), report, offline); err != nil {
+					return err
+				}
+			}
+			status := reportStatus(report.Summary, strict)
+			if status != nil && !offered && len(doctorWork(report)) > 0 {
+				return clierr.From(status).WithHint("Run 'tenjin setup' to fix these step by step, or 'tenjin doctor --agent claude' (or codex) to have your coding agent fix them.")
+			}
+			return status
 		},
 	}
+	cmd.Flags().StringVar(&fixWith, "agent", "", "fix what can be fixed in code with this coding agent: claude or codex, or none never to offer (default: ask at a terminal)")
 	addSDKKeyFlag(cmd, &sdkKeys)
 	cmd.Flags().BoolVar(&offline, "offline", false, "skip the SDK key check against Tenjin, and the look for newer SDK releases")
 	cmd.Flags().BoolVar(&strict, "strict", false, "exit non-zero on warnings as well as errors")
@@ -139,6 +183,93 @@ otherwise. With --strict, warnings count too.`,
 	addBuildFlag(cmd, &builds)
 	addFeaturesFlag(cmd, &features)
 	return cmd
+}
+
+// doctorWork is what a coding agent can fix of a doctor's report: what setup
+// gives its agent, less what a device reported, which no change to the code
+// answers by itself.
+func doctorWork(report *verify.Report) []verify.Finding {
+	var work []verify.Finding
+	for _, f := range agentWork(report) {
+		if !strings.HasPrefix(f.ID, "device.") {
+			work = append(work, f)
+		}
+	}
+	return work
+}
+
+// offerFix offers, at a terminal, to have the developer's coding agent fix
+// what doctor found, and runs it on a yes or with --agent. The default is no:
+// doctor is first a check. fixed says the agent ran; offered, that the
+// developer was asked or chose with --agent.
+func (s *setup) offerFix(p *project.Project, report *verify.Report) (fixed, offered bool, err error) {
+	work := doctorWork(report)
+	if len(work) == 0 || s.agentFlag == "none" || agent.InsideAgent(s.env.getenv) {
+		return false, s.agentFlag == "none", nil
+	}
+	installed := agent.Find(s.env.lookPath)
+	var helper *agent.Agent
+	switch {
+	case s.agentFlag != "":
+		for i := range installed {
+			if installed[i].ID == s.agentFlag {
+				helper = &installed[i]
+			}
+		}
+		if helper == nil {
+			return false, true, clierr.New(clierr.NotFound, "--agent %s was given, but it is not installed on this machine", s.agentFlag)
+		}
+	case !s.env.interactive || len(installed) == 0:
+		return false, false, nil
+	default:
+		s.say("\n%s above can be fixed in the project's code.", plural(len(work), "finding"))
+		helper, err = s.askToFix(installed)
+		if err != nil || helper == nil {
+			return false, true, err
+		}
+	}
+	s.helper = helper
+	if err := s.runAgent(p, report); err != nil {
+		return false, true, err
+	}
+	return true, true, nil
+}
+
+// askToFix asks whether an installed agent should fix the findings, and
+// which one when there are several. No is the default.
+func (s *setup) askToFix(installed []agent.Agent) (*agent.Agent, error) {
+	if len(installed) == 1 {
+		a := &installed[0]
+		s.say("%s is installed and can make the changes:", a.Name)
+		s.say("  - it works in this project only, under your own %s account;", a.Name)
+		s.say("  - %s;", a.Limits())
+		s.say("  - it is never given an SDK key, and doctor checks its work afterwards.")
+		ok, err := s.env.confirm(s.out, fmt.Sprintf("Fix them with %s?", a.Name), false)
+		if err != nil || !ok {
+			return nil, err
+		}
+		return a, nil
+	}
+	s.say("These coding agents are installed and can make the changes, in this project only and under your own account:")
+	options := make([]string, len(installed))
+	for i, a := range installed {
+		s.say("  %d) %s: %s", i+1, s.style.Bold(a.Name), a.Limits())
+		options[i] = fmt.Sprintf("%s (%d)", a.Name, i+1)
+	}
+	answer, err := s.env.ask(s.out, fmt.Sprintf("Fix them with %s, or neither? [n]", strings.Join(options, ", ")))
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	answer = strings.ToLower(strings.TrimSpace(answer))
+	for i := range installed {
+		if answer == fmt.Sprint(i+1) || answer == installed[i].ID || answer == strings.ToLower(installed[i].Name) {
+			return &installed[i], nil
+		}
+	}
+	return nil, nil
 }
 
 // readDevice gets the device log from a device, a file or standard input. A

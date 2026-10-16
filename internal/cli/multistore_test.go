@@ -248,25 +248,33 @@ func TestSetupAsksWhichFeatures(t *testing.T) {
 	h.signIn()
 	dir := testproject.Write(t, withBilling())
 
-	// Enter: the suggested ones, and the purchases are then expected.
+	// Enter: the suggested ones, said back, and the purchases are then
+	// expected.
 	code, stdout, _ := h.typing("", "q").run("setup", dir)
 	lacks(t, stdout,
-		"Tenjin features this integration can include:",
+		"Tenjin features for this integration",
 		"App opens and attribution  always included",
 		"2) In-app purchases  (Google Play Billing in app/build.gradle.kts)",
+		"Press Enter when the",
+		"Integrating: App opens and attribution, In-app purchases.",
 		"In-app purchases: chosen for the integration, but not sent to Tenjin",
 	)
 	if code != 0 {
 		t.Errorf("exit = %d, want 0: a missing feature is a warning", code)
 	}
 
-	// 0: app opens only, and the purchases are only suggested.
-	_, stdout, _ = h.typing("0", "q").run("setup", dir)
-	lacks(t, stdout, "In-app purchases: could be sent to Tenjin")
+	// A number removes a feature that was included; Enter then confirms.
+	_, stdout, _ = h.typing("2", "", "q").run("setup", dir)
+	lacks(t, stdout, "Integrating: App opens and attribution.", "In-app purchases: could be sent to Tenjin")
 
-	// An answer that is not a number is asked again.
-	_, stdout, _ = h.typing("maybe", "", "q").run("setup", dir)
-	lacks(t, stdout, "Give numbers from the list")
+	// none, then a number: only that one.
+	_, stdout, _ = h.typing("none", "3", "").run("setup", dir, "--agent", "none")
+	lacks(t, stdout, "Integrating: App opens and attribution, Subscriptions.")
+
+	// App opens cannot be removed; an answer that is not in the list is
+	// explained.
+	_, stdout, _ = h.typing("1", "maybe", "", "q").run("setup", dir)
+	lacks(t, stdout, "App opens and attribution are always included.", `"maybe" is not in the list.`)
 }
 
 func TestFeaturesFlag(t *testing.T) {

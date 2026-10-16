@@ -135,7 +135,7 @@ Two of setup's steps are under [Your Tenjin data](#your-tenjin-data): `tenjin ap
 
 #### Your Tenjin data
 
-For anyone with a Tenjin account, from any directory: none of these reads a project. Each reads one thing from the [Tenjin API](https://tenjin.com/docs/automation-apis/), with its parameters as flags. At a terminal it prints a table; with `--json`, the API's answer as it is, so the API's documentation describes it. Lists show one page: `--page` and `--per-page` pick one, `--all` reads them all.
+For anyone with a Tenjin account, from any directory: none of these reads a project. Each reads one thing from the [Tenjin API](https://tenjin.com/docs/automation-apis/), with its parameters as flags. At a terminal it prints a table; with `--json`, the API's answer as it is, so the API's documentation describes it. Lists show one page of 25: `--page` and `--per-page` (up to 1000) pick another, `--all` reads them all. Reports show every row unless a page is asked for; `apps list` always shows every app.
 
 | Command | What it does |
 | --- | --- |
@@ -179,7 +179,7 @@ Changes are commands too. Each sends only the fields given as flags, asks before
 | `tenjin saved-reports create --type <type> --name <name> --granularity <g> --group-by <g>`, `update <id>`, `delete <id>` | Saved reports |
 | `tenjin site-ids block <site-id>...`, `reinstate <site-id>...`, `clear` | Block site IDs, everywhere or for one `--app`, `--campaign` or `--channel`; `--replace` makes them the only rules |
 
-Reports take the API's own values: `--granularity`, `--group-by`, `--apps`, `--channels` and `--metrics`. For example:
+Reports take the API's own values: `--granularity`, `--group-by`, and `--app`, `--channel` and `--metrics`, each repeated or comma-separated. `tenjin reports metrics` lists the metric names. For example:
 
 ```sh
 tenjin reports spend --from 2026-10-01 --to 2026-10-07 --group-by channel,app --granularity totals-daily

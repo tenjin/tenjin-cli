@@ -19,7 +19,7 @@ func TestAgentInstall(t *testing.T) {
 		h, dir := newHarness(t), t.TempDir()
 		h.typing("n")
 		code, _, stderr := h.run("agent", "install", dir, "--agent", "claude")
-		if code != 1 || exists(skillFile(dir)) || !strings.Contains(stderr, skillFile(dir)) {
+		if code != 0 || exists(skillFile(dir)) || !strings.Contains(stderr, skillFile(dir)) || !strings.Contains(stderr, "Nothing was changed.") {
 			t.Fatalf("answered no: exit = %d, written = %v, stderr = %q", code, exists(skillFile(dir)), stderr)
 		}
 		h.typing("y")
@@ -89,7 +89,7 @@ func TestAgentInstall(t *testing.T) {
 
 	t.Run("unknown agent", func(t *testing.T) {
 		code, _, stderr := newHarness(t).run("agent", "install", "--agent", "copilot", "--yes")
-		if code != 2 || !strings.Contains(stderr, "claude (Claude Code)") {
+		if code != 2 || !strings.Contains(stderr, "claude for Claude Code") {
 			t.Errorf("exit = %d, stderr = %q", code, stderr)
 		}
 	})
@@ -184,5 +184,16 @@ func TestTheSkillOnlyNamesCommandsThatExist(t *testing.T) {
 				t.Errorf("%q: %q has no flag %s", line, cmd.CommandPath(), flag)
 			}
 		}
+	}
+}
+
+// codex names the AGENTS.md target, which Codex reads.
+func TestAgentInstallTakesCodex(t *testing.T) {
+	h, dir := newHarness(t), t.TempDir()
+	if code, _, stderr := h.run("agent", "install", dir, "--agent", "codex", "--yes"); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err != nil {
+		t.Errorf("AGENTS.md not written: %v", err)
 	}
 }

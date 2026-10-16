@@ -89,7 +89,7 @@ func (f *agentFlags) targets(env *environment, loc skill.Location) ([]skill.Targ
 func targetList() string {
 	parts := make([]string, 0, len(skill.Targets))
 	for _, t := range skill.Targets {
-		parts = append(parts, fmt.Sprintf("%s (%s)", t.ID, t.Name))
+		parts = append(parts, fmt.Sprintf("%s for %s", t.ID, t.Name))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -201,7 +201,7 @@ func runAgentChange(cmd *cobra.Command, opts *options, env *environment, flags *
 			return err
 		}
 		if !ok {
-			return clierr.New(clierr.Internal, "nothing was changed")
+			return declined("Nothing was changed.")
 		}
 	}
 	if !dryRun {
