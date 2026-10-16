@@ -56,6 +56,9 @@ func (o *options) format(cmd *cobra.Command) (render.Format, error) {
 	if err != nil {
 		return "", clierr.Wrap(clierr.Usage, err, "%v", err)
 	}
+	if f == render.CSV && cmd.Annotations[csvAnnotation] == "" {
+		return "", clierr.New(clierr.Usage, "-o csv is for the data commands, such as 'tenjin reports spend' or 'tenjin campaigns list'")
+	}
 	return f, nil
 }
 
@@ -355,7 +358,7 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	root.SetOut(stdout)
 	root.SetErr(stderr)
 
-	err := root.ExecuteContext(ctx)
+	ran, err := root.ExecuteContextC(ctx)
 	defer env.reportUpdate(stderr)
 	if err == nil {
 		return 0
@@ -377,6 +380,10 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 			WithHint("Run it in a terminal to answer, or give the answers as flags (see --help).")
 	}
 	e := clierr.From(err)
+	// A usage error points at the help of the command that was used.
+	if e.Kind == clierr.Usage && e.Hint == "" && ran != nil && ran != root {
+		e = e.WithHint("Run '%s --help' for usage.", ran.CommandPath())
+	}
 	writeError(stderr, e, wantsJSON(args))
 	return e.Kind.ExitCode()
 }
@@ -462,7 +469,7 @@ terminal, so scripts and coding agents can drive them.`,
 
 	// Defined by hand so cobra does not claim -v, which is reserved for --verbose.
 	root.Flags().Bool("version", false, "print the version and exit")
-	root.PersistentFlags().StringVarP(&opts.output, "output", "o", string(render.Table), "output format: table or json")
+	root.PersistentFlags().StringVarP(&opts.output, "output", "o", string(render.Table), "output format: table or json, or csv for the data commands")
 	root.PersistentFlags().BoolVar(&opts.json, "json", false, "shorthand for --output json")
 	root.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "show each request to Tenjin, and each program run, on stderr")
 	root.PersistentPreRun = func(cmd *cobra.Command, _ []string) {
@@ -537,7 +544,10 @@ func noArgs(cmd *cobra.Command, args []string) error {
 // exactArgs requires n positional arguments; what names them for the error.
 func exactArgs(n int, what string) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
-		if len(args) != n {
+		switch {
+		case len(args) > n && n == 1:
+			return clierr.New(clierr.Usage, "%q takes only one argument, %s; got %d", cmd.CommandPath(), what, len(args))
+		case len(args) != n:
 			return clierr.New(clierr.Usage, "%q takes %s", cmd.CommandPath(), what)
 		}
 		return nil

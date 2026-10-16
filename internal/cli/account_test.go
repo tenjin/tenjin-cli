@@ -448,7 +448,7 @@ func TestAppsGet(t *testing.T) {
 	h.signIn()
 
 	code, stdout, _ := h.run("apps", "get", app.ID)
-	if code != 0 || !strings.Contains(stdout, "Bundle ID com.example.sample") || !strings.Contains(stdout, "none received yet") {
+	if code != 0 || !strings.Contains(stdout, "Bundle ID  com.example.sample") || !strings.Contains(stdout, "none received yet") {
 		t.Errorf("exit = %d, stdout:\n%s", code, stdout)
 	}
 	// The API returns shared secrets with an app; none of that is printed.
@@ -524,7 +524,7 @@ func TestAppsCreate(t *testing.T) {
 		h := newHarness(t)
 		h.signIn()
 		code, stdout, stderr := h.run("apps", "create", "--store-url", "https://play.google.com/store/apps/details?id=com.example.store", "--yes")
-		if code != 0 || !strings.Contains(stdout, "Bundle ID com.example.store") {
+		if code != 0 || !strings.Contains(stdout, "Bundle ID  com.example.store") {
 			t.Errorf("exit = %d, stderr = %q, stdout:\n%s", code, stderr, stdout)
 		}
 		// Tenjin's own explanation of a URL it cannot use is passed on.

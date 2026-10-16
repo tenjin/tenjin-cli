@@ -265,6 +265,14 @@ func (k keyAsker) ask(label string, b project.Build, appKnown bool) (string, err
 			k.say("    Skipped. The placeholder stays where the key belongs, and the checks will say so.")
 			return "", nil
 		}
+		// Something that cannot be a key is not sent to Tenjin.
+		if !verify.LooksLikeKey(key) {
+			if errors.Is(err, io.EOF) {
+				return "", nil
+			}
+			k.say("    That is not an SDK key: those are 24 to 64 capital letters and digits. Copy it again, or press Enter to skip.")
+			continue
+		}
 		verdict := checkGivenKey(k.ctx, k.check, key, b, appKnown)
 		k.verdict("  "+label+", key "+maskKey(key), verdict)
 		if verdict.ok {

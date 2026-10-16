@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -39,8 +41,8 @@ type dataSpec struct {
 	// default, unless a page is asked for.
 	paged    bool
 	allPages bool
-	flags func(*pflag.FlagSet)
-	fetch func(ctx context.Context, api *tenjinapi.Client, args []string, p tenjinapi.Paging) (tenjinapi.Document, error)
+	flags    func(*pflag.FlagSet)
+	fetch    func(ctx context.Context, api *tenjinapi.Client, args []string, p tenjinapi.Paging) (tenjinapi.Document, error)
 }
 
 func dataCmd(opts *options, env *environment, s dataSpec) *cobra.Command {
@@ -50,10 +52,11 @@ func dataCmd(opts *options, env *environment, s dataSpec) *cobra.Command {
 		args = noArgs
 	}
 	cmd := &cobra.Command{
-		Use:   s.use,
-		Short: s.short,
-		Long:  s.long,
-		Args:  args,
+		Use:         s.use,
+		Short:       s.short,
+		Long:        s.long,
+		Args:        args,
+		Annotations: map[string]string{csvAnnotation: "yes"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, err := opts.format(cmd)
 			if err != nil {
@@ -75,7 +78,7 @@ func dataCmd(opts *options, env *environment, s dataSpec) *cobra.Command {
 			if format == render.JSON {
 				return writeRawJSON(cmd.OutOrStdout(), doc)
 			}
-			next, err := writeDocument(cmd.OutOrStdout(), doc, s.view)
+			next, err := writeDocument(cmd.OutOrStdout(), cmd.ErrOrStderr(), format, doc, s.view)
 			if err != nil {
 				return err
 			}
@@ -113,9 +116,43 @@ type item struct {
 	Attributes json.RawMessage `json:"attributes"`
 }
 
-// writeDocument writes a document as a table: a list as rows, one resource
-// as its fields. It reports whether the API has a next page.
-func writeDocument(w io.Writer, doc tenjinapi.Document, v view) (next bool, err error) {
+// csvAnnotation marks the commands that can write CSV.
+const csvAnnotation = "csv"
+
+// writeDocument writes a document as a table, or as CSV: a list as rows, one
+// resource as its fields. It reports whether the API has a next page. A
+// table wider than the terminal is followed, on errw, by how to see it whole.
+func writeDocument(w, errw io.Writer, format render.Format, doc tenjinapi.Document, v view) (next bool, err error) {
+	header, rows, next, err := tableOf(doc, v)
+	if err != nil {
+		return next, err
+	}
+	if format == render.CSV {
+		if header == nil {
+			header = []string{}
+		}
+		return next, render.WriteCSV(w, header, rows)
+	}
+	if header == nil {
+		_, err := fmt.Fprintf(w, "No %s.\n", v.noun)
+		return next, err
+	}
+	var table bytes.Buffer
+	if err := render.WriteTable(&table, render.NewStyler(w), header, rows); err != nil {
+		return next, err
+	}
+	if width := render.Width(w); width > 0 && widest(table.String()) > width && errw != nil {
+		defer func() {
+			_, _ = fmt.Fprintln(errw, "Wider than the terminal: -o csv or --json shows every column whole.")
+		}()
+	}
+	_, err = table.WriteTo(w)
+	return next, err
+}
+
+// tableOf lays a document out as a header and rows. A list with no items has
+// no header.
+func tableOf(doc tenjinapi.Document, v view) (header []string, rows [][]string, next bool, err error) {
 	var body struct {
 		Data  json.RawMessage `json:"data"`
 		Links struct {
@@ -123,28 +160,40 @@ func writeDocument(w io.Writer, doc tenjinapi.Document, v view) (next bool, err 
 		} `json:"links"`
 	}
 	if err := json.Unmarshal(doc, &body); err != nil {
-		return false, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned something that is not a JSON:API document")
+		return nil, nil, false, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned something that is not a JSON:API document")
 	}
 	next = body.Links.Next != ""
 	data := bytes.TrimSpace(body.Data)
 	if len(data) > 0 && data[0] == '[' {
 		var items []item
 		if err := json.Unmarshal(data, &items); err != nil {
-			return next, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned a list that is not one")
+			return nil, nil, next, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned a list that is not one")
 		}
-		return next, writeItems(w, items, v)
+		header, rows = itemRows(items, v)
+		return header, rows, next, nil
 	}
 	var one item
 	if err := json.Unmarshal(data, &one); err != nil || len(data) == 0 {
-		return next, clierr.New(clierr.Upstream, "the Tenjin API's answer holds no data")
+		return nil, nil, next, clierr.New(clierr.Upstream, "the Tenjin API's answer holds no data")
 	}
-	return next, writeItem(w, one)
+	header, rows = itemFields(one)
+	return header, rows, next, nil
 }
 
-func writeItems(w io.Writer, items []item, v view) error {
+var ansi = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// widest is the width of a text's longest line, colour codes left out.
+func widest(text string) int {
+	most := 0
+	for _, line := range strings.Split(ansi.ReplaceAllString(text, ""), "\n") {
+		most = max(most, utf8.RuneCountInString(line))
+	}
+	return most
+}
+
+func itemRows(items []item, v view) ([]string, [][]string) {
 	if len(items) == 0 {
-		_, err := fmt.Fprintf(w, "No %s.\n", v.noun)
-		return err
+		return nil, nil
 	}
 	columns := v.columns
 	if len(columns) == 0 {
@@ -177,12 +226,12 @@ func writeItems(w io.Writer, items []item, v view) error {
 		}
 		rows = append(rows, row)
 	}
-	return render.WriteTable(w, render.NewStyler(w), header, rows)
+	return header, rows
 }
 
-// writeItem writes one resource: its ID, then every attribute in the API's
-// order.
-func writeItem(w io.Writer, it item) error {
+// itemFields lays one resource out as its ID, then every attribute in the
+// API's order.
+func itemFields(it item) ([]string, [][]string) {
 	var attrs map[string]json.RawMessage
 	_ = json.Unmarshal(it.Attributes, &attrs)
 	rows := [][]string{}
@@ -192,7 +241,7 @@ func writeItem(w io.Writer, it item) error {
 	for _, k := range orderedKeys(it.Attributes) {
 		rows = append(rows, []string{strings.ReplaceAll(render.Clean(k), "_", " "), cell(attrs[k])})
 	}
-	return render.WriteTable(w, render.NewStyler(w), []string{"field", "value"}, rows)
+	return []string{"field", "value"}, rows
 }
 
 // orderedKeys returns an object's keys in the order they were sent.

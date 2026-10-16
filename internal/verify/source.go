@@ -332,6 +332,9 @@ var placeholderKey = regexp.MustCompile(`(?i)^$|[<>{}\s]|your|sdk[_-]?key|api[_-
 // digits.
 var wholeKey = regexp.MustCompile(`^[A-Z0-9]{24,64}$`)
 
+// LooksLikeKey reports whether s has the shape of an SDK key.
+func LooksLikeKey(s string) bool { return wholeKey.MatchString(s) }
+
 // isPlaceholder reports whether a key literal is obviously not a real key.
 // Real keys are long runs of letters and digits; one of those is a key even
 // when it happens to contain "TODO" or "XXXX", unless it is one character

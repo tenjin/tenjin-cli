@@ -129,7 +129,8 @@ type writeSpec struct {
 	flags func(*pflag.FlagSet)
 	// prepare checks what the body and fields cannot, may add to the body,
 	// and says what will be done, for the question: "Create the campaign ...".
-	prepare func(args []string, body tenjinapi.Fields) (string, error)
+	// said is the body as the flags that set it, for the question.
+	prepare func(args []string, body tenjinapi.Fields, said string) (string, error)
 	// update refuses an empty body: there would be nothing to change.
 	update bool
 	// destructive asks with no as the default.
@@ -166,11 +167,12 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 			if s.update && len(body) == 0 {
 				return clierr.New(clierr.Usage, "nothing to change: give at least one of %s", fields.flagNames())
 			}
-			what, err := s.prepare(args, body)
+			what, err := s.prepare(args, body, fields.describe(body))
 			if err != nil {
 				return err
 			}
 			if dryRun {
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Would %s. Nothing was sent; the body it would send:\n", lowerFirst(render.Clean(what)))
 				return render.WriteJSON(cmd.OutOrStdout(), body)
 			}
 			if err := confirmChange(cmd, env, yes, what, s.destructive); err != nil {
@@ -187,7 +189,7 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), s.done)
 				return err
 			}
-			_, err = writeDocument(cmd.OutOrStdout(), doc, view{})
+			_, err = writeDocument(cmd.OutOrStdout(), cmd.ErrOrStderr(), render.Table, doc, view{})
 			return err
 		},
 	}
@@ -236,18 +238,44 @@ func lowerFirst(s string) string {
 	return strings.ToLower(s[:1]) + s[1:]
 }
 
-// describe lists a body's fields for the question, in a stable order.
-func describe(body tenjinapi.Fields) string {
-	keys := make([]string, 0, len(body))
-	for k := range body {
-		keys = append(keys, k)
+// describe says a body as the flags that set it, in the order they are
+// listed: --name "Summer sale", --active=false, --param token=abc.
+func (s *fieldSet) describe(body tenjinapi.Fields) string {
+	var parts []string
+	for _, fd := range s.fields {
+		v, ok := body[fd.name]
+		if !ok {
+			continue
+		}
+		switch t := v.(type) {
+		case bool:
+			parts = append(parts, fmt.Sprintf("--%s=%t", fd.flag, t))
+		case map[string]string:
+			keys := make([]string, 0, len(t))
+			for k := range t {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				parts = append(parts, fmt.Sprintf("--%s %s=%s", fd.flag, k, t[k]))
+			}
+		case []int:
+			numbers := make([]string, len(t))
+			for i, n := range t {
+				numbers[i] = fmt.Sprint(n)
+			}
+			parts = append(parts, "--"+fd.flag+" "+strings.Join(numbers, ","))
+		case string:
+			if strings.ContainsAny(t, " \t") || t == "" {
+				parts = append(parts, fmt.Sprintf("--%s %q", fd.flag, t))
+			} else {
+				parts = append(parts, "--"+fd.flag+" "+t)
+			}
+		default:
+			parts = append(parts, fmt.Sprintf("--%s %v", fd.flag, v))
+		}
 	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		parts = append(parts, fmt.Sprintf("%s %v", k, body[k]))
-	}
-	return strings.Join(parts, ", ")
+	return strings.Join(parts, " ")
 }
 
 func newAppsUpdateCmd(opts *options, env *environment) *cobra.Command {
@@ -264,8 +292,8 @@ bundle ID and platform cannot be changed.`,
 			field{flag: "match-strings", name: "match_strings", usage: "strings that match campaigns to the app"},
 			field{flag: "destination-url", name: "destination_url", usage: "where an android_other app is downloaded from"},
 		),
-		prepare: func(args []string, body tenjinapi.Fields) (string, error) {
-			return fmt.Sprintf("Change the app %s: %s", args[0], describe(body)), nil
+		prepare: func(args []string, body tenjinapi.Fields, said string) (string, error) {
+			return fmt.Sprintf("Change the app %s: %s", args[0], said), nil
 		},
 		send: func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 			return api.UpdateApp(ctx, args[0], body)
@@ -279,7 +307,7 @@ func newAppsDeleteCmd(opts *options, env *environment) *cobra.Command {
 		long: `Delete an app. It no longer appears in the dashboard or the API, and its
 SDK keys stop being accepted.`,
 		args: exactArgs(1, "the app's ID, from 'tenjin apps list'"),
-		prepare: func(args []string, _ tenjinapi.Fields) (string, error) {
+		prepare: func(args []string, _ tenjinapi.Fields, said string) (string, error) {
 			return "Delete the app " + args[0], nil
 		},
 		send: func(ctx context.Context, api *tenjinapi.Client, args []string, _ tenjinapi.Fields) (tenjinapi.Document, error) {
@@ -299,7 +327,7 @@ func newCampaignWriteCmds(opts *options, env *environment) []*cobra.Command {
 				field{flag: "ad-account", name: "ad_account_id", usage: "the ad account's ID, instead of --channel"},
 			),
 			flags: appFlag(&app),
-			prepare: func(_ []string, body tenjinapi.Fields) (string, error) {
+			prepare: func(_ []string, body tenjinapi.Fields, said string) (string, error) {
 				if err := requireApp(app); err != nil {
 					return "", err
 				}
@@ -332,8 +360,8 @@ func newCampaignWriteCmds(opts *options, env *environment) []*cobra.Command {
 part of a campaign the API lets change.`,
 			args:   exactArgs(1, "the campaign's ID, from 'tenjin campaigns list'"),
 			fields: newFieldSet(field{flag: "attribution-window", name: "attribution_window", usage: "the click attribution window in seconds; 604800 is 7 days", kind: numberField}),
-			prepare: func(args []string, body tenjinapi.Fields) (string, error) {
-				return fmt.Sprintf("Change the campaign %s: %s", args[0], describe(body)), nil
+			prepare: func(args []string, body tenjinapi.Fields, said string) (string, error) {
+				return fmt.Sprintf("Change the campaign %s: %s", args[0], said), nil
 			},
 			send: func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 				return api.UpdateCampaign(ctx, args[0], body)
@@ -344,7 +372,7 @@ part of a campaign the API lets change.`,
 			long: `Delete a campaign. Tenjin refuses to delete one that has started tracking
 installs.`,
 			args: exactArgs(1, "the campaign's ID, from 'tenjin campaigns list'"),
-			prepare: func(args []string, _ tenjinapi.Fields) (string, error) {
+			prepare: func(args []string, _ tenjinapi.Fields, said string) (string, error) {
 				return "Delete the campaign " + args[0], nil
 			},
 			send: func(ctx context.Context, api *tenjinapi.Client, args []string, _ tenjinapi.Fields) (tenjinapi.Document, error) {
@@ -421,8 +449,8 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 			writeCmd(opts, env, writeSpec{
 				use: "create --app <app-id> --template <template-id>", short: "Create a callback from a template",
 				fields: callbackFields(true), flags: needApp,
-				prepare: func(_ []string, body tenjinapi.Fields) (string, error) {
-					return "Create a callback on app " + app + ": " + describe(body), checkApp()
+				prepare: func(_ []string, body tenjinapi.Fields, said string) (string, error) {
+					return "Create a callback on app " + app + ": " + said, checkApp()
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, _ []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 					doc, err := api.CreateAppCallback(ctx, app, body)
@@ -450,8 +478,8 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 				use: "update <callback-id> --app <app-id>", short: "Change a callback", update: true,
 				args:   exactArgs(1, "the callback's ID, from 'tenjin apps callbacks list'"),
 				fields: callbackFields(false), flags: needApp,
-				prepare: func(args []string, body tenjinapi.Fields) (string, error) {
-					return "Change the callback " + args[0] + ": " + describe(body), checkApp()
+				prepare: func(args []string, body tenjinapi.Fields, said string) (string, error) {
+					return "Change the callback " + args[0] + ": " + said, checkApp()
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 					return api.UpdateAppCallback(ctx, app, args[0], body)
@@ -462,8 +490,8 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 			writeCmd(opts, env, writeSpec{
 				use: "create --app <app-id> --url <url> --event <event> --name <name> --action <action>", short: "Create a server-to-server callback",
 				fields: s2sFields(true), flags: needApp,
-				prepare: func(_ []string, body tenjinapi.Fields) (string, error) {
-					return "Create a server-to-server callback on app " + app + ": " + describe(body), checkApp()
+				prepare: func(_ []string, body tenjinapi.Fields, said string) (string, error) {
+					return "Create a server-to-server callback on app " + app + ": " + said, checkApp()
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, _ []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 					return api.CreateAppS2SCallback(ctx, app, body)
@@ -473,8 +501,8 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 				use: "update <callback-id> --app <app-id>", short: "Change a server-to-server callback", update: true,
 				args:   exactArgs(1, "the callback's ID, from 'tenjin apps s2s-callbacks list'"),
 				fields: s2sFields(false), flags: needApp,
-				prepare: func(args []string, body tenjinapi.Fields) (string, error) {
-					return "Change the server-to-server callback " + args[0] + ": " + describe(body), checkApp()
+				prepare: func(args []string, body tenjinapi.Fields, said string) (string, error) {
+					return "Change the server-to-server callback " + args[0] + ": " + said, checkApp()
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 					return api.UpdateAppS2SCallback(ctx, app, args[0], body)
@@ -485,14 +513,14 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 			writeCmd(opts, env, writeSpec{
 				use: "create --app <app-id> --channel <channel-id> --template <template-id>", short: "Create a callback group from a template",
 				fields: groupFields(true), flags: needAppChannel,
-				prepare: func(_ []string, body tenjinapi.Fields) (string, error) {
+				prepare: func(_ []string, body tenjinapi.Fields, said string) (string, error) {
 					if err := checkAppChannel(); err != nil {
 						return "", err
 					}
 					if body["event"] == nil && body["event_definition_id"] == nil {
 						return "", clierr.New(clierr.Usage, "--event or --event-definition is required")
 					}
-					return fmt.Sprintf("Create a callback group on app %s for channel %d: %s", app, channel, describe(body)), nil
+					return fmt.Sprintf("Create a callback group on app %s for channel %d: %s", app, channel, said), nil
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, _ []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 					return api.CreateAppCallbackGroup(ctx, app, channel, body)
@@ -502,8 +530,8 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 				use: "update <group-id> --app <app-id> --channel <channel-id>", short: "Change a callback group", update: true,
 				args:   exactArgs(1, "the group's ID, from 'tenjin apps callback-groups list'"),
 				fields: groupFields(false), flags: needAppChannel,
-				prepare: func(args []string, body tenjinapi.Fields) (string, error) {
-					return "Change the callback group " + args[0] + ": " + describe(body), checkAppChannel()
+				prepare: func(args []string, body tenjinapi.Fields, said string) (string, error) {
+					return "Change the callback group " + args[0] + ": " + said, checkAppChannel()
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 					return api.UpdateAppCallbackGroup(ctx, app, channel, args[0], body)
@@ -518,8 +546,8 @@ its callback groups for that channel. Check the current ones first with
 'tenjin apps callback-settings get'.`,
 				fields: newFieldSet(field{flag: "setting", name: "callback_settings", usage: "a callback setting", kind: pairsField, required: true}),
 				flags:  needAppChannel,
-				prepare: func(_ []string, body tenjinapi.Fields) (string, error) {
-					return fmt.Sprintf("Change the callback settings of app %s for channel %d: %s", app, channel, describe(body)), checkAppChannel()
+				prepare: func(_ []string, body tenjinapi.Fields, said string) (string, error) {
+					return fmt.Sprintf("Change the callback settings of app %s for channel %d: %s", app, channel, said), checkAppChannel()
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, _ []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 					return api.UpdateAppCallbackSettings(ctx, app, channel, body)
@@ -549,8 +577,8 @@ func newSavedReportWriteCmds(opts *options, env *environment) []*cobra.Command {
 		writeCmd(opts, env, writeSpec{
 			use: "create --type <type> --name <name> --granularity <granularity> --group-by <grouping>", short: "Save a report",
 			fields: reportFields(true),
-			prepare: func(_ []string, body tenjinapi.Fields) (string, error) {
-				return "Save the report " + describe(body), nil
+			prepare: func(_ []string, body tenjinapi.Fields, said string) (string, error) {
+				return "Save the report " + said, nil
 			},
 			send: func(ctx context.Context, api *tenjinapi.Client, _ []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 				return api.CreateSavedReport(ctx, body)
@@ -560,8 +588,8 @@ func newSavedReportWriteCmds(opts *options, env *environment) []*cobra.Command {
 			use: "update <saved-report-id>", short: "Change a saved report", update: true,
 			args:   exactArgs(1, "the saved report's ID, from 'tenjin saved-reports list'"),
 			fields: reportFields(false),
-			prepare: func(args []string, body tenjinapi.Fields) (string, error) {
-				return "Change the saved report " + args[0] + ": " + describe(body), nil
+			prepare: func(args []string, body tenjinapi.Fields, said string) (string, error) {
+				return "Change the saved report " + args[0] + ": " + said, nil
 			},
 			send: func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 				return api.UpdateSavedReport(ctx, args[0], body)
@@ -570,7 +598,7 @@ func newSavedReportWriteCmds(opts *options, env *environment) []*cobra.Command {
 		writeCmd(opts, env, writeSpec{
 			use: "delete <saved-report-id>", short: "Delete a saved report", destructive: true, done: "Deleted.",
 			args: exactArgs(1, "the saved report's ID, from 'tenjin saved-reports list'"),
-			prepare: func(args []string, _ tenjinapi.Fields) (string, error) {
+			prepare: func(args []string, _ tenjinapi.Fields, said string) (string, error) {
 				return "Delete the saved report " + args[0], nil
 			},
 			send: func(ctx context.Context, api *tenjinapi.Client, args []string, _ tenjinapi.Fields) (tenjinapi.Document, error) {

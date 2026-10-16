@@ -220,6 +220,8 @@ tenjin campaigns create --app <app-id> --name "Summer UA" --channel <channel-id>
 
 Every problem comes with a fix that names the file, the line and the version. The key check sends one request to Tenjin and no event; `--offline` skips it, along with the once-a-day lookup of the newest SDK releases. `--strict` also fails on warnings.
 
+`doctor` never changes the project itself. At a terminal, when Claude Code or Codex is installed and there is something to fix in code, it offers to have your agent fix it (no by default), then checks again. `--agent claude` or `--agent codex` fixes without asking; `--agent none` never offers. The agent works under the same limits as in `setup` and never sees an SDK key.
+
 ### Verifying a launch
 
 ```sh
@@ -282,7 +284,7 @@ For Claude Code, this writes a skill to `.claude/skills/tenjin-cli/` in the proj
 
 Every command except `setup` is built to be driven by a program:
 
-- `--json` (or `-o json`) writes only the result to stdout; everything else goes to stderr.
+- `--json` (or `-o json`) writes only the result to stdout; everything else goes to stderr. The data commands also take `-o csv`, for a spreadsheet.
 - A command never prompts when stdin is not a terminal. Anything that creates something needs `--yes` or a flag.
 - A failure with `--json` is written to stderr as `{"error": {"code", "message", "hint"}}`.
 - The JSON of `project detect` and `doctor` is stable: fields are added, never renamed or removed.

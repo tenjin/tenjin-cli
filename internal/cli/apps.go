@@ -92,7 +92,7 @@ func writeAppDetail(w io.Writer, a appDetail) error {
 	if a.SendingEvents {
 		events = "being received"
 	}
-	_, err := fmt.Fprintf(w, "Name      %s\nPlatform  %s\nBundle ID %s\nApp ID    %s\nEvents    %s\nSDK keys  %s\n",
+	_, err := fmt.Fprintf(w, "Name       %s\nPlatform   %s\nBundle ID  %s\nApp ID     %s\nEvents     %s\nSDK keys   %s\n",
 		a.Name, a.Platform, a.BundleID, a.ID, events, a.DashboardURL)
 	return err
 }

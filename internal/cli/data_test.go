@@ -244,3 +244,20 @@ func TestReportsReadEveryPage(t *testing.T) {
 		t.Errorf("--per-page 5000: exit = %d", code)
 	}
 }
+
+// -o csv writes a data command's rows for a spreadsheet; other commands
+// refuse it.
+func TestDataCSV(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	h.fake.data = map[string]func(*http.Request) (int, any){"/v2/reports/spend": func(*http.Request) (int, any) {
+		return http.StatusOK, json.RawMessage(`{"data":[{"type":"report","attributes":{"date":"2026-10-01","name":"Sample, Inc.","spend":12.5}}]}`)
+	}}
+	code, stdout, _ := h.run("reports", "spend", "--from", "2026-10-01", "--to", "2026-10-01", "-o", "csv")
+	if want := "date,name,spend\n2026-10-01,\"Sample, Inc.\",12.5\n"; code != 0 || stdout != want {
+		t.Errorf("exit = %d, stdout = %q, want %q", code, stdout, want)
+	}
+	if code, _, stderr := h.run("doctor", "-o", "csv"); code != 2 || !strings.Contains(stderr, "data commands") {
+		t.Errorf("doctor -o csv: exit = %d, stderr = %q", code, stderr)
+	}
+}

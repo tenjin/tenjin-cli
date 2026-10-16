@@ -2,8 +2,10 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -54,7 +56,7 @@ func loadProject(args []string) (*project.Project, error) {
 	}
 	p, err := project.Detect(dir)
 	if err != nil {
-		return nil, clierr.Wrap(clierr.NotFound, err, "cannot read %s: %v", dir, err)
+		return nil, clierr.Wrap(clierr.NotFound, err, "cannot read %s: %v", dir, plainOSError(err))
 	}
 	if p.Framework == project.Unknown && p.Library == nil {
 		e := clierr.New(clierr.NotFound, "no mobile project found in %s", p.Root)
@@ -83,7 +85,7 @@ func writeProject(w io.Writer, p *project.Project) error {
 	p = forPeople(p)
 	style := render.NewStyler(w)
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s %s\n", style.Bold("Project   "), p.Root)
+	fmt.Fprintf(&b, "%s %s\n", style.Bold("Project    "), p.Root)
 	// A library is not an app: what an app would show here is the example
 	// app's, which is a project of its own.
 	if lib := p.Library; lib != nil {
@@ -91,20 +93,20 @@ func writeProject(w io.Writer, p *project.Project) error {
 		if lib.Name != "" {
 			name = lib.Name + ", a " + name
 		}
-		fmt.Fprintf(&b, "%s %s that wraps %s %s\n", style.Bold("Library   "), name, strings.TrimSpace(lib.Tenjin.Package+" "+lib.Tenjin.Version), style.Dim("("+lib.Source+")"))
+		fmt.Fprintf(&b, "%s %s that wraps %s %s\n", style.Bold("Library    "), name, strings.TrimSpace(lib.Tenjin.Package+" "+lib.Tenjin.Version), style.Dim("("+lib.Source+")"))
 		if lib.Example != "" {
-			fmt.Fprintf(&b, "%s %s %s\n", style.Bold("Example   "), lib.Example, style.Dim("(an app of its own: pass its path to see it)"))
+			fmt.Fprintf(&b, "%s %s %s\n", style.Bold("Example    "), lib.Example, style.Dim("(an app of its own: pass its path to see it)"))
 		}
 		_, err := io.WriteString(w, b.String())
 		return err
 	}
-	fmt.Fprintf(&b, "%s %s\n", style.Bold("Framework "), style.Accent(frameworkNames[p.Framework]))
+	fmt.Fprintf(&b, "%s %s\n", style.Bold("Framework  "), style.Accent(frameworkNames[p.Framework]))
 
 	if len(p.Tenjin) == 0 {
-		fmt.Fprintf(&b, "%s %s\n", style.Bold("Tenjin SDK"), style.Yellow("not found"))
+		fmt.Fprintf(&b, "%s %s\n", style.Bold("Tenjin SDK "), style.Yellow("not found"))
 	}
 	for _, i := range p.Tenjin {
-		fmt.Fprintf(&b, "%s %s %s\n", style.Bold("Tenjin SDK"), style.Green(strings.TrimSpace(i.Package+" "+i.Version)), style.Dim("("+i.Source+")"))
+		fmt.Fprintf(&b, "%s %s %s\n", style.Bold("Tenjin SDK "), style.Green(strings.TrimSpace(i.Package+" "+i.Version)), style.Dim("("+i.Source+")"))
 	}
 
 	if len(p.Targets) > 0 {
@@ -243,4 +245,15 @@ func forPeople[T any](v *T) *T {
 	}
 	render.CleanAll(&c)
 	return &c
+}
+
+// plainOSError is a file error without the operation and path Go puts in
+// front ("stat demo/x: no such file or directory"), which the message
+// already says.
+func plainOSError(err error) error {
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) {
+		return pathErr.Err
+	}
+	return err
 }
