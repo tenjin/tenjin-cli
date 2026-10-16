@@ -18,6 +18,10 @@ on:
         required: true
 permissions:
   contents: write
+  # Build provenance for the archives: a signed statement that this
+  # workflow built them, from this commit.
+  id-token: write
+  attestations: write
 jobs:
   test:
     # Every test, install and snapshot job, on Linux, macOS and Windows, on
@@ -63,6 +67,15 @@ jobs:
           GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ steps.tap-token.outputs.token }}
+      - name: Attest
+        # Anyone can check a download came from this workflow:
+        # gh attestation verify <archive> --repo tenjin/tenjin-cli
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
       - name: Publish
         # GoReleaser fills release-please's draft and leaves it a draft, so
         # the release goes public, and becomes the latest the install scripts

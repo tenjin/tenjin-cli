@@ -352,6 +352,7 @@ func TestHelpIsStyledOnATerminal(t *testing.T) {
 	}
 	for _, want := range []string{
 		"\x1b[1;38;5;37mYour Tenjin data:\x1b[0m", // a section title
+		"  \x1b[38;5;37msaved-reports\x1b[0m",     // the longest name, one space from its summary
 		"  \x1b[38;5;37msetup\x1b[0m",             // a command name
 		"\x1b[38;5;37m--json\x1b[0m",              // a flag
 	} {
