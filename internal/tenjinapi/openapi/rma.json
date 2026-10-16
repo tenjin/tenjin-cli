@@ -623,7 +623,8 @@
         "type": "object",
         "properties": {
           "data": {
-            "type": "object"
+            "type": "array",
+            "items": {}
           },
           "links": {
             "$ref": "#/components/schemas/DefaultLinks"
@@ -1168,9 +1169,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "string",
-                        "enum": [
-                          "app_id"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -1281,9 +1290,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "string",
-                        "enum": [
-                          "ad_network_id"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -1439,9 +1456,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "string",
-                        "enum": [
-                          "campaign_id"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -1536,9 +1561,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "string",
-                        "enum": [
-                          "site_id"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -1633,9 +1666,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "string",
-                        "enum": [
-                          "country"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -1774,9 +1815,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "string",
-                        "enum": [
-                          "ad_network_app"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -1920,9 +1969,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "string",
-                        "enum": [
-                          "ad_network_app_country"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -2082,9 +2139,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "string",
-                        "enum": [
-                          "campaign_country"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -2222,9 +2287,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "string",
-                        "enum": [
-                          "app_id"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -2335,9 +2408,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "string",
-                        "enum": [
-                          "ad_network_id"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -2427,15 +2508,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "enum": [
-                            "country"
-                          ]
-                        },
-                        "default": [
-                          "country"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -2584,17 +2667,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "enum": [
-                            "ad_network_id",
-                            "app_id"
-                          ]
-                        },
-                        "default": [
-                          "ad_network_id",
-                          "app_id"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -2748,19 +2831,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "enum": [
-                            "ad_network_id",
-                            "app_id",
-                            "country"
-                          ]
-                        },
-                        "default": [
-                          "ad_network_id",
-                          "app_id",
-                          "country"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -2920,15 +3001,17 @@
                     "type": "object",
                     "properties": {
                       "group_by": {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "enum": [
-                            "ad_placement"
-                          ]
-                        },
-                        "default": [
-                          "ad_placement"
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
                         ]
                       }
                     }
@@ -3150,20 +3233,18 @@
                         }
                       },
                       "group_by": {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "enum": [
-                            "app_id",
-                            "ad_network_id",
-                            "campaign_id",
-                            "conversion_value",
-                            "sk_ad_network_id",
-                            "sk_campaign_id",
-                            "sk_source_app_id",
-                            "fidelity_type"
-                          ]
-                        }
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        ]
                       },
                       "app_ids": {
                         "type": "array",
@@ -3397,19 +3478,18 @@
                         }
                       },
                       "group_by": {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "enum": [
-                            "app_id",
-                            "ad_network_id",
-                            "conversion_value",
-                            "sk_ad_network_id",
-                            "sk_campaign_id",
-                            "sk_source_app_id",
-                            "fidelity_type"
-                          ]
-                        }
+                        "description": "What each row is grouped by: one name, or a list of names when the report is grouped by several.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        ]
                       },
                       "app_ids": {
                         "type": "array",

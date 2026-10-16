@@ -168,7 +168,7 @@ Changes are commands too. Each sends only the fields given as flags, asks before
 | `tenjin campaigns create --app <id> --name <name> --channel <id>` | Create a campaign and its tracking links; `--ad-account` instead of `--channel` |
 | `tenjin campaigns update <id> --attribution-window <seconds>`, `delete <id>` | Change a campaign's attribution window; delete one that has not tracked installs |
 | `tenjin apps callbacks create --app <id> --template <id>`, `update <id>` | Callbacks from a channel's templates; `--param key=value` for its parameters |
-| `tenjin apps s2s-callbacks create --app <id> --url <url> --event <event>`, `update <id>` | Server-to-server callbacks |
+| `tenjin apps s2s-callbacks create --app <id> --url <url> --event <event> --name <name> --action ping`, `update <id>` | Server-to-server callbacks |
 | `tenjin apps callback-groups create --app <id> --channel <id> --template <id>`, `update <id>` | Callback groups; `--setting key=value` for their settings |
 | `tenjin apps callback-settings update --app <id> --channel <id> --setting <key=value>` | An app's callback settings for one channel |
 | `tenjin saved-reports create --type <type> --name <name> --granularity <g> --group-by <g>`, `update <id>`, `delete <id>` | Saved reports |

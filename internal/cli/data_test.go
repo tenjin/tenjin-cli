@@ -114,7 +114,7 @@ func TestDataTables(t *testing.T) {
 			}}}}
 		},
 		"/v2/reports/spend": func(*http.Request) (int, any) {
-			return http.StatusOK, json.RawMessage(`{"data":[{"type":"report","attributes":{"date":"2026-10-01","name":"Sample","spend":12.5,"installs":40}}]}`)
+			return http.StatusOK, json.RawMessage(`{"data":[{"type":"report","attributes":{"date":"2026-10-01","name":"Sample","app_icon_url":"https://img.example/a.png","spend":12.5,"installs":40}}]}`)
 		},
 		"/v2/campaigns/" + testOther: func(*http.Request) (int, any) {
 			return http.StatusOK, json.RawMessage(`{"data":{"id":"` + testOther + `","type":"campaign","attributes":{"name":"Summer","hidden":false,"click_tracking_url":"https://track.example/c"}}}`)

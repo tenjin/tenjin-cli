@@ -237,11 +237,25 @@ func TestLiveRead(t *testing.T) {
 	})
 	t.Run("reports", func(t *testing.T) {
 		end := time.Now().UTC()
-		from, to := openapi_types.Date{Time: end.AddDate(0, 0, -7)}, openapi_types.Date{Time: end}
-		ok(t, "GET /reports/spend", wrap(l.rma.GetReportsSpendWithResponse(l.ctx, &rma.GetReportsSpendParams{StartDate: from, EndDate: to, PerPage: new(5)})))
-		ok(t, "GET /reports/ad_revenue", wrap(l.rma.GetReportsAdRevenueWithResponse(l.ctx, &rma.GetReportsAdRevenueParams{StartDate: from, EndDate: to, PerPage: new(5)})))
-		ok(t, "GET /reports/sk_ad_network", wrap(l.rma.GetReportsSkAdNetworkWithResponse(l.ctx, &rma.GetReportsSkAdNetworkParams{StartDate: from, EndDate: to, PerPage: new(5)})))
-		ok(t, "GET /reports/skan_apple", wrap(l.rma.GetReportsSkanAppleWithResponse(l.ctx, &rma.GetReportsSkanAppleParams{StartDate: from, EndDate: to, PerPage: new(5)})))
+		from, to := openapi_types.Date{Time: end.AddDate(0, 0, -30)}, openapi_types.Date{Time: end}
+		// Each grouping by one name and by several: meta.group_by is a string
+		// for one and a list for several.
+		for _, group := range []string{"app", "channel,app"} {
+			t.Run(group, func(t *testing.T) {
+				spend := rma.GetReportsSpendParamsGroupBy(group)
+				ok(t, "GET /reports/spend", wrap(l.rma.GetReportsSpendWithResponse(l.ctx, &rma.GetReportsSpendParams{StartDate: from, EndDate: to, PerPage: new(5), GroupBy: &spend})))
+				revenue := rma.GetReportsAdRevenueParamsGroupBy(group)
+				ok(t, "GET /reports/ad_revenue", wrap(l.rma.GetReportsAdRevenueWithResponse(l.ctx, &rma.GetReportsAdRevenueParams{StartDate: from, EndDate: to, PerPage: new(5), GroupBy: &revenue})))
+			})
+		}
+		for _, group := range []string{"app", "app,channel"} {
+			t.Run("skadnetwork "+group, func(t *testing.T) {
+				sk := rma.GetReportsSkAdNetworkParamsGroupBy(group)
+				ok(t, "GET /reports/sk_ad_network", wrap(l.rma.GetReportsSkAdNetworkWithResponse(l.ctx, &rma.GetReportsSkAdNetworkParams{StartDate: from, EndDate: to, PerPage: new(5), GroupBy: &sk})))
+				skan := rma.GetReportsSkanAppleParamsGroupBy(group)
+				ok(t, "GET /reports/skan_apple", wrap(l.rma.GetReportsSkanAppleWithResponse(l.ctx, &rma.GetReportsSkanAppleParams{StartDate: from, EndDate: to, PerPage: new(5), GroupBy: &skan})))
+			})
+		}
 		body := ok(t, "GET /saved_reports", wrap(l.rma.GetSavedReportsWithResponse(l.ctx, nil)))
 		if id := firstID(body); id != "" {
 			ok(t, "GET /saved_reports/{id}", wrap(l.rma.GetSavedReportsIdWithResponse(l.ctx, mustUUID(t, id))))
@@ -319,8 +333,15 @@ func TestLiveWrite(t *testing.T) {
 		if template == "" {
 			t.Skip("the new app has no callback templates")
 		}
+		// A template names the customer parameters a callback must give.
+		params := map[string]string{}
+		if required, ok := items(templates)[0]["attributes"].(map[string]any)["customer_parameters"].(map[string]any); ok {
+			for key := range required {
+				params[key] = "tenjin-cli-live-test"
+			}
+		}
 		body := ok(t, "POST /apps/{id}/callbacks", wrap(l.cma.PostAppsAppIdCallbacksWithBodyWithResponse(l.ctx, app, contentJSON, jsonBody(map[string]any{
-			"callback_template_id": template, "name": name, "event": "open", "active": false,
+			"callback_template_id": template, "name": name, "event": "open", "active": false, "customer_parameters": params,
 		}))))
 		id := mustUUID(t, firstID(body))
 		ok(t, "GET /apps/{id}/callbacks/{id}", wrap(l.cma.GetAppsAppIdCallbacksIdWithResponse(l.ctx, app, id)))
