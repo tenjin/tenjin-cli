@@ -1,9 +1,11 @@
 // Package tenjinapi holds operations on Tenjin's Campaign Management API:
-// typed functions that know nothing about terminals. It is the part of this
-// repository meant to move into the module shared with the MCP server.
+// typed functions that know nothing about terminals. They call the clients
+// generated from the API's specs (cma, rma, openapi), which are the part of
+// this repository meant to move into the module shared with the MCP server.
 package tenjinapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,11 +17,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/tenjin/tenjin-cli/internal/clierr"
+	"github.com/tenjin/tenjin-cli/internal/tenjinapi/cma"
 )
 
 // maxPageSize is the largest page the API serves. Its default is 25.
 const maxPageSize = 1000
+
+// maxResponse caps what is read of one response.
+const maxResponse = 32 << 20
 
 // TokenSource supplies the bearer token for each request.
 type TokenSource interface {
@@ -44,7 +52,9 @@ func New(baseURL, userAgent string, tokens TokenSource) *Client {
 	}
 }
 
-// App is a Tenjin app. One app is one bundle ID on one platform.
+// App is a Tenjin app. One app is one bundle ID on one platform. It holds
+// only what the CLI shows: the API also returns shared secrets on an app, and
+// copying out these fields alone keeps them out of every output.
 type App struct {
 	ID            string `json:"id"`
 	Name          string `json:"name"`
@@ -55,51 +65,71 @@ type App struct {
 	CreatedAt     string `json:"created_at,omitempty"`
 }
 
-// resource is one JSON:API object. Only the attributes the CLI shows are
-// decoded: the API also returns shared secrets on an app, and leaving them
-// out here keeps them out of every output.
-type resource struct {
-	ID         string `json:"id"`
-	Attributes struct {
-		Name          string `json:"name"`
-		BundleID      string `json:"bundle_id"`
-		Platform      string `json:"platform"`
-		StoreID       string `json:"store_id"`
-		SendingEvents bool   `json:"sending_events"`
-		CreatedAt     string `json:"created_at"`
-	} `json:"attributes"`
-}
-
-func (r resource) app() App {
+func appFrom(r cma.App) App {
+	var app App
+	if r.Id != nil {
+		app.ID = r.Id.String()
+	}
 	a := r.Attributes
-	return App{ID: r.ID, Name: a.Name, BundleID: a.BundleID, Platform: a.Platform, StoreID: a.StoreID, SendingEvents: a.SendingEvents, CreatedAt: a.CreatedAt}
+	if a == nil {
+		return app
+	}
+	app.Name, app.BundleID, app.StoreID = value(a.Name), value(a.BundleId), value(a.StoreId)
+	if a.Platform != nil {
+		app.Platform = string(*a.Platform)
+	}
+	app.SendingEvents = a.SendingEvents != nil && *a.SendingEvents
+	if a.CreatedAt != nil {
+		app.CreatedAt = a.CreatedAt.Format(time.RFC3339)
+	}
+	return app
 }
 
 // ListApps returns every app the user can see, following all pages. query
 // filters by name; empty means all.
 func (c *Client) ListApps(ctx context.Context, query string) ([]App, error) {
+	api, err := c.api(ctx)
+	if err != nil {
+		return nil, err
+	}
 	apps := []App{}
 	for page := 1; ; page++ {
-		params := url.Values{"page": {fmt.Sprint(page)}, "per_page": {fmt.Sprint(maxPageSize)}}
+		params := &cma.GetAppsParams{Page: &page, PerPage: new(maxPageSize)}
 		if query != "" {
-			params.Set("query", query)
+			params.Query = &query
 		}
-		var body struct {
-			Data  []resource `json:"data"`
-			Links struct {
-				Next string `json:"next"`
-			} `json:"links"`
+		resp, err := api.GetAppsWithResponse(ctx, params)
+		if err != nil {
+			return nil, callError(err)
 		}
-		if err := c.do(ctx, http.MethodGet, "/apps?"+params.Encode(), nil, &body); err != nil {
+		if err := statusError(resp.HTTPResponse, resp.Body, resp.JSON200 != nil); err != nil {
 			return nil, err
 		}
-		for _, r := range body.Data {
-			apps = append(apps, r.app())
+		data := value(resp.JSON200.Data)
+		for _, r := range data {
+			apps = append(apps, appFrom(r))
 		}
-		if body.Links.Next == "" || len(body.Data) == 0 {
+		if len(data) == 0 || !hasNext(resp.JSON200.Links) {
 			return apps, nil
 		}
 	}
+}
+
+// hasNext reports whether a list response links to a further page. The spec
+// allows links with or without pagination, so the link is read from the raw
+// object.
+func hasNext(links interface{ MarshalJSON() ([]byte, error) }) bool {
+	if links == nil {
+		return false
+	}
+	raw, err := links.MarshalJSON()
+	if err != nil {
+		return false
+	}
+	var l struct {
+		Next string `json:"next"`
+	}
+	return json.Unmarshal(raw, &l) == nil && l.Next != ""
 }
 
 // FindApp returns the app with this bundle ID and platform, or nil. The API
@@ -120,13 +150,22 @@ func (c *Client) FindApp(ctx context.Context, bundleID, platform string) (*App, 
 
 // GetApp returns one app by ID.
 func (c *Client) GetApp(ctx context.Context, id string) (*App, error) {
-	var body struct {
-		Data resource `json:"data"`
+	appID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, clierr.New(clierr.NotFound, "no app has the ID %q: app IDs look like 3f2a9c1e-5b7d-4e8a-9c21-7d4e5f6a8b90", id)
 	}
-	if err := c.do(ctx, http.MethodGet, "/apps/"+url.PathEscape(id), nil, &body); err != nil {
+	api, err := c.api(ctx)
+	if err != nil {
 		return nil, err
 	}
-	app := body.Data.app()
+	resp, err := api.GetAppsIdWithResponse(ctx, appID)
+	if err != nil {
+		return nil, callError(err)
+	}
+	if err := statusError(resp.HTTPResponse, resp.Body, resp.JSON200 != nil && resp.JSON200.Data != nil); err != nil {
+		return nil, err
+	}
+	app := appFrom(*resp.JSON200.Data)
 	return &app, nil
 }
 
@@ -148,28 +187,35 @@ var ErrKeysNotServed = errors.New("the Tenjin API does not serve SDK keys")
 // app with none returns an empty list. The app must be one that exists, so
 // "not found" here means the endpoint is missing, and is ErrKeysNotServed.
 func (c *Client) ListSDKKeys(ctx context.Context, appID string) ([]SDKKey, error) {
-	var body struct {
-		Data []struct {
-			ID         string `json:"id"`
-			Attributes struct {
-				Name      string `json:"name"`
-				Key       string `json:"key"`
-				CreatedAt string `json:"created_at"`
-			} `json:"attributes"`
-		} `json:"data"`
+	id, err := uuid.Parse(appID)
+	if err != nil {
+		return nil, clierr.New(clierr.NotFound, "no app has the ID %q", appID)
 	}
-	if err := c.do(ctx, http.MethodGet, "/apps/"+url.PathEscape(appID)+"/sdk_keys", nil, &body); err != nil {
+	api, err := c.api(ctx)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := api.GetAppsAppIdSdkKeysWithResponse(ctx, id, &cma.GetAppsAppIdSdkKeysParams{PerPage: new(maxPageSize)})
+	if err != nil {
+		return nil, callError(err)
+	}
+	if err := statusError(resp.HTTPResponse, resp.Body, resp.JSON200 != nil); err != nil {
 		if clierr.From(err).Kind == clierr.NotFound {
 			return nil, ErrKeysNotServed
 		}
 		return nil, err
 	}
-	keys := make([]SDKKey, 0, len(body.Data))
-	for _, r := range body.Data {
-		if r.Attributes.Key == "" {
+	data := value(resp.JSON200.Data)
+	keys := make([]SDKKey, 0, len(data))
+	for _, r := range data {
+		if r.Attributes == nil || value(r.Attributes.Key) == "" {
 			continue
 		}
-		keys = append(keys, SDKKey{ID: r.ID, Name: r.Attributes.Name, Value: r.Attributes.Key, CreatedAt: r.Attributes.CreatedAt})
+		key := SDKKey{ID: value(r.Id), Name: value(r.Attributes.Name), Value: *r.Attributes.Key}
+		if r.Attributes.CreatedAt != nil {
+			key.CreatedAt = r.Attributes.CreatedAt.Format(time.RFC3339)
+		}
+		keys = append(keys, key)
 	}
 	return keys, nil
 }
@@ -190,17 +236,28 @@ type NewApp struct {
 // created false: creation is not idempotent on the server, so this makes it
 // so.
 func (c *Client) CreateApp(ctx context.Context, in NewApp) (app *App, created bool, err error) {
+	// The body is written here, not from the spec's type: the spec requires
+	// a name, bundle ID and platform, and leaves out store_url, which the API
+	// accepts instead of them.
 	request := map[string]string{}
 	for field, value := range map[string]string{"name": in.Name, "bundle_id": in.BundleID, "platform": in.Platform, "store_url": in.StoreURL} {
 		if value != "" {
 			request[field] = value
 		}
 	}
-	var body struct {
-		Data resource `json:"data"`
-	}
-	err = c.do(ctx, http.MethodPost, "/apps", request, &body)
+	raw, err := json.Marshal(request)
 	if err != nil {
+		return nil, false, err
+	}
+	api, err := c.api(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	resp, err := api.PostAppsWithBodyWithResponse(ctx, "application/json", bytes.NewReader(raw))
+	if err != nil {
+		return nil, false, callError(err)
+	}
+	if err := statusError(resp.HTTPResponse, resp.Body, resp.JSON201 != nil && resp.JSON201.Data != nil); err != nil {
 		// The server reports a duplicate as a plain 400 with the existing
 		// app's ID inside the message.
 		if m := existingAppID.FindStringSubmatch(err.Error()); m != nil {
@@ -212,53 +269,46 @@ func (c *Client) CreateApp(ctx context.Context, in NewApp) (app *App, created bo
 		}
 		return nil, false, err
 	}
-	created = true
-	result := body.Data.app()
-	return &result, created, nil
+	result := appFrom(*resp.JSON201.Data)
+	return &result, true, nil
 }
 
-// do sends a request and decodes a JSON response into out.
-func (c *Client) do(ctx context.Context, method, path string, in, out any) error {
+// api returns the generated client, signed in for this call.
+func (c *Client) api(ctx context.Context) (*cma.ClientWithResponses, error) {
 	token, err := c.Tokens.Token(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	var payload io.Reader
-	if in != nil {
-		raw, err := json.Marshal(in)
-		if err != nil {
-			return err
-		}
-		payload = strings.NewReader(string(raw))
-	}
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, payload)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", c.UserAgent)
-	if in != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
+	httpClient := *c.HTTP
+	httpClient.Transport = limitedBody{next: transportOf(c.HTTP)}
+	return cma.NewClientWithResponses(c.BaseURL,
+		cma.WithHTTPClient(&httpClient),
+		cma.WithRequestEditorFn(func(_ context.Context, req *http.Request) error {
+			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set("Accept", "application/json")
+			req.Header.Set("User-Agent", c.UserAgent)
+			return nil
+		}))
+}
 
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
+// callError is a call that got no usable response: the request failed, or
+// the body did not decode as the spec says.
+func callError(err error) error {
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
 		return clierr.Wrap(clierr.Upstream, err, "could not reach the Tenjin API: %v", err)
 	}
-	defer func() { _ = resp.Body.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 32<<20))
-	if err != nil {
-		return clierr.Wrap(clierr.Upstream, err, "could not read the Tenjin API's response: %v", err)
-	}
+	return clierr.Wrap(clierr.Upstream, err, "could not read the Tenjin API's response: %v", err)
+}
+
+// statusError classifies a response. decoded says whether the success body
+// the call expects was there.
+func statusError(resp *http.Response, body []byte, decoded bool) error {
 	if resp.StatusCode/100 != 2 {
-		return apiError(resp, raw)
+		return apiError(resp, body)
 	}
-	if out == nil {
-		return nil
-	}
-	if err := json.Unmarshal(raw, out); err != nil {
-		return clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned something that is not JSON (HTTP %d)", resp.StatusCode)
+	if !decoded {
+		return clierr.New(clierr.Upstream, "the Tenjin API returned something that is not JSON (HTTP %d)", resp.StatusCode)
 	}
 	return nil
 }
@@ -267,6 +317,7 @@ func (c *Client) do(ctx context.Context, method, path string, in, out any) error
 // used both for an insufficient role and for a token it cannot decode, and
 // 400 doubles as "not found".
 func apiError(resp *http.Response, raw []byte) error {
+	status := resp.StatusCode
 	var body struct {
 		Error string `json:"error"`
 	}
@@ -281,27 +332,57 @@ func apiError(resp *http.Response, raw []byte) error {
 	signIn := "Run 'tenjin login'."
 
 	switch {
-	case resp.StatusCode == http.StatusUnauthorized, resp.StatusCode == 498,
-		resp.StatusCode == http.StatusForbidden && strings.Contains(message, "DecodeError"):
+	case status == http.StatusUnauthorized, status == 498,
+		status == http.StatusForbidden && strings.Contains(message, "DecodeError"):
 		return clierr.New(clierr.NotSignedIn, "Tenjin did not accept the saved sign-in").WithHint("%s", signIn)
-	case resp.StatusCode == http.StatusForbidden:
+	case status == http.StatusForbidden:
 		return clierr.New(clierr.Permission, "your Tenjin role does not allow this").
 			WithHint("Creating and changing apps needs a manager role in the organization. Ask a manager, or use an app that already exists.")
-	case resp.StatusCode == http.StatusNotFound,
-		resp.StatusCode == http.StatusBadRequest && strings.Contains(strings.ToLower(message), "not found"):
+	case status == http.StatusNotFound,
+		status == http.StatusBadRequest && strings.Contains(strings.ToLower(message), "not found"):
 		return clierr.New(clierr.NotFound, "%s", firstNonEmpty(message, "not found"))
-	case resp.StatusCode == http.StatusTooManyRequests:
+	case status == http.StatusTooManyRequests:
 		e := clierr.New(clierr.RateLimited, "Tenjin is rate limiting this token")
 		if after := resp.Header.Get("X-Retry-After"); after != "" {
 			return e.WithHint("Retry in %s seconds.", after)
 		}
 		return e
-	case resp.StatusCode == http.StatusServiceUnavailable:
+	case status == http.StatusServiceUnavailable:
 		return clierr.New(clierr.Upstream, "Tenjin is in read-only maintenance: %s", firstNonEmpty(message, "try again later"))
-	case resp.StatusCode >= 500:
-		return clierr.New(clierr.Upstream, "the Tenjin API failed (HTTP %d)", resp.StatusCode)
+	case status >= 500:
+		return clierr.New(clierr.Upstream, "the Tenjin API failed (HTTP %d)", status)
 	}
-	return clierr.New(clierr.Internal, "%s", firstNonEmpty(message, fmt.Sprintf("the Tenjin API refused the request (HTTP %d)", resp.StatusCode)))
+	return clierr.New(clierr.Internal, "%s", firstNonEmpty(message, fmt.Sprintf("the Tenjin API refused the request (HTTP %d)", status)))
+}
+
+// limitedBody caps each response body at maxResponse.
+type limitedBody struct{ next http.RoundTripper }
+
+func (l limitedBody) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := l.next.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+	resp.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.LimitReader(resp.Body, maxResponse), resp.Body}
+	return resp, nil
+}
+
+func transportOf(c *http.Client) http.RoundTripper {
+	if c.Transport != nil {
+		return c.Transport
+	}
+	return http.DefaultTransport
+}
+
+func value[T any](p *T) T {
+	var zero T
+	if p == nil {
+		return zero
+	}
+	return *p
 }
 
 func firstNonEmpty(values ...string) string {

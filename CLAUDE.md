@@ -10,6 +10,7 @@ This repository is meant to be public. Keep internal details (private repos, int
 make build      # bin/tenjin, with version stamped in
 make test       # go test -race ./...
 make lint       # gofmt check + golangci-lint
+make generate   # the API clients, from internal/tenjinapi/openapi (oapi-codegen v2.7.1)
 make release-snapshot   # GoReleaser, locally: every archive (with THIRD_PARTY_NOTICES.md) and the cask into dist/, nothing published
 go test -tags keychain ./internal/session   # opt-in: writes to the real system keychain
 go test -tags realagent -run RealClaudeCode -v ./internal/cli   # opt-in: starts the real Claude Code (setup, then the skill); needs `make build`
@@ -34,7 +35,7 @@ internal/keyfill      finds and fills the SDK key placeholders agents leave
 internal/devicelog    parses the SDK's log lines (Android logcat, iOS log and console); reads them through adb, simctl, or devicectl on an iPhone
 internal/track        the SDK key check and the device lookup against Tenjin's tracking service (track.tenjin.com)
 internal/transport    every HTTP client's transport: retries where safe, and the --verbose log
-internal/tenjinapi    API operations (apps); destined for the shared module
+internal/tenjinapi    API operations (apps, SDK keys) over the clients generated from the API's specs (openapi/, cma/, rma/: the same specs and edits as the MCP server's); the seed of the shared module
 internal/oauth        browser sign-in: PKCE on a loopback port, then token exchange
 internal/session      credential store (keychain, file fallback) and token refresh
 internal/config       service URLs per environment
@@ -63,13 +64,13 @@ docs/adr              architecture decisions
 - **`setup` ends on a real launch.** Its last step reads the device and waits, a bounded number of polls through `env.wait`, for Tenjin to process the install.
 - **What is said about an agent must be what is enforced.** The sentence shown before the yes comes from the driver (`limits`). If a limit is only an instruction to the agent, say "it is told not to", not "it cannot".
 - **All HTTP goes through `internal/transport`** (`env.transport()`). It retries a request only when sending it again cannot do anything twice: GET, or a request whose context is marked `transport.Retryable`. Never mark a request that creates or changes something, or an OAuth token request (refresh tokens rotate). The `--verbose` log is method, address, status and time; never add headers or bodies to it.
-- **Never print a credential or a whole SDK key.** Findings show the last four characters (`mask`), and an agent's report is masked the same way before it is shown. The API client decodes only the app attributes it shows, because the API returns shared secrets alongside them.
+- **Never print a credential or a whole SDK key.** Findings show the last four characters (`mask`), and an agent's report is masked the same way before it is shown. The generated client decodes everything the API returns, shared secrets included; `tenjinapi` copies out only the attributes the CLI shows, so never render a generated type directly.
 - **A check that cannot tell must not say pass.** Use an `info` finding.
 - **Read the project as its tools do.** Comments are blanked by a lexer that knows strings (`project.BlankComments`); calls count on the SDK's receiver under the project's own names for it (`verify/receivers.go`); test sources say nothing about the app; `TENJIN_APP_STORE` is read as the Android SDK reads it; what a library brings (permissions, Play Services) counts.
 - **Text from outside is cleaned for people.** Project content and agent output reach the terminal through `render.Clean` / `forPeople`; JSON escapes on its own.
 - **Ctrl-C stops everything.** Prompts and waits end on it (exit 130, `interrupted`), and programs the CLI starts run in their own process group (`internal/proc`).
 - **A fix must be usable as written.** Name the file, the line and the version; never "the latest". The SDK versions fixes name come from `internal/verify/versions.go`, which is also the offline answer; online, `internal/sdkrelease` finds newer releases once a day, and `verify` takes one only within the major version the table knows. A new major SDK version is a CLI change: read its changelog, adjust the checks, then move the table.
-- **No dead flags or code.** Add a flag in the change that gives it behaviour.
+- **No dead flags or code.** Add a flag in the change that gives it behaviour. The generated clients are the exception: they cover the whole spec, used or not. Change the specs in `internal/tenjinapi/openapi` (and its README's list of edits), then `make generate`; never edit `client.gen.go`, and CI fails if it differs from what the specs generate.
 - **The README describes this binary too.** `TestTheReadmeOnlyNamesCommandsThatExist` checks every command and flag it names, and `TestTheReadmeListsEveryExitCode` its exit codes against `clierr`. The Markdown is linted and its links checked in CI (`.github/workflows/docs.yaml`, `.markdownlint-cli2.yaml`).
 - **The skill describes this binary.** `internal/skill/tenjin-cli.md` is what agents are told. When a command or flag it mentions changes, change it too; `TestTheSkillOnlyNamesCommandsThatExist` fails if it names something that is not there.
 - **JSON output is a contract.** `project detect --json` and `doctor --json` are pinned by golden files in `internal/cli/testdata`. Add fields; do not rename or remove them.

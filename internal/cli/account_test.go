@@ -467,6 +467,10 @@ func TestAppsGet(t *testing.T) {
 	if code != 5 || errorBody(t, stderr)["code"] != "not_found" {
 		t.Errorf("unknown app: exit = %d, stderr = %q", code, stderr)
 	}
+	// App IDs are UUIDs; anything else cannot name an app.
+	if code, _, stderr := h.run("apps", "get", "com.example.sample", "--json"); code != 5 || errorBody(t, stderr)["code"] != "not_found" {
+		t.Errorf("a bundle ID for an app ID: exit = %d, stderr = %q", code, stderr)
+	}
 	if code, _, stderr := h.run("apps", "get"); code != 2 || !strings.Contains(stderr, "the app's ID") {
 		t.Errorf("no argument: exit = %d, stderr = %q", code, stderr)
 	}

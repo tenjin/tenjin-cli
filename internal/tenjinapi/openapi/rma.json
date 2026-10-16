@@ -1,0 +1,3992 @@
+{
+  "openapi": "3.0.2",
+  "info": {
+    "title": "Reporting Metrics API",
+    "description": "# Introduction\n<p>Get all your Tenjin Data Exporter metrics through the API. To\nview a comprehensive list of metrics that you can report on, go to our\n<a href='/metric_definitions' title='Metric Definitions'>Metric Definitions</a> page.</p>\n\n<p>An access token can be generated\n<a href='https://tenjin.com/dashboard/access_tokens' title='Tenjin Access Tokens' target='_blank'>here</a>.</p>\n\n## Access to the API\n<p>You can access the Reporting Metrics API via the following Base URL:</p>\n\n```\nhttps://api.tenjin.com/v2/\n```\n",
+    "version": "2.0.1"
+  },
+  "servers": [
+    {
+      "url": "https://api.tenjin.com/v2"
+    }
+  ],
+  "externalDocs": {
+    "description": "Find out more about the Reporting Metrics API",
+    "url": "https://tenjin.com/docs/automation-apis/#reporting-metrics-api"
+  },
+  "security": [
+    {
+      "Bearer Authentication": []
+    }
+  ],
+  "paths": {
+    "/reports/spend": {
+      "get": {
+        "summary": "Pull spend reporting data",
+        "tags": [
+          "Reporting Metrics"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          },
+          {
+            "$ref": "#/components/parameters/start_date"
+          },
+          {
+            "$ref": "#/components/parameters/end_date"
+          },
+          {
+            "$ref": "#/components/parameters/granularity"
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "app",
+                "channel",
+                "country",
+                "site",
+                "campaign",
+                "campaign,country",
+                "channel,app",
+                "channel,app,country",
+                "creative"
+              ],
+              "example": "channel,app",
+              "default": "app"
+            },
+            "style": "form",
+            "explode": false,
+            "description": "Group your reporting data by an attribute(s).<br /><i><strong>Note:</strong> Grouping by campaign includes the app, channel and platform in the response.</i>"
+          },
+          {
+            "$ref": "#/components/parameters/app_ids"
+          },
+          {
+            "$ref": "#/components/parameters/channel_ids"
+          },
+          {
+            "$ref": "#/components/parameters/spend_metrics"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully pull spend data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByApp"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByChannel"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByCampaign"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByCountry"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedBySite"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByCampaign+Country"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByChannel+App"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByChannel+App+Country"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/ad_revenue": {
+      "get": {
+        "summary": "Pull ad revenue reporting data",
+        "tags": [
+          "Reporting Metrics"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          },
+          {
+            "$ref": "#/components/parameters/start_date"
+          },
+          {
+            "$ref": "#/components/parameters/end_date"
+          },
+          {
+            "$ref": "#/components/parameters/granularity"
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "app",
+                "channel",
+                "country",
+                "channel,app",
+                "channel,app,country",
+                "ad_placement"
+              ],
+              "default": "app",
+              "example": "channel,app,country"
+            },
+            "style": "form",
+            "explode": false,
+            "description": "Group your reporting data by an attribute(s).<br /><i><strong>Note:</strong> Grouping by campaign includes the app, channel and platform in the response.</i>"
+          },
+          {
+            "$ref": "#/components/parameters/app_ids"
+          },
+          {
+            "$ref": "#/components/parameters/channel_ids"
+          },
+          {
+            "$ref": "#/components/parameters/ad_revenue_metrics"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully pull ad revenue data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/AdRevenueDataGroupedByApp"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdRevenueDataGroupedByChannel"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdRevenueDataGroupedByCountry"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdRevenueDataGroupedByChannel+App"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdRevenueDataGroupedByChannel+App+Country"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdRevenueDataGroupedByAdPlacement"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/sk_ad_network": {
+      "get": {
+        "summary": "Pull SK Ad Network reporting data",
+        "tags": [
+          "Reporting Metrics"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          },
+          {
+            "$ref": "#/components/parameters/start_date"
+          },
+          {
+            "$ref": "#/components/parameters/end_date"
+          },
+          {
+            "$ref": "#/components/parameters/granularity_daily"
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "app",
+                "channel",
+                "campaign",
+                "sk_ad_network",
+                "sk_campaign",
+                "sk_source_app",
+                "fidelity_type",
+                "conversion_value"
+              ],
+              "default": "app",
+              "example": "conversion_value,app,channel,campaign,sk_campaign,sk_source_app,sk_ad_network"
+            },
+            "style": "form",
+            "explode": false,
+            "description": "A comma-separated list of dimensions to group the reporting data by."
+          },
+          {
+            "$ref": "#/components/parameters/app_ids"
+          },
+          {
+            "$ref": "#/components/parameters/channel_ids"
+          },
+          {
+            "$ref": "#/components/parameters/sk_ad_network_metrics"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully pull SK Ad Network data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SKAdNetworkData"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/SKAdNetworkReport"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/skan_apple": {
+      "get": {
+        "summary": "Pull SKAN Apple reporting data",
+        "tags": [
+          "Reporting Metrics"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          },
+          {
+            "$ref": "#/components/parameters/start_date"
+          },
+          {
+            "$ref": "#/components/parameters/end_date"
+          },
+          {
+            "$ref": "#/components/parameters/granularity_daily"
+          },
+          {
+            "in": "query",
+            "name": "group_by",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "app",
+                "channel",
+                "sk_ad_network",
+                "sk_campaign",
+                "sk_source_app",
+                "fidelity_type",
+                "conversion_value"
+              ],
+              "default": "app",
+              "example": "conversion_value,app,channel,sk_campaign,sk_source_app,sk_ad_network"
+            },
+            "style": "form",
+            "explode": false,
+            "description": "A comma-separated list of dimensions to group the reporting data by."
+          },
+          {
+            "$ref": "#/components/parameters/app_ids"
+          },
+          {
+            "$ref": "#/components/parameters/channel_ids"
+          },
+          {
+            "$ref": "#/components/parameters/sk_ad_network_metrics"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully pull SKAN Apple",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkanAppleData"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/SkanAppleReport"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reports/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "A saved report's ID"
+        }
+      ],
+      "get": {
+        "summary": "Pull reporting data based on attributes of a saved report",
+        "tags": [
+          "Reporting Metrics"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully pull reporting data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByApp"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByChannel"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByCampaign"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByCountry"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedBySite"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByCampaign+Country"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByChannel+App"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SpendDataGroupedByChannel+App+Country"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdRevenueDataGroupedByApp"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdRevenueDataGroupedByChannel"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdRevenueDataGroupedByCountry"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdRevenueDataGroupedByChannel+App"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdRevenueDataGroupedByChannel+App+Country"
+                    },
+                    {
+                      "$ref": "#/components/schemas/AdRevenueDataGroupedByAdPlacement"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/saved_reports": {
+      "get": {
+        "summary": "Retrieves a list of saved reports",
+        "tags": [
+          "Saved Reports"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success (200)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfSavedReports"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "87093346-e796-490e-85a0-f8b1481652cd",
+                      "type": "saved_report",
+                      "attributes": {
+                        "name": "Past Week Saved Report",
+                        "channel_ids": [
+                          3
+                        ],
+                        "past_number_days": 7,
+                        "app_ids": [
+                          "defg888-z433-kl33-7733-441e319f0bce"
+                        ],
+                        "metrics": [
+                          "spend",
+                          "installs",
+                          "clicks",
+                          "impressions"
+                        ],
+                        "granularity": "daily",
+                        "group_by": "app",
+                        "report_type": "user_acquisition"
+                      }
+                    }
+                  ],
+                  "links": {
+                    "self": "https://api.tenjin.com/v2/saved_reports"
+                  },
+                  "meta": {
+                    "count": 1,
+                    "per_page": 25
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "in": "query",
+            "name": "per_page",
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "example": 25,
+              "default": 25
+            },
+            "description": "Number of results per page."
+          },
+          {
+            "in": "query",
+            "name": "report_type",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "user_acquisition",
+                "ad_revenue"
+              ]
+            },
+            "description": "Filter saved reports by the report type."
+          }
+        ]
+      },
+      "post": {
+        "summary": "Create a saved report",
+        "tags": [
+          "Saved Reports"
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/SavedReportBodyPOST"
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created a saved report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedReport"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/SavedReport"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/saved_reports/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The saved report's ID"
+        }
+      ],
+      "get": {
+        "summary": "Get a saved report",
+        "tags": [
+          "Saved Reports"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get a saved report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedReport"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/SavedReport"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a saved report",
+        "tags": [
+          "Saved Reports"
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/SavedReportBody"
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully updates a saved report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedReport"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/SavedReport"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a saved report",
+        "tags": [
+          "Saved Reports"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully deleted a saved report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "Bearer Authentication": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "<p>If you have an account on Tenjin you can <a href='https://tenjin.com/dashboard/access_tokens' title='generate an access token' target='_blank'>generate an access token</a> for accessing the Reporting Metrics API. You can learn more about authenticating with Tenjin in our <a title='learn more about access tokens' href='https://tenjin.com/docs/api-access-tokens/' target='_blank'>documentation</a>. Usage format: set the `Authorization` header to `Bearer <Access Token>`.</p><h3>Rate Limiting</h3><p>Reporting Metrics API requests are rate limited to prevent abuse and ensure stability. Each access token may make up to 100 reporting requests per minute. The Reporting Metrics API will respond with a 429 status code for subsequent requests above the rate limit.</p>"
+      }
+    },
+    "schemas": {
+      "EmptyResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object"
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "DefaultLinks": {
+        "type": "object",
+        "properties": {
+          "self": {
+            "type": "string",
+            "format": "uri",
+            "description": "Self-reference to the current API request URL"
+          }
+        }
+      },
+      "LinksWithPagination": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DefaultLinks"
+          },
+          {
+            "type": "object",
+            "description": "Additional pagination links.",
+            "properties": {
+              "first": {
+                "type": "string",
+                "format": "uri",
+                "description": "API request URL for the first page of data."
+              },
+              "last": {
+                "type": "string",
+                "format": "uri",
+                "description": "API request URL for the last page of data."
+              },
+              "next": {
+                "type": "string",
+                "format": "uri",
+                "description": "API request URL for the next page of data."
+              },
+              "prev": {
+                "type": "string",
+                "format": "uri",
+                "description": "API request URL for the previous page of data."
+              }
+            }
+          }
+        ]
+      },
+      "Meta": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "description": "Total number of items across all pages."
+          },
+          "per_page": {
+            "type": "integer",
+            "description": "Number of items returned per API request."
+          }
+        }
+      },
+      "SavedReport": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SavedReportUserAcquisition"
+          },
+          {
+            "$ref": "#/components/schemas/SavedReportAdRevenue"
+          }
+        ]
+      },
+      "SavedReportUserAcquisition": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "saved_report"
+                ]
+              },
+              "attributes": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/SavedReportSharedAttributes"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SavedReportUserAcquisitionAttributes"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "report_type": {
+                        "type": "string",
+                        "enum": [
+                          "user_acquisition"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "SavedReportUserAcquisitionAttributes": {
+        "type": "object",
+        "properties": {
+          "metrics": {
+            "type": "string",
+            "default": "spend,impressions,clicks,installs,cpi,ctr,cvr,tcpi",
+            "example": "users_1d,sessions_1d,retention_1d",
+            "description": "Select which metrics to report by passing the metrics in a comma-separated string. To view a comprehensive list of metrics that you can report on, view our <a href='/metric_definitions#spend' title='Spend Metric Definitions'>Spend Metric Definitions</a> page."
+          },
+          "granularity": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "totals-daily"
+            ],
+            "default": "daily"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "app",
+              "channel",
+              "country",
+              "site",
+              "campaign",
+              "campaign,country",
+              "channel,app",
+              "channel,app,country"
+            ],
+            "example": "channel,app",
+            "default": "app",
+            "description": "Group your reporting data by an attribute(s).<br /><i><strong>Note:</strong> Grouping by campaign includes the app, channel and platform in the response.</i>"
+          }
+        }
+      },
+      "SavedReportAdRevenue": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "saved_report"
+                ]
+              },
+              "attributes": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/SavedReportSharedAttributes"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SavedReportAdRevenueAttributes"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "report_type": {
+                        "type": "string",
+                        "enum": [
+                          "ad_revenue"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "SavedReportAdRevenueAttributes": {
+        "type": "object",
+        "properties": {
+          "metrics": {
+            "type": "string",
+            "default": "ad_revenue,clicks,impressions,ecpm,ecpc",
+            "example": "ad_revenue,ecpm",
+            "description": "Select which metrics to report by passing the metrics in a comma-separated string. To view a comprehensive list of metrics that you can report on, view our <a href='/metric_definitions#ad_revenue' title='Ad Revenue Metric Definitions'>Ad Revenue Metric Definitions</a> page."
+          },
+          "granularity": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "totals-daily"
+            ],
+            "default": "daily"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "app",
+              "channel",
+              "country",
+              "channel,app",
+              "channel,app,country",
+              "ad_placement"
+            ],
+            "example": "channel,app",
+            "default": "app",
+            "description": "Group your reporting data by an attribute(s).<br /><i><strong>Note:</strong> Grouping by campaign includes the app, channel and platform in the response.</i>"
+          }
+        }
+      },
+      "ArrayOfSavedReports": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SavedReportUserAcquisition"
+                },
+                {
+                  "$ref": "#/components/schemas/SavedReportAdRevenue"
+                }
+              ]
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "SavedReportBody": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SavedReportUserAcquisitionBody"
+          },
+          {
+            "$ref": "#/components/schemas/SavedReportAdRevenueBody"
+          }
+        ]
+      },
+      "SavedReportBodyPOST": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SavedReportUserAcquisitionBodyPOST"
+          },
+          {
+            "$ref": "#/components/schemas/SavedReportAdRevenueBodyPOST"
+          }
+        ]
+      },
+      "SavedReportSharedAttributes": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "past_number_days": {
+            "type": "integer",
+            "default": 30,
+            "description": "The number of days to look back from todays date",
+            "minimum": 0
+          },
+          "channel_ids": {
+            "type": "string",
+            "example": "1,10,10015",
+            "description": "Filter data by marketing channels. Must pass in a comma-separated string of channel IDs (integers in string format). <br /><i><strong>Note:</strong> Do <strong>not</strong> include commas as part of the IDs (e.g. '1000' is good, '1,000' is bad).</i>"
+          },
+          "app_ids": {
+            "type": "string",
+            "example": "5ca0d40l-a595-430d-bb99-e188ee10d291,6315195b-da2e-4638-b15f-a03431377ac5",
+            "description": "Filter data by apps. Must pass in a comma-separated string of app UUIDs."
+          }
+        }
+      },
+      "SavedReportUserAcquisitionBody": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SavedReportSharedAttributes"
+          },
+          {
+            "$ref": "#/components/schemas/SavedReportUserAcquisitionAttributes"
+          }
+        ]
+      },
+      "SavedReportUserAcquisitionBodyPOST": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SavedReportUserAcquisitionBody"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "report_type": {
+                "type": "string",
+                "enum": [
+                  "user_acquisition"
+                ]
+              }
+            }
+          }
+        ],
+        "required": [
+          "name",
+          "granularity",
+          "group_by",
+          "report_type"
+        ]
+      },
+      "SavedReportAdRevenueBody": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SavedReportSharedAttributes"
+          },
+          {
+            "$ref": "#/components/schemas/SavedReportAdRevenueAttributes"
+          }
+        ]
+      },
+      "SavedReportAdRevenueBodyPOST": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SavedReportAdRevenueBody"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "report_type": {
+                "type": "string",
+                "enum": [
+                  "ad_revenue"
+                ]
+              }
+            }
+          }
+        ],
+        "required": [
+          "name",
+          "granularity",
+          "group_by",
+          "report_type"
+        ]
+      },
+      "ReportingDataShared": {
+        "type": "object",
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Earliest date for reporting data."
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Latest date for reporting data."
+          },
+          "granularity": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "totals-daily"
+            ]
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "SpendDataShared": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ReportingDataShared"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "group_by": {
+                "type": "string",
+                "enum": [
+                  "ad_network_id",
+                  "app_id",
+                  "site_id",
+                  "country",
+                  "campaign_id",
+                  "campaign_country",
+                  "ad_network_app",
+                  "ad_network_app_country"
+                ]
+              },
+              "metrics": {
+                "$ref": "#/components/schemas/SpendMetrics"
+              }
+            }
+          }
+        ]
+      },
+      "SpendDataGroupedByApp": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "app_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the app in Tenjin."
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "description": "The name of the app."
+                                },
+                                "icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the app in the App Store."
+                                },
+                                "platform": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ios",
+                                    "android",
+                                    "windows",
+                                    "amazon"
+                                  ]
+                                },
+                                "bundle_id": {
+                                  "type": "string",
+                                  "description": "The Bundle ID of the app in the App Store."
+                                },
+                                "store_id": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "description": "The Store ID of the app in the App Store."
+                                }
+                              },
+                              "required": [
+                                "app_id",
+                                "name",
+                                "icon_url",
+                                "platform",
+                                "bundle_id",
+                                "store_id"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SpendDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "string",
+                        "enum": [
+                          "app_id"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SpendDataGroupedByChannel": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "ad_network_id": {
+                                  "type": "integer",
+                                  "description": "The ID of the channel in Tenjin."
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "description": "The name of the channel."
+                                },
+                                "icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the channel."
+                                },
+                                "short_id": {
+                                  "type": "string",
+                                  "description": "Friendly URL slug used to identify the channel."
+                                },
+                                "custom": {
+                                  "type": "boolean",
+                                  "description": "Whether the channel is custom or natively supported by Tenjin."
+                                }
+                              },
+                              "required": [
+                                "ad_network_id",
+                                "name",
+                                "icon_url",
+                                "short_id",
+                                "custom"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SpendDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "string",
+                        "enum": [
+                          "ad_network_id"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SpendDataGroupedByCampaign": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "description": "The name of the campaign in Tenjin."
+                                },
+                                "campaign_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the campaign in Tenjin."
+                                },
+                                "app_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the app in Tenjin."
+                                },
+                                "app_name": {
+                                  "type": "string",
+                                  "description": "The name of the app in Tenjin."
+                                },
+                                "app_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the app in the App Store."
+                                },
+                                "platform": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ios",
+                                    "android",
+                                    "windows",
+                                    "amazon"
+                                  ]
+                                },
+                                "bundle_id": {
+                                  "type": "string",
+                                  "description": "The Bundle ID of the app in the App Store."
+                                },
+                                "store_id": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "description": "The Store ID of the app in the App Store."
+                                },
+                                "ad_network_id": {
+                                  "type": "integer",
+                                  "description": "The ID of the channel in Tenjin."
+                                },
+                                "ad_network_name": {
+                                  "type": "string",
+                                  "description": "The name of the channel."
+                                },
+                                "icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the channel."
+                                },
+                                "ad_network_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the channel."
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "campaign_id",
+                                "app_id",
+                                "app_name",
+                                "app_icon_url",
+                                "platform",
+                                "bundle_id",
+                                "store_id",
+                                "ad_network_id",
+                                "ad_network_name",
+                                "icon_url",
+                                "ad_network_icon_url"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SpendDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "string",
+                        "enum": [
+                          "campaign_id"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SpendDataGroupedBySite": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "site_id": {
+                                  "type": "string",
+                                  "description": "The site ID."
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "description": "Alias to the site_id attribute."
+                                }
+                              },
+                              "required": [
+                                "name",
+                                "site_id"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SpendDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "string",
+                        "enum": [
+                          "site_id"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SpendDataGroupedByCountry": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "country": {
+                                  "type": "string",
+                                  "description": "The ISO 3166-2 country code (2 letter country code)."
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "description": "Alias to the country attribute."
+                                }
+                              },
+                              "required": [
+                                "country",
+                                "name"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SpendDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "string",
+                        "enum": [
+                          "country"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SpendDataGroupedByChannel+App": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "ad_network_id": {
+                                  "type": "integer",
+                                  "description": "The ID of the channel in Tenjin."
+                                },
+                                "app_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the app in Tenjin."
+                                },
+                                "app_name": {
+                                  "type": "string",
+                                  "description": "The name of the app in Tenjin."
+                                },
+                                "app_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the app in the App Store."
+                                },
+                                "platform": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ios",
+                                    "android",
+                                    "windows",
+                                    "amazon"
+                                  ]
+                                },
+                                "bundle_id": {
+                                  "type": "string",
+                                  "description": "The Bundle ID of the app in the App Store."
+                                },
+                                "store_id": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "description": "The Store ID of the app in the App Store."
+                                },
+                                "ad_network_name": {
+                                  "type": "string",
+                                  "description": "The name of the channel."
+                                },
+                                "ad_network_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the channel."
+                                }
+                              },
+                              "required": [
+                                "ad_network_id",
+                                "app_id",
+                                "app_name",
+                                "app_icon_url",
+                                "platform",
+                                "bundle_id",
+                                "store_id",
+                                "ad_network_name",
+                                "ad_network_icon_url"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SpendDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "string",
+                        "enum": [
+                          "ad_network_app"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SpendDataGroupedByChannel+App+Country": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "country": {
+                                  "type": "string",
+                                  "description": "The ISO 3166-2 country code (2 letter country code)."
+                                },
+                                "app_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the app in Tenjin."
+                                },
+                                "app_name": {
+                                  "type": "string",
+                                  "description": "The name of the app in Tenjin."
+                                },
+                                "app_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the app in the App Store."
+                                },
+                                "platform": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ios",
+                                    "android",
+                                    "windows",
+                                    "amazon"
+                                  ]
+                                },
+                                "bundle_id": {
+                                  "type": "string",
+                                  "description": "The Bundle ID of the app in the App Store."
+                                },
+                                "store_id": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "description": "The Store ID of the app in the App Store."
+                                },
+                                "ad_network_id": {
+                                  "type": "integer",
+                                  "description": "The ID of the channel in Tenjin."
+                                },
+                                "ad_network_name": {
+                                  "type": "string",
+                                  "description": "The name of the channel."
+                                },
+                                "ad_network_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the channel."
+                                }
+                              },
+                              "required": [
+                                "country",
+                                "app_id",
+                                "app_name",
+                                "app_icon_url",
+                                "platform",
+                                "bundle_id",
+                                "store_id",
+                                "ad_network_id",
+                                "ad_network_name",
+                                "ad_network_icon_url"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SpendDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "string",
+                        "enum": [
+                          "ad_network_app_country"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SpendDataGroupedByCampaign+Country": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "campaign_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the campaign in Tenjin."
+                                },
+                                "country": {
+                                  "type": "string",
+                                  "description": "The ISO 3166-2 country code (2 letter country code)."
+                                },
+                                "name": {
+                                  "type": "string",
+                                  "description": "The name of the campaign."
+                                },
+                                "app_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the app in Tenjin."
+                                },
+                                "app_name": {
+                                  "type": "string",
+                                  "description": "The name of the app."
+                                },
+                                "app_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the app in the App Store."
+                                },
+                                "platform": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ios",
+                                    "android",
+                                    "windows",
+                                    "amazon"
+                                  ]
+                                },
+                                "bundle_id": {
+                                  "type": "string",
+                                  "description": "The Bundle ID of the app in the App Store."
+                                },
+                                "store_id": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "description": "The Store ID of the app in the App Store."
+                                },
+                                "ad_network_id": {
+                                  "type": "integer",
+                                  "description": "The ID of the channel in Tenjin."
+                                },
+                                "ad_network_name": {
+                                  "type": "string",
+                                  "description": "The name of the channel."
+                                },
+                                "icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the channel."
+                                },
+                                "ad_network_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the channel."
+                                }
+                              },
+                              "required": [
+                                "campaign_id",
+                                "country",
+                                "name",
+                                "app_id",
+                                "app_name",
+                                "app_icon_url",
+                                "platform",
+                                "bundle_id",
+                                "store_id",
+                                "ad_network_id",
+                                "ad_network_name",
+                                "ad_network_icon_url"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SpendDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "string",
+                        "enum": [
+                          "campaign_country"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "AdRevenueDataShared": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ReportingDataShared"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "metrics": {
+                "$ref": "#/components/schemas/AdRevenueMetrics"
+              }
+            }
+          }
+        ]
+      },
+      "AdRevenueDataGroupedByApp": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "app_name": {
+                                  "type": "string",
+                                  "description": "The name of the app in Tenjin."
+                                },
+                                "app_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the app in Tenjin."
+                                },
+                                "app_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the app in the App Store."
+                                },
+                                "platform": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ios",
+                                    "android",
+                                    "windows",
+                                    "amazon"
+                                  ]
+                                },
+                                "bundle_id": {
+                                  "type": "string",
+                                  "description": "The Bundle ID of the app in the App Store."
+                                },
+                                "store_id": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "description": "The Store ID of the app in the App Store."
+                                }
+                              },
+                              "required": [
+                                "app_name",
+                                "app_id",
+                                "app_icon_url",
+                                "platform",
+                                "bundle_id",
+                                "store_id"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AdRevenueDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "string",
+                        "enum": [
+                          "app_id"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "AdRevenueDataGroupedByChannel": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "ad_network_id": {
+                                  "type": "integer",
+                                  "description": "The ID of the channel in Tenjin."
+                                },
+                                "ad_network_name": {
+                                  "type": "string",
+                                  "description": "The name of the channel."
+                                },
+                                "ad_network_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the channel."
+                                },
+                                "ad_network_short_id": {
+                                  "type": "string",
+                                  "description": "Friendly URL slug used to identify the channel."
+                                },
+                                "ad_network_custom": {
+                                  "type": "boolean",
+                                  "description": "Whether the channel is custom or natively supported by Tenjin."
+                                }
+                              },
+                              "required": [
+                                "ad_network_id",
+                                "ad_network_name",
+                                "ad_network_icon_url",
+                                "ad_network_short_id",
+                                "ad_network_custom"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AdRevenueDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "string",
+                        "enum": [
+                          "ad_network_id"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "AdRevenueDataGroupedByCountry": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "country_name": {
+                                  "type": "string",
+                                  "description": "The ISO 3166-2 country code (2 letter country code)."
+                                }
+                              },
+                              "required": [
+                                "country_name"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AdRevenueDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "country"
+                          ]
+                        },
+                        "default": [
+                          "country"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "AdRevenueDataGroupedByChannel+App": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "app_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the app in Tenjin."
+                                },
+                                "app_name": {
+                                  "type": "string",
+                                  "description": "The name of the app in Tenjin."
+                                },
+                                "app_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the app in the App Store."
+                                },
+                                "platform": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ios",
+                                    "android",
+                                    "windows",
+                                    "amazon"
+                                  ]
+                                },
+                                "bundle_id": {
+                                  "type": "string",
+                                  "description": "The Bundle ID of the app in the App Store."
+                                },
+                                "store_id": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "description": "The Store ID of the app in the App Store."
+                                },
+                                "ad_network_id": {
+                                  "type": "integer",
+                                  "description": "The ID of the channel in Tenjin."
+                                },
+                                "ad_network_name": {
+                                  "type": "string",
+                                  "description": "The name of the channel."
+                                },
+                                "ad_network_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the channel."
+                                },
+                                "ad_network_short_id": {
+                                  "type": "string",
+                                  "description": "Friendly URL slug used to identify the channel."
+                                },
+                                "ad_network_custom": {
+                                  "type": "boolean",
+                                  "description": "Whether the channel is custom or natively supported by Tenjin."
+                                }
+                              },
+                              "required": [
+                                "app_id",
+                                "app_name",
+                                "app_icon_url",
+                                "platform",
+                                "bundle_id",
+                                "store_id",
+                                "ad_network_id",
+                                "ad_network_name",
+                                "ad_network_icon_url",
+                                "ad_network_short_id",
+                                "ad_network_custom"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AdRevenueDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "ad_network_id",
+                            "app_id"
+                          ]
+                        },
+                        "default": [
+                          "ad_network_id",
+                          "app_id"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "AdRevenueDataGroupedByChannel+App+Country": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "country_name": {
+                                  "type": "string",
+                                  "description": "The ISO 3166-2 country code (2 letter country code)."
+                                },
+                                "app_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the app in Tenjin."
+                                },
+                                "app_name": {
+                                  "type": "string",
+                                  "description": "The name of the app in Tenjin."
+                                },
+                                "app_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the app in the App Store."
+                                },
+                                "platform": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ios",
+                                    "android",
+                                    "windows",
+                                    "amazon"
+                                  ]
+                                },
+                                "bundle_id": {
+                                  "type": "string",
+                                  "description": "The Bundle ID of the app in the App Store."
+                                },
+                                "store_id": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "description": "The Store ID of the app in the App Store."
+                                },
+                                "ad_network_id": {
+                                  "type": "integer",
+                                  "description": "The ID of the channel in Tenjin."
+                                },
+                                "ad_network_name": {
+                                  "type": "string",
+                                  "description": "The name of the channel."
+                                },
+                                "ad_network_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the channel."
+                                },
+                                "ad_network_short_id": {
+                                  "type": "string",
+                                  "description": "Friendly URL slug used to identify the channel."
+                                },
+                                "ad_network_custom": {
+                                  "type": "boolean",
+                                  "description": "Whether the channel is custom or natively supported by Tenjin."
+                                }
+                              },
+                              "required": [
+                                "country_name",
+                                "app_id",
+                                "app_name",
+                                "app_icon_url",
+                                "platform",
+                                "bundle_id",
+                                "store_id",
+                                "ad_network_id",
+                                "ad_network_name",
+                                "ad_network_icon_url",
+                                "ad_network_short_id",
+                                "ad_network_custom"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AdRevenueDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "ad_network_id",
+                            "app_id",
+                            "country"
+                          ]
+                        },
+                        "default": [
+                          "ad_network_id",
+                          "app_id",
+                          "country"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "AdRevenueDataGroupedByAdPlacement": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data. There is no date when granularity is totals-daily."
+                                },
+                                "ad_placement_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the ad placement in Tenjin."
+                                },
+                                "ad_placement_name": {
+                                  "type": "string",
+                                  "description": "The name of the ad placement."
+                                },
+                                "app_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the app in Tenjin."
+                                },
+                                "app_name": {
+                                  "type": "string",
+                                  "description": "The name of the app in Tenjin."
+                                },
+                                "app_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the app in the App Store."
+                                },
+                                "platform": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ios",
+                                    "android",
+                                    "windows",
+                                    "amazon"
+                                  ]
+                                },
+                                "bundle_id": {
+                                  "type": "string",
+                                  "description": "The Bundle ID of the app in the App Store."
+                                },
+                                "store_id": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "description": "The Store ID of the app in the App Store."
+                                },
+                                "ad_network_id": {
+                                  "type": "integer",
+                                  "description": "The ID of the channel in Tenjin."
+                                },
+                                "ad_network_name": {
+                                  "type": "string",
+                                  "description": "The name of the channel."
+                                },
+                                "ad_network_icon_url": {
+                                  "type": "string",
+                                  "format": "uri",
+                                  "description": "The icon of the channel."
+                                },
+                                "ad_network_short_id": {
+                                  "type": "string",
+                                  "description": "Friendly URL slug used to identify the channel."
+                                },
+                                "ad_network_custom": {
+                                  "type": "boolean",
+                                  "description": "Whether the channel is custom or natively supported by Tenjin."
+                                }
+                              },
+                              "required": [
+                                "ad_placement_id",
+                                "ad_placement_name",
+                                "app_id",
+                                "app_name",
+                                "app_icon_url",
+                                "platform",
+                                "bundle_id",
+                                "store_id",
+                                "ad_network_id",
+                                "ad_network_name",
+                                "ad_network_icon_url",
+                                "ad_network_short_id",
+                                "ad_network_custom"
+                              ]
+                            },
+                            {
+                              "$ref": "#/components/schemas/DataItemMetrics"
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AdRevenueDataShared"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "group_by": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "ad_placement"
+                          ]
+                        },
+                        "default": [
+                          "ad_placement"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SKAdNetworkData": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "sk_ad_network_report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data."
+                                },
+                                "app_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the app in Tenjin."
+                                },
+                                "app_name": {
+                                  "type": "string",
+                                  "description": "The name of the app in Tenjin."
+                                },
+                                "bundle_id": {
+                                  "type": "string",
+                                  "description": "The Bundle ID of the app in the App Store."
+                                },
+                                "store_id": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "description": "The Store ID of the app in the App Store."
+                                },
+                                "platform": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ios"
+                                  ]
+                                },
+                                "ad_network_id": {
+                                  "type": "integer",
+                                  "description": "The ID of the channel in Tenjin."
+                                },
+                                "ad_network_name": {
+                                  "type": "string",
+                                  "description": "The name of the channel."
+                                },
+                                "ad_network_short_id": {
+                                  "type": "string",
+                                  "description": "Friendly URL slug used to identify the channel."
+                                },
+                                "sk_ad_network_id": {
+                                  "type": "string",
+                                  "description": "SK Ad Network ID for the ad network."
+                                },
+                                "sk_campaign_id": {
+                                  "type": "integer",
+                                  "description": "SK Campaign ID, an Integer from 0-99."
+                                },
+                                "sk_source_app_id": {
+                                  "type": "string",
+                                  "description": "The Store ID of the App that showed the advertisement that led to a conversion."
+                                },
+                                "fidelity_type": {
+                                  "type": "integer",
+                                  "description": "1 for StoreKit Ads, 0 for view-through ads."
+                                },
+                                "conversion_value": {
+                                  "type": "integer",
+                                  "description": "Conversion Value, an integer from 0-63."
+                                },
+                                "conversion_value_count": {
+                                  "type": "integer",
+                                  "description": "Count of occurrences of the Conversion Value."
+                                },
+                                "conversion_value_avg": {
+                                  "type": "number",
+                                  "description": "Average of Conversion Values."
+                                },
+                                "conversion_value_total": {
+                                  "type": "integer",
+                                  "description": "Sum of Conversion Values."
+                                },
+                                "redownload_count": {
+                                  "type": "integer",
+                                  "description": "Count of occurrences of the Conversion Value for redownloads."
+                                },
+                                "redownload_cv_total": {
+                                  "type": "integer",
+                                  "description": "Sum of Conversion Values for redownloads."
+                                },
+                                "redownload_cv_avg": {
+                                  "type": "number",
+                                  "description": "Average of Conversion Values for redownloads."
+                                },
+                                "first_download_count": {
+                                  "type": "integer",
+                                  "description": "Count of occurrences of the Conversion Value for first downloads."
+                                },
+                                "first_download_cv_total": {
+                                  "type": "integer",
+                                  "description": "Sum of Conversion Values for first downloads."
+                                },
+                                "first_download_cv_avg": {
+                                  "type": "number",
+                                  "description": "Average of Conversion Values for first downloads."
+                                },
+                                "assists": {
+                                  "type": "number",
+                                  "description": "Count of Assists"
+                                },
+                                "redownload_assists": {
+                                  "type": "number",
+                                  "description": "Count of Assists for redownloads"
+                                },
+                                "first_download_assists": {
+                                  "type": "number",
+                                  "description": "Count of Assists for first downloads"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "start_date": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Earliest date for reporting data."
+                      },
+                      "end_date": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Latest date for reporting data."
+                      },
+                      "granularity": {
+                        "type": "string",
+                        "enum": [
+                          "daily"
+                        ]
+                      },
+                      "organization_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The ID of your Organization."
+                      },
+                      "metrics": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "conversion_value_count",
+                            "conversion_value_total",
+                            "conversion_value_avg",
+                            "redownload_count",
+                            "redownload_cv_total",
+                            "redownload_cv_avg",
+                            "first_download_count",
+                            "first_download_cv_total",
+                            "first_download_cv_avg",
+                            "assists",
+                            "redownload_assists",
+                            "first_download_assists"
+                          ]
+                        }
+                      },
+                      "group_by": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "app_id",
+                            "ad_network_id",
+                            "campaign_id",
+                            "conversion_value",
+                            "sk_ad_network_id",
+                            "sk_campaign_id",
+                            "sk_source_app_id",
+                            "fidelity_type"
+                          ]
+                        }
+                      },
+                      "app_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "ad_network_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SkanAppleData": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "enum": [
+                            "skan_apple_report"
+                          ]
+                        },
+                        "attributes": {
+                          "allOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "date": {
+                                  "type": "string",
+                                  "format": "date",
+                                  "description": "Date of the related data."
+                                },
+                                "app_id": {
+                                  "type": "string",
+                                  "format": "uuid",
+                                  "description": "The ID of the app in Tenjin."
+                                },
+                                "app_name": {
+                                  "type": "string",
+                                  "description": "The name of the app in Tenjin."
+                                },
+                                "bundle_id": {
+                                  "type": "string",
+                                  "description": "The Bundle ID of the app in the App Store."
+                                },
+                                "store_id": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "description": "The Store ID of the app in the App Store."
+                                },
+                                "platform": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ios"
+                                  ]
+                                },
+                                "ad_network_id": {
+                                  "type": "integer",
+                                  "description": "The ID of the channel in Tenjin."
+                                },
+                                "ad_network_name": {
+                                  "type": "string",
+                                  "description": "The name of the channel."
+                                },
+                                "ad_network_short_id": {
+                                  "type": "string",
+                                  "description": "Friendly URL slug used to identify the channel."
+                                },
+                                "sk_ad_network_id": {
+                                  "type": "string",
+                                  "description": "SK Ad Network ID for the ad network."
+                                },
+                                "sk_campaign_id": {
+                                  "type": "integer",
+                                  "description": "SK Campaign ID, an Integer from 0-99."
+                                },
+                                "sk_source_app_id": {
+                                  "type": "string",
+                                  "description": "The Store ID of the App that showed the advertisement that led to a conversion."
+                                },
+                                "fidelity_type": {
+                                  "type": "integer",
+                                  "description": "1 for StoreKit Ads, 0 for view-through ads."
+                                },
+                                "conversion_value": {
+                                  "type": "integer",
+                                  "description": "Conversion Value, an integer from 0-63."
+                                },
+                                "conversion_value_count": {
+                                  "type": "integer",
+                                  "description": "Count of occurrences of the Conversion Value."
+                                },
+                                "conversion_value_avg": {
+                                  "type": "number",
+                                  "description": "Average of Conversion Values."
+                                },
+                                "conversion_value_total": {
+                                  "type": "integer",
+                                  "description": "Sum of Conversion Values."
+                                },
+                                "redownload_count": {
+                                  "type": "integer",
+                                  "description": "Count of occurrences of the Conversion Value for redownloads."
+                                },
+                                "redownload_cv_total": {
+                                  "type": "integer",
+                                  "description": "Sum of Conversion Values for redownloads."
+                                },
+                                "redownload_cv_avg": {
+                                  "type": "number",
+                                  "description": "Average of Conversion Values for redownloads."
+                                },
+                                "first_download_count": {
+                                  "type": "integer",
+                                  "description": "Count of occurrences of the Conversion Value for first downloads."
+                                },
+                                "first_download_cv_total": {
+                                  "type": "integer",
+                                  "description": "Sum of Conversion Values for first downloads."
+                                },
+                                "first_download_cv_avg": {
+                                  "type": "number",
+                                  "description": "Average of Conversion Values for first downloads."
+                                },
+                                "assists": {
+                                  "type": "number",
+                                  "description": "Count of Assists"
+                                },
+                                "redownload_assists": {
+                                  "type": "number",
+                                  "description": "Count of Assists for redownloads"
+                                },
+                                "first_download_assists": {
+                                  "type": "number",
+                                  "description": "Count of Assists for first downloads"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "links": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LinksWithPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/DefaultLinks"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "meta": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Meta"
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "start_date": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Earliest date for reporting data."
+                      },
+                      "end_date": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Latest date for reporting data."
+                      },
+                      "granularity": {
+                        "type": "string",
+                        "enum": [
+                          "daily"
+                        ]
+                      },
+                      "organization_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "The ID of your Organization."
+                      },
+                      "metrics": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "conversion_value_count",
+                            "conversion_value_total",
+                            "conversion_value_avg",
+                            "redownload_count",
+                            "redownload_cv_total",
+                            "redownload_cv_avg",
+                            "first_download_count",
+                            "first_download_cv_total",
+                            "first_download_cv_avg",
+                            "assists",
+                            "redownload_assists",
+                            "first_download_assists"
+                          ]
+                        }
+                      },
+                      "group_by": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "app_id",
+                            "ad_network_id",
+                            "conversion_value",
+                            "sk_ad_network_id",
+                            "sk_campaign_id",
+                            "sk_source_app_id",
+                            "fidelity_type"
+                          ]
+                        }
+                      },
+                      "app_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "ad_network_ids": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "DataItemMetrics": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "number",
+          "description": "The metrics you requested will be listed with the associated value"
+        }
+      },
+      "SpendMetrics": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "spend",
+            "installs",
+            "clicks",
+            "tracked_clicks",
+            "tracked_impressions",
+            "tracked_installs",
+            "tracked_cvr",
+            "impressions",
+            "cpi",
+            "cpc",
+            "cpm",
+            "ctr",
+            "cvr",
+            "cpr",
+            "tcpi",
+            "users",
+            "sessions",
+            "revenues",
+            "total_rev",
+            "pub_rev",
+            "iap_arpu",
+            "pub_arpu",
+            "total_arpu",
+            "installs_difference",
+            "clicks_difference",
+            "installs_difference_pct",
+            "clicks_difference_pct",
+            "all_fraud",
+            "blocked_clicks",
+            "fraud_purchases",
+            "fraud_revenue",
+            "blocked_device_events",
+            "users_0d",
+            "sessions_0d",
+            "retention_0d",
+            "revenues_0d",
+            "pubrev_0d",
+            "total_rev_0d",
+            "iap_rpu_0d",
+            "pub_rpu_0d",
+            "rpu_0d",
+            "roi_0d",
+            "roas_0d",
+            "cp_user_0d",
+            "cp_ksessions_0d",
+            "users_1d",
+            "sessions_1d",
+            "retention_1d",
+            "revenues_1d",
+            "pubrev_1d",
+            "total_rev_1d",
+            "iap_rpu_1d",
+            "pub_rpu_1d",
+            "rpu_1d",
+            "roi_1d",
+            "roas_1d",
+            "cp_user_1d",
+            "cp_ksessions_1d",
+            "users_2d",
+            "sessions_2d",
+            "retention_2d",
+            "revenues_2d",
+            "pubrev_2d",
+            "total_rev_2d",
+            "iap_rpu_2d",
+            "pub_rpu_2d",
+            "rpu_2d",
+            "roi_2d",
+            "roas_2d",
+            "cp_user_2d",
+            "cp_ksessions_2d",
+            "users_3d",
+            "sessions_3d",
+            "retention_3d",
+            "revenues_3d",
+            "pubrev_3d",
+            "total_rev_3d",
+            "iap_rpu_3d",
+            "pub_rpu_3d",
+            "rpu_3d",
+            "roi_3d",
+            "roas_3d",
+            "cp_user_3d",
+            "cp_ksessions_3d",
+            "users_4d",
+            "sessions_4d",
+            "retention_4d",
+            "revenues_4d",
+            "pubrev_4d",
+            "total_rev_4d",
+            "iap_rpu_4d",
+            "pub_rpu_4d",
+            "rpu_4d",
+            "roi_4d",
+            "roas_4d",
+            "cp_user_4d",
+            "cp_ksessions_4d",
+            "users_5d",
+            "essions_5d",
+            "retention_5d",
+            "revenues_5d",
+            "pubrev_5d",
+            "total_rev_5d",
+            "iap_rpu_5d",
+            "pub_rpu_5d",
+            "rpu_5d",
+            "roi_5d",
+            "roas_5d",
+            "cp_user_5d",
+            "cp_ksessions_5d",
+            "users_6d",
+            "sessions_6d",
+            "retention_6d",
+            "revenues_6d",
+            "pubrev_6d",
+            "total_rev_6d",
+            "iap_rpu_6d",
+            "pub_rpu_6d",
+            "rpu_6d",
+            "roi_6d",
+            "roas_6d",
+            "cp_user_6d",
+            "cp_ksessions_6d",
+            "users_7d",
+            "sessions_7d",
+            "retention_7d",
+            "revenues_7d",
+            "pubrev_7d",
+            "total_rev_7d",
+            "iap_rpu_7d",
+            "pub_rpu_7d",
+            "rpu_7d",
+            "roi_7d",
+            "roas_7d",
+            "cp_user_7d",
+            "cp_ksessions_7d",
+            "users_14d",
+            "sessions_14d",
+            "retention_14d",
+            "revenues_14d",
+            "pubrev_14d",
+            "total_rev_14d",
+            "iap_rpu_14d",
+            "pub_rpu_14d",
+            "rpu_14d",
+            "roi_14d",
+            "roas_14d",
+            "p_user_14d",
+            "cp_ksessions_14d",
+            "users_30d",
+            "sessions_30d",
+            "retention_30d",
+            "revenues_30d",
+            "pubrev_30d",
+            "total_rev_30d",
+            "iap_rpu_30d",
+            "pub_rpu_30d",
+            "rpu_30d",
+            "roi_30d",
+            "roas_30d",
+            "cp_user_30d",
+            "cp_ksessions_30d",
+            "users_60d",
+            "sessions_60d",
+            "retention_60d",
+            "revenues_60d",
+            "pubrev_60d",
+            "total_rev_60d",
+            "iap_rpu_60d",
+            "pub_rpu_60d",
+            "rpu_60d",
+            "roi_60d",
+            "roas_60d",
+            "cp_user_60d",
+            "cp_ksessions_60d",
+            "users_90d",
+            "sessions_90d",
+            "retention_90d",
+            "revenues_90d",
+            "pubrev_90d",
+            "total_rev_90d",
+            "iap_rpu_90d",
+            "pub_rpu_90d",
+            "rpu_90d",
+            "roi_90d",
+            "roas_90d",
+            "cp_user_90d",
+            "cp_ksessions_90d",
+            "users_120d",
+            "sessions_120d",
+            "retention_120d",
+            "revenues_120d",
+            "pubrev_120d",
+            "total_rev_120d",
+            "iap_rpu_120d",
+            "pub_rpu_120d",
+            "rpu_120d",
+            "roi_120d",
+            "roas_120d",
+            "cp_user_120d",
+            "cp_ksessions_120d"
+          ]
+        },
+        "default": [
+          "spend",
+          "impressions",
+          "clicks",
+          "installs",
+          "cpi",
+          "ctr",
+          "cvr",
+          "tcpi",
+          "tracked_installs"
+        ],
+        "description": "To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#spend' title='Spend Metric Definitions'>Spend Metric Definitions</a> page."
+      },
+      "AdRevenueMetrics": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "ad_revenue",
+            "clicks",
+            "impressions",
+            "ecpm",
+            "ecpc"
+          ]
+        },
+        "default": [
+          "ad_revenue",
+          "clicks",
+          "impressions",
+          "ecpm",
+          "ecpc"
+        ],
+        "description": "To view a comprehensive list of metrics that you can report on view our <a href='/metric_definitions#ad_revenue' title='Ad Revenue Metric Definitions'>Ad Revenue Metric Definitions</a> page."
+      }
+    },
+    "requestBodies": {
+      "SavedReportBody": {
+        "description": "A JSON object containing saved report information for a PUT request",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SavedReportBody"
+            }
+          }
+        }
+      },
+      "SavedReportBodyPOST": {
+        "description": "A JSON object containing saved report information for a POST request",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/SavedReportBodyPOST"
+            }
+          }
+        }
+      }
+    },
+    "examples": {
+      "SavedReport": {
+        "value": {
+          "data": {
+            "id": "87093346-e796-490e-85a0-f8b1481652cd",
+            "type": "saved_report",
+            "attributes": {
+              "name": "Past Week Saved Report",
+              "channel_ids": [
+                3
+              ],
+              "past_number_days": 7,
+              "app_ids": [
+                "defg888-z433-kl33-7733-441e319f0bce"
+              ],
+              "metrics": [
+                "spend",
+                "installs",
+                "clicks",
+                "impressions"
+              ],
+              "granularity": "daily",
+              "group_by": "app",
+              "report_type": "user_acquisition"
+            }
+          },
+          "links": {
+            "self": "https://api.tenjin.com/v2/saved_reports"
+          }
+        }
+      },
+      "SKAdNetworkReport": {
+        "value": {
+          "data": [
+            {
+              "id": "2021-02-09.2e101a1a-1c19-465d-8e59-21c3554d4076.1.1.887212194.1.0",
+              "type": "sk_ad_network_report",
+              "attributes": {
+                "date": "2021-02-09",
+                "app_id": "2e101a1a-1c19-465d-8e59-21c3554d4076",
+                "app_name": "Super Word Hunt",
+                "bundle_id": "com.tenjin.wordsearch",
+                "store_id": "1478027094",
+                "platform": "ios",
+                "ad_network_id": 1,
+                "ad_network_name": "Tapjoy",
+                "ad_network_short_id": "tapjoy",
+                "campaign_id": "cbb1174a-17dd-4200-8d43-a9fe03b18abe",
+                "campaign_name": "6ee911d92e3264d36d70505e9bf159da",
+                "remote_campaign_id": "c4b7bfd",
+                "sk_ad_network_id": "ecpz2srf59.skadnetwork",
+                "sk_campaign_id": 1,
+                "sk_source_app_id": "887212194",
+                "fidelity_type": 1,
+                "conversion_value": 0,
+                "conversion_value_count": 2,
+                "conversion_value_total": 0,
+                "conversion_value_avg": 0
+              }
+            }
+          ],
+          "links": {
+            "self": "https://api.tenjin.com/v2/reports/sk_ad_network?group_by=app,channel,sk_campaign,sk_source_app,conversion_value&per_page=1",
+            "last": "https://api.tenjin.com/v2/reports/sk_ad_network?group_by=app%2Cchannel%2Csk_campaign%2Csk_source_app%2Cconversion_value&page=2&per_page=1",
+            "next": "https://api.tenjin.com/v2/reports/sk_ad_network?group_by=app%2Cchannel%2Csk_campaign%2Csk_source_app%2Cconversion_value&page=2&per_page=1"
+          },
+          "meta": {
+            "count": 2,
+            "per_page": 1,
+            "start_date": "2021-02-09",
+            "end_date": "2021-02-09",
+            "group_by": [
+              "app_id",
+              "ad_network_id",
+              "campaign_id",
+              "conversion_value",
+              "sk_ad_network_id",
+              "sk_campaign_id",
+              "sk_source_app_id",
+              "fidelity_type"
+            ],
+            "granularity": "daily",
+            "metrics": [
+              "conversion_value_count",
+              "conversion_value_total",
+              "conversion_value_avg"
+            ],
+            "organization_id": "316afaf1-902f-423d-98a2-1c415e168027",
+            "app_ids": [],
+            "ad_network_ids": []
+          }
+        }
+      },
+      "SkanAppleReport": {
+        "value": {
+          "data": [
+            {
+              "id": "2021-02-09.2e101a1a-1c19-465d-8e59-21c3554d4076.1.1.887212194.1.0",
+              "type": "skan_apple_report",
+              "attributes": {
+                "date": "2021-02-09",
+                "app_id": "2e101a1a-1c19-465d-8e59-21c3554d4076",
+                "app_name": "Super Word Hunt",
+                "bundle_id": "com.tenjin.wordsearch",
+                "store_id": "1478027094",
+                "platform": "ios",
+                "ad_network_id": 1,
+                "ad_network_name": "Tapjoy",
+                "ad_network_short_id": "tapjoy",
+                "sk_ad_network_id": "ecpz2srf59.skadnetwork",
+                "sk_campaign_id": 1,
+                "sk_source_app_id": "887212194",
+                "fidelity_type": 1,
+                "conversion_value": 0,
+                "conversion_value_count": 2,
+                "conversion_value_total": 0,
+                "conversion_value_avg": 0
+              }
+            }
+          ],
+          "links": {
+            "self": "https://api.tenjin.com/v2/reports/skan_apple?group_by=app,channel,sk_campaign,sk_source_app,conversion_value&per_page=1",
+            "last": "https://api.tenjin.com/v2/reports/skan_apple?group_by=app%2Cchannel%2Csk_campaign%2Csk_source_app%2Cconversion_value&page=2&per_page=1",
+            "next": "https://api.tenjin.com/v2/reports/skan_apple?group_by=app%2Cchannel%2Csk_campaign%2Csk_source_app%2Cconversion_value&page=2&per_page=1"
+          },
+          "meta": {
+            "count": 2,
+            "per_page": 1,
+            "start_date": "2021-02-09",
+            "end_date": "2021-02-09",
+            "group_by": [
+              "app_id",
+              "ad_network_id",
+              "conversion_value",
+              "sk_ad_network_id",
+              "sk_campaign_id",
+              "sk_source_app_id",
+              "fidelity_type"
+            ],
+            "granularity": "daily",
+            "metrics": [
+              "conversion_value_count",
+              "conversion_value_total",
+              "conversion_value_avg"
+            ],
+            "organization_id": "316afaf1-902f-423d-98a2-1c415e168027",
+            "app_ids": [],
+            "ad_network_ids": []
+          }
+        }
+      }
+    },
+    "parameters": {
+      "per_page": {
+        "in": "query",
+        "name": "per_page",
+        "schema": {
+          "type": "integer",
+          "maximum": 1000,
+          "example": 25,
+          "default": 100
+        },
+        "description": "Number of results per page."
+      },
+      "page": {
+        "in": "query",
+        "name": "page",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "example": 1,
+          "default": 1
+        },
+        "description": "The page you want in your response."
+      },
+      "start_date": {
+        "in": "query",
+        "name": "start_date",
+        "schema": {
+          "type": "string",
+          "format": "date",
+          "example": "YYYY-MM-DD"
+        },
+        "description": "First day that should be included in the response.",
+        "required": true
+      },
+      "end_date": {
+        "in": "query",
+        "name": "end_date",
+        "schema": {
+          "type": "string",
+          "format": "date",
+          "example": "YYYY-MM-DD"
+        },
+        "description": "Last day that should be included in the response.",
+        "required": true
+      },
+      "granularity": {
+        "in": "query",
+        "name": "granularity",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "daily",
+            "weekly",
+            "monthly",
+            "totals-daily"
+          ],
+          "example": "daily",
+          "default": "daily"
+        },
+        "description": "Granularity of the data."
+      },
+      "granularity_daily": {
+        "in": "query",
+        "name": "granularity",
+        "schema": {
+          "type": "string",
+          "enum": [
+            "daily"
+          ],
+          "example": "daily",
+          "default": "daily"
+        },
+        "description": "Granularity of the data.",
+        "x-go-name": "GranularityDailyOnly"
+      },
+      "channel_ids": {
+        "in": "query",
+        "name": "channel_ids",
+        "schema": {
+          "type": "string",
+          "example": "1,10,10015"
+        },
+        "style": "form",
+        "explode": false,
+        "description": "Filter data by marketing channels. Must pass in a comma-separated string of channel IDs (integers in string format). <br /><i><strong>Note:</strong> Do <strong>not</strong> include commas as part of the IDs (e.g. '1000' is good, '1,000' is bad).</i>"
+      },
+      "app_ids": {
+        "in": "query",
+        "name": "app_ids",
+        "schema": {
+          "type": "string",
+          "example": "5ca0d40l-a595-430d-bb99-e188ee10d291,6315195b-da2e-4638-b15f-a03431377ac5"
+        },
+        "style": "form",
+        "explode": false,
+        "description": "Filter data by apps with a comma-separated string of app UUIDs."
+      },
+      "ad_revenue_metrics": {
+        "in": "query",
+        "name": "metrics",
+        "schema": {
+          "type": "string",
+          "default": "ad_revenue,clicks,impressions,ecpm,ecpc",
+          "example": "ad_revenue,ecpm",
+          "description": "Select which metrics to report by passing the metrics in a comma-separated string. To view a comprehensive list of metrics that you can report on, view our <a href='/metric_definitions#ad_revenue' title='Ad Revenue Metric Definitions'>Ad Revenue Metric Definitions</a> page."
+        },
+        "x-go-name": "AdRevenueMetricsParam"
+      },
+      "spend_metrics": {
+        "in": "query",
+        "name": "metrics",
+        "schema": {
+          "type": "string",
+          "default": "spend,impressions,clicks,installs,cpi,ctr,cvr,tcpi,tracked_installs",
+          "example": "users_1d,sessions_1d,retention_1d",
+          "description": "Select which metrics to report by passing the metrics in a comma-separated string. To view a comprehensive list of metrics that you can report on, view our <a href='/metric_definitions#spend' title='Spend Metric Definitions'>Spend Metric Definitions</a> page."
+        },
+        "x-go-name": "SpendMetricsParam"
+      },
+      "sk_ad_network_metrics": {
+        "in": "query",
+        "name": "metrics",
+        "schema": {
+          "type": "string",
+          "default": "conversion_value_avg,conversion_value_count,conversion_value_total",
+          "example": "conversion_value_avg,conversion_value_count,conversion_value_total",
+          "description": "Select which metrics to report by passing the metrics in a comma-separated string. To view a comprehensive list of metrics that you can report on, view our <a href='/metric_definitions#sk_ad_network' title='SK Ad Network Metric Definitions'>SK Ad Network Metric Definitions</a> page."
+        }
+      }
+    }
+  }
+}
