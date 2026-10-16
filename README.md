@@ -336,9 +336,10 @@ It holds the time of the last update check and the newest SDK releases it found.
 
 ## Privacy and security
 
-- **No analytics.** The CLI sends no telemetry.
-- **What it contacts:** Tenjin's dashboard, API and collector for the commands you run; GitHub, once a day, for the newest release of the CLI; and, once a day for `doctor`, the public registries of the Tenjin SDKs (Maven Central, pub.dev, npm, GitHub). `--offline` keeps `doctor` from contacting Tenjin and the registries.
-- **Credentials and SDK keys are never printed.** Keys are shown by their last four characters, in tables, JSON, `--verbose` and an agent's report.
+- **No analytics of its own.** The CLI sends no telemetry. Tenjin's API, like any server, records the requests it gets, with the CLI's version in the User-Agent.
+- **What it contacts:** Tenjin's dashboard, API, collector and Site ID Optimization service for the commands you run; Tenjin's documentation site for `docs search`; GitHub, once a day, for the newest release of the CLI; and, once a day for `doctor`, the public registries of the Tenjin SDKs (Maven Central, pub.dev, npm, GitHub). `--offline` keeps `doctor` from contacting Tenjin and the registries.
+- **Credentials and SDK keys are never printed.** Keys are shown by their last four characters, in tables, JSON, `--verbose` and an agent's report. The data commands show what the dashboard shows you, callback URLs and parameters included.
+- **Downloads can be verified.** Each release's archives carry build provenance: `gh attestation verify tenjin_<version>_<os>_<arch>.tar.gz --repo tenjin/tenjin-cli` shows they were built by this repository's release workflow, from the tagged commit. The install scripts and Homebrew check each archive against the release's checksums.
 - **It changes your project only to write an SDK key** where a placeholder was left for it. Code changes are yours or your agent's.
 
 Report a vulnerability privately: see [SECURITY.md](SECURITY.md).

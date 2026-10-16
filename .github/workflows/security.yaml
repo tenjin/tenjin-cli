@@ -1,0 +1,35 @@
+name: Security
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**/*.go'
+      - go.mod
+      - go.sum
+      - .github/workflows/security.yaml
+  # New vulnerabilities are published without any change here.
+  schedule:
+    - cron: "17 6 * * 1"
+permissions:
+  contents: read
+jobs:
+  govulncheck:
+    name: Known vulnerabilities
+    concurrency: ${{ github.ref }}/govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: govulncheck
+        # Fails on a vulnerability the code can reach, in a module or in the
+        # Go release the binary is built with (the toolchain line of go.mod).
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...

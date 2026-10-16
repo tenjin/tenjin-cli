@@ -16,7 +16,9 @@ import (
 const tagline = "Integrate the Tenjin SDK, and work with your Tenjin account, from the terminal"
 
 var (
-	helpEntry = regexp.MustCompile(`^  (\S+)(\s{2,}\S.*)$`)
+	// A command's row: its name, then its summary after at least one space
+	// (cobra pads names to the longest, which gets just one).
+	helpEntry = regexp.MustCompile(`^  (\S+)(\s+\S.*)$`)
 	helpFlag  = regexp.MustCompile(`^(\s+)((?:-\w, )?--[\w-]+)`)
 )
 
@@ -77,7 +79,8 @@ func colourHelp(text string, style render.Styler, cmd *cobra.Command) string {
 // writeLanding is what 'tenjin' alone shows: the wordmark at a terminal, then
 // where each kind of user starts, short enough to read without scrolling.
 // 'tenjin --help' lists every command.
-func writeLanding(w io.Writer) error {
+func writeLanding(root *cobra.Command) error {
+	w := root.OutOrStdout()
 	style := render.NewStyler(w)
 	var b strings.Builder
 	if banner := render.Banner(w, tagline); banner != "" {
@@ -112,7 +115,29 @@ func writeLanding(w io.Writer) error {
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString(style.Dim("Every command: tenjin --help. The documentation: tenjin docs search <words>.") + "\n")
+	shown := 0
+	for _, s := range sections {
+		shown += len(s.rows)
+	}
+	fmt.Fprintf(&b, "Those are the greatest hits. %d more commands live behind %s:\n", countCommands(root)-shown, style.Accent("tenjin --help"))
+	b.WriteString("campaigns, callbacks, site IDs, saved reports, your coding agent and friends.\n")
+	fmt.Fprintf(&b, "Stuck? %s has read the documentation for you.\n", style.Accent("tenjin docs search <words>"))
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// countCommands counts the commands that do something, leaving out help
+// and shell completion.
+func countCommands(cmd *cobra.Command) int {
+	n := 0
+	for _, c := range cmd.Commands() {
+		if c.Hidden || c.Name() == "help" || c.Name() == "completion" {
+			continue
+		}
+		if c.Runnable() && !c.HasSubCommands() {
+			n++
+		}
+		n += countCommands(c)
+	}
+	return n
 }
