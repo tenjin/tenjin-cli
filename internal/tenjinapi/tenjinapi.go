@@ -1,7 +1,10 @@
 // Package tenjinapi holds operations on Tenjin's Campaign Management API:
-// typed functions that know nothing about terminals. They call the clients
-// generated from the API's specs (cma, rma, openapi), which are the part of
-// this repository meant to move into the module shared with the MCP server.
+// typed functions that know nothing about terminals. Requests are built by the
+// clients generated from the API's specs (cma, rma, openapi), the part of this
+// repository meant to move into the module shared with the MCP server. These
+// operations decode responses themselves, reading only the fields the CLI
+// shows: a value the spec does not expect in a field nobody shows must not
+// fail a whole list.
 package tenjinapi
 
 import (
@@ -12,7 +15,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -65,24 +67,22 @@ type App struct {
 	CreatedAt     string `json:"created_at,omitempty"`
 }
 
-func appFrom(r cma.App) App {
-	var app App
-	if r.Id != nil {
-		app.ID = r.Id.String()
-	}
+// resource is one JSON:API object, with the attributes the CLI shows.
+type resource struct {
+	ID         string `json:"id"`
+	Attributes struct {
+		Name          string `json:"name"`
+		BundleID      string `json:"bundle_id"`
+		Platform      string `json:"platform"`
+		StoreID       string `json:"store_id"`
+		SendingEvents bool   `json:"sending_events"`
+		CreatedAt     string `json:"created_at"`
+	} `json:"attributes"`
+}
+
+func (r resource) app() App {
 	a := r.Attributes
-	if a == nil {
-		return app
-	}
-	app.Name, app.BundleID, app.StoreID = value(a.Name), value(a.BundleId), value(a.StoreId)
-	if a.Platform != nil {
-		app.Platform = string(*a.Platform)
-	}
-	app.SendingEvents = a.SendingEvents != nil && *a.SendingEvents
-	if a.CreatedAt != nil {
-		app.CreatedAt = a.CreatedAt.Format(time.RFC3339)
-	}
-	return app
+	return App{ID: r.ID, Name: a.Name, BundleID: a.BundleID, Platform: a.Platform, StoreID: a.StoreID, SendingEvents: a.SendingEvents, CreatedAt: a.CreatedAt}
 }
 
 // ListApps returns every app the user can see, following all pages. query
@@ -98,38 +98,22 @@ func (c *Client) ListApps(ctx context.Context, query string) ([]App, error) {
 		if query != "" {
 			params.Query = &query
 		}
-		resp, err := api.GetAppsWithResponse(ctx, params)
-		if err != nil {
-			return nil, callError(err)
+		var body struct {
+			Data  []resource `json:"data"`
+			Links struct {
+				Next string `json:"next"`
+			} `json:"links"`
 		}
-		if err := statusError(resp.HTTPResponse, resp.Body, resp.JSON200 != nil); err != nil {
+		if err := receive(api.GetApps(ctx, params))(&body); err != nil {
 			return nil, err
 		}
-		data := value(resp.JSON200.Data)
-		for _, r := range data {
-			apps = append(apps, appFrom(r))
+		for _, r := range body.Data {
+			apps = append(apps, r.app())
 		}
-		if len(data) == 0 || !hasNext(resp.JSON200.Links) {
+		if body.Links.Next == "" || len(body.Data) == 0 {
 			return apps, nil
 		}
 	}
-}
-
-// hasNext reports whether a list response links to a further page. The spec
-// allows links with or without pagination, so the link is read from the raw
-// object.
-func hasNext(links interface{ MarshalJSON() ([]byte, error) }) bool {
-	if links == nil {
-		return false
-	}
-	raw, err := links.MarshalJSON()
-	if err != nil {
-		return false
-	}
-	var l struct {
-		Next string `json:"next"`
-	}
-	return json.Unmarshal(raw, &l) == nil && l.Next != ""
 }
 
 // FindApp returns the app with this bundle ID and platform, or nil. The API
@@ -158,14 +142,13 @@ func (c *Client) GetApp(ctx context.Context, id string) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp, err := api.GetAppsIdWithResponse(ctx, appID)
-	if err != nil {
-		return nil, callError(err)
+	var body struct {
+		Data resource `json:"data"`
 	}
-	if err := statusError(resp.HTTPResponse, resp.Body, resp.JSON200 != nil && resp.JSON200.Data != nil); err != nil {
+	if err := receive(api.GetAppsId(ctx, appID))(&body); err != nil {
 		return nil, err
 	}
-	app := appFrom(*resp.JSON200.Data)
+	app := body.Data.app()
 	return &app, nil
 }
 
@@ -184,8 +167,10 @@ type SDKKey struct {
 var ErrKeysNotServed = errors.New("the Tenjin API does not serve SDK keys")
 
 // ListSDKKeys returns an app's enabled, app-level SDK keys, oldest first. An
-// app with none returns an empty list. The app must be one that exists, so
-// "not found" here means the endpoint is missing, and is ErrKeysNotServed.
+// app with none returns an empty list. "Not found" is ErrKeysNotServed: the
+// endpoint is missing (404), or the app is not one the signed-in
+// organization's keys can be read for (400 "App not found"); either way the
+// key comes from the dashboard instead.
 func (c *Client) ListSDKKeys(ctx context.Context, appID string) ([]SDKKey, error) {
 	id, err := uuid.Parse(appID)
 	if err != nil {
@@ -195,27 +180,28 @@ func (c *Client) ListSDKKeys(ctx context.Context, appID string) ([]SDKKey, error
 	if err != nil {
 		return nil, err
 	}
-	resp, err := api.GetAppsAppIdSdkKeysWithResponse(ctx, id, &cma.GetAppsAppIdSdkKeysParams{PerPage: new(maxPageSize)})
-	if err != nil {
-		return nil, callError(err)
+	var body struct {
+		Data []struct {
+			ID         string `json:"id"`
+			Attributes struct {
+				Name      string `json:"name"`
+				Key       string `json:"key"`
+				CreatedAt string `json:"created_at"`
+			} `json:"attributes"`
+		} `json:"data"`
 	}
-	if err := statusError(resp.HTTPResponse, resp.Body, resp.JSON200 != nil); err != nil {
+	if err := receive(api.GetAppsAppIdSdkKeys(ctx, id, &cma.GetAppsAppIdSdkKeysParams{PerPage: new(maxPageSize)}))(&body); err != nil {
 		if clierr.From(err).Kind == clierr.NotFound {
 			return nil, ErrKeysNotServed
 		}
 		return nil, err
 	}
-	data := value(resp.JSON200.Data)
-	keys := make([]SDKKey, 0, len(data))
-	for _, r := range data {
-		if r.Attributes == nil || value(r.Attributes.Key) == "" {
+	keys := make([]SDKKey, 0, len(body.Data))
+	for _, r := range body.Data {
+		if r.Attributes.Key == "" {
 			continue
 		}
-		key := SDKKey{ID: value(r.Id), Name: value(r.Attributes.Name), Value: *r.Attributes.Key}
-		if r.Attributes.CreatedAt != nil {
-			key.CreatedAt = r.Attributes.CreatedAt.Format(time.RFC3339)
-		}
-		keys = append(keys, key)
+		keys = append(keys, SDKKey{ID: r.ID, Name: r.Attributes.Name, Value: r.Attributes.Key, CreatedAt: r.Attributes.CreatedAt})
 	}
 	return keys, nil
 }
@@ -253,11 +239,10 @@ func (c *Client) CreateApp(ctx context.Context, in NewApp) (app *App, created bo
 	if err != nil {
 		return nil, false, err
 	}
-	resp, err := api.PostAppsWithBodyWithResponse(ctx, "application/json", bytes.NewReader(raw))
-	if err != nil {
-		return nil, false, callError(err)
+	var body struct {
+		Data resource `json:"data"`
 	}
-	if err := statusError(resp.HTTPResponse, resp.Body, resp.JSON201 != nil && resp.JSON201.Data != nil); err != nil {
+	if err := receive(api.PostAppsWithBody(ctx, "application/json", bytes.NewReader(raw)))(&body); err != nil {
 		// The server reports a duplicate as a plain 400 with the existing
 		// app's ID inside the message.
 		if m := existingAppID.FindStringSubmatch(err.Error()); m != nil {
@@ -269,7 +254,7 @@ func (c *Client) CreateApp(ctx context.Context, in NewApp) (app *App, created bo
 		}
 		return nil, false, err
 	}
-	result := appFrom(*resp.JSON201.Data)
+	result := body.Data.app()
 	return &result, true, nil
 }
 
@@ -291,26 +276,28 @@ func (c *Client) api(ctx context.Context) (*cma.ClientWithResponses, error) {
 		}))
 }
 
-// callError is a call that got no usable response: the request failed, or
-// the body did not decode as the spec says.
-func callError(err error) error {
-	var urlErr *url.Error
-	if errors.As(err, &urlErr) {
-		return clierr.Wrap(clierr.Upstream, err, "could not reach the Tenjin API: %v", err)
+// receive reads a generated call's response into out: a request that failed
+// is Upstream, a status that is not 2xx is classified by apiError, and a body
+// that is not JSON is Upstream. It takes the call's results and returns the
+// step that decodes, so a call reads receive(api.GetApps(ctx, p))(&body).
+func receive(resp *http.Response, err error) func(out any) error {
+	return func(out any) error {
+		if err != nil {
+			return clierr.Wrap(clierr.Upstream, err, "could not reach the Tenjin API: %v", err)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		raw, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return clierr.Wrap(clierr.Upstream, err, "could not read the Tenjin API's response: %v", err)
+		}
+		if resp.StatusCode/100 != 2 {
+			return apiError(resp, raw)
+		}
+		if err := json.Unmarshal(raw, out); err != nil {
+			return clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned something that is not JSON (HTTP %d)", resp.StatusCode)
+		}
+		return nil
 	}
-	return clierr.Wrap(clierr.Upstream, err, "could not read the Tenjin API's response: %v", err)
-}
-
-// statusError classifies a response. decoded says whether the success body
-// the call expects was there.
-func statusError(resp *http.Response, body []byte, decoded bool) error {
-	if resp.StatusCode/100 != 2 {
-		return apiError(resp, body)
-	}
-	if !decoded {
-		return clierr.New(clierr.Upstream, "the Tenjin API returned something that is not JSON (HTTP %d)", resp.StatusCode)
-	}
-	return nil
 }
 
 // apiError classifies a failed response. The API's statuses need care: 403 is
@@ -375,14 +362,6 @@ func transportOf(c *http.Client) http.RoundTripper {
 		return c.Transport
 	}
 	return http.DefaultTransport
-}
-
-func value[T any](p *T) T {
-	var zero T
-	if p == nil {
-		return zero
-	}
-	return *p
 }
 
 func firstNonEmpty(values ...string) string {

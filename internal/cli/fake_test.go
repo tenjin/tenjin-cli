@@ -206,8 +206,12 @@ func (f *fakeTenjin) authorized(w http.ResponseWriter, r *http.Request) bool {
 func appResource(a tenjinapi.App) map[string]any {
 	return map[string]any{"id": a.ID, "type": "app", "attributes": map[string]any{
 		"name": a.Name, "bundle_id": a.BundleID, "platform": a.Platform, "sending_events": a.SendingEvents,
+		"created_at": "2026-10-06T12:34:56.123Z",
 		// The real API returns shared secrets here. They must never reach output.
 		"ios_shared_secret": "TOP-SECRET-SHARED-SECRET",
+		// Fields the CLI does not show, with values the spec does not expect:
+		// they must not fail the app, or the list it is in.
+		"price": 0.99, "rating": 4.5, "released_on": "",
 	}}
 }
 

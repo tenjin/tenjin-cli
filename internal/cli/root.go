@@ -416,13 +416,13 @@ func newRootCmd(env *environment) *cobra.Command {
 
 Integrating the Tenjin SDK, for app developers: start with 'tenjin setup'. It
 works out what the project is, finds its Tenjin app and SDK key, checks the
-integration, and confirms a real launch.
+integration, and checks a real launch.
 
-Your Tenjin data, for anyone with a Tenjin account: the apps in your
+Your Tenjin data, for anyone with a Tenjin account: today, the apps in your
 organization and their SDK keys, from a terminal or a script.
 
-Every command accepts --json and never prompts when stdin is not a terminal,
-so scripts and coding agents can drive them.`,
+Every command but setup accepts --json and never prompts when stdin is not a
+terminal, so scripts and coding agents can drive them.`,
 		Version:       buildinfo.Get().Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,

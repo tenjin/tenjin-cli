@@ -462,13 +462,16 @@ func TestAppsGet(t *testing.T) {
 	if strings.Contains(stdout, "SECRET") {
 		t.Errorf("a shared secret reached the output:\n%s", stdout)
 	}
+	if got["created_at"] != "2026-10-06T12:34:56.123Z" {
+		t.Errorf("created_at = %v, want the API's own text", got["created_at"])
+	}
 
 	code, _, stderr := h.run("apps", "get", "00000000-0000-4000-8000-999999999999", "--json")
 	if code != 5 || errorBody(t, stderr)["code"] != "not_found" {
 		t.Errorf("unknown app: exit = %d, stderr = %q", code, stderr)
 	}
 	// App IDs are UUIDs; anything else cannot name an app.
-	if code, _, stderr := h.run("apps", "get", "com.example.sample", "--json"); code != 5 || errorBody(t, stderr)["code"] != "not_found" {
+	if code, _, stderr := h.run("apps", "get", "com.example.sample", "--json"); code != 5 || errorBody(t, stderr)["code"] != "not_found" || !strings.Contains(stderr, "app IDs look like") {
 		t.Errorf("a bundle ID for an app ID: exit = %d, stderr = %q", code, stderr)
 	}
 	if code, _, stderr := h.run("apps", "get"); code != 2 || !strings.Contains(stderr, "the app's ID") {

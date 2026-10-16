@@ -16,6 +16,7 @@ go test -tags keychain ./internal/session   # opt-in: writes to the real system 
 go test -tags realagent -run RealClaudeCode -v ./internal/cli   # opt-in: starts the real Claude Code (setup, then the skill); needs `make build`
 go test -tags realagent -run RealCodex -v ./internal/cli        # opt-in: starts the real Codex
 go test ./internal/cli -run JSONOutputIsStable -update          # accept a deliberate change to the golden JSON
+TENJIN_API_TOKEN=<token> go test -tags liveapi -run Live -v ./internal/tenjinapi   # opt-in: every API operation against a real API; reads only unless TENJIN_LIVE_WRITE=1, which creates, changes and deletes a throwaway app's data
 ```
 
 Go 1.27 (see `go.mod`).
@@ -64,7 +65,7 @@ docs/adr              architecture decisions
 - **`setup` ends on a real launch.** Its last step reads the device and waits, a bounded number of polls through `env.wait`, for Tenjin to process the install.
 - **What is said about an agent must be what is enforced.** The sentence shown before the yes comes from the driver (`limits`). If a limit is only an instruction to the agent, say "it is told not to", not "it cannot".
 - **All HTTP goes through `internal/transport`** (`env.transport()`). It retries a request only when sending it again cannot do anything twice: GET, or a request whose context is marked `transport.Retryable`. Never mark a request that creates or changes something, or an OAuth token request (refresh tokens rotate). The `--verbose` log is method, address, status and time; never add headers or bodies to it.
-- **Never print a credential or a whole SDK key.** Findings show the last four characters (`mask`), and an agent's report is masked the same way before it is shown. The generated client decodes everything the API returns, shared secrets included; `tenjinapi` copies out only the attributes the CLI shows, so never render a generated type directly.
+- **Never print a credential or a whole SDK key.** Findings show the last four characters (`mask`), and an agent's report is masked the same way before it is shown. `tenjinapi` builds requests with the generated client but decodes responses itself, into types holding only what the CLI shows: the API returns shared secrets on an app, and an unexpected value in a field nobody shows must not fail a whole list. Never render a generated response type directly.
 - **A check that cannot tell must not say pass.** Use an `info` finding.
 - **Read the project as its tools do.** Comments are blanked by a lexer that knows strings (`project.BlankComments`); calls count on the SDK's receiver under the project's own names for it (`verify/receivers.go`); test sources say nothing about the app; `TENJIN_APP_STORE` is read as the Android SDK reads it; what a library brings (permissions, Play Services) counts.
 - **Text from outside is cleaned for people.** Project content and agent output reach the terminal through `render.Clean` / `forPeople`; JSON escapes on its own.
