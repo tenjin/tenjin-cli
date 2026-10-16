@@ -160,11 +160,25 @@ For anyone with a Tenjin account, from any directory: none of these reads a proj
 | `tenjin reports skadnetwork --from <date> --to <date>`, `skan` | SKAdNetwork postbacks, as Tenjin attributes them, or as Apple sends them |
 | `tenjin saved-reports list`, `get <id>`, `run <id>` | Reports saved in the dashboard, and their data |
 
+Changes are commands too. Each sends only the fields given as flags, asks before it changes anything (deletes default to no), and needs `--yes` when nothing can ask. `--dry-run` prints the request body and sends nothing.
+
+| Command | What it does |
+| --- | --- |
+| `tenjin apps update <id>`, `delete <id>` | Change an app's name or settings; delete an app |
+| `tenjin campaigns create --app <id> --name <name> --channel <id>` | Create a campaign and its tracking links; `--ad-account` instead of `--channel` |
+| `tenjin campaigns update <id> --attribution-window <seconds>`, `delete <id>` | Change a campaign's attribution window; delete one that has not tracked installs |
+| `tenjin apps callbacks create --app <id> --template <id>`, `update <id>` | Callbacks from a channel's templates; `--param key=value` for its parameters |
+| `tenjin apps s2s-callbacks create --app <id> --url <url> --event <event>`, `update <id>` | Server-to-server callbacks |
+| `tenjin apps callback-groups create --app <id> --channel <id> --template <id>`, `update <id>` | Callback groups; `--setting key=value` for their settings |
+| `tenjin apps callback-settings update --app <id> --channel <id> --setting <key=value>` | An app's callback settings for one channel |
+| `tenjin saved-reports create --type <type> --name <name> --granularity <g> --group-by <g>`, `update <id>`, `delete <id>` | Saved reports |
+
 Reports take the API's own values: `--granularity`, `--group-by`, `--apps`, `--channels` and `--metrics`. For example:
 
 ```sh
 tenjin reports spend --from 2026-10-01 --to 2026-10-07 --group-by channel,app --granularity totals-daily
 tenjin campaigns list --app <app-id> --all --json | jq '.data[].attributes.name'
+tenjin campaigns create --app <app-id> --name "Summer UA" --channel <channel-id> --yes
 ```
 
 #### Your account

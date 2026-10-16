@@ -171,8 +171,6 @@ func jsonBody(v any) *bytes.Reader {
 	return bytes.NewReader(raw)
 }
 
-const contentJSON = "application/json"
-
 func TestLiveRead(t *testing.T) {
 	l := newLive(t)
 	page := &cma.GetAppsParams{PerPage: new(25)}
@@ -303,7 +301,8 @@ func TestLiveWrite(t *testing.T) {
 			}
 		})
 		ok(t, "GET /campaigns/{id}", wrap(l.cma.GetCampaignsIdWithResponse(l.ctx, campaign)))
-		ok(t, "PATCH /campaigns/{id}", wrap(l.cma.PatchCampaignsIdWithBodyWithResponse(l.ctx, campaign, contentJSON, jsonBody(map[string]string{"name": name + " (renamed)"}))))
+		// The attribution window is the only field a campaign lets change.
+		ok(t, "PATCH /campaigns/{id}", wrap(l.cma.PatchCampaignsIdWithBodyWithResponse(l.ctx, campaign, contentJSON, jsonBody(map[string]int{"attribution_window": 86400}))))
 		ok(t, "DELETE /campaigns/{id}", wrap(l.cma.DeleteCampaignsIdWithResponse(l.ctx, campaign)))
 		deleted = true
 	})
