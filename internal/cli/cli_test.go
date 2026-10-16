@@ -53,13 +53,17 @@ func TestVersionJSON(t *testing.T) {
 	}
 }
 
+// tenjin alone is a short landing that fits a screen; a group alone prints
+// its help.
 func TestNoArgsPrintsHelp(t *testing.T) {
 	h := newHarness(t)
-	for _, args := range [][]string{{}, {"project"}} {
-		code, stdout, _ := h.run(args...)
-		if code != 0 || !strings.Contains(stdout, "Usage:") || !strings.Contains(stdout, "Use \"tenjin") {
-			t.Errorf("%v: exit = %d, stdout = %q", args, code, stdout)
-		}
+	code, stdout, _ := h.run()
+	if lines := strings.Count(stdout, "\n"); code != 0 || lines > 25 || !strings.Contains(stdout, "tenjin setup") || !strings.Contains(stdout, "tenjin --help") {
+		t.Errorf("landing: exit = %d, %d lines:\n%s", code, lines, stdout)
+	}
+	code, stdout, _ = h.run("project")
+	if code != 0 || !strings.Contains(stdout, "Usage:") || !strings.Contains(stdout, "Use \"tenjin") {
+		t.Errorf("project: exit = %d, stdout = %q", code, stdout)
 	}
 }
 
@@ -271,7 +275,7 @@ func TestDoctorRefusesAnUnsupportedProject(t *testing.T) {
 // integration leads with setup, the data commands stand apart, and nothing
 // is promised that does not exist yet.
 func TestHelpSeparatesTheIntegrationFromTheData(t *testing.T) {
-	_, stdout, _ := newHarness(t).run()
+	_, stdout, _ := newHarness(t).run("--help")
 	sdk, data, account := strings.Index(stdout, "Integrate the Tenjin SDK (app developers):"), strings.Index(stdout, "Your Tenjin data:"), strings.Index(stdout, "Your account:")
 	if sdk < 0 || data < sdk || account < data {
 		t.Fatalf("help is not grouped as expected:\n%s", stdout)
@@ -330,16 +334,23 @@ func TestDoctorPrintsAMultiLineFix(t *testing.T) {
 // Colour and the wordmark are for a person at a terminal. Tests reach them
 // with CLICOLOR_FORCE, which is also how a user keeps colour through a pipe.
 func TestHelpIsStyledOnATerminal(t *testing.T) {
-	_, plain, _ := newHarness(t).run()
-	if strings.Contains(plain, "\x1b[") || strings.Contains(plain, "█") {
-		t.Fatalf("piped help carries styling:\n%q", plain)
+	_, plain, _ := newHarness(t).run("--help")
+	_, landing, _ := newHarness(t).run()
+	if strings.Contains(plain+landing, "\x1b[") || strings.Contains(plain+landing, "█") {
+		t.Fatalf("piped help carries styling:\n%q\n%q", plain, landing)
 	}
 
 	t.Setenv("CLICOLOR_FORCE", "1")
 	t.Setenv("COLORTERM", "")
-	_, styled, _ := newHarness(t).run()
+	// The wordmark is the landing's, not the full help's.
+	if _, landing, _ = newHarness(t).run(); !strings.Contains(landing, "████████╗") || !strings.Contains(landing, "\x1b[38;5;37mtenjin setup") {
+		t.Errorf("styled landing:\n%q", landing)
+	}
+	_, styled, _ := newHarness(t).run("--help")
+	if strings.Contains(styled, "█") {
+		t.Errorf("the full help carries the wordmark")
+	}
 	for _, want := range []string{
-		"████████╗",                               // the wordmark
 		"\x1b[1;38;5;37mYour Tenjin data:\x1b[0m", // a section title
 		"  \x1b[38;5;37msetup\x1b[0m",             // a command name
 		"\x1b[38;5;37m--json\x1b[0m",              // a flag
@@ -361,7 +372,7 @@ func TestHelpIsStyledOnATerminal(t *testing.T) {
 	}
 
 	t.Setenv("NO_COLOR", "1")
-	if _, off, _ := newHarness(t).run(); off != plain {
+	if _, off, _ := newHarness(t).run("--help"); off != plain {
 		t.Error("NO_COLOR did not give the plain help")
 	}
 }

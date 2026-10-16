@@ -1,4 +1,4 @@
-.PHONY: build test fmt-check lint tidy generate release-check release-snapshot
+.PHONY: build test coverage fmt-check lint lint-scripts tidy generate release-check release-snapshot
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
@@ -12,6 +12,18 @@ build:
 
 test:
 	go test -race ./...
+
+# Coverage of all the code, and of the lines changed since main, as CI reports
+# it on a pull request.
+coverage:
+	go test -coverpkg=./... -coverprofile=coverage.out ./...
+	go run ./scripts/coverage -profile coverage.out -base origin/main
+
+# The workflows (actionlint, which also runs shellcheck over their scripts)
+# and the shell scripts. Needs shellcheck installed.
+lint-scripts:
+	go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+	shellcheck install.sh scripts/*.sh
 
 generate:
 	go generate ./...

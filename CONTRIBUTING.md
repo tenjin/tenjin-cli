@@ -17,6 +17,8 @@ make build              # bin/tenjin, with the version stamped in
 make test               # go test -race ./...
 make lint               # gofmt check and golangci-lint
 make generate           # regenerate the API clients from internal/tenjinapi/openapi
+make coverage           # coverage of all the code and of what changed since main
+make lint-scripts       # actionlint and shellcheck (needs shellcheck installed)
 make release-snapshot   # every release archive and the Homebrew cask, into dist/; publishes nothing
 ```
 
@@ -71,7 +73,7 @@ Merging that pull request tags the release as a draft. The release workflow then
 ## Pull requests
 
 - Keep each pull request to one change, with tests.
-- `make test` and `make lint` pass, on macOS, Linux and Windows (CI runs all three).
+- `make test` and `make lint` pass, on macOS, Linux and Windows (CI runs all three). CI also lints the workflows and shell scripts, and comments the test coverage on the pull request: at least 80% of the changed statements must be tested.
 - Title the pull request as a [conventional commit](https://www.conventionalcommits.org/) (`feat: …`, `fix: …`, `docs: …`): squashed, it becomes the commit's title, and CI checks it. Its description says what changed and why.
 - Device log captures added as test fixtures must have every identifier, receipt, signature, key and location replaced first.
 

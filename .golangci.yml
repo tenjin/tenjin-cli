@@ -1,9 +1,33 @@
 version: "2"
 linters:
+  # The default set (errcheck, govet, ineffassign, staticcheck, unused), and:
+  enable:
+    - bodyclose # an HTTP response body left open
+    - errorlint # errors compared or cast in a way that misses wrapped ones
+    - gosec # security
+    - misspell # typos in comments and strings
+  settings:
+    gosec:
+      excludes:
+        # What a CLI does by design, each reviewed:
+        - G101 # names of token types and variables, not credentials
+        - G204 # it runs adb, xcrun and coding agents, through internal/proc
+        - G301 # folders it creates in a project get the project's usual mode
+        - G304 # it reads the files and folders the user points it at
+        - G306 # files it writes in a project are readable like the rest
+        - G122 # it reads the user's own project while walking it, and writes nothing
   exclusions:
+    generated: strict
     rules:
       # Tests routinely ignore errors from buffer writes and cleanup Close
-      # calls; errcheck stays fully active on non-test code.
+      # calls, build fixtures with plain file modes, and misspell on purpose
+      # (a mistyped command is a test case); errcheck stays fully active on
+      # non-test code.
       - path: _test\.go
         linters:
           - errcheck
+          - gosec
+          - misspell
+      - path: internal/testproject/
+        linters:
+          - gosec

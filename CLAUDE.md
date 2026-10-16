@@ -9,7 +9,9 @@ This repository is meant to be public. Keep internal details (private repos, int
 ```sh
 make build      # bin/tenjin, with version stamped in
 make test       # go test -race ./...
-make lint       # gofmt check + golangci-lint
+make lint       # gofmt check + golangci-lint (with gosec, bodyclose, errorlint, misspell; .golangci.yml says why each gosec rule left out is)
+make lint-scripts   # actionlint (workflows) + shellcheck (install.sh, scripts/)
+make coverage   # coverage of everything and of the lines changed since main; CI comments it on PRs and fails under 80% of changed statements
 make generate   # the API clients, from internal/tenjinapi/openapi (oapi-codegen v2.7.1)
 make release-snapshot   # GoReleaser, locally: every archive (with THIRD_PARTY_NOTICES.md) and the cask into dist/, nothing published
 go test -tags keychain ./internal/session   # opt-in: writes to the real system keychain

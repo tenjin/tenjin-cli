@@ -11,7 +11,8 @@ on:
       - go.sum
       - .golangci.yml
       - Makefile
-      - .github/workflows/linter.yaml
+      - .github/workflows/**
+      - '**/*.sh'
   pull_request:
     branches:
       - main
@@ -22,7 +23,8 @@ on:
       - go.sum
       - .golangci.yml
       - Makefile
-      - .github/workflows/linter.yaml
+      - .github/workflows/**
+      - '**/*.sh'
 permissions:
   contents: read
 jobs:
@@ -50,3 +52,21 @@ jobs:
         with:
           version: v2.14.0
           args: --timeout=5m
+  scripts:
+    # The release workflow holds a token for the tap, and install.sh is piped
+    # into people's shells: both are checked like code.
+    name: Workflows and scripts
+    concurrency: ${{ github.ref }}/scripts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: actionlint
+        # It runs shellcheck over every run: block too.
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+      - name: shellcheck
+        run: shellcheck install.sh scripts/*.sh

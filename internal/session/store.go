@@ -108,7 +108,7 @@ func (s *systemStore) Load(environment string) (*Credentials, error) {
 }
 
 func (s *systemStore) Save(c *Credentials) (string, error) {
-	raw, err := json.Marshal(c)
+	raw, err := json.Marshal(c) //nolint:gosec // G117: the session file is written 0600, below
 	if err != nil {
 		return "", err
 	}

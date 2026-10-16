@@ -18,3 +18,5 @@
 /demo/
 /completions/
 /THIRD_PARTY_NOTICES.md
+coverage.out
+coverage.md
