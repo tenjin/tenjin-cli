@@ -38,7 +38,9 @@ func TestDoctorReadsAnIOSSimulator(t *testing.T) {
 	lacks(t, stdout,
 		"On the device",
 		"Tenjin accepted the app's connect request (SDK 1.19.1)",
-		"Tenjin has processed this device's install, attributed to Organic",
+		// The SDK marks a simulator's requests, and Tenjin does not process
+		// them: said, and not asked about.
+		"Tenjin does not process installs from a simulator",
 		// The capture's app never asked for tracking permission.
 		"connect() ran before the user was asked for tracking permission",
 		"IDFV AAAABBBB-CCCC-DDDD-EEEE-000000000002",
@@ -47,8 +49,8 @@ func TestDoctorReadsAnIOSSimulator(t *testing.T) {
 	if read[0] != "simctl" || read[2] != "243AACFD-275B-4332-8D06-D4B06EFEA171" {
 		t.Errorf("simctl calls = %q", *calls)
 	}
-	if got := strings.Join(h.fake.installsAsked, ","); got != capturedIOSInstall {
-		t.Errorf("installs looked up = %q", got)
+	if len(h.fake.installsAsked) != 0 {
+		t.Errorf("a simulator's install was looked up: %q", h.fake.installsAsked)
 	}
 }
 
@@ -98,8 +100,12 @@ func TestSetupChecksALaunchOnTheIOSSimulator(t *testing.T) {
 	lacks(t, stdout,
 		"On an iPhone connected by cable, the Tenjin CLI launches the app itself",
 		"Install a debug build on the iPhone, or launch one on a simulator, then press Enter",
-		"✓ Tenjin received this device's install and processed it. The integration works end to end.",
+		"Tenjin accepted the app's request. That is as far as a simulator or emulator goes",
 	)
+	// Nothing to wait for.
+	if strings.Contains(stdout, "Waiting for it to process the install") {
+		t.Errorf("setup waited for a simulator's install:\n%s", stdout)
+	}
 }
 
 // The log of a real launch on an iPhone, scrubbed, and its installation ID.
@@ -183,8 +189,8 @@ func TestSetupChecksALaunchOnAnIPhone(t *testing.T) {
 	lacks(t, stdout, "✓ Tenjin received this device's install and processed it. The integration works end to end.")
 }
 
-// On a simulator, an accepted install that is not processed is not a
-// matter of waiting: say so, and what confirms it.
+// On a simulator, an accepted install is not processed by design: say so,
+// and what confirms it.
 func TestSetupSaysWhatConfirmsASimulatorLaunch(t *testing.T) {
 	h := newHarness(t)
 	h.fake.addApp("Sample", "com.example.sample", "ios")
@@ -192,7 +198,7 @@ func TestSetupSaysWhatConfirmsASimulatorLaunch(t *testing.T) {
 	h.bootSimulator(readCapturedIOSLog(t))
 	dir := testproject.Write(t, testproject.IOSNative())
 	_, stdout, _ := h.typing("", "").run("setup", dir)
-	lacks(t, stdout, "Installs from an iOS simulator have not been seen to be processed; a launch on an iPhone connected by cable confirms it.")
+	lacks(t, stdout, "the SDK marks its installs, and Tenjin leaves them out of attribution by design", "run a debug build on an iPhone connected by cable")
 }
 
 // A launch on an iPhone that logs nothing from Tenjin says so, and what to

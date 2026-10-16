@@ -101,6 +101,7 @@ When several devices or simulators are running, pass `--serial` with the adb ser
 | `device.connect` is `error` | Tenjin refused it; the title says why, and the fix follows from it |
 | `device.processed` is `pass` | Tenjin has processed the install and attributed it |
 | `device.processed` is `info` | Tenjin has not processed the install yet; run it again in a minute |
+| `device.simulator` | The launch was on a simulator or an emulator the SDK recognised, whose installs Tenjin leaves out of attribution by design; a physical device confirms the install |
 | `device.lookup` | Tenjin could not be asked about the install; the detail gives Tenjin's answer |
 | `device.processed.unchecked` | The install was not looked up, for the reason in the title (offline, for example) |
 | `device.connect` is `warning` | Only other apps' connects are in the log, or Tenjin gave an unusual answer |
@@ -111,7 +112,7 @@ When several devices or simulators are running, pass `--serial` with the adb ser
 | `device.advertising_id` | On iOS, `warning` when `connect()` ran before the tracking prompt was answered; `info` when the user declined tracking, which is expected |
 | `device.unavailable` | No device could be read; the title says why |
 
-On iOS, `doctor --device` reads an iPhone connected by cable, launching the installed debug build itself, or a running simulator. A simulator's install has not been seen to be processed, so `device.processed` from an iPhone is what confirms an iOS integration; from a simulator, say that `device.connect` passed and the install is unconfirmed.
+On iOS, `doctor --device` reads an iPhone connected by cable, launching the installed debug build itself, or a running simulator. Tenjin leaves a simulator's installs out of attribution by design (the SDK marks its requests with `device_info=true`), so `device.processed` from an iPhone is what confirms an iOS integration; from a simulator, `device.simulator` says so: report that `device.connect` passed, and that an iPhone is needed to see the install processed.
 
 ## Reading the account's data
 

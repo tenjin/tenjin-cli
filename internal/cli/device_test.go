@@ -193,3 +193,17 @@ func TestDoctorDeviceFlagErrors(t *testing.T) {
 		})
 	}
 }
+
+// An emulator the SDK recognises marks its requests device_info=true, and
+// Tenjin does not process them: doctor says so and does not ask.
+func TestDoctorOnAMarkedEmulator(t *testing.T) {
+	h := newHarness(t)
+	h.fake.installs[capturedInstall] = "Organic"
+	h.connectDevice(strings.ReplaceAll(readCapturedLog(t), "platform=android, ", "platform=android, device_info=true, "))
+	dir := testproject.Write(t, testproject.AndroidNative())
+	_, stdout, _ := h.run("doctor", dir, "--device")
+	lacks(t, stdout, "Tenjin does not process installs from a simulator or emulator", "a physical Android device")
+	if len(h.fake.installsAsked) != 0 {
+		t.Errorf("an emulator's install was looked up: %q", h.fake.installsAsked)
+	}
+}
