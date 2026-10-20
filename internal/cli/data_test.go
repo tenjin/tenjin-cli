@@ -102,6 +102,28 @@ func TestDataJSONIsTheAPIsAnswer(t *testing.T) {
 	}
 }
 
+// A table and CSV leave hidden campaigns out, as the dashboard does, and say
+// so; --json keeps them.
+func TestHiddenCampaignsAreLeftOutOfTables(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	h.fake.data = map[string]func(*http.Request) (int, any){"/v2/campaigns": func(*http.Request) (int, any) {
+		return http.StatusOK, json.RawMessage(`{"data":[
+			{"id":"` + testOther + `","type":"campaign","attributes":{"name":"Summer","hidden":false}},
+			{"id":"` + testApp + `","type":"campaign","attributes":{"name":"Spring @abc","hidden":true}}]}`)
+	}}
+	for _, format := range []string{"table", "csv"} {
+		code, stdout, stderr := h.run("campaigns", "list", "-o", format)
+		if code != 0 || !strings.Contains(stdout, "Summer") || strings.Contains(stdout, "Spring") || !strings.Contains(stderr, "Hidden campaigns left out, as the dashboard does: 1") {
+			t.Errorf("%s: exit = %d\n%s\n%s", format, code, stdout, stderr)
+		}
+	}
+	code, stdout, stderr := h.run("campaigns", "list", "--json")
+	if code != 0 || !strings.Contains(stdout, "Spring @abc") || strings.Contains(stderr, "left out") {
+		t.Errorf("--json: exit = %d\n%s\n%s", code, stdout, stderr)
+	}
+}
+
 // At a terminal, a list shows its view's columns, a report every column the
 // API sent in its order, and one resource all its fields.
 func TestDataTables(t *testing.T) {

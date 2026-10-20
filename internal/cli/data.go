@@ -31,6 +31,10 @@ type view struct {
 	// every attribute of the first item, in the API's order: reports carry
 	// the metrics that were asked for.
 	columns []string
+	// hidden names a boolean attribute that marks an item the dashboard
+	// leaves out. A table and CSV leave it out too, and say how many; --json
+	// keeps every item.
+	hidden string
 }
 
 // dataSpec is one data command.
@@ -123,9 +127,14 @@ const csvAnnotation = "csv"
 // resource as its fields. A table wider than the terminal is followed, on
 // errw, by how to see it whole.
 func writeDocument(w, errw io.Writer, format render.Format, doc tenjinapi.Document, v view) error {
-	header, rows, err := tableOf(doc, v)
+	header, rows, left, err := tableOf(doc, v)
 	if err != nil {
 		return err
+	}
+	if left > 0 && errw != nil {
+		defer func() {
+			_, _ = fmt.Fprintf(errw, "Hidden %s left out, as the dashboard does: %d; --json lists them too.\n", v.noun, left)
+		}()
 	}
 	if format == render.CSV {
 		if header == nil {
@@ -171,28 +180,29 @@ func morePages(doc tenjinapi.Document, page int) bool {
 
 // tableOf lays a document out as a header and rows. A list with no items has
 // no header.
-func tableOf(doc tenjinapi.Document, v view) (header []string, rows [][]string, err error) {
+func tableOf(doc tenjinapi.Document, v view) (header []string, rows [][]string, left int, err error) {
 	var body struct {
 		Data json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(doc, &body); err != nil {
-		return nil, nil, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned something that is not a JSON:API document")
+		return nil, nil, 0, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned something that is not a JSON:API document")
 	}
 	data := bytes.TrimSpace(body.Data)
 	if len(data) > 0 && data[0] == '[' {
 		var items []item
 		if err := json.Unmarshal(data, &items); err != nil {
-			return nil, nil, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned a list that is not one")
+			return nil, nil, 0, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned a list that is not one")
 		}
+		items, left = withoutHidden(items, v.hidden)
 		header, rows = itemRows(items, v)
-		return header, rows, nil
+		return header, rows, left, nil
 	}
 	var one item
 	if err := json.Unmarshal(data, &one); err != nil || len(data) == 0 {
-		return nil, nil, clierr.New(clierr.Upstream, "the Tenjin API's answer holds no data")
+		return nil, nil, 0, clierr.New(clierr.Upstream, "the Tenjin API's answer holds no data")
 	}
 	header, rows = itemFields(one)
-	return header, rows, nil
+	return header, rows, 0, nil
 }
 
 var ansi = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -204,6 +214,24 @@ func widest(text string) int {
 		most = max(most, utf8.RuneCountInString(line))
 	}
 	return most
+}
+
+// withoutHidden drops the items whose attribute named hidden is true, and
+// says how many it dropped.
+func withoutHidden(items []item, hidden string) ([]item, int) {
+	if hidden == "" {
+		return items, 0
+	}
+	kept := items[:0:0]
+	for _, it := range items {
+		var attrs map[string]json.RawMessage
+		_ = json.Unmarshal(it.Attributes, &attrs)
+		if string(bytes.TrimSpace(attrs[hidden])) == "true" {
+			continue
+		}
+		kept = append(kept, it)
+	}
+	return kept, len(items) - len(kept)
 }
 
 func itemRows(items []item, v view) ([]string, [][]string) {
@@ -357,7 +385,7 @@ func newCampaignsCmd(opts *options, env *environment) *cobra.Command {
 	cmd := group("campaigns", "Your campaigns",
 		dataCmd(opts, env, dataSpec{
 			use: "list", short: "List campaigns", paged: true,
-			view: view{noun: "campaigns", columns: []string{"name", "platform", "channel_id", "app_id"}},
+			view: view{noun: "campaigns", columns: []string{"name", "platform", "channel_id", "app_id"}, hidden: "hidden"},
 			flags: func(f *pflag.FlagSet) {
 				f.StringVar(&q.App, "app", "", "only this app's campaigns, by its ID")
 				optionalChannel(f, &channel, "campaigns")
