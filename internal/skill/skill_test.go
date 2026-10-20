@@ -109,6 +109,37 @@ func TestClaudeSkillInstallAndRemove(t *testing.T) {
 	}
 }
 
+// Folders an install made go when removal leaves them empty; a .claude that
+// holds anything else stays, with what it holds.
+func TestRemovalLeavesNoEmptyFolders(t *testing.T) {
+	claude := target(t, "claude")
+	dir := t.TempDir()
+	loc := Location{ProjectDir: dir}
+	install(t, claude, loc)
+	remove(t, claude, loc)
+	if _, err := os.Stat(filepath.Join(dir, ".claude")); !errors.Is(err, os.ErrNotExist) {
+		t.Error("an empty .claude was left behind")
+	}
+
+	dir = t.TempDir()
+	loc = Location{ProjectDir: dir}
+	settings := filepath.Join(dir, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settings), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(settings, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	install(t, claude, loc)
+	remove(t, claude, loc)
+	if _, err := os.Stat(settings); err != nil {
+		t.Error(".claude's own files went with the skill")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills")); !errors.Is(err, os.ErrNotExist) {
+		t.Error("an empty .claude/skills was left behind")
+	}
+}
+
 func TestClaudeSkillGlobal(t *testing.T) {
 	home, project := t.TempDir(), t.TempDir()
 	c := install(t, target(t, "claude"), Location{ProjectDir: project, Home: home, Global: true})
