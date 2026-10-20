@@ -564,7 +564,11 @@ func (s *setup) integrate(p *project.Project) error {
 		s.say("The Tenjin SDK is already set up in this project.")
 		return nil
 	}
-	s.say("The Tenjin SDK is not fully set up in this project yet. %s", outstanding(report.Summary))
+	if report.Summary.Errors == 0 {
+		s.say("The Tenjin SDK is set up in this project. %s", outstanding(report.Summary))
+	} else {
+		s.say("The Tenjin SDK is not fully set up in this project yet. %s", outstanding(report.Summary))
+	}
 	if len(agentWork(report)) == 0 {
 		s.say("What is left is the SDK keys, which the next step settles.")
 		return nil

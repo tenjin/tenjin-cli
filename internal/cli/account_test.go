@@ -320,6 +320,22 @@ func TestSetupOnACorrectProject(t *testing.T) {
 
 // Without a terminal, setup does not create apps unless told to, and still
 // carries on to the checks.
+// With only recommendations left, such as a newer SDK, step 5 says the SDK is
+// set up rather than that it is not.
+func TestSetupWithOnlyRecommendationsLeft(t *testing.T) {
+	h := newHarness(t)
+	h.fake.addApp("Sample", "com.example.sample", "android")
+	h.signIn()
+	const build = "app/build.gradle.kts"
+	base := testproject.AndroidNative()
+	dir := testproject.Write(t, base.With(testproject.Files{build: strings.Replace(base[build], "android-sdk:2.0.0", "android-sdk:1.24.0", 1)}))
+
+	code, stdout, stderr := h.run("setup", dir, "--agent", "none")
+	if code != 0 || !strings.Contains(stdout, "The Tenjin SDK is set up in this project. 1 change is recommended.") || strings.Contains(stdout, "not fully set up") {
+		t.Errorf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+}
+
 func TestSetupDoesNotCreateAppsUnasked(t *testing.T) {
 	h := newHarness(t)
 	h.signIn()
