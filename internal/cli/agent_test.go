@@ -586,3 +586,26 @@ func TestDoctorWithoutATerminalSaysHowToFix(t *testing.T) {
 		t.Errorf("--agent claude: exit = %d, runs = %q, stderr = %q", code, agent.runs(), stderr)
 	}
 }
+
+// An agent's run is for a person: with --json, --agent is refused rather
+// than ignored, and an agent that does not exist is named as such.
+func TestDoctorAgentFlagErrors(t *testing.T) {
+	h, dir := brokenAndroid(t)
+	agent := h.installAgent()
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"--agent", "claude", "--json"}, "has no JSON output"},
+		{[]string{"--agent", "cursor"}, `unknown agent "cursor"`},
+	} {
+		code, stdout, stderr := h.run(append([]string{"doctor", dir, "--offline"}, tc.args...)...)
+		if code != 2 || stdout != "" || !strings.Contains(stderr, tc.want) || agent.runs() != "" {
+			t.Errorf("%v: exit = %d, runs = %q, stdout = %q, stderr = %q", tc.args, code, agent.runs(), stdout, stderr)
+		}
+	}
+	// --agent none offers nothing, so it goes with JSON.
+	if code, stdout, _ := h.run("doctor", dir, "--offline", "--agent", "none", "--json"); code != 9 || !strings.HasPrefix(stdout, "{") {
+		t.Errorf("--agent none --json: exit = %d, stdout = %q", code, stdout)
+	}
+}
