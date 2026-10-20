@@ -327,6 +327,25 @@ func TestEveryPagedListPages(t *testing.T) {
 	}
 }
 
+// --channel 0 asks for Organic; a list given no --channel is not narrowed.
+func TestChannelZeroIsOrganic(t *testing.T) {
+	for _, list := range []string{"campaigns list", "ad-accounts list", "apps callbacks list --app " + testApp, "apps callback-templates list --app " + testApp} {
+		t.Run(list, func(t *testing.T) {
+			h := newHarness(t)
+			h.signIn()
+			if code, _, stderr := h.run(strings.Fields(list + " --channel 0")...); code != 0 || h.fake.dataAsked[0].Query().Get("channel_id") != "0" {
+				t.Errorf("--channel 0: exit = %d, query %q, stderr = %q", code, h.fake.dataAsked[0].RawQuery, stderr)
+			}
+			if code, _, _ := h.run(strings.Fields(list)...); code != 0 || h.fake.dataAsked[1].Query().Has("channel_id") {
+				t.Errorf("no --channel: exit = %d, query %q", code, h.fake.dataAsked[1].RawQuery)
+			}
+			if code, _, _ := h.run(strings.Fields(list + " --channel organic")...); code != 2 {
+				t.Errorf("--channel organic: exit = %d", code)
+			}
+		})
+	}
+}
+
 // A command missing what its endpoint needs, or given something that cannot
 // be an ID, fails as a usage error before any request.
 func TestDataUsageErrors(t *testing.T) {

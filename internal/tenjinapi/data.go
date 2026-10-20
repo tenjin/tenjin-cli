@@ -133,17 +133,18 @@ func ParseID(s, what string) (openapi_types.UUID, error) {
 	return id, nil
 }
 
-// CampaignQuery narrows a list of campaigns. Zero values do not narrow it.
+// CampaignQuery narrows a list of campaigns. Zero values and a nil Channel
+// do not narrow it; channel 0 is Organic.
 type CampaignQuery struct {
 	App      string
-	Channel  int
+	Channel  *int
 	Platform string
 	Query    string
 }
 
 // Campaigns lists campaigns.
 func (c *Client) Campaigns(ctx context.Context, q CampaignQuery, p Paging) (Document, error) {
-	params := cma.GetCampaignsParams{ChannelId: positive(q.Channel), Query: optional(q.Query)}
+	params := cma.GetCampaignsParams{ChannelId: q.Channel, Query: optional(q.Query)}
 	if q.App != "" {
 		app, err := ParseID(q.App, "app")
 		if err != nil {
@@ -189,10 +190,10 @@ func (c *Client) CallbackGroupTemplates(ctx context.Context, channel int, p Pagi
 	})
 }
 
-// AdAccounts lists ad accounts, of one channel when channel is not 0.
-func (c *Client) AdAccounts(ctx context.Context, channel int, query string, p Paging) (Document, error) {
+// AdAccounts lists ad accounts, of one channel when channel is not nil.
+func (c *Client) AdAccounts(ctx context.Context, channel *int, query string, p Paging) (Document, error) {
 	return c.list(ctx, p, func(cl clients, page, perPage *int) (*http.Response, error) {
-		return cl.cma.GetAdAccounts(ctx, &cma.GetAdAccountsParams{Page: page, PerPage: perPage, ChannelId: positive(channel), Query: optional(query)})
+		return cl.cma.GetAdAccounts(ctx, &cma.GetAdAccountsParams{Page: page, PerPage: perPage, ChannelId: channel, Query: optional(query)})
 	})
 }
 
@@ -228,14 +229,15 @@ func (c *Client) AppEvents(ctx context.Context, app string, p Paging) (Document,
 	})
 }
 
-// AppCallbacks lists an app's callbacks, of one channel when channel is not 0.
-func (c *Client) AppCallbacks(ctx context.Context, app string, channel int, p Paging) (Document, error) {
+// AppCallbacks lists an app's callbacks, of one channel when channel is not
+// nil.
+func (c *Client) AppCallbacks(ctx context.Context, app string, channel *int, p Paging) (Document, error) {
 	id, err := ParseID(app, "app")
 	if err != nil {
 		return nil, err
 	}
 	return c.list(ctx, p, func(cl clients, page, perPage *int) (*http.Response, error) {
-		return cl.cma.GetAppsAppIdCallbacks(ctx, id, &cma.GetAppsAppIdCallbacksParams{Page: page, PerPage: perPage, ChannelId: positive(channel)})
+		return cl.cma.GetAppsAppIdCallbacks(ctx, id, &cma.GetAppsAppIdCallbacksParams{Page: page, PerPage: perPage, ChannelId: channel})
 	})
 }
 
@@ -269,14 +271,14 @@ func (c *Client) AppS2SCallback(ctx context.Context, app, callback string) (Docu
 }
 
 // AppCallbackTemplates lists the callback templates an app can use, of one
-// channel when channel is not 0.
-func (c *Client) AppCallbackTemplates(ctx context.Context, app string, channel int, p Paging) (Document, error) {
+// channel when channel is not nil.
+func (c *Client) AppCallbackTemplates(ctx context.Context, app string, channel *int, p Paging) (Document, error) {
 	id, err := ParseID(app, "app")
 	if err != nil {
 		return nil, err
 	}
 	return c.list(ctx, p, func(cl clients, page, perPage *int) (*http.Response, error) {
-		return cl.cma.GetAppsAppIdCallbackTemplates(ctx, id, &cma.GetAppsAppIdCallbackTemplatesParams{Page: page, PerPage: perPage, ChannelId: positive(channel)})
+		return cl.cma.GetAppsAppIdCallbackTemplates(ctx, id, &cma.GetAppsAppIdCallbackTemplatesParams{Page: page, PerPage: perPage, ChannelId: channel})
 	})
 }
 
