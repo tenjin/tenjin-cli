@@ -44,6 +44,16 @@ type field struct {
 	// secret is said by its last four characters, in the question and the
 	// dry run.
 	secret bool
+	// check refuses a text value the API would not take.
+	check func(flag, value string) error
+}
+
+// isID checks that a field is an ID; what names it in the error.
+func isID(what string) func(flag, value string) error {
+	return func(_, value string) error {
+		_, err := tenjinapi.ParseID(value, what)
+		return err
+	}
 }
 
 // fieldSet binds a body's fields to flags, and builds the body from the
@@ -91,6 +101,11 @@ func (s *fieldSet) body(cmd *cobra.Command) (tenjinapi.Fields, error) {
 		}
 		switch v := s.values[fd.flag].(type) {
 		case *string:
+			if fd.check != nil {
+				if err := fd.check(fd.flag, *v); err != nil {
+					return nil, err
+				}
+			}
 			body[fd.name] = *v
 		case *int:
 			body[fd.name] = *v
@@ -489,11 +504,11 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 			{flag: "name", name: "name", usage: "the callback's name"},
 			{flag: "event", name: "event", usage: "the event that triggers it, such as open or purchase"},
 			{flag: "active", name: "active", usage: "whether it is sent", kind: boolField},
-			{flag: "user-filter", name: "user_filter", usage: "whose events it sends: all, or channel for the channel's own users"},
+			{flag: "user-filter", name: "user_filter", usage: "whose events it sends: all, or channel for the channel's own users", check: tenjinapi.CallbackUserFilters.Check},
 			{flag: "param", name: "customer_parameters", usage: "a parameter the channel needs", kind: pairsField},
 		}
 		if create {
-			fields = append([]field{{flag: "template", name: "callback_template_id", usage: "the callback template's ID, from 'tenjin apps callback-templates list'", required: true}}, fields...)
+			fields = append([]field{{flag: "template", name: "callback_template_id", usage: "the callback template's ID, from 'tenjin apps callback-templates list'", required: true, check: isID("callback template")}}, fields...)
 		}
 		return newFieldSet(fields...)
 	}
@@ -502,8 +517,8 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 			field{flag: "url", name: "url", usage: "where the callback is sent", required: create},
 			field{flag: "event", name: "event", usage: "the event that triggers it, such as open or purchase", required: create},
 			field{flag: "name", name: "name", usage: "the callback's name", required: create},
-			field{flag: "http-method", name: "http_method", usage: "GET or POST"},
-			field{flag: "action", name: "action", usage: "ping, or ping_on_first for the first event only", required: create},
+			field{flag: "http-method", name: "http_method", usage: "GET or POST", check: tenjinapi.S2SHTTPMethods.Check},
+			field{flag: "action", name: "action", usage: "ping, or ping_on_first for the first event only", required: create, check: tenjinapi.S2SActions.Check},
 			field{flag: "active", name: "active", usage: "whether it is sent", kind: boolField},
 			field{flag: "advertising-id-filter", name: "advertising_id_filter", usage: "only for users with a known advertising ID", kind: boolField},
 			field{flag: "user-filter", name: "user_filter", usage: "only for users attributed to these channels, by ID", kind: numbersField},
@@ -512,14 +527,14 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 	groupFields := func(create bool) *fieldSet {
 		fields := []field{
 			{flag: "event", name: "event", usage: "the event that triggers it, such as open or purchase"},
-			{flag: "event-definition", name: "event_definition_id", usage: "the event definition's ID, instead of --event"},
+			{flag: "event-definition", name: "event_definition_id", usage: "the event definition's ID, instead of --event", check: isID("event definition")},
 			{flag: "name", name: "name", usage: "the group's name"},
 			{flag: "active", name: "active", usage: "whether it is sent", kind: boolField},
-			{flag: "user-filter", name: "user_filter", usage: "whose events it sends: all, channel, or channel_and_organic"},
+			{flag: "user-filter", name: "user_filter", usage: "whose events it sends: all, channel, or channel_and_organic", check: tenjinapi.CallbackGroupUserFilters.Check},
 			{flag: "setting", name: "callback_settings", usage: "a callback setting", kind: pairsField},
 		}
 		if create {
-			fields = append([]field{{flag: "template", name: "callback_group_template_id", usage: "the template's ID, from 'tenjin channels callback-group-templates'", required: true}}, fields...)
+			fields = append([]field{{flag: "template", name: "callback_group_template_id", usage: "the template's ID, from 'tenjin channels callback-group-templates'", required: true, check: isID("callback group template")}}, fields...)
 		}
 		return newFieldSet(fields...)
 	}
@@ -667,7 +682,7 @@ func newSavedReportWriteCmds(opts *options, env *environment) []*cobra.Command {
 			{flag: "metrics", name: "metrics", usage: "the metrics, from 'tenjin reports metrics'", kind: listField},
 		}
 		if create {
-			fields = append([]field{{flag: "type", name: "report_type", usage: "user_acquisition or ad_revenue", required: true}}, fields...)
+			fields = append([]field{{flag: "type", name: "report_type", usage: "user_acquisition or ad_revenue", required: true, check: tenjinapi.SavedReportTypes.Check}}, fields...)
 		}
 		return newFieldSet(fields...)
 	}

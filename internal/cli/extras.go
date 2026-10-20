@@ -40,6 +40,9 @@ site ID everywhere unless --app, --campaign or --channel narrows it to one.
 			if err != nil {
 				return err
 			}
+			if err := tenjinapi.CheckSiteIDs(args); err != nil {
+				return err
+			}
 			rules := make([]tenjinapi.SiteIDRule, 0, len(args))
 			for _, id := range args {
 				rule := tenjinapi.SiteIDRule{SiteID: id, AppID: app, CampaignID: campaign}
@@ -95,6 +98,9 @@ site ID everywhere unless --app, --campaign or --channel narrows it to one.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, err := opts.format(cmd)
 			if err != nil {
+				return err
+			}
+			if err := tenjinapi.CheckSiteIDs(args); err != nil {
 				return err
 			}
 			what := "Remove every rule for " + strings.Join(args, ", ")

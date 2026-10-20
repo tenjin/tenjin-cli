@@ -54,6 +54,24 @@ func TestSiteIDs(t *testing.T) {
 	}
 }
 
+// A site ID the service would refuse is refused before the question.
+func TestSiteIDsAreChecked(t *testing.T) {
+	for _, args := range [][]string{
+		{"site-ids", "block", ""},
+		{"site-ids", "block", "bad\x07site"},
+		{"site-ids", "block", "same", "same"},
+		{"site-ids", "reinstate", ""},
+		{"site-ids", "reinstate", "same", "same", "--dry-run"},
+	} {
+		h := newHarness(t)
+		h.signIn()
+		h.typing("y")
+		if code, _, stderr := h.run(args...); code != 2 || len(h.fake.siteIDCalls) != 0 || strings.Contains(stderr, "[Y/n]") {
+			t.Errorf("%q: exit = %d, calls = %v, stderr = %q", args, code, h.fake.siteIDCalls, stderr)
+		}
+	}
+}
+
 // The documentation is searched without a token.
 func TestDocsSearch(t *testing.T) {
 	h := newHarness(t)

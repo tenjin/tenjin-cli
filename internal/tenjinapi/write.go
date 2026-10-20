@@ -9,11 +9,37 @@ import (
 	"net/http"
 
 	"github.com/tenjin/tenjin-cli/internal/clierr"
+	"github.com/tenjin/tenjin-cli/internal/tenjinapi/cma"
+	"github.com/tenjin/tenjin-cli/internal/tenjinapi/rma"
 )
 
 // Fields is a request body, by the API's own field names. Only the fields
 // given are sent, so an update changes those and leaves the rest.
 type Fields map[string]any
+
+// Choice is the values the API takes for a field, as its specs list them.
+type Choice struct {
+	say   string
+	valid func(string) bool
+}
+
+// Check refuses a value the API does not take; flag names the field.
+func (c Choice) Check(flag, value string) error {
+	if c.valid(value) {
+		return nil
+	}
+	return clierr.New(clierr.Usage, "--%s is %s, not %q", flag, c.say, value)
+}
+
+var (
+	S2SHTTPMethods = Choice{"GET or POST", func(s string) bool { return cma.S2sCallbackBodyHttpMethod(s).Valid() }}
+	S2SActions     = Choice{"ping or ping_on_first", func(s string) bool { return cma.S2sCallbackBodyAction(s).Valid() }}
+	// CallbackUserFilters are a callback's; a callback group's are
+	// CallbackGroupUserFilters.
+	CallbackUserFilters      = Choice{"all or channel", func(s string) bool { return cma.CallbackBodyUserFilter(s).Valid() }}
+	CallbackGroupUserFilters = Choice{"all, channel or channel_and_organic", func(s string) bool { return cma.CallbackGroupBodyUserFilter(s).Valid() }}
+	SavedReportTypes         = Choice{"user_acquisition or ad_revenue", func(s string) bool { return rma.GetSavedReportsParamsReportType(s).Valid() }}
+)
 
 // Request is a write as it would be sent.
 type Request struct {
