@@ -382,6 +382,18 @@ func TestDataUsageErrors(t *testing.T) {
 		"reports spend --from yesterday --to 2026-10-02",
 		"channels list --all --page 2",
 		"saved-reports run",
+		"reports spend --from 2026-10-07 --to 2026-10-01",
+		"reports spend --from 2026-10-01 --to 2026-10-02 --granularity hourly",
+		"reports ad-revenue --from 2026-10-01 --to 2026-10-02 --group-by site",
+		"reports skan --from 2026-10-01 --to 2026-10-02 --group-by campaign",
+		"reports skadnetwork --from 2026-10-01 --to 2026-10-02 --granularity weekly",
+		"reports spend --from 2026-10-01 --to 2026-10-02 --app com.example.sample",
+		"reports spend --from 2026-10-01 --to 2026-10-02 --channel facebook",
+		"skadnetworks get .",
+		"skadnetworks get ..",
+		"skadnetworks get 4fzdc2evr5",
+		"skadnetworks get ../sk_ad_networks",
+		"saved-reports list --type weekly",
 	} {
 		t.Run(args, func(t *testing.T) {
 			h := newHarness(t)

@@ -218,6 +218,14 @@ func TestWriteUsageErrors(t *testing.T) {
 		"apps callback-settings update --app " + testApp + " --setting a=b",
 		"saved-reports create --name Weekly --granularity daily --group-by app",
 		"campaigns delete not-an-id",
+		"apps callbacks create --app " + testApp + " --template summer",
+		"apps callbacks create --app " + testApp + " --template " + testOther + " --user-filter everyone",
+		"apps s2s-callbacks create --app " + testApp + " --url https://example.com/hook --event open --name Opens --action pong",
+		"apps s2s-callbacks update " + testOther + " --app " + testApp + " --http-method PUT",
+		"apps callback-groups create --app " + testApp + " --channel 18 --template " + testOther + " --event-definition purchase",
+		"apps callback-groups create --app " + testApp + " --channel 18 --template summer --event open",
+		"apps callback-groups update " + testOther + " --app " + testApp + " --channel 18 --user-filter none",
+		"saved-reports create --type weekly --name Weekly --granularity daily --group-by app",
 	} {
 		t.Run(args, func(t *testing.T) {
 			h := newHarness(t)

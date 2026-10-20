@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"unicode"
 
 	"github.com/tenjin/tenjin-cli/internal/clierr"
 )
@@ -28,6 +29,25 @@ type SiteIDRule struct {
 
 const siteIDService = "/management.v2.SiteIDFilter/"
 
+// CheckSiteIDs refuses what the service would: an empty site ID, one with a
+// control character, or the same one twice.
+func CheckSiteIDs(ids []string) error {
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if id == "" {
+			return clierr.New(clierr.Usage, "a site ID cannot be empty")
+		}
+		if strings.IndexFunc(id, unicode.IsControl) >= 0 {
+			return clierr.New(clierr.Usage, "the site ID %q has a control character in it", id)
+		}
+		if seen[id] {
+			return clierr.New(clierr.Usage, "the site ID %q is given twice", id)
+		}
+		seen[id] = true
+	}
+	return nil
+}
+
 // SiteIDRules returns the account's blocking rules, as the service answers:
 // {"rules": [...]}, or {} when there are none.
 func (c *Client) SiteIDRules(ctx context.Context) (Document, error) {
@@ -37,6 +57,13 @@ func (c *Client) SiteIDRules(ctx context.Context) (Document, error) {
 // BlockSiteIDs adds rules. With replace, they replace every existing rule
 // at once.
 func (c *Client) BlockSiteIDs(ctx context.Context, rules []SiteIDRule, replace bool) (Document, error) {
+	ids := make([]string, 0, len(rules))
+	for _, r := range rules {
+		ids = append(ids, r.SiteID)
+	}
+	if err := CheckSiteIDs(ids); err != nil {
+		return nil, err
+	}
 	body := struct {
 		Rules []SiteIDRule `json:"rules"`
 		Clear bool         `json:"clear,omitempty"`
@@ -46,6 +73,9 @@ func (c *Client) BlockSiteIDs(ctx context.Context, rules []SiteIDRule, replace b
 
 // ReinstateSiteIDs removes every rule for these site IDs.
 func (c *Client) ReinstateSiteIDs(ctx context.Context, siteIDs []string) (Document, error) {
+	if err := CheckSiteIDs(siteIDs); err != nil {
+		return nil, err
+	}
 	return c.siteIDs(ctx, "Reinstate", struct {
 		SiteIDs []string `json:"siteIds"`
 	}{siteIDs})

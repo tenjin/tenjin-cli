@@ -3,8 +3,11 @@ package tenjinapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -213,8 +216,14 @@ func (c *Client) SKAdNetworks(ctx context.Context, p Paging) (Document, error) {
 	})
 }
 
+// skAdNetworkID is the shape the API's route takes.
+var skAdNetworkID = regexp.MustCompile(`^[a-zA-Z0-9]{10}\.skadnetwork$`)
+
 // SKAdNetwork gets one SKAdNetwork ID, such as 4fzdc2evr5.skadnetwork.
 func (c *Client) SKAdNetwork(ctx context.Context, id string) (Document, error) {
+	if !skAdNetworkID.MatchString(id) {
+		return nil, clierr.New(clierr.Usage, "%q is not a SKAdNetwork ID: they look like 4fzdc2evr5.skadnetwork", id)
+	}
 	return c.fetch(ctx, func(cl clients) (*http.Response, error) { return cl.cma.GetSkAdNetworksId(ctx, id) })
 }
 
@@ -368,6 +377,13 @@ func (c *Client) Report(ctx context.Context, report Report, q ReportQuery, p Pag
 	if err != nil {
 		return nil, err
 	}
+	// Tenjin answers a reversed range with no rows, not an error.
+	if to.Before(from.Time) {
+		return nil, clierr.New(clierr.Usage, "--to %s is before --from %s", q.To, q.From)
+	}
+	if err := checkReportValues(report, q); err != nil {
+		return nil, err
+	}
 	apps, channels, metrics := optional(q.Apps), optional(q.Channels), optional(q.Metrics)
 	return c.list(ctx, p, func(cl clients, page, perPage *int) (*http.Response, error) {
 		switch report {
@@ -411,6 +427,55 @@ func (c *Client) Report(ctx context.Context, report Report, q ReportQuery, p Pag
 	})
 }
 
+// checkReportValues refuses what the report's spec does not list, and app
+// and channel IDs that cannot be IDs, before anything is sent.
+func checkReportValues(report Report, q ReportQuery) error {
+	var granularity, groupBy bool
+	switch report {
+	case ReportSpend:
+		granularity = rma.GetReportsSpendParamsGranularity(q.Granularity).Valid()
+		groupBy = rma.GetReportsSpendParamsGroupBy(q.GroupBy).Valid()
+	case ReportAdRevenue:
+		granularity = rma.GetReportsAdRevenueParamsGranularity(q.Granularity).Valid()
+		groupBy = rma.GetReportsAdRevenueParamsGroupBy(q.GroupBy).Valid()
+	case ReportSKAdNetwork:
+		granularity = rma.GetReportsSkAdNetworkParamsGranularity(q.Granularity).Valid()
+		groupBy = rma.GetReportsSkAdNetworkParamsGroupBy(q.GroupBy).Valid()
+	default:
+		granularity = rma.GetReportsSkanAppleParamsGranularity(q.Granularity).Valid()
+		groupBy = rma.GetReportsSkanAppleParamsGroupBy(q.GroupBy).Valid()
+	}
+	help := fmt.Sprintf("'tenjin reports %s --help' lists the values it takes.", report)
+	if q.Granularity != "" && !granularity {
+		return clierr.New(clierr.Usage, "the %s report does not take --granularity %q", report, q.Granularity).WithHint("%s", help)
+	}
+	if q.GroupBy != "" && !groupBy {
+		return clierr.New(clierr.Usage, "the %s report does not take --group-by %q", report, q.GroupBy).WithHint("%s", help)
+	}
+	for _, app := range splitList(q.Apps) {
+		if _, err := ParseID(app, "app"); err != nil {
+			return err
+		}
+	}
+	for _, channel := range splitList(q.Channels) {
+		if _, err := strconv.Atoi(channel); err != nil {
+			return clierr.New(clierr.Usage, "channel %q is not an ID: channel IDs are numbers, from 'tenjin channels list'", channel)
+		}
+	}
+	return nil
+}
+
+func splitList(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	return parts
+}
+
 func parseDate(s, flag string) (openapi_types.Date, error) {
 	t, err := time.Parse(time.DateOnly, s)
 	if err != nil {
@@ -422,6 +487,11 @@ func parseDate(s, flag string) (openapi_types.Date, error) {
 // SavedReports lists saved reports, of one type (user_acquisition or
 // ad_revenue) when reportType is not empty.
 func (c *Client) SavedReports(ctx context.Context, reportType string, p Paging) (Document, error) {
+	if reportType != "" {
+		if err := SavedReportTypes.Check("type", reportType); err != nil {
+			return nil, err
+		}
+	}
 	return c.list(ctx, p, func(cl clients, page, perPage *int) (*http.Response, error) {
 		params := rma.GetSavedReportsParams{Page: page, PerPage: perPage}
 		if reportType != "" {

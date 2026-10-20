@@ -179,7 +179,7 @@ Changes are commands too. Each sends only the fields given as flags, asks before
 | `tenjin saved-reports create --type <type> --name <name> --granularity <g> --group-by <g>`, `update <id>`, `delete <id>` | Saved reports |
 | `tenjin site-ids block <site-id>...`, `reinstate <site-id>...`, `clear` | Block site IDs, everywhere or for one `--app`, `--campaign` or `--channel`; `--replace` makes them the only rules |
 
-Reports take the API's own values: `--granularity`, `--group-by`, and `--app`, `--channel` and `--metrics`, each repeated or comma-separated. `tenjin reports metrics` lists the metric names. For example:
+Reports take the API's own values, and refuse others before anything is sent: `--granularity`, `--group-by`, and `--app`, `--channel` and `--metrics`, each repeated or comma-separated. `tenjin reports metrics` lists the metric names. For example:
 
 ```sh
 tenjin reports spend --from 2026-10-01 --to 2026-10-07 --group-by channel,app --granularity totals-daily

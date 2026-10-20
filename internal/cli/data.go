@@ -612,11 +612,11 @@ func newReportsCmd(opts *options, env *environment) *cobra.Command {
 			long: short + `, for the dates from --from to --to (YYYY-MM-DD), both included.
 Every row is shown: --page and --per-page show one page instead.
 
-The other flags take the API's own values and are passed as they are:
---granularity is one of ` + granularities + `, and --group-by one of ` + groupings + `.
---app, --channel and --metrics can be repeated or given comma-separated; find
-metric names with 'tenjin reports metrics'. Left out, each is the API's
-default.`,
+The other flags take the API's own values, and others are refused before
+anything is sent: --granularity is one of ` + granularities + `, and --group-by one
+of ` + groupings + `. --app and --channel take IDs, and with --metrics can
+be repeated or given comma-separated; find metric names with 'tenjin reports
+metrics'. Left out, each is the API's default.`,
 			view: view{noun: "rows"},
 			flags: func(f *pflag.FlagSet) {
 				f.StringVar(&q.From, "from", "", "the first day, YYYY-MM-DD (required)")
@@ -641,7 +641,7 @@ default.`,
 		report(tenjinapi.ReportSpend, "User acquisition: spend, installs and what they returned", "daily, weekly, monthly, totals-daily", "app, channel, country, site, campaign, campaign,country, channel,app, channel,app,country, creative"),
 		report(tenjinapi.ReportAdRevenue, "Ad revenue, by ad network", "daily, weekly, monthly, totals-daily", "app, channel, country, channel,app, channel,app,country, ad_placement"),
 		report(tenjinapi.ReportSKAdNetwork, "SKAdNetwork postbacks, as Tenjin attributes them", "daily", "app, channel, campaign, sk_ad_network, sk_campaign, sk_source_app, fidelity_type, conversion_value"),
-		report(tenjinapi.ReportSKAN, "SKAdNetwork postbacks, as Apple sends them", "daily", "app, channel, campaign, sk_ad_network, sk_campaign, sk_source_app, fidelity_type, conversion_value"),
+		report(tenjinapi.ReportSKAN, "SKAdNetwork postbacks, as Apple sends them", "daily", "app, channel, sk_ad_network, sk_campaign, sk_source_app, fidelity_type, conversion_value"),
 	)
 }
 
