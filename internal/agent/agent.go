@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/tenjin/tenjin-cli/internal/proc"
@@ -197,7 +198,7 @@ func (a Agent) Run(ctx context.Context, task Task, progress func(Action)) (Resul
 	cmd := proc.Command(ctx, a.Path, a.args(task, sessionID)...)
 	cmd.Dir = task.Dir
 	cmd.Stdin = strings.NewReader(task.Prompt)
-	cmd.Env = withPath(withoutKeys(os.Environ()), task.ToolDir)
+	cmd.Env = withPath(withoutKeys(os.Environ(), foldEnv), task.ToolDir, foldEnv)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -320,31 +321,54 @@ func resolved(dir string) string {
 	return dir
 }
 
+// foldEnv is true where the names of environment variables ignore case, as
+// on Windows: there PATH is usually spelled Path, and tenjin_api_token is
+// TENJIN_API_TOKEN.
+var foldEnv = runtime.GOOS == "windows"
+
+// envName returns the name of a NAME=value entry. Windows has entries such
+// as "=C:=C:\work", whose name starts with the sign.
+func envName(kv string) string {
+	if kv == "" {
+		return ""
+	}
+	if i := strings.IndexByte(kv[1:], '='); i >= 0 {
+		return kv[:i+1]
+	}
+	return kv
+}
+
 // withoutKeys drops the variables that carry Tenjin secrets: the SDK keys
 // (TENJIN_SDK_KEY and its per-build forms) and TENJIN_API_TOKEN. The agent
 // writes a placeholder where a key belongs and is never given the key, and
 // the checks it runs need no sign-in, so it must find neither in its
 // environment.
-func withoutKeys(env []string) []string {
+func withoutKeys(env []string, fold bool) []string {
 	out := make([]string, 0, len(env))
 	for _, kv := range env {
-		if !strings.HasPrefix(kv, "TENJIN_SDK_KEY") && !strings.HasPrefix(kv, "TENJIN_API_TOKEN=") {
+		name := envName(kv)
+		if fold {
+			name = strings.ToUpper(name)
+		}
+		if !strings.HasPrefix(name, "TENJIN_SDK_KEY") && name != "TENJIN_API_TOKEN" {
 			out = append(out, kv)
 		}
 	}
 	return out
 }
 
-// withPath returns env with dir placed first on PATH.
-func withPath(env []string, dir string) []string {
+// withPath returns env with dir placed first on PATH, keeping the name the
+// entry already has.
+func withPath(env []string, dir string, fold bool) []string {
 	if dir == "" {
 		return env
 	}
 	out := make([]string, 0, len(env)+1)
 	found := false
 	for _, kv := range env {
-		if strings.HasPrefix(kv, "PATH=") {
-			kv = "PATH=" + dir + string(os.PathListSeparator) + strings.TrimPrefix(kv, "PATH=")
+		name := envName(kv)
+		if name == "PATH" || fold && strings.EqualFold(name, "PATH") {
+			kv = name + "=" + dir + string(os.PathListSeparator) + strings.TrimPrefix(kv[len(name):], "=")
 			found = true
 		}
 		out = append(out, kv)

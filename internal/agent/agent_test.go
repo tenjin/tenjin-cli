@@ -83,12 +83,27 @@ func TestInsideAgent(t *testing.T) {
 
 func TestWithPath(t *testing.T) {
 	sep := string(os.PathListSeparator)
-	got := withPath([]string{"HOME=/h", "PATH=/usr/bin"}, "/opt/tenjin")
+	got := withPath([]string{"HOME=/h", "PATH=/usr/bin"}, "/opt/tenjin", false)
 	if got[1] != "PATH=/opt/tenjin"+sep+"/usr/bin" || got[0] != "HOME=/h" {
 		t.Errorf("env = %q", got)
 	}
-	if got := withPath([]string{"HOME=/h"}, "/opt/tenjin"); got[1] != "PATH=/opt/tenjin" {
+	if got := withPath([]string{"HOME=/h"}, "/opt/tenjin", false); got[1] != "PATH=/opt/tenjin" {
 		t.Errorf("env = %q", got)
+	}
+	// Where names are case-sensitive, Path is another variable.
+	if got := withPath([]string{"Path=/usr/bin"}, "/opt/tenjin", false); strings.Join(got, " ") != "Path=/usr/bin PATH=/opt/tenjin" {
+		t.Errorf("env = %q", got)
+	}
+}
+
+// Windows spells it Path, and a second entry named PATH would replace it, so
+// the agent would find nothing but the Tenjin CLI.
+func TestWithPathKeepsTheWindowsPath(t *testing.T) {
+	env := []string{`=C:=C:\work`, `Path=C:\Windows;C:\Program Files\nodejs`, `USERPROFILE=C:\Users\me`}
+	got := withPath(env, `C:\tenjin`, true)
+	want := []string{`=C:=C:\work`, `Path=C:\tenjin` + string(os.PathListSeparator) + `C:\Windows;C:\Program Files\nodejs`, `USERPROFILE=C:\Users\me`}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("env = %q, want %q", got, want)
 	}
 }
 
@@ -166,8 +181,23 @@ func TestInsideCodex(t *testing.T) {
 }
 
 func TestTheAgentInheritsNoSDKKey(t *testing.T) {
-	got := withoutKeys([]string{"HOME=/h", "TENJIN_SDK_KEY=abc", "TENJIN_SDK_KEY_ANDROID=def", "TENJIN_SDK_KEY_IOS=ghi", "TENJIN_SDK_KEY_ANDROID_AMAZON=jkl", "TENJIN_API_TOKEN=tok", "TENJIN_API_URL=http://x"})
-	if strings.Join(got, " ") != "HOME=/h TENJIN_API_URL=http://x" {
+	env := []string{"HOME=/h", "TENJIN_SDK_KEY=abc", "TENJIN_SDK_KEY_ANDROID=def", "TENJIN_SDK_KEY_IOS=ghi", "TENJIN_SDK_KEY_ANDROID_AMAZON=jkl", "TENJIN_API_TOKEN=tok", "TENJIN_API_TOKENS=x", "TENJIN_API_URL=http://x"}
+	for _, fold := range []bool{false, true} {
+		if got := withoutKeys(env, fold); strings.Join(got, " ") != "HOME=/h TENJIN_API_TOKENS=x TENJIN_API_URL=http://x" {
+			t.Errorf("fold %v: env = %q", fold, got)
+		}
+	}
+}
+
+// On Windows the CLI reads tenjin_api_token as TENJIN_API_TOKEN, so the
+// agent must not inherit it under that spelling either.
+func TestTheAgentInheritsNoKeyInAnotherCaseOnWindows(t *testing.T) {
+	env := []string{"Path=C:\\bin", "tenjin_api_token=tok", "Tenjin_Sdk_Key_Android=def"}
+	if got := withoutKeys(env, true); strings.Join(got, " ") != "Path=C:\\bin" {
+		t.Errorf("env = %q", got)
+	}
+	// Elsewhere those are other variables, which the CLI does not read.
+	if got := withoutKeys(env, false); len(got) != 3 {
 		t.Errorf("env = %q", got)
 	}
 }
