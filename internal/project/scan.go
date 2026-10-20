@@ -40,7 +40,7 @@ func (d *detector) walk(rel string, maxDepth int, fn func(path string, entry fs.
 		depth := strings.Count(filepath.ToSlash(fromStart), "/") + 1
 
 		if entry.IsDir() {
-			if skipDirs[entry.Name()] {
+			if skipDirs[entry.Name()] || webCopy(relPath) {
 				return filepath.SkipDir
 			}
 			fn(relPath, entry)
@@ -52,6 +52,14 @@ func (d *detector) walk(rel string, maxDepth int, fn func(path string, entry fs.
 		fn(relPath, entry)
 		return nil
 	})
+}
+
+// webCopy reports whether a folder is the copy of a web app's build that
+// Capacitor puts in the native projects on each sync: output, which may be
+// older than the source.
+func webCopy(rel string) bool {
+	rel = "/" + rel
+	return strings.HasSuffix(rel, "/src/main/assets/public") || strings.HasSuffix(rel, "/App/App/public")
 }
 
 func isBundle(name string) bool {
