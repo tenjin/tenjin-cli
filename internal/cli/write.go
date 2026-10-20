@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 
@@ -39,6 +40,9 @@ type field struct {
 	flag, name, usage string
 	kind              fieldKind
 	required          bool
+	// secret is said by its last four characters, in the question and the
+	// dry run.
+	secret bool
 }
 
 // fieldSet binds a body's fields to flags, and builds the body from the
@@ -112,6 +116,19 @@ func (s *fieldSet) body(cmd *cobra.Command) (tenjinapi.Fields, error) {
 	return body, nil
 }
 
+// masked is the body with its secrets by their last four characters, and
+// whether it had any.
+func (s *fieldSet) masked(body tenjinapi.Fields) (tenjinapi.Fields, bool) {
+	out := maps.Clone(body)
+	hid := false
+	for _, fd := range s.fields {
+		if v, ok := body[fd.name].(string); ok && fd.secret {
+			out[fd.name], hid = maskKey(v), true
+		}
+	}
+	return out, hid
+}
+
 func (s *fieldSet) flagNames() string {
 	names := make([]string, 0, len(s.fields))
 	for _, fd := range s.fields {
@@ -136,6 +153,9 @@ type writeSpec struct {
 	// destructive asks with no as the default.
 	destructive bool
 	send        func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (tenjinapi.Document, error)
+	// show, instead of send, makes the write and writes what it did in the
+	// CLI's own form: an app's answer holds its shared secrets.
+	show func(cmd *cobra.Command, format render.Format, args []string, body tenjinapi.Fields) error
 	// done is what a person is told after an answer with no resource in it.
 	done string
 }
@@ -172,11 +192,19 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 				return err
 			}
 			if dryRun {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Would %s. Nothing was sent; the body it would send:\n", lowerFirst(render.Clean(what)))
-				return render.WriteJSON(cmd.OutOrStdout(), body)
+				shown, masked := fields.masked(body)
+				note := ""
+				if masked {
+					note = ", its secrets by their last four characters"
+				}
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Would %s. Nothing was sent; the body it would send%s:\n", lowerFirst(render.Clean(what)), note)
+				return render.WriteJSON(cmd.OutOrStdout(), shown)
 			}
 			if err := confirmChange(cmd, env, yes, what, s.destructive); err != nil {
 				return err
+			}
+			if s.show != nil {
+				return s.show(cmd, format, args, body)
 			}
 			doc, err := s.send(cmd.Context(), env.api(), args, body)
 			if err != nil {
@@ -265,6 +293,9 @@ func (s *fieldSet) describe(body tenjinapi.Fields) string {
 			}
 			parts = append(parts, "--"+fd.flag+" "+strings.Join(numbers, ","))
 		case string:
+			if fd.secret {
+				t = maskKey(t)
+			}
 			if strings.ContainsAny(t, " \t") || t == "" {
 				parts = append(parts, fmt.Sprintf("--%s %q", fd.flag, t))
 			} else {
@@ -285,8 +316,8 @@ bundle ID and platform cannot be changed.`,
 		args: exactArgs(1, "the app's ID, from 'tenjin apps list'"),
 		fields: newFieldSet(
 			field{flag: "name", name: "name", usage: "the app's name"},
-			field{flag: "public-key", name: "public_key", usage: "the Google Play public key, for Android receipt validation"},
-			field{flag: "ios-shared-secret", name: "ios_shared_secret", usage: "the App Store shared secret, for iOS subscription revenue"},
+			field{flag: "public-key", name: "public_key", usage: "the Google Play public key, for Android receipt validation", secret: true},
+			field{flag: "ios-shared-secret", name: "ios_shared_secret", usage: "the App Store shared secret, for iOS subscription revenue", secret: true},
 			field{flag: "protocol", name: "protocol", usage: "the app's URL scheme, for Facebook deep links"},
 			field{flag: "match-strings", name: "match_strings", usage: "strings that match campaigns to the app"},
 			field{flag: "destination-url", name: "destination_url", usage: "where an android_other app is downloaded from"},
@@ -294,23 +325,39 @@ bundle ID and platform cannot be changed.`,
 		prepare: func(args []string, body tenjinapi.Fields, said string) (string, error) {
 			return fmt.Sprintf("Change the app %s: %s", args[0], said), nil
 		},
-		send: func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
-			return api.UpdateApp(ctx, args[0], body)
+		show: func(cmd *cobra.Command, format render.Format, args []string, body tenjinapi.Fields) error {
+			app, err := env.api().UpdateApp(cmd.Context(), args[0], body)
+			if err != nil {
+				return err
+			}
+			detail := appDetail{App: *app, DashboardURL: env.endpoints.SDKKeysURL(app.ID)}
+			if format == render.JSON {
+				return render.WriteJSON(cmd.OutOrStdout(), detail)
+			}
+			render.CleanAll(&detail)
+			return writeAppDetail(cmd.OutOrStdout(), detail)
 		},
 	})
 }
 
 func newAppsDeleteCmd(opts *options, env *environment) *cobra.Command {
 	return writeCmd(opts, env, writeSpec{
-		use: "delete <app-id>", short: "Delete an app", destructive: true, done: "Deleted.",
+		use: "delete <app-id>", short: "Delete an app", destructive: true,
 		long: `Delete an app. It no longer appears in the dashboard or the API, and its
 SDK keys stop being accepted.`,
 		args: exactArgs(1, "the app's ID, from 'tenjin apps list'"),
 		prepare: func(args []string, _ tenjinapi.Fields, said string) (string, error) {
 			return "Delete the app " + args[0], nil
 		},
-		send: func(ctx context.Context, api *tenjinapi.Client, args []string, _ tenjinapi.Fields) (tenjinapi.Document, error) {
-			return api.DeleteApp(ctx, args[0])
+		show: func(cmd *cobra.Command, format render.Format, args []string, _ tenjinapi.Fields) error {
+			if err := env.api().DeleteApp(cmd.Context(), args[0]); err != nil {
+				return err
+			}
+			if format == render.JSON {
+				return render.WriteJSON(cmd.OutOrStdout(), map[string]any{"app_id": args[0], "deleted": true})
+			}
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), "Deleted.")
+			return err
 		},
 	})
 }
