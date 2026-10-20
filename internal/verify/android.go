@@ -289,7 +289,7 @@ func (r *runner) checkProguard(t *project.Target) {
 	}
 	matches, _ := filepath.Glob(filepath.Join(r.p.Root, filepath.FromSlash(t.Android.ModuleDir), "*.pro"))
 	for _, m := range matches {
-		if raw, err := os.ReadFile(m); err == nil && strings.Contains(string(raw), "com.tenjin") {
+		if raw, err := os.ReadFile(m); err == nil && strings.Contains(withoutComments(m, string(raw)), "com.tenjin") {
 			rel, _ := filepath.Rel(r.p.Root, m)
 			r.pass("android.proguard", project.Android, "ProGuard keep rules for Tenjin are present", filepath.ToSlash(rel), 0)
 			return
@@ -410,14 +410,14 @@ func (r *runner) storeSetInCode() string {
 // stripCode is a build file without its comments, for matching settings.
 func stripCode(s string) string { return project.BlankComments(s) }
 
-// androidDeps is the text of every file that declares the app's
-// dependencies: its build file, the version catalog, and the build files of
-// the library modules it depends on.
+// androidDeps is the code of every file that declares the app's
+// dependencies, without comments: its build file, the version catalog, and
+// the build files of the library modules it depends on.
 func (r *runner) androidDeps(t *project.Target) string {
-	parts := []string{r.readRel(t.Android.BuildFile), r.readRel(t.Android.VersionCatalog)}
+	parts := []string{r.readCode(t.Android.BuildFile), r.readCode(t.Android.VersionCatalog)}
 	for _, m := range t.Android.LibraryModules {
 		for _, name := range []string{"build.gradle.kts", "build.gradle"} {
-			parts = append(parts, r.readRel(path.Join(m, name)))
+			parts = append(parts, r.readCode(path.Join(m, name)))
 		}
 	}
 	return strings.Join(parts, "\n")

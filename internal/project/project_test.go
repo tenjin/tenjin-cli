@@ -487,6 +487,29 @@ func TestAdSDKs(t *testing.T) {
 		}
 	})
 
+	// YAML and TOML comment with #: what is commented out there is not a
+	// dependency either, and neither suggests a feature.
+	t.Run("flutter and a version catalog", func(t *testing.T) {
+		base := testproject.Flutter()
+		p := detect(t, base.With(testproject.Files{
+			"pubspec.yaml":                      base["pubspec.yaml"] + "  # google_mobile_ads: ^5.0.0\n  # purchases_flutter: ^8.0.0\n",
+			"android/settings.gradle.kts":       "include(\":app\")\n",
+			"android/gradle/libs.versions.toml": "[libraries]\n# applovin = { module = \"com.applovin:applovin-sdk\", version = \"13.0.0\" }\nbilling = { module = \"com.android.billingclient:billing\", version = \"7.0.0\" } # not RevenueCat: com.revenuecat.purchases\n",
+		}))
+		if got := names(p); got != "" {
+			t.Errorf("ad SDKs = %q", got)
+		}
+		var evidence []string
+		for _, f := range p.Features {
+			for _, e := range f.Evidence {
+				evidence = append(evidence, e.What)
+			}
+		}
+		if got := strings.Join(evidence, ", "); got != "Google Play Billing" {
+			t.Errorf("evidence = %q", got)
+		}
+	})
+
 	t.Run("ios pods", func(t *testing.T) {
 		base := testproject.IOSNative()
 		p := detect(t, base.With(testproject.Files{

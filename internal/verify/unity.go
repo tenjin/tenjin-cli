@@ -202,7 +202,7 @@ func (r *runner) checkUnityAndroidLibraries() {
 	case r.isDir("Assets/ExternalDependencyManager"), r.isDir("Assets/PlayServicesResolver"):
 		r.pass("unity.android_libraries", project.Android, "The External Dependency Manager adds Tenjin's Android libraries to the build", "Assets/ExternalDependencyManager", 0)
 		return
-	case strings.Contains(r.readRel("Assets/Plugins/Android/mainTemplate.gradle"), "com.tenjin:android-sdk"):
+	case strings.Contains(r.readCode("Assets/Plugins/Android/mainTemplate.gradle"), "com.tenjin:android-sdk"):
 		r.pass("unity.android_libraries", project.Android, "The Gradle template adds Tenjin's Android SDK to the build", "Assets/Plugins/Android/mainTemplate.gradle", 0)
 		return
 	}
@@ -217,7 +217,7 @@ func (r *runner) checkUnityAndroidLibraries() {
 // checkUnityStoreType reports an Android build that does not say which
 // store it is for. The TenjinObject component sets Google Play itself.
 func (r *runner) checkUnityStoreType(src source, usesComponent bool) {
-	if usesComponent || strings.Contains(r.readRel("Assets/Plugins/Android/AndroidManifest.xml"), "TENJIN_APP_STORE") {
+	if usesComponent || strings.Contains(r.readCode("Assets/Plugins/Android/AndroidManifest.xml"), "TENJIN_APP_STORE") {
 		return
 	}
 	for _, c := range append(src.inits, src.connects...) {
@@ -239,7 +239,7 @@ func (r *runner) checkUnityProguard() {
 		return
 	}
 	const rules = "Assets/Plugins/Android/proguard-user.txt"
-	if strings.Contains(r.readRel(rules), "com.tenjin") {
+	if strings.Contains(r.readCode(rules), "com.tenjin") {
 		r.pass("android.proguard", project.Android, "ProGuard keep rules for Tenjin are present", rules, 0)
 		return
 	}
@@ -271,7 +271,7 @@ func (r *runner) checkUnitySKAN() {
 			return nil
 		}
 		raw, err := os.ReadFile(p)
-		if err == nil && strings.Contains(string(raw), plistSKAN) && strings.Contains(string(raw), "tenjin-skan.com") {
+		if code := blankComments(string(raw)); err == nil && strings.Contains(code, plistSKAN) && strings.Contains(code, "tenjin-skan.com") {
 			rel, _ := filepath.Rel(r.p.Root, p)
 			setter = filepath.ToSlash(rel)
 		}

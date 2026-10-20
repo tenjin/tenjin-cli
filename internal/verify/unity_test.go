@@ -60,6 +60,9 @@ func TestUnityWithoutTheDependencyManager(t *testing.T) {
 		expect(t, run(t, files, verify.Options{}), "unity.android_libraries", project.Android, verify.Pass)
 		_ = name
 	}
+	// A dependency commented out of the template adds nothing.
+	files := base.With(testproject.Files{"Packages/manifest.json": manifest, "Assets/Plugins/Android/mainTemplate.gradle": "dependencies {\n    // implementation 'com.tenjin:android-sdk:1.24.0'\n}\n"})
+	expect(t, run(t, files, verify.Options{}), "unity.android_libraries", project.Android, verify.Error)
 }
 
 func TestUnityPackageListedUnderTheWrongName(t *testing.T) {
