@@ -25,6 +25,11 @@ var (
 	// import Anything from 'react-native-tenjin', or require().
 	reactNativeAlias = regexp.MustCompile(`import\s+(\w+)\s+from\s+['"]react-native-tenjin['"]|(\w+)\s*=\s*require\(\s*['"]react-native-tenjin['"]\s*\)`)
 	capacitorAlias   = regexp.MustCompile(`\bTenjin\s+as\s+(\w+)`)
+	// C# `BaseTenjin instance = …`, a BaseTenjin field or parameter, or
+	// `var t = Tenjin.getInstance(…)`.
+	unityAlias = regexp.MustCompile(`\bBaseTenjin\s+(\w+)\b|\b(\w+)\s*=\s*Tenjin\.getInstance`)
+	// A call chained on getInstance, or on the component's instance.
+	unityChained = regexp.MustCompile(`(?:\bTenjin\.getInstance\w*\((?:[^()]|\([^()]*\))*\)|\bGetTenjinInstance\(\s*\))\s*\.Connect\(`)
 )
 
 // aliases returns the names the pattern captures.
@@ -74,6 +79,17 @@ func normalizeReactNative(text string) string {
 
 func normalizeCapacitor(text string) string {
 	return rewrite(text, aliases(capacitorAlias, text), "Tenjin")
+}
+
+// normalizeUnity makes every Connect on a Tenjin instance read
+// Tenjin.Connect(, so that an IAP store's or a socket's Connect() is not
+// taken for Tenjin's.
+func normalizeUnity(text string) string {
+	text = unityChained.ReplaceAllStringFunc(text, func(chain string) string {
+		end := strings.LastIndex(chain, ".Connect(")
+		return chain[:end] + " Tenjin.Connect("
+	})
+	return rewrite(text, aliases(unityAlias, text), "Tenjin")
 }
 
 // testSource reports whether a file is test code, which says nothing about

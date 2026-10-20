@@ -28,7 +28,9 @@ var unitySpec = frameworkSpec{
 	connectName: "Connect()",
 	initCall:    regexp.MustCompile(`Tenjin\.getInstance\w*\(`),
 	keyLiteral:  regexp.MustCompile(`Tenjin\.getInstance\w*\(\s*"([^"]*)"`),
-	connectCall: regexp.MustCompile(`\.Connect\(\)`),
+	// On a Tenjin instance only, after normalizeUnity.
+	connectCall: regexp.MustCompile(`\bTenjin\.Connect\(`),
+	normalize:   normalizeUnity,
 	initFix:     `In the first scene's Start(), call Tenjin.getInstance("<SDK_KEY>"), choosing the key with #if UNITY_IOS and #elif UNITY_ANDROID; or drag the TenjinObject prefab into the first scene and set its SDK Key.`,
 	connectFix:  "Call Connect() on the instance in Start(), and again in OnApplicationPause when pauseStatus is false.",
 	attCall:     regexp.MustCompile(`RequestTrackingAuthorizationWithCompletionHandler|RequestAuthorizationTracking`),
