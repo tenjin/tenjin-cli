@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -309,6 +310,33 @@ func appFlag(app *string) func(*pflag.FlagSet) {
 	}
 }
 
+// optionalInt is a number flag that is sent only when given, so that 0, the
+// Organic channel, can be asked for.
+type optionalInt struct{ n *int }
+
+func (o *optionalInt) Set(s string) error {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return fmt.Errorf("%q is not a number", s)
+	}
+	o.n = &n
+	return nil
+}
+
+func (o *optionalInt) String() string {
+	if o.n == nil {
+		return ""
+	}
+	return strconv.Itoa(*o.n)
+}
+
+func (o *optionalInt) Type() string { return "int" }
+
+// optionalChannel adds a --channel that narrows a list; 0 is Organic.
+func optionalChannel(f *pflag.FlagSet, channel *optionalInt, whose string) {
+	f.Var(channel, "channel", "only this marketing channel's "+whose+", by its ID; 0 is Organic")
+}
+
 func requireApp(app string) error {
 	if app == "" {
 		return clierr.New(clierr.Usage, "--app is required").WithHint("Find the app's ID with 'tenjin apps list'.")
@@ -325,17 +353,19 @@ func requireChannel(channel int) error {
 
 func newCampaignsCmd(opts *options, env *environment) *cobra.Command {
 	var q tenjinapi.CampaignQuery
+	var channel optionalInt
 	cmd := group("campaigns", "Your campaigns",
 		dataCmd(opts, env, dataSpec{
 			use: "list", short: "List campaigns", paged: true,
 			view: view{noun: "campaigns", columns: []string{"name", "platform", "channel_id", "app_id"}},
 			flags: func(f *pflag.FlagSet) {
 				f.StringVar(&q.App, "app", "", "only this app's campaigns, by its ID")
-				f.IntVar(&q.Channel, "channel", 0, "only this marketing channel's campaigns, by its ID")
+				optionalChannel(f, &channel, "campaigns")
 				f.StringVar(&q.Platform, "platform", "", "only campaigns on this platform (ios, android, amazon, android_other)")
 				f.StringVar(&q.Query, "query", "", "only campaigns whose name matches")
 			},
 			fetch: func(ctx context.Context, api *tenjinapi.Client, _ []string, p tenjinapi.Paging) (tenjinapi.Document, error) {
+				q.Channel = channel.n
 				return api.Campaigns(ctx, q, p)
 			},
 		}),
@@ -389,18 +419,18 @@ func newChannelsCmd(opts *options, env *environment) *cobra.Command {
 }
 
 func newAdAccountsCmd(opts *options, env *environment) *cobra.Command {
-	var channel int
+	var channel optionalInt
 	var query string
 	return group("ad-accounts", "The ad network accounts Tenjin reads spend from",
 		dataCmd(opts, env, dataSpec{
 			use: "list", short: "List ad accounts", paged: true,
 			view: view{noun: "ad accounts", columns: []string{"name", "channel_id"}},
 			flags: func(f *pflag.FlagSet) {
-				f.IntVar(&channel, "channel", 0, "only this marketing channel's accounts, by its ID")
+				optionalChannel(f, &channel, "accounts")
 				f.StringVar(&query, "query", "", "only accounts whose name matches")
 			},
 			fetch: func(ctx context.Context, api *tenjinapi.Client, _ []string, p tenjinapi.Paging) (tenjinapi.Document, error) {
-				return api.AdAccounts(ctx, channel, query, p)
+				return api.AdAccounts(ctx, channel.n, query, p)
 			},
 		}),
 		dataCmd(opts, env, dataSpec{
@@ -436,12 +466,13 @@ func newSKAdNetworksCmd(opts *options, env *environment) *cobra.Command {
 func appDataCmds(opts *options, env *environment) []*cobra.Command {
 	var app string
 	var channel int
+	var narrow optionalInt
 	channelFlag := func(f *pflag.FlagSet, required bool) {
-		usage := "only this marketing channel's, by its ID"
-		if required {
-			usage = "the marketing channel's ID, from 'tenjin channels list' (required)"
+		if !required {
+			optionalChannel(f, &narrow, "ones")
+			return
 		}
-		f.IntVar(&channel, "channel", 0, usage)
+		f.IntVar(&channel, "channel", 0, "the marketing channel's ID, from 'tenjin channels list' (required)")
 	}
 	return []*cobra.Command{
 		group("events", "The events an app has sent",
@@ -465,7 +496,7 @@ func appDataCmds(opts *options, env *environment) []*cobra.Command {
 					if err := requireApp(app); err != nil {
 						return nil, err
 					}
-					return api.AppCallbacks(ctx, app, channel, p)
+					return api.AppCallbacks(ctx, app, narrow.n, p)
 				},
 			}),
 			dataCmd(opts, env, dataSpec{
@@ -510,7 +541,7 @@ func appDataCmds(opts *options, env *environment) []*cobra.Command {
 					if err := requireApp(app); err != nil {
 						return nil, err
 					}
-					return api.AppCallbackTemplates(ctx, app, channel, p)
+					return api.AppCallbackTemplates(ctx, app, narrow.n, p)
 				},
 			}),
 			dataCmd(opts, env, dataSpec{
