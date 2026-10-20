@@ -457,15 +457,19 @@ func (d *detector) iosTarget(rel string) (Target, bool) {
 	pbx := d.read(path.Join(xcodeproj, "project.pbxproj"))
 	dir := path.Dir(xcodeproj)
 	info := &IOSInfo{
-		Xcodeproj:          xcodeproj,
-		GeneratedInfoPlist: pbxGeneratedPlist.MatchString(pbx),
-		SwiftPackages:      strings.Contains(pbx, "XCRemoteSwiftPackageReference"),
+		Xcodeproj:     xcodeproj,
+		SwiftPackages: strings.Contains(pbx, "XCRemoteSwiftPackageReference"),
 	}
 	if podfile := path.Join(dir, "Podfile"); d.exists(podfile) {
 		info.Podfile = podfile
 	}
 
 	target := Target{Platform: IOS, IOS: info}
+	if targets, err := xcodeTargets(pbx); err == nil {
+		d.iosAppTarget(&target, targets, dir)
+		return target, true
+	}
+	info.GeneratedInfoPlist = pbxGeneratedPlist.MatchString(pbx)
 	var ids []string
 	for _, m := range pbxBundleID.FindAllStringSubmatch(pbx, -1) {
 		if id := strings.TrimSpace(m[1]); !isTestBundle(id) {
@@ -483,11 +487,91 @@ func (d *detector) iosTarget(rel string) (Target, bool) {
 		if strings.Contains(target.BundleID, "$(") {
 			d.note("The iOS bundle ID is built from build settings (%s); check the resolved value in Xcode.", target.BundleID)
 		}
+		d.note("Could not read the targets of %s, so the iOS bundle ID %s is the shortest one in its build settings; check that it is the app's and not a framework's or an extension's.", xcodeproj, target.BundleID)
 	} else {
 		d.note("Could not read PRODUCT_BUNDLE_IDENTIFIER from %s.", xcodeproj)
 	}
 	d.chooseInfoPlist(info, pbx, dir, target.BundleID)
 	return target, true
+}
+
+// iosAppTarget takes the bundle ID and Info.plist from the project's iOS app
+// target, so that a framework's, an extension's or a watch app's is never
+// taken for the app's. Of several app targets, the one named after the
+// project is the app, then the one with the shortest bundle ID; the others'
+// IDs are other builds of it.
+func (d *detector) iosAppTarget(target *Target, targets []xcodeTarget, dir string) {
+	info := target.IOS
+	var apps []xcodeTarget
+	for _, t := range targets {
+		if t.iosApp() {
+			apps = append(apps, t)
+		}
+	}
+	if len(apps) == 0 {
+		d.note("%s has no iOS app target, so there is no bundle ID for Tenjin.", info.Xcodeproj)
+		return
+	}
+	project := strings.TrimSuffix(path.Base(info.Xcodeproj), ".xcodeproj")
+	sort.SliceStable(apps, func(i, j int) bool {
+		if (apps[i].name == project) != (apps[j].name == project) {
+			return apps[i].name == project
+		}
+		a, b := apps[i].setting("PRODUCT_BUNDLE_IDENTIFIER"), apps[j].setting("PRODUCT_BUNDLE_IDENTIFIER")
+		return a != "" && (b == "" || len(a) < len(b))
+	})
+	app := apps[0]
+	if len(apps) > 1 {
+		var names []string
+		for _, a := range apps {
+			names = append(names, a.name)
+		}
+		d.note("Found %d iOS app targets in %s (%s); using %s.", len(apps), info.Xcodeproj, strings.Join(names, ", "), app.name)
+	}
+
+	info.GeneratedInfoPlist = app.setting("GENERATE_INFOPLIST_FILE") == "YES"
+	ids := app.values("PRODUCT_BUNDLE_IDENTIFIER")
+	for _, other := range apps[1:] {
+		ids = append(ids, other.values("PRODUCT_BUNDLE_IDENTIFIER")...)
+	}
+	ids = dedupe(ids)
+	if len(ids) == 0 || app.setting("PRODUCT_BUNDLE_IDENTIFIER") == "" {
+		d.note("Could not read PRODUCT_BUNDLE_IDENTIFIER of the %s target in %s.", app.name, info.Xcodeproj)
+	} else {
+		target.BundleID = ids[0]
+		target.OtherBundleIDs = ids[1:]
+		target.Source = path.Join(info.Xcodeproj, "project.pbxproj")
+		if strings.Contains(target.BundleID, "$(") {
+			d.note("The iOS bundle ID is built from build settings (%s); check the resolved value in Xcode.", target.BundleID)
+		}
+	}
+
+	var plists []string
+	for _, p := range app.values("INFOPLIST_FILE") {
+		plists = append(plists, resolveSourceRoot(p))
+	}
+	for _, p := range plists {
+		if strings.Contains(p, "$(") || strings.Contains(p, "${") {
+			continue
+		}
+		if rel := path.Join(dir, p); d.exists(rel) {
+			info.InfoPlist = rel
+			return
+		}
+	}
+	if len(plists) > 0 {
+		info.MissingInfoPlist = plists[0]
+	}
+}
+
+// resolveSourceRoot makes a path in build settings relative to the folder
+// of the Xcode project.
+func resolveSourceRoot(p string) string {
+	p = strings.Trim(strings.TrimSpace(p), `"`)
+	for _, root := range []string{"$(SRCROOT)/", "${SRCROOT}/", "$(PROJECT_DIR)/", "${PROJECT_DIR}/"} {
+		p = strings.TrimPrefix(p, root)
+	}
+	return p
 }
 
 // pbxBuildSettings is one configuration's build settings in project.pbxproj.
@@ -499,13 +583,7 @@ var pbxBuildSettings = regexp.MustCompile(`(?s)buildSettings = \{(.*?)\n\s*\};`)
 // resolved. A plist the settings name that is not there is recorded as
 // missing.
 func (d *detector) chooseInfoPlist(info *IOSInfo, pbx, dir, bundleID string) {
-	resolve := func(p string) string {
-		p = strings.Trim(strings.TrimSpace(p), `"`)
-		for _, root := range []string{"$(SRCROOT)/", "${SRCROOT}/", "$(PROJECT_DIR)/", "${PROJECT_DIR}/"} {
-			p = strings.TrimPrefix(p, root)
-		}
-		return p
-	}
+	resolve := resolveSourceRoot
 	var ofApp, others []string
 	for _, block := range pbxBuildSettings.FindAllStringSubmatch(pbx, -1) {
 		m := pbxInfoPlist.FindStringSubmatch(block[1])

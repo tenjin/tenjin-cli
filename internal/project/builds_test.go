@@ -250,6 +250,67 @@ func TestTheAppsOwnInfoPlist(t *testing.T) {
 	}
 }
 
+// The app is the target that builds an app: a framework it embeds, an
+// extension or a watch app has a shorter or a longer bundle ID, and neither
+// is the app's.
+func TestTheBundleIDIsTheAppTargets(t *testing.T) {
+	base := testproject.IOSNative()
+	const pbx = "Sample.xcodeproj/project.pbxproj"
+	files := base.With(testproject.Files{
+		pbx: testproject.PBXProj(
+			testproject.PBXTarget{Name: "Kit", ProductType: "com.apple.product-type.framework", BundleID: "com.acmegames.Kit", InfoPlist: "Kit/Info.plist"},
+			testproject.PBXTarget{Name: "Sample", ProductType: "com.apple.product-type.application", BundleID: "com.acmegames.wordsearch", InfoPlist: "Sample/Info.plist"},
+			testproject.PBXTarget{Name: "Widget", ProductType: "com.apple.product-type.app-extension", BundleID: "com.acmegames.wordsearch.widget", InfoPlist: "Widget/Info.plist"},
+			testproject.PBXTarget{Name: "Watch", ProductType: "com.apple.product-type.application.watchapp2", BundleID: "com.acmegames.w"},
+		),
+		"Kit/Info.plist":    testproject.InfoPlist,
+		"Widget/Info.plist": testproject.InfoPlist,
+	})
+	p := detect(t, files)
+	target := p.Target(project.IOS)
+	if target.BundleID != "com.acmegames.wordsearch" || len(target.OtherBundleIDs) != 0 || target.IOS.InfoPlist != "Sample/Info.plist" {
+		t.Errorf("bundle ID = %q, others = %q, Info.plist = %q", target.BundleID, target.OtherBundleIDs, target.IOS.InfoPlist)
+	}
+	if b := target.Builds; len(b) != 1 || b[0].BundleID != "com.acmegames.wordsearch" {
+		t.Errorf("builds = %+v", b)
+	}
+	if len(p.Notes) != 0 {
+		t.Errorf("notes = %q", p.Notes)
+	}
+
+	// A debug configuration's own ID is another build of the app; the
+	// release one is the app.
+	pbxText := strings.Replace(testproject.PBXProj(testproject.PBXTarget{Name: "Sample", ProductType: "com.apple.product-type.application", BundleID: "com.example.sample", InfoPlist: "Sample/Info.plist"}),
+		"PRODUCT_BUNDLE_IDENTIFIER = com.example.sample;", "PRODUCT_BUNDLE_IDENTIFIER = com.example.sample.debug;", 1)
+	target = detect(t, base.With(testproject.Files{pbx: pbxText})).Target(project.IOS)
+	if target.BundleID != "com.example.sample" || strings.Join(target.OtherBundleIDs, " ") != "com.example.sample.debug" {
+		t.Errorf("bundle ID = %q, others = %q", target.BundleID, target.OtherBundleIDs)
+	}
+
+	// Of two app targets, the one named after the project is the app.
+	p = detect(t, base.With(testproject.Files{pbx: testproject.PBXProj(
+		testproject.PBXTarget{Name: "Lite", ProductType: "com.apple.product-type.application", BundleID: "com.example.x", InfoPlist: "Sample/Info.plist"},
+		testproject.PBXTarget{Name: "Sample", ProductType: "com.apple.product-type.application", BundleID: "com.example.sample", InfoPlist: "Sample/Info.plist"},
+	)}))
+	target = p.Target(project.IOS)
+	if target.BundleID != "com.example.sample" || strings.Join(target.OtherBundleIDs, " ") != "com.example.x" || !strings.Contains(strings.Join(p.Notes, "\n"), "Found 2 iOS app targets in Sample.xcodeproj (Sample, Lite); using Sample.") {
+		t.Errorf("bundle ID = %q, others = %q, notes = %q", target.BundleID, target.OtherBundleIDs, p.Notes)
+	}
+
+	// A project of frameworks only has no app to name.
+	p = detect(t, base.With(testproject.Files{pbx: testproject.PBXProj(testproject.PBXTarget{Name: "Kit", ProductType: "com.apple.product-type.framework", BundleID: "com.acmegames.Kit"})}))
+	if target := p.Target(project.IOS); target.BundleID != "" || len(target.Builds) != 0 || !strings.Contains(strings.Join(p.Notes, "\n"), "has no iOS app target") {
+		t.Errorf("target = %+v, notes = %q", target, p.Notes)
+	}
+
+	// A file whose targets cannot be read falls back to its build settings,
+	// and says so.
+	p = detect(t, base.With(testproject.Files{pbx: "PRODUCT_BUNDLE_IDENTIFIER = com.example.sample;\nINFOPLIST_FILE = Sample/Info.plist;\n"}))
+	if target := p.Target(project.IOS); target.BundleID != "com.example.sample" || !strings.Contains(strings.Join(p.Notes, "\n"), "Could not read the targets of Sample.xcodeproj") {
+		t.Errorf("target = %+v, notes = %q", target, p.Notes)
+	}
+}
+
 // With several application modules, the one with Tenjin is the one checked.
 func TestTheModuleWithTenjinIsChosen(t *testing.T) {
 	base := testproject.AndroidNative()
