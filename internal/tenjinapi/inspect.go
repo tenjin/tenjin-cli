@@ -31,8 +31,9 @@ func (c *Client) InspectIntegration(ctx context.Context, app string, channel int
 		return nil, err
 	}
 	out := &Integration{}
-	read := func(name string, call func(clients) (*http.Response, error)) any {
-		doc, err := c.fetch(ctx, call)
+	every := Paging{All: true}
+	read := func(name string, get func() (Document, error)) any {
+		doc, err := get()
 		if err != nil {
 			e := clierr.From(err)
 			if e.Kind == clierr.NotSignedIn {
@@ -53,20 +54,22 @@ func (c *Client) InspectIntegration(ctx context.Context, app string, channel int
 		return flatten(body.Data)
 	}
 	err = catchSignIn(func() {
-		out.Templates = list(read("available_templates", func(cl clients) (*http.Response, error) {
-			return cl.cma.GetIntegrationsIntegrationIdCallbackGroupTemplates(ctx, channel)
+		out.Templates = list(read("available_templates", func() (Document, error) {
+			return c.CallbackGroupTemplates(ctx, channel, every)
 		}))
-		out.Groups = list(read("configured_groups", func(cl clients) (*http.Response, error) {
-			return cl.cma.GetAppsAppIdIntegrationsIntegrationIdCallbackGroups(ctx, appID, channel)
+		out.Groups = list(read("configured_groups", func() (Document, error) {
+			return c.AppCallbackGroups(ctx, app, channel, every)
 		}))
 		settingsKnown := false
-		if settings, ok := read("callback_settings", func(cl clients) (*http.Response, error) {
-			return cl.cma.GetAppsAppIdIntegrationsIntegrationIdCallbackSettings(ctx, appID, channel)
+		if settings, ok := read("callback_settings", func() (Document, error) {
+			return c.fetch(ctx, func(cl clients) (*http.Response, error) {
+				return cl.cma.GetAppsAppIdIntegrationsIntegrationIdCallbackSettings(ctx, appID, channel)
+			})
 		}).(map[string]any); ok {
 			out.Settings, settingsKnown = settings, true
 		}
-		out.Events = list(read("events", func(cl clients) (*http.Response, error) {
-			return cl.cma.GetAppsAppIdEvents(ctx, appID, nil)
+		out.Events = list(read("events", func() (Document, error) {
+			return c.AppEvents(ctx, app, every)
 		}))
 		annotate(out, settingsKnown)
 	})

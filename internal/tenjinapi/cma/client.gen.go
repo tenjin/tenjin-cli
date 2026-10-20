@@ -1494,6 +1494,15 @@ type GetAppsAppIdEventsParams struct {
 	PerPage *PerPage `form:"per_page,omitempty" json:"per_page,omitempty"`
 }
 
+// GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsParams defines parameters for GetAppsAppIdIntegrationsIntegrationIdCallbackGroups.
+type GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsParams struct {
+	// Page The page you want in your response.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
+
+	// PerPage Number of results per page.
+	PerPage *PerPage `form:"per_page,omitempty" json:"per_page,omitempty"`
+}
+
 // GetAppsAppIdS2sCallbacksParams defines parameters for GetAppsAppIdS2sCallbacks.
 type GetAppsAppIdS2sCallbacksParams struct {
 	// Page The page you want in your response.
@@ -1546,6 +1555,24 @@ type GetChannelsParams struct {
 
 	// Query Search for channel's by name
 	Query *string `form:"query,omitempty" json:"query,omitempty"`
+}
+
+// GetIntegrationsIntegrationIdCallbackGroupTemplatesParams defines parameters for GetIntegrationsIntegrationIdCallbackGroupTemplates.
+type GetIntegrationsIntegrationIdCallbackGroupTemplatesParams struct {
+	// Page The page you want in your response.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
+
+	// PerPage Number of results per page.
+	PerPage *PerPage `form:"per_page,omitempty" json:"per_page,omitempty"`
+}
+
+// GetSkAdNetworksParams defines parameters for GetSkAdNetworks.
+type GetSkAdNetworksParams struct {
+	// Page The page you want in your response.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
+
+	// PerPage Number of results per page.
+	PerPage *PerPage `form:"per_page,omitempty" json:"per_page,omitempty"`
 }
 
 // PostAppsJSONRequestBody defines body for PostApps for application/json ContentType.
@@ -2500,7 +2527,7 @@ type ClientInterface interface {
 	GetAppsAppIdEvents(ctx context.Context, appId openapi_types.UUID, params *GetAppsAppIdEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAppsAppIdIntegrationsIntegrationIdCallbackGroups request
-	GetAppsAppIdIntegrationsIntegrationIdCallbackGroups(ctx context.Context, appId openapi_types.UUID, integrationId int, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAppsAppIdIntegrationsIntegrationIdCallbackGroups(ctx context.Context, appId openapi_types.UUID, integrationId int, params *GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithBody request with any body
 	PostAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithBody(ctx context.Context, appId openapi_types.UUID, integrationId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2579,10 +2606,10 @@ type ClientInterface interface {
 	GetChannelsId(ctx context.Context, id int, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetIntegrationsIntegrationIdCallbackGroupTemplates request
-	GetIntegrationsIntegrationIdCallbackGroupTemplates(ctx context.Context, integrationId int, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetIntegrationsIntegrationIdCallbackGroupTemplates(ctx context.Context, integrationId int, params *GetIntegrationsIntegrationIdCallbackGroupTemplatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSkAdNetworks request
-	GetSkAdNetworks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetSkAdNetworks(ctx context.Context, params *GetSkAdNetworksParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSkAdNetworksId request
 	GetSkAdNetworksId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2756,8 +2783,8 @@ func (c *Client) GetAppsAppIdEvents(ctx context.Context, appId openapi_types.UUI
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetAppsAppIdIntegrationsIntegrationIdCallbackGroups(ctx context.Context, appId openapi_types.UUID, integrationId int, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAppsAppIdIntegrationsIntegrationIdCallbackGroupsRequest(c.Server, appId, integrationId)
+func (c *Client) GetAppsAppIdIntegrationsIntegrationIdCallbackGroups(ctx context.Context, appId openapi_types.UUID, integrationId int, params *GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAppsAppIdIntegrationsIntegrationIdCallbackGroupsRequest(c.Server, appId, integrationId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3104,8 +3131,8 @@ func (c *Client) GetChannelsId(ctx context.Context, id int, reqEditors ...Reques
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetIntegrationsIntegrationIdCallbackGroupTemplates(ctx context.Context, integrationId int, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetIntegrationsIntegrationIdCallbackGroupTemplatesRequest(c.Server, integrationId)
+func (c *Client) GetIntegrationsIntegrationIdCallbackGroupTemplates(ctx context.Context, integrationId int, params *GetIntegrationsIntegrationIdCallbackGroupTemplatesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetIntegrationsIntegrationIdCallbackGroupTemplatesRequest(c.Server, integrationId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3116,8 +3143,8 @@ func (c *Client) GetIntegrationsIntegrationIdCallbackGroupTemplates(ctx context.
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetSkAdNetworks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetSkAdNetworksRequest(c.Server)
+func (c *Client) GetSkAdNetworks(ctx context.Context, params *GetSkAdNetworksParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetSkAdNetworksRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3809,7 +3836,7 @@ func NewGetAppsAppIdEventsRequest(server string, appId openapi_types.UUID, param
 }
 
 // NewGetAppsAppIdIntegrationsIntegrationIdCallbackGroupsRequest generates requests for GetAppsAppIdIntegrationsIntegrationIdCallbackGroups
-func NewGetAppsAppIdIntegrationsIntegrationIdCallbackGroupsRequest(server string, appId openapi_types.UUID, integrationId int) (*http.Request, error) {
+func NewGetAppsAppIdIntegrationsIntegrationIdCallbackGroupsRequest(server string, appId openapi_types.UUID, integrationId int, params *GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -3839,6 +3866,45 @@ func NewGetAppsAppIdIntegrationsIntegrationIdCallbackGroupsRequest(server string
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page", *params.Page, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PerPage != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "per_page", *params.PerPage, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -4892,7 +4958,7 @@ func NewGetChannelsIdRequest(server string, id int) (*http.Request, error) {
 }
 
 // NewGetIntegrationsIntegrationIdCallbackGroupTemplatesRequest generates requests for GetIntegrationsIntegrationIdCallbackGroupTemplates
-func NewGetIntegrationsIntegrationIdCallbackGroupTemplatesRequest(server string, integrationId int) (*http.Request, error) {
+func NewGetIntegrationsIntegrationIdCallbackGroupTemplatesRequest(server string, integrationId int, params *GetIntegrationsIntegrationIdCallbackGroupTemplatesParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4917,6 +4983,45 @@ func NewGetIntegrationsIntegrationIdCallbackGroupTemplatesRequest(server string,
 		return nil, err
 	}
 
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page", *params.Page, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PerPage != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "per_page", *params.PerPage, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -4926,7 +5031,7 @@ func NewGetIntegrationsIntegrationIdCallbackGroupTemplatesRequest(server string,
 }
 
 // NewGetSkAdNetworksRequest generates requests for GetSkAdNetworks
-func NewGetSkAdNetworksRequest(server string) (*http.Request, error) {
+func NewGetSkAdNetworksRequest(server string, params *GetSkAdNetworksParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4942,6 +5047,45 @@ func NewGetSkAdNetworksRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page", *params.Page, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PerPage != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "per_page", *params.PerPage, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -5069,7 +5213,7 @@ type ClientWithResponsesInterface interface {
 	GetAppsAppIdEventsWithResponse(ctx context.Context, appId openapi_types.UUID, params *GetAppsAppIdEventsParams, reqEditors ...RequestEditorFn) (*GetAppsAppIdEventsResponse, error)
 
 	// GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithResponse request
-	GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithResponse(ctx context.Context, appId openapi_types.UUID, integrationId int, reqEditors ...RequestEditorFn) (*GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsResponse, error)
+	GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithResponse(ctx context.Context, appId openapi_types.UUID, integrationId int, params *GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsParams, reqEditors ...RequestEditorFn) (*GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsResponse, error)
 
 	// PostAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithBodyWithResponse request with any body
 	PostAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithBodyWithResponse(ctx context.Context, appId openapi_types.UUID, integrationId int, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostAppsAppIdIntegrationsIntegrationIdCallbackGroupsResponse, error)
@@ -5148,10 +5292,10 @@ type ClientWithResponsesInterface interface {
 	GetChannelsIdWithResponse(ctx context.Context, id int, reqEditors ...RequestEditorFn) (*GetChannelsIdResponse, error)
 
 	// GetIntegrationsIntegrationIdCallbackGroupTemplatesWithResponse request
-	GetIntegrationsIntegrationIdCallbackGroupTemplatesWithResponse(ctx context.Context, integrationId int, reqEditors ...RequestEditorFn) (*GetIntegrationsIntegrationIdCallbackGroupTemplatesResponse, error)
+	GetIntegrationsIntegrationIdCallbackGroupTemplatesWithResponse(ctx context.Context, integrationId int, params *GetIntegrationsIntegrationIdCallbackGroupTemplatesParams, reqEditors ...RequestEditorFn) (*GetIntegrationsIntegrationIdCallbackGroupTemplatesResponse, error)
 
 	// GetSkAdNetworksWithResponse request
-	GetSkAdNetworksWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetSkAdNetworksResponse, error)
+	GetSkAdNetworksWithResponse(ctx context.Context, params *GetSkAdNetworksParams, reqEditors ...RequestEditorFn) (*GetSkAdNetworksResponse, error)
 
 	// GetSkAdNetworksIdWithResponse request
 	GetSkAdNetworksIdWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetSkAdNetworksIdResponse, error)
@@ -6331,8 +6475,8 @@ func (c *ClientWithResponses) GetAppsAppIdEventsWithResponse(ctx context.Context
 }
 
 // GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithResponse request returning *GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsResponse
-func (c *ClientWithResponses) GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithResponse(ctx context.Context, appId openapi_types.UUID, integrationId int, reqEditors ...RequestEditorFn) (*GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsResponse, error) {
-	rsp, err := c.GetAppsAppIdIntegrationsIntegrationIdCallbackGroups(ctx, appId, integrationId, reqEditors...)
+func (c *ClientWithResponses) GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithResponse(ctx context.Context, appId openapi_types.UUID, integrationId int, params *GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsParams, reqEditors ...RequestEditorFn) (*GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsResponse, error) {
+	rsp, err := c.GetAppsAppIdIntegrationsIntegrationIdCallbackGroups(ctx, appId, integrationId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -6584,8 +6728,8 @@ func (c *ClientWithResponses) GetChannelsIdWithResponse(ctx context.Context, id 
 }
 
 // GetIntegrationsIntegrationIdCallbackGroupTemplatesWithResponse request returning *GetIntegrationsIntegrationIdCallbackGroupTemplatesResponse
-func (c *ClientWithResponses) GetIntegrationsIntegrationIdCallbackGroupTemplatesWithResponse(ctx context.Context, integrationId int, reqEditors ...RequestEditorFn) (*GetIntegrationsIntegrationIdCallbackGroupTemplatesResponse, error) {
-	rsp, err := c.GetIntegrationsIntegrationIdCallbackGroupTemplates(ctx, integrationId, reqEditors...)
+func (c *ClientWithResponses) GetIntegrationsIntegrationIdCallbackGroupTemplatesWithResponse(ctx context.Context, integrationId int, params *GetIntegrationsIntegrationIdCallbackGroupTemplatesParams, reqEditors ...RequestEditorFn) (*GetIntegrationsIntegrationIdCallbackGroupTemplatesResponse, error) {
+	rsp, err := c.GetIntegrationsIntegrationIdCallbackGroupTemplates(ctx, integrationId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -6593,8 +6737,8 @@ func (c *ClientWithResponses) GetIntegrationsIntegrationIdCallbackGroupTemplates
 }
 
 // GetSkAdNetworksWithResponse request returning *GetSkAdNetworksResponse
-func (c *ClientWithResponses) GetSkAdNetworksWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetSkAdNetworksResponse, error) {
-	rsp, err := c.GetSkAdNetworks(ctx, reqEditors...)
+func (c *ClientWithResponses) GetSkAdNetworksWithResponse(ctx context.Context, params *GetSkAdNetworksParams, reqEditors ...RequestEditorFn) (*GetSkAdNetworksResponse, error) {
+	rsp, err := c.GetSkAdNetworks(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

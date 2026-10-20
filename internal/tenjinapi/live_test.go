@@ -222,7 +222,7 @@ func TestLiveRead(t *testing.T) {
 		}
 	})
 	t.Run("skadnetworks", func(t *testing.T) {
-		body := ok(t, "GET /sk_ad_networks", wrap(l.cma.GetSkAdNetworksWithResponse(l.ctx)))
+		body := ok(t, "GET /sk_ad_networks", wrap(l.cma.GetSkAdNetworksWithResponse(l.ctx, nil)))
 		if id := firstID(body); id != "" {
 			ok(t, "GET /sk_ad_networks/{id}", wrap(l.cma.GetSkAdNetworksIdWithResponse(l.ctx, id)))
 		}
@@ -232,7 +232,7 @@ func TestLiveRead(t *testing.T) {
 		if channel == 0 {
 			t.Skip("no channel among the first ones has callback group templates")
 		}
-		ok(t, "GET /apps/{id}/integrations/{id}/callback_groups", wrap(l.cma.GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithResponse(l.ctx, app, channel)))
+		ok(t, "GET /apps/{id}/integrations/{id}/callback_groups", wrap(l.cma.GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithResponse(l.ctx, app, channel, nil)))
 		ok(t, "GET /apps/{id}/integrations/{id}/callback_settings", wrap(l.cma.GetAppsAppIdIntegrationsIntegrationIdCallbackSettingsWithResponse(l.ctx, app, channel)))
 	})
 	t.Run("reports", func(t *testing.T) {
@@ -259,7 +259,7 @@ func TestLiveRead(t *testing.T) {
 		body := ok(t, "GET /saved_reports", wrap(l.rma.GetSavedReportsWithResponse(l.ctx, nil)))
 		if id := firstID(body); id != "" {
 			ok(t, "GET /saved_reports/{id}", wrap(l.rma.GetSavedReportsIdWithResponse(l.ctx, mustUUID(t, id))))
-			ok(t, "GET /reports/{id}", wrap(l.rma.GetReportsIdWithResponse(l.ctx, mustUUID(t, id))))
+			ok(t, "GET /reports/{id}", wrap(l.rma.GetReportsIdWithResponse(l.ctx, mustUUID(t, id), nil)))
 		}
 	})
 }
@@ -274,7 +274,7 @@ func channelWithGroupTemplates(t *testing.T, l *live) int {
 	}
 	for _, c := range items(resp.Body) {
 		id, _ := c["id"].(float64)
-		templates, err := l.cma.GetIntegrationsIntegrationIdCallbackGroupTemplatesWithResponse(l.ctx, int(id))
+		templates, err := l.cma.GetIntegrationsIntegrationIdCallbackGroupTemplatesWithResponse(l.ctx, int(id), nil)
 		if err == nil && templates.HTTPResponse.StatusCode == http.StatusOK && len(items(templates.Body)) > 0 {
 			ok(t, "GET /integrations/{id}/callback_group_templates", result{templates, nil})
 			return int(id)
@@ -352,7 +352,7 @@ func TestLiveWrite(t *testing.T) {
 		if channel == 0 {
 			t.Skip("no channel among the first ones has callback group templates")
 		}
-		templates := ok(t, "GET /integrations/{id}/callback_group_templates", wrap(l.cma.GetIntegrationsIntegrationIdCallbackGroupTemplatesWithResponse(l.ctx, channel)))
+		templates := ok(t, "GET /integrations/{id}/callback_group_templates", wrap(l.cma.GetIntegrationsIntegrationIdCallbackGroupTemplatesWithResponse(l.ctx, channel, nil)))
 		body := ok(t, "POST /apps/{id}/integrations/{id}/callback_groups", wrap(l.cma.PostAppsAppIdIntegrationsIntegrationIdCallbackGroupsWithBodyWithResponse(l.ctx, app, channel, contentJSON, jsonBody(map[string]any{
 			"callback_group_template_id": firstID(templates), "event": "open", "name": name, "active": false,
 		}))))
@@ -385,7 +385,7 @@ func TestLiveWrite(t *testing.T) {
 			}
 		})
 		ok(t, "GET /saved_reports/{id}", wrap(l.rma.GetSavedReportsIdWithResponse(l.ctx, id)))
-		ok(t, "GET /reports/{id}", wrap(l.rma.GetReportsIdWithResponse(l.ctx, id)))
+		ok(t, "GET /reports/{id}", wrap(l.rma.GetReportsIdWithResponse(l.ctx, id, nil)))
 		ok(t, "PATCH /saved_reports/{id}", wrap(l.rma.PatchSavedReportsIdWithBodyWithResponse(l.ctx, id, contentJSON, jsonBody(map[string]any{"name": name + " (renamed)"}))))
 		ok(t, "DELETE /saved_reports/{id}", wrap(l.rma.DeleteSavedReportsIdWithResponse(l.ctx, id)))
 		deleted = true

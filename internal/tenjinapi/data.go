@@ -183,9 +183,9 @@ func (c *Client) Channel(ctx context.Context, id int) (Document, error) {
 }
 
 // CallbackGroupTemplates lists a marketing channel's callback group templates.
-func (c *Client) CallbackGroupTemplates(ctx context.Context, channel int) (Document, error) {
-	return c.fetch(ctx, func(cl clients) (*http.Response, error) {
-		return cl.cma.GetIntegrationsIntegrationIdCallbackGroupTemplates(ctx, channel)
+func (c *Client) CallbackGroupTemplates(ctx context.Context, channel int, p Paging) (Document, error) {
+	return c.list(ctx, p, func(cl clients, page, perPage *int) (*http.Response, error) {
+		return cl.cma.GetIntegrationsIntegrationIdCallbackGroupTemplates(ctx, channel, &cma.GetIntegrationsIntegrationIdCallbackGroupTemplatesParams{Page: page, PerPage: perPage})
 	})
 }
 
@@ -206,8 +206,10 @@ func (c *Client) AdAccount(ctx context.Context, id string) (Document, error) {
 }
 
 // SKAdNetworks lists the SKAdNetwork IDs Tenjin knows.
-func (c *Client) SKAdNetworks(ctx context.Context) (Document, error) {
-	return c.fetch(ctx, func(cl clients) (*http.Response, error) { return cl.cma.GetSkAdNetworks(ctx) })
+func (c *Client) SKAdNetworks(ctx context.Context, p Paging) (Document, error) {
+	return c.list(ctx, p, func(cl clients, page, perPage *int) (*http.Response, error) {
+		return cl.cma.GetSkAdNetworks(ctx, &cma.GetSkAdNetworksParams{Page: page, PerPage: perPage})
+	})
 }
 
 // SKAdNetwork gets one SKAdNetwork ID, such as 4fzdc2evr5.skadnetwork.
@@ -290,13 +292,13 @@ func (c *Client) AppCallbackTemplate(ctx context.Context, app, template string) 
 }
 
 // AppCallbackGroups lists an app's callback groups for one channel.
-func (c *Client) AppCallbackGroups(ctx context.Context, app string, channel int) (Document, error) {
+func (c *Client) AppCallbackGroups(ctx context.Context, app string, channel int, p Paging) (Document, error) {
 	id, err := ParseID(app, "app")
 	if err != nil {
 		return nil, err
 	}
-	return c.fetch(ctx, func(cl clients) (*http.Response, error) {
-		return cl.cma.GetAppsAppIdIntegrationsIntegrationIdCallbackGroups(ctx, id, channel)
+	return c.list(ctx, p, func(cl clients, page, perPage *int) (*http.Response, error) {
+		return cl.cma.GetAppsAppIdIntegrationsIntegrationIdCallbackGroups(ctx, id, channel, &cma.GetAppsAppIdIntegrationsIntegrationIdCallbackGroupsParams{Page: page, PerPage: perPage})
 	})
 }
 
@@ -437,12 +439,14 @@ func (c *Client) SavedReport(ctx context.Context, id string) (Document, error) {
 }
 
 // RunSavedReport pulls the data of a saved report.
-func (c *Client) RunSavedReport(ctx context.Context, id string) (Document, error) {
+func (c *Client) RunSavedReport(ctx context.Context, id string, p Paging) (Document, error) {
 	report, err := ParseID(id, "saved report")
 	if err != nil {
 		return nil, err
 	}
-	return c.fetch(ctx, func(cl clients) (*http.Response, error) { return cl.rma.GetReportsId(ctx, report) })
+	return c.list(ctx, p, func(cl clients, page, perPage *int) (*http.Response, error) {
+		return cl.rma.GetReportsId(ctx, report, &rma.GetReportsIdParams{Page: page, PerPage: perPage})
+	})
 }
 
 // ChannelID reads a marketing channel's ID: a number.

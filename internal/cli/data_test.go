@@ -281,6 +281,52 @@ func TestEndlessPagesFailLoudly(t *testing.T) {
 	}
 }
 
+// The lists the API pages without its specs saying so are paged like the
+// others; a saved report's data, like a report, is every row.
+func TestEveryPagedListPages(t *testing.T) {
+	for _, tc := range []struct{ args, path string }{
+		{"skadnetworks list", "/v2/sk_ad_networks"},
+		{"channels callback-group-templates 18", "/v2/integrations/18/callback_group_templates"},
+		{"apps callback-groups list --app " + testApp + " --channel 18", "/v2/apps/" + testApp + "/integrations/18/callback_groups"},
+	} {
+		t.Run(tc.args, func(t *testing.T) {
+			h := newHarness(t)
+			h.signIn()
+			h.fake.data = map[string]func(*http.Request) (int, any){tc.path: func(r *http.Request) (int, any) {
+				doc := map[string]any{"data": []any{map[string]any{"id": "x", "type": "thing", "attributes": map[string]any{"name": "Page " + r.URL.Query().Get("page")}}}}
+				if r.URL.Query().Get("page") != "2" {
+					doc["links"] = map[string]string{"next": tc.path + "?page=2"}
+				}
+				return http.StatusOK, doc
+			}}
+			code, _, stderr := h.run(strings.Fields(tc.args + " --page 1 --per-page 10")...)
+			if q := h.fake.dataAsked[0].Query(); code != 0 || q.Get("page") != "1" || q.Get("per_page") != "10" || !strings.Contains(stderr, "--page 2") {
+				t.Errorf("one page: exit = %d, query %q, stderr = %q", code, h.fake.dataAsked[0].RawQuery, stderr)
+			}
+			h.fake.dataAsked = nil
+			code, stdout, _ := h.run(strings.Fields(tc.args + " --all")...)
+			if code != 0 || len(h.fake.dataAsked) != 2 || !strings.Contains(stdout, "Page 2") {
+				t.Errorf("--all: exit = %d, %d reads:\n%s", code, len(h.fake.dataAsked), stdout)
+			}
+		})
+	}
+
+	h := newHarness(t)
+	h.signIn()
+	path := "/v2/reports/" + testOther
+	h.fake.data = map[string]func(*http.Request) (int, any){path: func(r *http.Request) (int, any) {
+		doc := map[string]any{"data": []any{map[string]any{"type": "report", "attributes": map[string]any{"date": "2026-10-0" + r.URL.Query().Get("page")}}}}
+		if r.URL.Query().Get("page") != "2" {
+			doc["links"] = map[string]string{"next": path + "?page=2"}
+		}
+		return http.StatusOK, doc
+	}}
+	code, stdout, _ := h.run("saved-reports", "run", testOther)
+	if code != 0 || len(h.fake.dataAsked) != 2 || !strings.Contains(stdout, "2026-10-01") || !strings.Contains(stdout, "2026-10-02") {
+		t.Errorf("saved-reports run: exit = %d, %d reads:\n%s", code, len(h.fake.dataAsked), stdout)
+	}
+}
+
 // A command missing what its endpoint needs, or given something that cannot
 // be an ID, fails as a usage error before any request.
 func TestDataUsageErrors(t *testing.T) {

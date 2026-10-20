@@ -374,15 +374,15 @@ func newChannelsCmd(opts *options, env *environment) *cobra.Command {
 			},
 		}),
 		dataCmd(opts, env, dataSpec{
-			use: "callback-group-templates <channel-id>", short: "List a channel's callback group templates",
+			use: "callback-group-templates <channel-id>", short: "List a channel's callback group templates", paged: true,
 			args: exactArgs(1, "the channel's ID, from 'tenjin channels list'"),
 			view: view{noun: "callback group templates", columns: []string{"name", "event", "platform"}},
-			fetch: func(ctx context.Context, api *tenjinapi.Client, args []string, _ tenjinapi.Paging) (tenjinapi.Document, error) {
+			fetch: func(ctx context.Context, api *tenjinapi.Client, args []string, p tenjinapi.Paging) (tenjinapi.Document, error) {
 				id, err := tenjinapi.ChannelID(args[0])
 				if err != nil {
 					return nil, err
 				}
-				return api.CallbackGroupTemplates(ctx, id)
+				return api.CallbackGroupTemplates(ctx, id, p)
 			},
 		}),
 	)
@@ -416,10 +416,10 @@ func newAdAccountsCmd(opts *options, env *environment) *cobra.Command {
 func newSKAdNetworksCmd(opts *options, env *environment) *cobra.Command {
 	return group("skadnetworks", "SKAdNetwork IDs Tenjin knows",
 		dataCmd(opts, env, dataSpec{
-			use: "list", short: "List SKAdNetwork IDs",
+			use: "list", short: "List SKAdNetwork IDs", paged: true,
 			view: view{noun: "SKAdNetwork IDs"},
-			fetch: func(ctx context.Context, api *tenjinapi.Client, _ []string, _ tenjinapi.Paging) (tenjinapi.Document, error) {
-				return api.SKAdNetworks(ctx)
+			fetch: func(ctx context.Context, api *tenjinapi.Client, _ []string, p tenjinapi.Paging) (tenjinapi.Document, error) {
+				return api.SKAdNetworks(ctx, p)
 			},
 		}),
 		dataCmd(opts, env, dataSpec{
@@ -526,17 +526,17 @@ func appDataCmds(opts *options, env *environment) []*cobra.Command {
 		),
 		group("callback-groups", "An app's callback groups, per marketing channel",
 			dataCmd(opts, env, dataSpec{
-				use: "list --app <app-id> --channel <channel-id>", short: "List an app's callback groups for one channel",
+				use: "list --app <app-id> --channel <channel-id>", short: "List an app's callback groups for one channel", paged: true,
 				view:  view{noun: "callback groups", columns: []string{"name", "event", "active"}},
 				flags: func(f *pflag.FlagSet) { appFlag(&app)(f); channelFlag(f, true) },
-				fetch: func(ctx context.Context, api *tenjinapi.Client, _ []string, _ tenjinapi.Paging) (tenjinapi.Document, error) {
+				fetch: func(ctx context.Context, api *tenjinapi.Client, _ []string, p tenjinapi.Paging) (tenjinapi.Document, error) {
 					if err := requireApp(app); err != nil {
 						return nil, err
 					}
 					if err := requireChannel(channel); err != nil {
 						return nil, err
 					}
-					return api.AppCallbackGroups(ctx, app, channel)
+					return api.AppCallbackGroups(ctx, app, channel, p)
 				},
 			}),
 			dataCmd(opts, env, dataSpec{
@@ -635,11 +635,13 @@ func newSavedReportsCmd(opts *options, env *environment) *cobra.Command {
 			},
 		}),
 		dataCmd(opts, env, dataSpec{
-			use: "run <saved-report-id>", short: "Pull a saved report's data",
+			use: "run <saved-report-id>", short: "Pull a saved report's data", paged: true, allPages: true,
+			long: `Pull a saved report's data. Every row is shown: --page and --per-page show
+one page instead.`,
 			args: exactArgs(1, "the saved report's ID, from 'tenjin saved-reports list'"),
 			view: view{noun: "rows"},
-			fetch: func(ctx context.Context, api *tenjinapi.Client, args []string, _ tenjinapi.Paging) (tenjinapi.Document, error) {
-				return api.RunSavedReport(ctx, args[0])
+			fetch: func(ctx context.Context, api *tenjinapi.Client, args []string, p tenjinapi.Paging) (tenjinapi.Document, error) {
+				return api.RunSavedReport(ctx, args[0], p)
 			},
 		}),
 	)

@@ -119,3 +119,45 @@ func TestInspectIntegration(t *testing.T) {
 		t.Errorf("no --channel: exit = %d", code)
 	}
 }
+
+// The integration view reads every page of the templates, the groups and
+// the events.
+func TestInspectIntegrationReadsEveryPage(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	paged := func(path, key string) func(*http.Request) (int, any) {
+		return func(r *http.Request) (int, any) {
+			page := r.URL.Query().Get("page")
+			doc := map[string]any{"data": []any{map[string]any{"id": key + page, "type": "thing", "attributes": map[string]any{"name": key + " " + page, "event": key + page}}}}
+			if page == "1" {
+				doc["links"] = map[string]string{"next": path + "?page=2"}
+			}
+			return http.StatusOK, doc
+		}
+	}
+	templates := "/v2/integrations/31/callback_group_templates"
+	groups := "/v2/apps/" + testApp + "/integrations/31/callback_groups"
+	events := "/v2/apps/" + testApp + "/events"
+	h.fake.data = map[string]func(*http.Request) (int, any){
+		templates: paged(templates, "template"),
+		groups:    paged(groups, "group"),
+		events:    paged(events, "event"),
+	}
+	code, stdout, stderr := h.run("apps", "callback-groups", "inspect", "--app", testApp, "--channel", "31", "--json")
+	var got struct {
+		Templates []map[string]any `json:"available_templates"`
+		Groups    []map[string]any `json:"configured_groups"`
+		Events    []map[string]any `json:"events"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil || code != 0 {
+		t.Fatalf("exit = %d, err = %v, stderr = %q", code, err, stderr)
+	}
+	if len(got.Templates) != 2 || len(got.Groups) != 2 || len(got.Events) != 2 {
+		t.Errorf("%d templates, %d groups, %d events; want 2 of each", len(got.Templates), len(got.Groups), len(got.Events))
+	}
+	for _, u := range h.fake.dataAsked {
+		if u.Path != "/v2/apps/"+testApp+"/integrations/31/callback_settings" && u.Query().Get("per_page") != "1000" {
+			t.Errorf("read %s, not 1000 to a page", u)
+		}
+	}
+}

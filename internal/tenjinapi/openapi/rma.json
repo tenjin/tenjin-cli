@@ -359,6 +359,14 @@
       ],
       "get": {
         "summary": "Pull reporting data based on attributes of a saved report",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          }
+        ],
         "tags": [
           "Reporting Metrics"
         ],

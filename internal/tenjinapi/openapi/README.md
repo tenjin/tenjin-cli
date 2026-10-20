@@ -20,8 +20,8 @@ constructs and a few structures that `oapi-codegen` (strict OAS3) cannot
 process. The vendored copies here include the minimal edits below. **Edits 1 to 4
 are structural / codegen-facing and preserve the HTTP wire contract**: no path,
 query/parameter name, JSON property name, or type constraint that affects what
-the client sends or receives was changed. Edits 5, 7 and 8 correct response shapes, and
-edit 6 adds an endpoint.
+the client sends or receives was changed. Edits 5, 7 and 8 correct response shapes,
+edit 6 adds an endpoint, and edit 9 adds the paging parameters the API reads.
 
 1. **Root-level `parameters` → `components.parameters`** (both specs). OAS3
    places reusable parameters under `components`; the originals used the OAS2
@@ -74,6 +74,14 @@ edit 6 adds an endpoint.
    creating a callback group answers 201, not 200 (cma.json); a deleted
    saved report answers `{"data": []}`, so the reporting API's
    `EmptyResponse.data` is a list, as in cma.json (rma.json).
+
+9. **Paging on the lists that page without saying so** (cma.json:
+   `GET /sk_ad_networks`, `GET /integrations/{integration_id}/callback_group_templates`
+   and `GET /apps/{app_id}/integrations/{integration_id}/callback_groups`;
+   rma.json: `GET /reports/{id}`). The API pages each of them, 25 to a page
+   (100 for a saved report's data) and at most 1000, but the specs gave them
+   no `page` or `per_page`, so only the first page could be read. Each now
+   refers to the spec's own `page` and `per_page` parameters.
 
 When refreshing these specs from upstream, re-apply the equivalent edits (or fix
 them upstream) so `oapi-codegen` can run.

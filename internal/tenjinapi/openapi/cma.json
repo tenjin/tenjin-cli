@@ -1322,6 +1322,14 @@
       ],
       "get": {
         "summary": "Get callback group templates for a marketing channel",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          }
+        ],
         "tags": [
           "Callback Group Templates"
         ],
@@ -1371,6 +1379,14 @@
       ],
       "get": {
         "summary": "Get callback groups for an app and marketing channel",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          }
+        ],
         "tags": [
           "Callback Groups"
         ],
@@ -1570,6 +1586,14 @@
     "/sk_ad_networks": {
       "get": {
         "summary": "Retrieves a list of SK Ad Networks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          }
+        ],
         "tags": [
           "SK Ad Networks"
         ],

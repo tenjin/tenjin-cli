@@ -135,7 +135,7 @@ Two of setup's steps are under [Your Tenjin data](#your-tenjin-data): `tenjin ap
 
 #### Your Tenjin data
 
-For anyone with a Tenjin account, from any directory: none of these reads a project. Each reads one thing from the [Tenjin API](https://tenjin.com/docs/automation-apis/), with its parameters as flags. At a terminal it prints a table; with `--json`, the API's answer as it is, so the API's documentation describes it. Lists show one page of 25: `--page` and `--per-page` (up to 1000) pick another, `--all` reads them all. Reports show every row unless a page is asked for; `apps list` always shows every app. Where every page is read, `--json` prints the first page's document with all the pages' data in its `data` and without its `links`, which named single pages.
+For anyone with a Tenjin account, from any directory: none of these reads a project. Each reads one thing from the [Tenjin API](https://tenjin.com/docs/automation-apis/), with its parameters as flags. At a terminal it prints a table; with `--json`, the API's answer as it is, so the API's documentation describes it. Lists show one page of 25: `--page` and `--per-page` (up to 1000) pick another, `--all` reads them all. Reports, and a saved report's data, show every row unless a page is asked for; `apps list` always shows every app. Where every page is read, `--json` prints the first page's document with all the pages' data in its `data` and without its `links`, which named single pages.
 
 | Command | What it does |
 | --- | --- |
