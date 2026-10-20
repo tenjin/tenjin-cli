@@ -220,7 +220,7 @@ tenjin campaigns create --app <app-id> --name "Summer UA" --channel <channel-id>
 
 Every problem comes with a fix that names the file, the line and the version. The key check sends one request to Tenjin and no event; `--offline` skips it, along with the once-a-day lookup of the newest SDK releases. `--strict` also fails on warnings.
 
-`doctor` never changes the project itself. At a terminal, when Claude Code or Codex is installed and there is something to fix in code, it offers to have your agent fix it (no by default), then checks again. `--agent claude` or `--agent codex` fixes without asking; `--agent none` never offers. The agent works under the same limits as in `setup` and never sees an SDK key.
+`doctor` does not edit the project itself. At a terminal, when Claude Code or Codex is installed and there is something to fix in code, it offers to have your agent fix it (no by default), then checks again. `--agent claude` or `--agent codex` fixes without asking; `--agent none` never offers. The agent works under the same limits as in `setup`, never sees an SDK key, and leaves a key already in the project as it is. Where it writes a placeholder for a key, `doctor` writes the key given with `--sdk-key` (or the environment) in its place once Tenjin accepts it for that build; a key given without a build only for a platform with one build, and none with `--offline`.
 
 ### Verifying a launch
 

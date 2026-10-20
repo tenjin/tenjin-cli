@@ -165,7 +165,7 @@ func checkGivenKey(ctx context.Context, keys verify.KeyChecker, key string, b pr
 	}
 	result, err := keys.CheckKey(ctx, key, b.BundleID, b.TenjinPlatform)
 	if err != nil {
-		return keyVerdict{ok: true, message: fmt.Sprintf("could not reach Tenjin to check it (%v); the last step checks again", err)}
+		return keyVerdict{ok: true, message: fmt.Sprintf("could not reach Tenjin to check it (%v)", err) + checksAgain}
 	}
 	switch result.Status {
 	case track.KeyValid:
@@ -182,8 +182,11 @@ func checkGivenKey(ctx context.Context, keys verify.KeyChecker, key string, b pr
 	case track.KeyDisabled:
 		return keyVerdict{message: "This key is disabled. Enable it in the dashboard, or copy another of the app's keys."}
 	}
-	return keyVerdict{ok: true, message: "Tenjin gave an unexpected answer (" + result.Detail + "); the last step checks again"}
+	return keyVerdict{ok: true, message: "Tenjin gave an unexpected answer (" + result.Detail + ")" + checksAgain}
 }
+
+// checksAgain ends a verdict on a key that is kept unchecked, in setup.
+const checksAgain = "; the last step checks again"
 
 // fetchedKey is a key Tenjin's API served, with what Tenjin said
 // about it.

@@ -18,6 +18,7 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/clierr"
 	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
+	"github.com/tenjin/tenjin-cli/internal/keyfill"
 	"github.com/tenjin/tenjin-cli/internal/project"
 	"github.com/tenjin/tenjin-cli/internal/render"
 	"github.com/tenjin/tenjin-cli/internal/verify"
@@ -48,11 +49,15 @@ day doctor also asks the SDKs' public registries (Maven Central, pub.dev,
 npm, GitHub) for their newest releases, so its fixes name current versions.
 --offline skips both.
 
-doctor itself never changes the project. At a terminal, when your coding
+doctor itself does not edit the project. At a terminal, when your coding
 agent (Claude Code or Codex) is installed and there is something to fix in
 code, it offers to have the agent fix it, then checks again; --agent picks
 one without asking, and --agent none never offers. The agent works under the
-same limits as in 'tenjin setup', and is never given an SDK key.
+same limits as in 'tenjin setup', is never given an SDK key, and leaves any
+key already in the project as it is. Where it writes a placeholder for a key
+instead, doctor writes the key given with --sdk-key (or the environment) in
+its place, once Tenjin accepts that key for that build; with --offline it
+writes none.
 
 With --device, doctor also reads what the app's last launch sent and what
 Tenjin answered to each request, then asks Tenjin whether the device's
@@ -147,28 +152,28 @@ otherwise. With --strict, warnings count too.`,
 			if err := writeReport(cmd.OutOrStdout(), report, offline); err != nil {
 				return err
 			}
-			fixer := &setup{cmd: cmd, env: env, args: args, agentFlag: fixWith, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
+			// The fixer writes no key of its own accord: keys are settled
+			// after the agent, by writeGivenKeys.
+			fixer := &setup{cmd: cmd, env: env, args: args, agentFlag: fixWith, offline: offline, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
 				given: given, features: chosen, inProject: map[string]bool{}, keys: map[string]verify.GivenKey{}}
 			if fixer.features == nil {
 				fixer.features = suggestedFeatures(p)
-			}
-			for _, b := range p.Builds() {
-				if key, ok := given.For(b.ID); ok {
-					fixer.keys[b.ID] = key
-				}
 			}
 			fixed, offered, err := fixer.offerFix(p, report)
 			if err != nil {
 				return err
 			}
 			if fixed {
-				// The agent changed the project: read it again and say what
-				// stands now.
+				// The agent changed the project: read it again, write the
+				// keys over the placeholders it left, and say what stands now.
 				if p, err = loadProject(args); err != nil {
 					return err
 				}
 				if err := narrowBuilds(p, builds); err != nil {
 					return err
+				}
+				if err := fixer.writeGivenKeys(p); err != nil {
+					fixer.say("%s %v", fixer.style.Yellow("!"), err)
 				}
 				vopts.Device = nil
 				report = verify.Run(cmd.Context(), p, vopts)
@@ -243,10 +248,77 @@ func (s *setup) offerFix(p *project.Project, report *verify.Report) (fixed, offe
 	if s.refuseAgent() {
 		return false, true, nil
 	}
+	s.inProject = keysInProject(s.cmd.Context(), p, s.given)
 	if err := s.runAgent(p, report); err != nil {
 		return false, true, err
 	}
 	return true, true, nil
+}
+
+// keysInProject are the builds whose SDK key is written in the project,
+// whether Tenjin accepts it or not. The agent is told to leave those alone:
+// doctor may hold no key to write back over a placeholder. It reads the
+// files only.
+func keysInProject(ctx context.Context, p *project.Project, given verify.GivenKeys) map[string]bool {
+	given.PreferSource = true
+	report := verify.Run(ctx, p, verify.Options{Given: given})
+	in := map[string]bool{}
+	for i := range p.Targets {
+		t := &p.Targets[i]
+		for _, b := range t.Builds {
+			if f := findingFor(report, "key.unchecked", t, b); f != nil && f.File != "" {
+				in[b.ID] = true
+			}
+		}
+	}
+	return in
+}
+
+// writeGivenKeys writes, over the placeholders an agent left, the keys given
+// with --sdk-key or the environment, each only once Tenjin accepts it for
+// that build's own app. A key given without a build serves a platform with
+// one build only. Offline nothing can be checked, so nothing is written.
+func (s *setup) writeGivenKeys(p *project.Project) error {
+	builds, _ := placeholderBuilds(p, keyfill.Find(p.Root))
+	keys := map[string]string{}
+	for _, pb := range builds {
+		b := pb.build
+		given, ok := s.given.ByBuild[b.ID]
+		if !ok || given.Value == "" {
+			given = s.given.All
+			if given.Value == "" {
+				continue
+			}
+			if pb.target != nil && len(pb.target.Builds) > 1 {
+				s.say("  %s %s: the key from %s was not written: it is not given for this build, and %s has %d. Run tenjin setup, or tenjin project set-keys, to write this build's own key.",
+					s.style.Yellow("!"), pb.title, given.Source, platformNames[pb.target.Platform], len(pb.target.Builds))
+				continue
+			}
+		}
+		label := pb.title + ", key " + maskKey(given.Value) + " from " + given.Source
+		if s.offline {
+			s.say("  %s %s: not written: with --offline it cannot be checked with Tenjin first. Run tenjin project set-keys to check and write it.", s.style.Yellow("!"), label)
+			continue
+		}
+		verdict := checkGivenKey(s.cmd.Context(), s.keyCheck(), given.Value, b, false)
+		if verdict.ok && !verdict.checked {
+			// Kept by setup, which checks again later; doctor writes only
+			// what Tenjin has accepted.
+			verdict = keyVerdict{message: strings.TrimSuffix(verdict.message, checksAgain) + ", so it was not written"}
+		}
+		s.asker().verdict(label, verdict)
+		if verdict.checked {
+			keys[b.SDKKeyPlaceholder] = given.Value
+		}
+	}
+	filled, err := keyfill.Fill(p.Root, keys)
+	for _, spot := range filled {
+		s.say("  %s Wrote %s at %s:%d", s.style.Green("✓"), keyNoun(p, spot), render.Clean(spot.File), spot.Line)
+	}
+	if err != nil {
+		return fmt.Errorf("could not write the SDK keys: %w", err)
+	}
+	return nil
 }
 
 // askToFix asks whether an installed agent should fix the findings, and

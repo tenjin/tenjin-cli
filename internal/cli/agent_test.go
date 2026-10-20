@@ -609,3 +609,77 @@ func TestDoctorAgentFlagErrors(t *testing.T) {
 		t.Errorf("--agent none --json: exit = %d, stdout = %q", code, stdout)
 	}
 }
+
+// A key Tenjin accepts is already in the project: doctor's agent is told to
+// leave it, and the integration that worked still works afterwards.
+func TestDoctorsAgentLeavesTheKeyInTheProject(t *testing.T) {
+	h, dir := brokenAndroid(t)
+	agent := h.installAgent()
+	code, stdout, stderr := h.run("doctor", dir, "--agent", "claude")
+	prompt := agent.read("prompt")
+	if !strings.Contains(prompt, "SDK key: already in the project: leave it as it is") || strings.Contains(prompt, "__TENJIN_ANDROID_SDK_KEY__") {
+		t.Errorf("the task:\n%s", prompt)
+	}
+	again := stdout[strings.Index(stdout, "Checking again"):]
+	if code != 0 || !strings.Contains(again, "Tenjin accepts the SDK key …MNBV") {
+		t.Errorf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+}
+
+// Over the placeholder its agent left, doctor writes only a given key that
+// Tenjin accepts for that build, and none offline.
+func TestDoctorWritesOnlyACheckedKeyOverThePlaceholder(t *testing.T) {
+	source := func(dir string) string {
+		raw, _ := os.ReadFile(filepath.Join(dir, androidActivity))
+		return string(raw)
+	}
+	cases := []struct {
+		name    string
+		args    []string
+		written bool
+		want    string
+	}{
+		{"accepted", []string{"--sdk-key", goodKey}, true, "✓ Wrote the Android SDK key at " + androidActivity},
+		{"refused", []string{"--sdk-key", wrongKey}, false, "✗ Android, key …WRNG from --sdk-key: Tenjin does not accept this key"},
+		{"offline", []string{"--sdk-key", goodKey, "--offline"}, false, "with --offline it cannot be checked with Tenjin first"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, dir := placeholderAndroid(t)
+			h.fake.keyAnswers[wrongKey] = "unauthorized"
+			h.installAgent()
+			t.Setenv("FAKE_AGENT_PLACEHOLDER", "1")
+			_, stdout, _ := h.run(append([]string{"doctor", dir, "--agent", "claude"}, tc.args...)...)
+			lacks(t, stdout, tc.want)
+			if written := strings.Contains(source(dir), goodKey); written != tc.written {
+				t.Errorf("written = %v:\n%s", written, source(dir))
+			}
+			if strings.Contains(source(dir), wrongKey) || (!tc.written && !strings.Contains(source(dir), "__TENJIN_ANDROID_SDK_KEY__")) {
+				t.Errorf("the placeholder is gone:\n%s", source(dir))
+			}
+		})
+	}
+}
+
+// A key given without a build is not written into a platform with several:
+// each is its own app, with its own key.
+func TestDoctorWritesAKeyPerStoreOnlyWhenGivenPerStore(t *testing.T) {
+	base := placeholderStores()
+	const manifest = "app/src/main/AndroidManifest.xml"
+	files := base.With(testproject.Files{manifest: strings.Replace(base[manifest], `    <uses-permission android:name="android.permission.INTERNET" />`+"\n", "", 1)})
+
+	h, dir := multiStore(t, files)
+	h.installAgent()
+	_, stdout, _ := h.run("doctor", dir, "--agent", "claude", "--sdk-key", testproject.PlayKey)
+	lacks(t, stdout, "Android, amazon (Amazon Appstore): the key from --sdk-key was not written")
+	if raw, _ := os.ReadFile(filepath.Join(dir, flavorBuild)); strings.Contains(string(raw), testproject.PlayKey) {
+		t.Errorf("a key given for no build was written:\n%s", raw)
+	}
+
+	h, dir = multiStore(t, files)
+	h.installAgent()
+	h.run("doctor", dir, "--agent", "claude", "--sdk-key", "android="+testproject.PlayKey, "--sdk-key", "android:amazon="+testproject.AmazonKey)
+	if raw, _ := os.ReadFile(filepath.Join(dir, flavorBuild)); !strings.Contains(string(raw), testproject.PlayKey) || !strings.Contains(string(raw), testproject.AmazonKey) {
+		t.Errorf("each store's key was not written:\n%s", raw)
+	}
+}
