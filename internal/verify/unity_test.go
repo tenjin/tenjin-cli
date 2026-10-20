@@ -117,6 +117,13 @@ PrefabInstance:
 	// A component with no key set is a placeholder.
 	files = testproject.Unity().Without(unityScript).With(testproject.Files{"Assets/Scenes/Main.unity": scene("")})
 	expect(t, run(t, files, verify.Options{}), "sdk.key.placeholder", "", verify.Error)
+
+	// A placeholder an agent left there is one the CLI fills, and until then
+	// Tenjin refuses the app's events.
+	files = testproject.Unity().Without(unityScript).With(testproject.Files{"Assets/Scenes/Main.unity": scene("__TENJIN_ANDROID_SDK_KEY__")})
+	if f := expect(t, run(t, files, verify.Options{}), "sdk.key.unfilled", project.Android, verify.Error); f.File != "Assets/Scenes/Main.unity" || f.Line != 8 {
+		t.Errorf("finding = %+v", f)
+	}
 }
 
 func TestUnityShrinkingNeedsKeepRules(t *testing.T) {

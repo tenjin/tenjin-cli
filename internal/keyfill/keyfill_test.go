@@ -130,6 +130,49 @@ func TestASymlinkedFileIsNotFilled(t *testing.T) {
 	if info, err := os.Lstat(filepath.Join(root, "config.json")); err != nil || info.Mode()&os.ModeSymlink == 0 {
 		t.Error("the link was replaced")
 	}
+	if raw, _ := os.ReadFile(target); !strings.Contains(string(raw), "__TENJIN_ANDROID_SDK_KEY__") {
+		t.Errorf("the file outside the project was written: %s", raw)
+	}
+	// It is still found, with why it is not filled.
+	spots := Find(root)
+	if len(spots) != 1 || spots[0].File != "config.json" || !strings.Contains(spots[0].Blocked, "symbolic link") || len(Writable(spots)) != 0 {
+		t.Errorf("spots = %+v", spots)
+	}
+}
+
+// The TenjinObject component keeps its key in a scene or a prefab. Saved as
+// YAML text, it is filled like any file; saved in binary form, where a
+// string carries its length, it is found and left.
+func TestUnityScenesAndPrefabs(t *testing.T) {
+	root := t.TempDir()
+	const scene = "%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!114 &1\nMonoBehaviour:\n  sdkKey: __TENJIN_ANDROID_SDK_KEY__\n"
+	binary := "\x00\x00\x00\x1a__TENJIN_ANDROID_SDK_KEY__\x00"
+	write(t, root, map[string]string{
+		"Assets/Scenes/Main.unity":      scene,
+		"Assets/Prefabs/Tenjin.prefab":  binary,
+		"Assets/Settings/Tenjin.asset":  "%YAML 1.1\n--- !u!114 &1\n  key: '__TENJIN_IOS_SDK_KEY__'\n",
+		"Assets/Scenes/Main.unity.meta": "guid: 1\n",
+		"Assets/Scenes/Other.unity":     "%YAML 1.1\n  sdkKey: \n",
+	})
+	spots := Find(root)
+	var got []string
+	for _, s := range spots {
+		got = append(got, s.File+":"+strconv.Itoa(s.Line)+":"+strconv.FormatBool(s.Blocked != ""))
+	}
+	if want := "Assets/Prefabs/Tenjin.prefab:1:true Assets/Scenes/Main.unity:5:false Assets/Settings/Tenjin.asset:3:false"; strings.Join(got, " ") != want {
+		t.Fatalf("found %q, want %q", strings.Join(got, " "), want)
+	}
+	const key = "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+	filled, err := Fill(root, map[string]string{Placeholder(project.Android): key})
+	if err != nil || len(filled) != 1 || filled[0].File != "Assets/Scenes/Main.unity" {
+		t.Fatalf("filled = %+v, err = %v", filled, err)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(root, "Assets/Scenes/Main.unity")); string(raw) != strings.Replace(scene, "__TENJIN_ANDROID_SDK_KEY__", key, 1) {
+		t.Errorf("scene = %q", raw)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(root, "Assets/Prefabs/Tenjin.prefab")); string(raw) != binary {
+		t.Errorf("the binary prefab was written: %q", raw)
+	}
 }
 
 // Unfill puts back exactly what Fill wrote.

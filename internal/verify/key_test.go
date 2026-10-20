@@ -1,6 +1,10 @@
 package verify_test
 
 import (
+	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -64,6 +68,37 @@ func TestAKeyWithSpacesIsItsOwnFinding(t *testing.T) {
 	}
 	if has(r, "sdk.key.placeholder") || has(r, "key.unchecked") || len(keys.asked) != 0 {
 		t.Errorf("findings: %s; asked: %q", ids(r), keys.asked)
+	}
+}
+
+// A placeholder in a symbolic link is one the CLI does not write through:
+// it is reported, with why, and what to do instead.
+func TestAPlaceholderInASymlinkIsReported(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need privileges on Windows")
+	}
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	base := testproject.AndroidNative()
+	dir := testproject.Write(t, base.Without(activity))
+	outside := filepath.Join(t.TempDir(), "MainActivity.kt")
+	if err := os.WriteFile(outside, []byte(strings.Replace(base[activity], testproject.Key, "__TENJIN_ANDROID_SDK_KEY__", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, filepath.FromSlash(activity))
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	p, err := project.Detect(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := verify.Run(context.Background(), p, verify.Options{})
+	f := expect(t, r, "sdk.key.unfilled", project.Android, verify.Error)
+	if f.File != activity || !strings.Contains(f.Detail, "symbolic link") || !strings.Contains(f.Fix, activity+":9 yourself") {
+		t.Errorf("finding = %+v", f)
 	}
 }
 

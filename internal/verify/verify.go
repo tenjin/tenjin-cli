@@ -5,6 +5,8 @@ package verify
 
 import (
 	"context"
+	"strconv"
+	"strings"
 
 	"github.com/tenjin/tenjin-cli/internal/collector"
 	"github.com/tenjin/tenjin-cli/internal/keyfill"
@@ -337,11 +339,16 @@ func (r *runner) checkDependency(spec frameworkSpec, platform project.Platform) 
 func (r *runner) checkUnfilledKeys() {
 	reported := map[string]bool{}
 	for _, spot := range r.spots() {
+		// Each place the CLI cannot write to is the developer's to fill.
+		seen := spot.Placeholder
+		if spot.Blocked != "" {
+			seen += "|" + spot.File
+		}
 		// A build left out with --build is not this run's to check.
-		if reported[spot.Placeholder] || r.p.IsOmitted(spot.Placeholder) {
+		if reported[seen] || r.p.IsOmitted(spot.Placeholder) {
 			continue
 		}
-		reported[spot.Placeholder] = true
+		reported[seen] = true
 		f := Finding{
 			ID: "sdk.key.unfilled", Severity: Error, Platform: spot.Platform,
 			Title:  "The " + platformName(spot.Platform) + " SDK key is still the placeholder " + spot.Placeholder,
@@ -362,6 +369,15 @@ func (r *runner) checkUnfilledKeys() {
 			f.Build = b.ID
 			f.Title = "The SDK key of " + buildLabel(*b) + " is still the placeholder " + spot.Placeholder
 			f.Fix = "Run tenjin setup, which asks for the key and writes it in its place. In a script, tenjin project set-keys --sdk-key " + b.ID + "=<key> does the same."
+		}
+		if spot.Blocked != "" && (b != nil || spot.Placeholder == keyfill.Placeholder(spot.Platform)) {
+			f.Detail = "The Tenjin CLI cannot write the key there: " + spot.Blocked + ". Until the key is written in its place, Tenjin refuses the app's events."
+			f.Fix = "Write the key from the app's page in the Tenjin dashboard over the placeholder at " + spot.File + ":" + strconv.Itoa(spot.Line) + " yourself."
+			if strings.HasPrefix(spot.Blocked, "Unity") {
+				f.Fix += " Or set Edit > Project Settings > Editor > Asset Serialization to Force Text, and run tenjin setup again."
+			} else {
+				f.Fix += " Or put the file itself in the project in place of the link, and run tenjin setup again."
+			}
 		}
 		r.add(f)
 	}

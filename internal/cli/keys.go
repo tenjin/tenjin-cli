@@ -303,6 +303,9 @@ type setKeysResult struct {
 	Refused []string `json:"refused"`
 	// Unknown are placeholders that name no build of the project.
 	Unknown []string `json:"unknown,omitempty"`
+	// Blocked are placeholders in files the CLI does not write to, each
+	// with why (keyfill.Spot.Blocked).
+	Blocked []keyfill.Spot `json:"blocked,omitempty"`
 }
 
 func newProjectSetKeysCmd(opts *options, env *environment) *cobra.Command {
@@ -362,7 +365,12 @@ once written, a key is in a file the agent reads.`,
 			spots := keyfill.Find(p.Root)
 			result := setKeysResult{Filled: []keyfill.Spot{}, Missing: []string{}, Refused: []string{}}
 			keys := map[string]string{}
-			builds, unknown := placeholderBuilds(p, spots)
+			for _, s := range spots {
+				if s.Blocked != "" && !p.IsOmitted(s.Placeholder) {
+					result.Blocked = append(result.Blocked, s)
+				}
+			}
+			builds, unknown := placeholderBuilds(p, keyfill.Writable(spots))
 			result.Unknown = unknown
 			for _, pb := range builds {
 				b, label := pb.build, pb.title
@@ -526,6 +534,9 @@ func writeFilled(w io.Writer, style render.Styler, p *project.Project, spots []k
 	for _, ph := range r.Unknown {
 		_, _ = fmt.Fprintf(w, "%s %s names no build of this project, so nothing was written for it. tenjin project detect lists the builds.\n", style.Red("✗"), render.Clean(ph))
 	}
+	for _, s := range r.Blocked {
+		_, _ = fmt.Fprintf(w, "%s %s at %s:%d is left: %s. Write the key there yourself.\n", style.Red("✗"), s.Placeholder, s.File, s.Line, s.Blocked)
+	}
 }
 
 // keyNoun names the SDK key a placeholder was for: "the Android SDK key",
@@ -548,6 +559,10 @@ func setKeysStatus(p *project.Project, r setKeysResult) error {
 	switch {
 	case len(r.Refused) > 0:
 		return clierr.New(clierr.ChecksFailed, "Tenjin refused the key for %s; nothing was written for it", joinTitles(p, r.Refused))
+	case len(r.Blocked) > 0:
+		s := r.Blocked[0]
+		return clierr.New(clierr.ChecksFailed, "the key cannot be written at %s:%d: %s", s.File, s.Line, s.Blocked).
+			WithHint("Write the key there yourself, from the app's page in the Tenjin dashboard.")
 	case len(r.Unknown) > 0:
 		return clierr.New(clierr.Usage, "%s names no build of this project", strings.Join(r.Unknown, ", ")).
 			WithHint("Replace it with the placeholder of the build it is for; tenjin project detect lists them.")
