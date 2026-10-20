@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -268,5 +269,22 @@ func TestInstallRefusesALinkOutOfTheProject(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(target); string(got) != "mine\n" {
 		t.Errorf("the outside file was changed: %q", got)
+	}
+}
+
+// SDK keys never go to an agent: no command the skill has it run writes one
+// into the project, where the agent would read it.
+func TestTheSkillNeverHasTheAgentWriteAKey(t *testing.T) {
+	blocks := regexp.MustCompile("(?s)```sh\n(.*?)```").FindAllStringSubmatch(Body(), -1)
+	if len(blocks) == 0 {
+		t.Fatal("no commands found in the skill")
+	}
+	for _, b := range blocks {
+		if strings.Contains(b[1], "set-keys") || strings.Contains(b[1], "tenjin setup") || strings.Contains(b[1], "--sdk-key") {
+			t.Errorf("the skill has the agent run:\n%s", b[1])
+		}
+	}
+	if !strings.Contains(Body(), "Do not run `tenjin setup` or `tenjin project set-keys` yourself") {
+		t.Error("the skill does not tell the agent to leave the keys to the developer")
 	}
 }

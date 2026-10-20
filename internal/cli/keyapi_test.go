@@ -90,9 +90,9 @@ func TestSetupFallsBackToTheDashboard(t *testing.T) {
 	}
 }
 
-// A coding agent can finish the job itself: set-keys fetches the key, and
-// the agent sees only its last four characters.
-func TestSetKeysFetchesTheKeyForAnAgent(t *testing.T) {
+// Signed in, set-keys fetches the key itself, and prints only its last four
+// characters.
+func TestSetKeysFetchesTheKey(t *testing.T) {
 	h, dir := agentPlaceholderAndroid(t)
 	app := h.fake.addApp("Sample", "com.example.sample", "android")
 	h.fake.serveKeys(app.ID, goodKey)
