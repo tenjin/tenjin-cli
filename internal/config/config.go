@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -78,7 +79,7 @@ func Resolve(getenv func(string) string) (Endpoints, error) {
 		*override.address = value
 		e.Name = "custom"
 	}
-	if e.Issuer == production.Issuer && (e.API != production.API || e.Resource != production.Resource || e.SiteIDs != production.SiteIDs) {
+	if sameOrigin(e.Issuer, production.Issuer) && (!sameOrigin(e.API, production.API) || !sameOrigin(e.Resource, production.Resource) || !sameOrigin(e.SiteIDs, production.SiteIDs)) {
 		return Endpoints{}, fmt.Errorf("TENJIN_API_URL, TENJIN_RESOURCE_URL and TENJIN_SITE_IDS_URL need TENJIN_DASHBOARD_URL as well: otherwise a token issued by Tenjin's production dashboard would be sent to another address")
 	}
 	if e.Name == "custom" {
@@ -86,6 +87,39 @@ func Resolve(getenv func(string) string) (Endpoints, error) {
 		e.Name = "custom-" + hex.EncodeToString(sum[:4])
 	}
 	return e, nil
+}
+
+// sameOrigin reports whether two addresses reach the same server: the same
+// scheme, host and port, however they are written. The path does not count,
+// so https://dashboard.tenjin.com/x/.. is Tenjin's dashboard.
+func sameOrigin(a, b string) bool {
+	ua, errA := url.Parse(a)
+	ub, errB := url.Parse(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return strings.EqualFold(ua.Scheme, ub.Scheme) && hostOf(ua) == hostOf(ub) && portOf(ua) == portOf(ub)
+}
+
+// hostOf is u's host as a name server reads it: in lower case, without the
+// trailing dot of a fully qualified name.
+func hostOf(u *url.URL) string {
+	return strings.TrimSuffix(strings.ToLower(u.Hostname()), ".")
+}
+
+// portOf is u's port as a number, or its scheme's when it names none.
+func portOf(u *url.URL) int {
+	if p := u.Port(); p != "" {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return -1
+		}
+		return n
+	}
+	if strings.EqualFold(u.Scheme, "http") {
+		return 80
+	}
+	return 443
 }
 
 // loopback reports whether host is this machine, where plain http cannot be
