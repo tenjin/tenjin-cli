@@ -37,11 +37,27 @@ archives:
         formats: [zip]
     # install.sh builds this name too; change both together.
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Every entry carries the commit's time, owner and mode, not the
+    # checkout's or the build hooks', so an archive built again from the same
+    # commit is the same file, with the checksum the release and cask name.
+    builds_info:
+      owner: root
+      group: root
+      mode: 0755
+      mtime: "{{ .CommitDate }}"
     files:
-      - README.md
-      - LICENSE*
-      - THIRD_PARTY_NOTICES.md
-      - completions/*
+      - src: README.md
+        info: &docs
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+      - src: LICENSE*
+        info: *docs
+      - src: THIRD_PARTY_NOTICES.md
+        info: *docs
+      - src: completions/*
+        info: *docs
 
 checksum:
   name_template: checksums.txt
