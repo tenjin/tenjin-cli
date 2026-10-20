@@ -2,9 +2,9 @@
 
 The `tenjin` command-line tool does the Tenjin side of an SDK integration and checks the result. You make the code changes. The CLI tells you what the project is, which Tenjin app it belongs to, what is still missing, and what Tenjin answered when the app ran.
 
-Every command below accepts `--json` and never prompts when it is not run at a terminal. Only `tenjin project set-keys` changes the project, and only to write SDK keys over the placeholders you leave for them. A failure prints `{"error": {"code", "message", "hint"}}` on standard error and sets the exit status: 2 usage, 3 not signed in, 4 role not allowed, 5 not found, 9 checks failed, 10 already exists.
+Every command below accepts `--json` and never prompts when it is not run at a terminal, and none of them changes the project's files. A failure prints `{"error": {"code", "message", "hint"}}` on standard error and sets the exit status: 2 usage, 3 not signed in, 4 role not allowed, 5 not found, 9 checks failed, 10 already exists.
 
-Do not run `tenjin setup` yourself. It is the same sequence for a person at a terminal: it asks questions, and it is where the developer's SDK keys go in. Tell the developer to run it when you are done (step 6).
+Do not run `tenjin setup` or `tenjin project set-keys` yourself. `setup` is the same sequence for a person at a terminal: it asks questions, and it is where the developer's SDK keys go in. Both write the real keys into the project, where you would then read them. Tell the developer to run `tenjin setup` when you are done (step 6).
 
 ## The sequence
 
@@ -32,7 +32,7 @@ Read from the result:
 tenjin auth status --json
 ```
 
-Exit status 3 means nobody is signed in. Ask the developer to run `tenjin login` themselves: it opens a browser and waits for them. Ask once. Steps 1 and 5 work without it, and without it step 4 leaves the keys to the developer.
+Exit status 3 means nobody is signed in. Ask the developer to run `tenjin login` themselves: it opens a browser and waits for them. Ask once. Only step 3 needs it.
 
 ### 3. Get the Tenjin app for each build
 
@@ -55,13 +55,7 @@ You are not given the SDK keys, and you do not ask for them: a key that passes t
 
 In a cross-platform project, choose between them at runtime, as you would between the real keys. Where a platform has several builds, each build must send its own key, and two builds never share a placeholder: for Android product flavors, put each placeholder in its flavor's block of the build file, for example `buildConfigField("String", "TENJIN_SDK_KEY", "\"<placeholder>\"")`, and read `BuildConfig.TENJIN_SDK_KEY` where the SDK starts; in Flutter, choose by `appFlavor`. Keep the word Tenjin on each line that holds a placeholder, so that `doctor` can find the key there later. If the developer gives you a key anyway, still write the placeholder, and do not repeat the key.
 
-Once the placeholders are written, have the CLI fill them:
-
-```sh
-tenjin project set-keys --json
-```
-
-Never pass it `--sdk-key`. When the developer is signed in and Tenjin serves the app's keys, it fetches each key, checks it with Tenjin and writes it over the placeholder, changing nothing else; you see only the last four characters. `filled` lists what it wrote. A build in `missing` has no key it could fetch, and the exit status is then 5: leave the placeholder, and say at the end that `tenjin setup` will ask the developer for it. A build in `refused` means Tenjin refused the app's own key: report it as it is. A placeholder in `unknown` names no build: replace it with the right one.
+Leave the placeholders in place. The keys go in after you are done, when the developer runs `tenjin setup` (or, in a script of theirs, `tenjin project set-keys`): it fetches each build's key from Tenjin or asks for it, checks it, and writes it over the placeholder, changing nothing else. Neither is yours to run: once a key is written, it is in a file you read.
 
 ### 5. Integrate, then check
 
@@ -79,13 +73,13 @@ Make the changes, then run, with the features the developer chose:
 tenjin doctor --json --features <id,id,...>
 ```
 
-`findings` lists each check with a stable `id`, a `severity` (`error`, `warning`, `info` or `pass`), and for a problem the `file`, `line` and `fix`. Resolve every `error` and `warning`, and on native iOS the `info` finding `ios.debug_logs` as well: the launch check reads the SDK's logs, which only debug builds should turn on. Then run it again. Repeat until there are none, or the only errors left are `sdk.key.unfilled` for placeholders `set-keys` could not fill: those are the developer's step, not yours. The exit status is 0 when nothing would stop events reaching Tenjin and 9 otherwise, so it stays 9 while a placeholder is in place.
+`findings` lists each check with a stable `id`, a `severity` (`error`, `warning`, `info` or `pass`), and for a problem the `file`, `line` and `fix`. Resolve every `error` and `warning`, and on native iOS the `info` finding `ios.debug_logs` as well: the launch check reads the SDK's logs, which only debug builds should turn on. Then run it again. Repeat until there are none, or the only errors left are `sdk.key.unfilled` for the placeholders you wrote: filling those is the developer's step, not yours, so leave them. An `sdk.key.unfilled` finding whose title says the placeholder names no build is yours to fix: replace it with the placeholder of the build it is for. An `sdk.key.placeholder` finding is a placeholder from a guide, such as `YOUR_SDK_KEY`: write the build's placeholder over it, and leave the rest of its fix to the developer. The exit status is 0 when nothing would stop events reaching Tenjin and 9 otherwise, so it stays 9 while a placeholder is in place.
 
 When the project already holds a real key, `doctor` checks it against Tenjin by sending one request and no event. A finding whose `id` starts with `key.` is about the key or the app in Tenjin, not about the code: the fix is the right key or the right bundle ID, which is for the developer to sort out in `tenjin setup`. A finding whose `id` starts with `feature.` is about a chosen feature that nothing sends to Tenjin yet: a warning to resolve when it was chosen, a suggestion to pass on to the developer when it was not.
 
 ### 6. Hand over to the developer
 
-End by telling the developer to run `tenjin setup` in the project. It writes any SDK key still missing, asking for it if Tenjin cannot serve it; then it re-runs the checks, asks them to launch the app, and reads Tenjin's answer from the device.
+End by telling the developer to run `tenjin setup` in the project. It writes the SDK keys over the placeholders, fetching each from Tenjin or asking for it; then it re-runs the checks, asks them to launch the app, and reads Tenjin's answer from the device.
 
 If the keys are already in the project and the developer asks you to check a launch, run this after a debug build has been launched on a connected Android device or emulator, or on an iOS simulator, or installed on an iPhone connected by cable:
 

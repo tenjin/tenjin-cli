@@ -326,8 +326,8 @@ Each key comes from --sdk-key or the environment; failing that, from Tenjin,
 for a developer who is signed in; failing that, at a terminal, it is pasted
 after the CLI says where to copy it from. It is checked with Tenjin first,
 against that build's own app, and a key Tenjin refuses is not written. The
-keys are never printed whole, so a coding agent can run this without seeing
-them.`,
+keys are never printed whole. Run it yourself, not through a coding agent:
+once written, a key is in a file the agent reads.`,
 		Args: maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, err := opts.format(cmd)

@@ -115,7 +115,7 @@ func guideHeader(g sdkGuide) string {
 	if g.SDKVersion != "" {
 		fmt.Fprintf(&b, "> - Where this guide says `<TENJIN_SDK_VERSION>`, use **%s**, the release `tenjin doctor` checks against. There is no need to look it up.\n", g.SDKVersion)
 	}
-	b.WriteString("> - Do not ask for the SDK key or write one. Where the key belongs, write the build's placeholder (`tenjin project detect` lists each build's `sdk_key_placeholder`), and the Tenjin CLI writes the key: `tenjin setup`, or `tenjin project set-keys`.\n")
+	b.WriteString("> - Do not ask for the SDK key or write one. Where the key belongs, write the build's placeholder (`tenjin project detect` lists each build's `sdk_key_placeholder`), and leave it there: the developer has the Tenjin CLI write the key afterwards, with `tenjin setup`. A coding agent does not run that, or `tenjin project set-keys`, itself.\n")
 	b.WriteString("> - Check the result with `tenjin doctor`.\n\n")
 	return b.String()
 }

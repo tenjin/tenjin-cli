@@ -219,22 +219,23 @@ func skillRun(t *testing.T, bin, claude string, served bool) {
 		t.Errorf("the SDK was not added at the version the doctor named:\n%s", build)
 	}
 
+	// Even signed in, with the key served, the agent leaves the placeholder:
+	// a key the CLI wrote would be in a file it reads.
+	for command := range ran {
+		if strings.HasPrefix(command, "tenjin project set-keys") || strings.HasPrefix(command, "tenjin setup") {
+			t.Errorf("the agent ran %q", command)
+		}
+	}
 	source, _ := os.ReadFile(filepath.Join(dir, activity))
-	if served {
-		if !strings.Contains(transcript, "tenjin project set-keys") || !strings.Contains(string(source), testproject.Key) {
-			t.Errorf("the agent did not have the CLI write the key:\n%s", source)
-		}
-	} else {
-		if !strings.Contains(string(source), keyfill.Placeholder(project.Android)) {
-			t.Errorf("the key placeholder is not in the launcher Activity:\n%s", source)
-		}
-		if !strings.Contains(summary, "tenjin setup") {
-			t.Error("the summary does not send the developer to tenjin setup for the key")
-		}
-		// What setup does with the key, as a script would.
-		if code, stdout, stderr := h.run("project", "set-keys", dir, "--sdk-key", "android="+testproject.Key); code != 0 {
-			t.Fatalf("set-keys: exit %d: %s%s", code, stdout, stderr)
-		}
+	if !strings.Contains(string(source), keyfill.Placeholder(project.Android)) {
+		t.Errorf("the key placeholder is not in the launcher Activity:\n%s", source)
+	}
+	if !strings.Contains(summary, "tenjin setup") {
+		t.Error("the summary does not send the developer to tenjin setup for the key")
+	}
+	// What setup does with the key, as a script would.
+	if code, stdout, stderr := h.run("project", "set-keys", dir, "--sdk-key", "android="+testproject.Key); code != 0 {
+		t.Fatalf("set-keys: exit %d: %s%s", code, stdout, stderr)
 	}
 	code, stdout, _ := h.run("doctor", dir, "--strict")
 	t.Logf("doctor afterwards (exit %d):\n%s", code, stdout)
