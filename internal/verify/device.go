@@ -381,7 +381,10 @@ func (r *runner) checkProcessed(t *project.Target, src source, c *devicelog.Requ
 		unchecked("no SDK key was found to ask with")
 		return
 	}
+	// The most telling answer wins: processed, then not processed yet, then
+	// a failed lookup, whatever order the keys come in.
 	var failed error
+	answered := false
 	for _, k := range keys {
 		attribution, err := lookup.LookupDevice(r.ctx, k.Value, bundle, platform, installationID)
 		if err != nil {
@@ -390,7 +393,7 @@ func (r *runner) checkProcessed(t *project.Target, src source, c *devicelog.Requ
 			failed = err
 			continue
 		}
-		failed = nil
+		answered = true
 		if attribution.Known {
 			title := "Tenjin has processed this device's install"
 			if source := firstNonEmpty(attribution.CampaignName, attribution.AdNetwork); source != "" {
@@ -400,7 +403,7 @@ func (r *runner) checkProcessed(t *project.Target, src source, c *devicelog.Requ
 			return
 		}
 	}
-	if failed != nil {
+	if !answered && failed != nil {
 		r.add(Finding{
 			ID: "device.lookup", Severity: Warning, Platform: t.Platform,
 			Title:  "Tenjin could not be asked whether it processed the install",

@@ -139,11 +139,17 @@ func (c *Client) LookupDevice(ctx context.Context, key, bundleID, platform, inst
 		var body struct {
 			AdNetwork    string `json:"ad_network"`
 			CampaignName string `json:"campaign_name"`
+			// Always present in a processed install's attribution, empty or
+			// not; nothing else the collector answers with 200 has it.
+			InstallationID *string `json:"analytics_installation_id"`
 		}
 		// Anything but the collector's JSON, such as a captive portal's page,
 		// says nothing about the install.
 		if err := json.Unmarshal(raw, &body); err != nil {
 			return Attribution{}, fmt.Errorf("the collector's answer could not be read: %s", truncate(string(raw), 80))
+		}
+		if body.InstallationID == nil {
+			return Attribution{}, fmt.Errorf("the collector answered HTTP 200 without an install's attribution")
 		}
 		return Attribution{Known: true, AdNetwork: body.AdNetwork, CampaignName: body.CampaignName}, nil
 	case http.StatusNotFound:

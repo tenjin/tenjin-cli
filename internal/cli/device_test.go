@@ -194,6 +194,27 @@ func TestDoctorDeviceFlagErrors(t *testing.T) {
 	}
 }
 
+// With a key per store, the install is looked up with each. The Google Play
+// app's answer, not processed yet, is the one that counts: the Amazon key's
+// refusal after it says nothing about this install.
+func TestTheLookupKeepsTheMostTellingAnswer(t *testing.T) {
+	h, dir := multiStore(t, testproject.AndroidMultiStore())
+	code, stdout, stderr := h.run("doctor", dir, "--logs", capturedLog, "--json")
+	var report struct {
+		Findings []struct{ ID, Severity string }
+	}
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("exit = %d, stderr = %q: %v", code, stderr, err)
+	}
+	got := map[string]string{}
+	for _, f := range report.Findings {
+		got[f.ID] = f.Severity
+	}
+	if got["device.processed"] != "info" || got["device.lookup"] != "" || len(h.fake.installsAsked) != 2 {
+		t.Errorf("findings = %v, lookups = %d", got, len(h.fake.installsAsked))
+	}
+}
+
 // An emulator the SDK recognises marks its requests device_info=true, and
 // Tenjin does not process them: doctor says so and does not ask.
 func TestDoctorOnAMarkedEmulator(t *testing.T) {
