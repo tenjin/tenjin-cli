@@ -3,6 +3,7 @@
 package session
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -42,6 +43,20 @@ type Store interface {
 	Save(c *Credentials) (location string, err error)
 }
 
+// Locker is a Store that can keep other processes from refreshing the same
+// sign-in at the same time. Lock waits for any other holder, a bounded time,
+// and returns the function that lets go.
+type Locker interface {
+	Lock(ctx context.Context, environment string) (unlock func(), err error)
+}
+
+// lockWait bounds the wait for another tenjin's refresh, which takes a second
+// or two. A holder that died lets go at once: the lock is the operating
+// system's, on an open file, so it never outlives its process.
+const lockWait = 30 * time.Second
+
+var errLockBusy = errors.New("another tenjin is refreshing the sign-in")
+
 // keychainTimeout bounds each keychain call. A locked Linux keyring can wait
 // for an unlock prompt that nobody will see, as over SSH; past this, the
 // credentials go to the file.
@@ -65,18 +80,54 @@ func NewStore() Store {
 
 // newStoreIn is NewStore with the file kept in dir, for tests.
 func newStoreIn(dir string) *systemStore {
-	return &systemStore{dir: dir, get: keyring.Get, set: keyring.Set, timeout: keychainTimeout}
+	return &systemStore{dir: dir, get: keyring.Get, set: keyring.Set, timeout: keychainTimeout, lockWait: lockWait}
 }
 
 type systemStore struct {
-	dir     string
-	get     func(service, user string) (string, error)
-	set     func(service, user, secret string) error
-	timeout time.Duration
+	dir      string
+	get      func(service, user string) (string, error)
+	set      func(service, user, secret string) error
+	timeout  time.Duration
+	lockWait time.Duration
 }
 
 func (s *systemStore) file(environment string) string {
 	return filepath.Join(s.dir, "credentials-"+environment+".json")
+}
+
+// Lock takes the lock file beside the credentials file, whether or not the
+// credentials are in the keychain. The file stays; only the lock on it ends.
+func (s *systemStore) Lock(ctx context.Context, environment string) (func(), error) {
+	if err := os.MkdirAll(s.dir, 0o700); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(filepath.Join(s.dir, "credentials-"+environment+".lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	deadline := time.Now().Add(s.lockWait)
+	for {
+		taken, err := tryLock(f)
+		switch {
+		case err != nil:
+			_ = f.Close()
+			return nil, err
+		case taken:
+			return func() {
+				unlockFile(f)
+				_ = f.Close()
+			}, nil
+		case time.Now().After(deadline):
+			_ = f.Close()
+			return nil, errLockBusy
+		}
+		select {
+		case <-ctx.Done():
+			_ = f.Close()
+			return nil, ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 }
 
 // The file is written only when the keychain failed, and removed whenever a
