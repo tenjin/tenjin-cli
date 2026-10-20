@@ -76,6 +76,17 @@ otherwise. With --strict, warnings count too.`,
 			if err != nil {
 				return err
 			}
+			if fixWith != "" && fixWith != "none" {
+				if !contains(agent.IDs(), fixWith) {
+					return clierr.New(clierr.Usage, "unknown agent %q (use %s, or none)", fixWith, strings.Join(agent.IDs(), ", "))
+				}
+				// An agent's run is followed by a person; JSON is for scripts
+				// and agents, which make the changes themselves.
+				if format == render.JSON {
+					return clierr.New(clierr.Usage, "--agent %s starts a coding agent, which is for a person at a terminal, and has no JSON output", fixWith).
+						WithHint("Run 'tenjin doctor --agent %s' without --json, or read 'tenjin doctor --json' and make the fixes it names.", fixWith)
+				}
+			}
 			p, err := loadProject(args)
 			if err != nil {
 				return err
