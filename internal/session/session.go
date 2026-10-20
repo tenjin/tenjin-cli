@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/tenjin/tenjin-cli/internal/clierr"
@@ -64,6 +65,9 @@ func (m *Manager) now() time.Time {
 func (m *Manager) Status() (Status, error) {
 	s := Status{Source: SourceNone, Environment: m.Environment}
 	if m.APIToken != "" {
+		if _, err := m.apiToken(); err != nil {
+			return s, err
+		}
 		s.SignedIn, s.Source = true, SourceAPIToken
 		return s, nil
 	}
@@ -131,7 +135,7 @@ func (c *Credentials) apply(tokens oauth.Tokens, identity oauth.Identity) {
 // Token returns a credential the API accepts, refreshing it when needed.
 func (m *Manager) Token(ctx context.Context) (string, error) {
 	if m.APIToken != "" {
-		return m.APIToken, nil
+		return m.apiToken()
 	}
 	c, err := m.Store.Load(m.Environment)
 	if err != nil {
@@ -140,48 +144,146 @@ func (m *Manager) Token(ctx context.Context) (string, error) {
 	if !c.SignedIn() {
 		return "", notSignedIn("You are not signed in.")
 	}
-	if c.JWT != "" && m.now().Before(c.JWTExpiry.Add(-refreshMargin)) {
+	if m.current(c) {
+		return c.JWT, nil
+	}
+	return m.refresh(ctx, "")
+}
+
+// Renew returns a token to use in place of one the API refused. The expiry
+// is judged by this machine's clock, which can be wrong, so a refused token
+// is refreshed even when it looks current. A token from TENJIN_API_TOKEN
+// cannot be renewed.
+func (m *Manager) Renew(ctx context.Context, refused string) (string, error) {
+	if m.APIToken != "" {
+		return "", m.Refused()
+	}
+	return m.refresh(ctx, refused)
+}
+
+// Refused is what to tell the user when the API refuses the token, naming
+// where it came from.
+func (m *Manager) Refused() *clierr.Error {
+	if m.APIToken != "" {
+		return clierr.New(clierr.NotSignedIn, "Tenjin did not accept the token in TENJIN_API_TOKEN").
+			WithHint("Set TENJIN_API_TOKEN to a current access token from the Tenjin dashboard, or unset it and run 'tenjin login'.")
+	}
+	return clierr.New(clierr.NotSignedIn, "Tenjin did not accept the saved sign-in").WithHint("Run 'tenjin login'.")
+}
+
+// apiToken returns TENJIN_API_TOKEN, refusing one that could not be sent: a
+// token is printable ASCII, with no spaces.
+func (m *Manager) apiToken() (string, error) {
+	if strings.ContainsFunc(m.APIToken, func(r rune) bool { return r <= ' ' || r > '~' }) {
+		return "", clierr.New(clierr.Usage, "TENJIN_API_TOKEN holds a space, a line break or another character no Tenjin token has").
+			WithHint("Set it to the access token alone, copied from the Tenjin dashboard.")
+	}
+	return m.APIToken, nil
+}
+
+func (m *Manager) current(c *Credentials) bool {
+	return c.JWT != "" && m.now().Before(c.JWTExpiry.Add(-refreshMargin))
+}
+
+// refresh trades the refresh token for a new API token, one tenjin at a
+// time: each refresh spends the refresh token, so two at once would leave one
+// of them holding a dead one. refused, when not empty, is a token the API
+// turned down, which must not be handed out again.
+func (m *Manager) refresh(ctx context.Context, refused string) (string, error) {
+	unlock, err := m.lock(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+	// Another tenjin may have refreshed while this one waited: its result is
+	// in the store.
+	c, err := m.Store.Load(m.Environment)
+	if err != nil {
+		return "", err
+	}
+	if !c.SignedIn() {
+		return "", notSignedIn("You are not signed in.")
+	}
+	if c.JWT != refused && m.current(c) {
 		return c.JWT, nil
 	}
 
-	tokens, err := m.Authority.Refresh(ctx, c.ClientID, c.RefreshToken)
+	spent := c.RefreshToken
+	tokens, err := m.Authority.Refresh(ctx, c.ClientID, spent)
 	if errors.Is(err, oauth.ErrGrantInvalid) {
-		// Another tenjin may have refreshed at the same moment, which spent
-		// the token this one used. Its result is in the store.
-		if again, reloadErr := m.Store.Load(m.Environment); reloadErr == nil && again.SignedIn() && again.RefreshToken != c.RefreshToken {
-			if again.JWT != "" && m.now().Before(again.JWTExpiry.Add(-refreshMargin)) {
+		// A tenjin that does not take the lock, such as an older version,
+		// may have refreshed at the same moment and spent the token this one
+		// used. Its result is in the store.
+		if again, reloadErr := m.Store.Load(m.Environment); reloadErr == nil && again.SignedIn() && again.RefreshToken != spent {
+			if again.JWT != refused && m.current(again) {
 				return again.JWT, nil
 			}
-			c = again
-			tokens, err = m.Authority.Refresh(ctx, c.ClientID, c.RefreshToken)
+			c, spent = again, again.RefreshToken
+			tokens, err = m.Authority.Refresh(ctx, c.ClientID, spent)
 		}
 	}
 	if err != nil {
-		return "", m.refreshFailed(c, err)
+		return "", m.refreshFailed(c, spent, err)
 	}
 	// The refresh token rotates. Save the new one before anything else can
 	// fail, or the stored one is dead and the user is signed out for no reason.
 	if tokens.RefreshToken != "" {
 		c.RefreshToken = tokens.RefreshToken
-		if _, err := m.Store.Save(c); err != nil {
+		if err := m.saveOver(spent, c); err != nil {
 			return "", err
 		}
 	}
 	identity, err := m.Authority.Exchange(ctx, tokens.AccessToken)
 	if err != nil {
-		return "", m.refreshFailed(c, err)
+		// The refresh token just saved is good: keep it for the next try.
+		return "", clierr.Wrap(clierr.Upstream, err, "Tenjin renewed the sign-in but did not give an API token for it: %v", err).
+			WithHint("Try again. If it keeps failing, run 'tenjin login'.")
 	}
 	c.apply(tokens, identity)
-	if _, err := m.Store.Save(c); err != nil {
+	if err := m.saveOver(spent, c); err != nil {
 		return "", err
 	}
 	return c.JWT, nil
 }
 
-func (m *Manager) refreshFailed(c *Credentials, err error) error {
+// saveOver saves c, refreshed from the refresh token spent, unless the store
+// has since moved on to another: then a tenjin that did not wait for the lock
+// signed in, out or refreshed meanwhile, and what it saved stands.
+func (m *Manager) saveOver(spent string, c *Credentials) error {
+	stored, err := m.Store.Load(m.Environment)
+	if err != nil {
+		return err
+	}
+	if stored == nil || (stored.RefreshToken != spent && stored.RefreshToken != c.RefreshToken) {
+		return nil
+	}
+	_, err = m.Store.Save(c)
+	return err
+}
+
+// lock keeps other tenjin processes from refreshing this sign-in until
+// unlock is called. Where the store cannot lock, or another process holds
+// the lock past the wait, the refresh goes ahead anyway: saveOver still keeps
+// a newer sign-in from being overwritten.
+func (m *Manager) lock(ctx context.Context) (unlock func(), err error) {
+	locker, ok := m.Store.(Locker)
+	if !ok {
+		return func() {}, nil
+	}
+	unlock, err = locker.Lock(ctx, m.Environment)
+	switch {
+	case ctx.Err() != nil:
+		return nil, ctx.Err()
+	case err != nil:
+		return func() {}, nil
+	}
+	return unlock, nil
+}
+
+func (m *Manager) refreshFailed(c *Credentials, spent string, err error) error {
 	if errors.Is(err, oauth.ErrGrantInvalid) {
 		// The grant was revoked or expired. Forget it so status is truthful.
-		_, _ = m.Store.Save(&Credentials{Environment: c.Environment, ClientID: c.ClientID})
+		_ = m.saveOver(spent, &Credentials{Environment: c.Environment, ClientID: c.ClientID})
 		return notSignedIn("Your sign-in has expired or was revoked.")
 	}
 	return clierr.Wrap(clierr.Upstream, err, "could not refresh the sign-in: %v", err)
