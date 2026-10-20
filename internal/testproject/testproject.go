@@ -178,30 +178,37 @@ const InfoPlist = `<?xml version="1.0" encoding="UTF-8"?>
 </plist>
 `
 
-// pbxproj returns the build-settings part of an Xcode project file, which is
-// all detection reads.
+// pbxproj returns the parts of an Xcode project file that detection reads:
+// the app target and its test target, each with its build settings.
 func pbxproj(bundleID, infoPlist string) string {
-	return `// !$*UTF8*$!
-{
-	objects = {
-		AAAA /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				INFOPLIST_FILE = ` + infoPlist + `;
-				PRODUCT_BUNDLE_IDENTIFIER = ` + bundleID + `;
-			};
-			name = Debug;
-		};
-		BBBB /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				PRODUCT_BUNDLE_IDENTIFIER = ` + bundleID + `.SampleTests;
-			};
-			name = Debug;
-		};
-	};
+	return PBXProj(PBXTarget{Name: "Sample", ProductType: "com.apple.product-type.application", BundleID: bundleID, InfoPlist: infoPlist},
+		PBXTarget{Name: "SampleTests", ProductType: "com.apple.product-type.bundle.unit-test", BundleID: bundleID + ".SampleTests"})
 }
-`
+
+// PBXTarget is one target of an Xcode project, built in Debug and Release
+// with the same settings.
+type PBXTarget struct {
+	Name, ProductType, BundleID, InfoPlist string
+}
+
+// PBXProj is a project.pbxproj with these targets, in the form Xcode writes.
+func PBXProj(targets ...PBXTarget) string {
+	var objects, ids strings.Builder
+	for i, t := range targets {
+		n := string(rune('A' + i))
+		settings := "\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = " + t.BundleID + ";\n"
+		if t.InfoPlist != "" {
+			settings = "\t\t\t\tINFOPLIST_FILE = " + t.InfoPlist + ";\n" + settings
+		}
+		for _, config := range []string{"Debug", "Release"} {
+			objects.WriteString("\t\t" + n + config + " /* " + config + " */ = {\n\t\t\tisa = XCBuildConfiguration;\n\t\t\tbuildSettings = {\n" + settings + "\t\t\t};\n\t\t\tname = " + config + ";\n\t\t};\n")
+		}
+		objects.WriteString("\t\t" + n + "List /* Build configuration list for PBXNativeTarget \"" + t.Name + "\" */ = {\n\t\t\tisa = XCConfigurationList;\n\t\t\tbuildConfigurations = (\n\t\t\t\t" + n + "Debug /* Debug */,\n\t\t\t\t" + n + "Release /* Release */,\n\t\t\t);\n\t\t\tdefaultConfigurationName = Release;\n\t\t};\n")
+		objects.WriteString("\t\t" + n + "Target /* " + t.Name + " */ = {\n\t\t\tisa = PBXNativeTarget;\n\t\t\tbuildConfigurationList = " + n + "List;\n\t\t\tname = " + t.Name + ";\n\t\t\tproductName = " + t.Name + ";\n\t\t\tproductType = \"" + t.ProductType + "\";\n\t\t};\n")
+		ids.WriteString("\t\t\t\t" + n + "Target /* " + t.Name + " */,\n")
+	}
+	return "// !$*UTF8*$!\n{\n\tarchiveVersion = 1;\n\tobjectVersion = 56;\n\tobjects = {\n" + objects.String() +
+		"\t\tROOT /* Project object */ = {\n\t\t\tisa = PBXProject;\n\t\t\ttargets = (\n" + ids.String() + "\t\t\t);\n\t\t};\n\t};\n\trootObject = ROOT /* Project object */;\n}\n"
 }
 
 // IOSNative is a native iOS app using CocoaPods, with Tenjin integrated.
