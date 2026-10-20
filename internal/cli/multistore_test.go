@@ -286,7 +286,13 @@ func TestFeaturesFlag(t *testing.T) {
 	if code != 2 || !strings.Contains(stderr, "purchases, subscriptions") {
 		t.Errorf("exit = %d, stderr = %q", code, stderr)
 	}
-	_, stdout, _ := h.run("doctor", dir, "--features", "purchases")
+	// The choice made with the flag is said back, as one made at the prompt.
+	_, stdout, _ := h.run("setup", dir, "--features", "purchases")
+	lacks(t, stdout, "Integrating: App opens and attribution, In-app purchases (--features).")
+	_, stdout, _ = h.run("setup", dir, "--features", "none")
+	lacks(t, stdout, "Integrating: App opens and attribution (--features).")
+
+	_, stdout, _ = h.run("doctor", dir, "--features", "purchases")
 	lacks(t, stdout, "In-app purchases: chosen for the integration, but not sent to Tenjin")
 	_, stdout, _ = h.run("doctor", dir, "--features", "none")
 	lacks(t, stdout, "In-app purchases: could be sent to Tenjin")
