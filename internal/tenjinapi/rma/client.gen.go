@@ -4007,6 +4007,15 @@ type GetReportsSpend200JSONResponseBody struct {
 	union json.RawMessage
 }
 
+// GetReportsIdParams defines parameters for GetReportsId.
+type GetReportsIdParams struct {
+	// Page The page you want in your response.
+	Page *Page `form:"page,omitempty" json:"page,omitempty"`
+
+	// PerPage Number of results per page.
+	PerPage *PerPage `form:"per_page,omitempty" json:"per_page,omitempty"`
+}
+
 // GetReportsId200JSONResponseBody defines parameters for GetReportsId.
 type GetReportsId200JSONResponseBody struct {
 	union json.RawMessage
@@ -10092,7 +10101,7 @@ type ClientInterface interface {
 	GetReportsSpend(ctx context.Context, params *GetReportsSpendParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetReportsId request
-	GetReportsId(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetReportsId(ctx context.Context, id openapi_types.UUID, params *GetReportsIdParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetSavedReports request
 	GetSavedReports(ctx context.Context, params *GetSavedReportsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -10162,8 +10171,8 @@ func (c *Client) GetReportsSpend(ctx context.Context, params *GetReportsSpendPar
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetReportsId(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetReportsIdRequest(c.Server, id)
+func (c *Client) GetReportsId(ctx context.Context, id openapi_types.UUID, params *GetReportsIdParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetReportsIdRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -10827,7 +10836,7 @@ func NewGetReportsSpendRequest(server string, params *GetReportsSpendParams) (*h
 }
 
 // NewGetReportsIdRequest generates requests for GetReportsId
-func NewGetReportsIdRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+func NewGetReportsIdRequest(server string, id openapi_types.UUID, params *GetReportsIdParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10850,6 +10859,45 @@ func NewGetReportsIdRequest(server string, id openapi_types.UUID) (*http.Request
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Page != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "page", *params.Page, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PerPage != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "per_page", *params.PerPage, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -11149,7 +11197,7 @@ type ClientWithResponsesInterface interface {
 	GetReportsSpendWithResponse(ctx context.Context, params *GetReportsSpendParams, reqEditors ...RequestEditorFn) (*GetReportsSpendResponse, error)
 
 	// GetReportsIdWithResponse request
-	GetReportsIdWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetReportsIdResponse, error)
+	GetReportsIdWithResponse(ctx context.Context, id openapi_types.UUID, params *GetReportsIdParams, reqEditors ...RequestEditorFn) (*GetReportsIdResponse, error)
 
 	// GetSavedReportsWithResponse request
 	GetSavedReportsWithResponse(ctx context.Context, params *GetSavedReportsParams, reqEditors ...RequestEditorFn) (*GetSavedReportsResponse, error)
@@ -11508,8 +11556,8 @@ func (c *ClientWithResponses) GetReportsSpendWithResponse(ctx context.Context, p
 }
 
 // GetReportsIdWithResponse request returning *GetReportsIdResponse
-func (c *ClientWithResponses) GetReportsIdWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetReportsIdResponse, error) {
-	rsp, err := c.GetReportsId(ctx, id, reqEditors...)
+func (c *ClientWithResponses) GetReportsIdWithResponse(ctx context.Context, id openapi_types.UUID, params *GetReportsIdParams, reqEditors ...RequestEditorFn) (*GetReportsIdResponse, error) {
+	rsp, err := c.GetReportsId(ctx, id, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
