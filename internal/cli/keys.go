@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/tenjin/tenjin-cli/internal/agent"
 	"github.com/tenjin/tenjin-cli/internal/clierr"
 	"github.com/tenjin/tenjin-cli/internal/collector"
 	"github.com/tenjin/tenjin-cli/internal/keyfill"
@@ -330,6 +331,10 @@ once written, a key is in a file the agent reads.`,
 			format, err := opts.format(cmd)
 			if err != nil {
 				return err
+			}
+			if agent.InsideAgent(env.getenv) {
+				return clierr.New(clierr.Usage, "'tenjin project set-keys' does not run inside a coding agent: it writes the real SDK keys into the project, where the agent would read them").
+					WithHint("Leave the placeholders, and have the developer run 'tenjin setup' or 'tenjin project set-keys' in their own terminal.")
 			}
 			given, err := givenKeys(sdkKeys, env.getenv)
 			if err != nil {
