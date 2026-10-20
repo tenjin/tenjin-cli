@@ -161,6 +161,30 @@ func TestUnityResumeAndStoreType(t *testing.T) {
 	expect(t, r, "unity.store_type", project.Android, verify.Info)
 }
 
+// Connect counts on a Tenjin instance, under whatever name the script gives
+// it, and not on an IAP store's.
+func TestUnityConnectIsOnATenjinInstance(t *testing.T) {
+	base := testproject.Unity()
+	script := func(body string) testproject.Files {
+		return base.With(testproject.Files{unityScript: "using UnityEngine;\n\npublic class Boot : MonoBehaviour\n{\n    private BaseTenjin tenjin;\n\n    async void Start()\n    {\n" + body + "    }\n}\n"})
+	}
+	get := `        tenjin = Tenjin.getInstance("` + testproject.Key + `");` + "\n"
+	cases := map[string]struct {
+		body string
+		want verify.Severity
+	}{
+		"another library's Connect": {get + "        await UnityIAPServices.DefaultStore().Connect();\n", verify.Error},
+		"a field":                   {get + "        tenjin.Connect();\n", verify.Pass},
+		"a local":                   {`        var t = Tenjin.getInstance("` + testproject.Key + `");` + "\n        t.Connect();\n", verify.Pass},
+		"chained":                   {`        Tenjin.getInstance("` + testproject.Key + `").Connect();` + "\n", verify.Pass},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			expect(t, run(t, script(tc.body), verify.Options{}), "sdk.connect", "", tc.want)
+		})
+	}
+}
+
 func TestUnityOutdatedPackage(t *testing.T) {
 	base := testproject.Unity()
 	manifest := strings.Replace(base["Packages/manifest.json"], "#1.22.1", "#1.16.5", 1)
