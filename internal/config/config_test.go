@@ -57,6 +57,30 @@ func TestEachSetOfAddressesHasItsOwnSession(t *testing.T) {
 	}
 }
 
+// Production's dashboard written another way is still production's: it must
+// not sign in for an API that was replaced.
+func TestProductionsDashboardIsKnownHoweverItIsWritten(t *testing.T) {
+	for _, dashboard := range []string{
+		"https://dashboard.tenjin.com:443", "https://DASHBOARD.tenjin.com", "https://dashboard.tenjin.com.",
+		"https://dashboard.tenjin.com/x/..", "HTTPS://dashboard.tenjin.com", "https://user@dashboard.tenjin.com", "https://dashboard.tenjin.com:0443",
+	} {
+		for _, variable := range []string{"TENJIN_API_URL", "TENJIN_RESOURCE_URL", "TENJIN_SITE_IDS_URL"} {
+			_, err := Resolve(env(map[string]string{"TENJIN_DASHBOARD_URL": dashboard, variable: "https://evil.example"}))
+			if err == nil || !strings.Contains(err.Error(), "need TENJIN_DASHBOARD_URL") {
+				t.Errorf("%s with %s: err = %v", dashboard, variable, err)
+			}
+		}
+	}
+	// Production's own addresses, written another way, are not a substitution.
+	if _, err := Resolve(env(map[string]string{"TENJIN_DASHBOARD_URL": "https://DASHBOARD.tenjin.com", "TENJIN_API_URL": "https://api.tenjin.com:443/v2"})); err != nil {
+		t.Errorf("production written another way: %v", err)
+	}
+	// Another dashboard may sign in for another API: that is how a test copy of Tenjin is reached.
+	if _, err := Resolve(env(map[string]string{"TENJIN_DASHBOARD_URL": "https://dashboard.tenjin.com.example", "TENJIN_API_URL": "https://api.example"})); err != nil {
+		t.Errorf("another dashboard: %v", err)
+	}
+}
+
 // A token or an SDK key goes to these addresses, so plain http is accepted
 // only where nobody else on the network can read it.
 func TestPlainHTTPOnlyOnThisMachine(t *testing.T) {
