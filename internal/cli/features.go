@@ -1,9 +1,7 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -87,10 +85,10 @@ func (s *setup) chooseFeatures(p *project.Project) error {
 	}
 	for {
 		answer, err := s.env.ask(s.out, "\nType numbers to add or remove (such as 3, or 3,4), all or none. Press Enter when the "+s.style.Green("✓")+" list is right:")
-		if err != nil && !errors.Is(err, io.EOF) {
+		if err != nil {
 			return err
 		}
-		answer = strings.ToLower(strings.TrimSpace(answer))
+		answer = strings.ToLower(answer)
 		if answer == "" {
 			s.features = inOrder(p, chosen)
 			s.say("Integrating: %s.", featureList(s.features))
@@ -100,11 +98,6 @@ func (s *setup) chooseFeatures(p *project.Project) error {
 			s.say("  %s", message)
 		} else {
 			s.listFeatures(p, chosen)
-		}
-		if errors.Is(err, io.EOF) {
-			s.features = inOrder(p, chosen)
-			s.say("Integrating: %s.", featureList(s.features))
-			return nil
 		}
 	}
 }

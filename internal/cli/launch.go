@@ -78,15 +78,15 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 			prompt = "\nInstall a debug build on the iPhone, or launch one on a simulator, then press Enter (s to skip):"
 		}
 		answer, err := s.env.ask(s.out, prompt)
-		if errors.Is(err, io.EOF) || strings.EqualFold(answer, "s") {
+		if err != nil {
+			return err
+		}
+		if strings.EqualFold(answer, "s") {
 			s.say("Skipped. After launching the app, run %s to see Tenjin's answer.", s.style.Accent("tenjin doctor --device"))
 			if refused {
 				return clierr.New(clierr.ChecksFailed, "Tenjin refused the app's last connect request")
 			}
 			return nil
-		}
-		if err != nil {
-			return err
 		}
 
 		raw, from, err := readLaunch(s.cmd.Context(), s.env, p, platform, s.serial, mark)

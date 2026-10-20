@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -315,11 +314,11 @@ func (s *setup) chooseBuilds(p *project.Project) error {
 	var picked []string
 	for picked == nil {
 		answer, err := s.env.ask(s.out, "\nWhich of these do you ship? Press Enter for all, or give their numbers, such as 1,3:")
-		if err != nil && !errors.Is(err, io.EOF) {
+		if err != nil {
 			return err
 		}
-		answer = strings.TrimSpace(answer)
 		if answer == "" {
+			s.say("Setting up all %s.", plural(len(all), "build"))
 			return nil
 		}
 		picked = []string{}
@@ -331,9 +330,6 @@ func (s *setup) chooseBuilds(p *project.Project) error {
 				break
 			}
 			picked = append(picked, all[n-1].ID)
-		}
-		if errors.Is(err, io.EOF) && picked == nil {
-			return nil
 		}
 	}
 	s.chosen = picked
@@ -877,11 +873,11 @@ func (s *setup) check() error {
 			question = fmt.Sprintf("\nPress Enter to check again, a to have %s fix them, or q to stop.", available.Name)
 		}
 		answer, err := s.env.ask(s.out, question)
-		if err != nil && !errors.Is(err, io.EOF) {
+		if err != nil {
 			return err
 		}
 		switch {
-		case errors.Is(err, io.EOF), strings.EqualFold(answer, "q"):
+		case strings.EqualFold(answer, "q"):
 			return status
 		case strings.EqualFold(answer, "a") && canAgent:
 			s.helper = available

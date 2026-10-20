@@ -261,12 +261,9 @@ func (s *setup) askToFix(installed []agent.Agent) (*agent.Agent, error) {
 	}
 	answer, err := s.env.ask(s.out, fmt.Sprintf("Fix them with %s, or neither? [n]", strings.Join(options, ", ")))
 	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return nil, nil
-		}
 		return nil, err
 	}
-	answer = strings.ToLower(strings.TrimSpace(answer))
+	answer = strings.ToLower(answer)
 	for i := range installed {
 		if answer == fmt.Sprint(i+1) || answer == installed[i].ID || answer == strings.ToLower(installed[i].Name) {
 			return &installed[i], nil
