@@ -78,12 +78,11 @@ func dataCmd(opts *options, env *environment, s dataSpec) *cobra.Command {
 			if format == render.JSON {
 				return writeRawJSON(cmd.OutOrStdout(), doc)
 			}
-			next, err := writeDocument(cmd.OutOrStdout(), cmd.ErrOrStderr(), format, doc, s.view)
-			if err != nil {
+			if err := writeDocument(cmd.OutOrStdout(), cmd.ErrOrStderr(), format, doc, s.view); err != nil {
 				return err
 			}
-			if s.paged && next && !paging.All {
-				page := max(paging.Page, 1)
+			page := max(paging.Page, 1)
+			if s.paged && !paging.All && morePages(doc, page) {
 				_, err = fmt.Fprintf(cmd.ErrOrStderr(), "There is more: --page %d for the next page, or --all for every page.\n", page+1)
 			}
 			return err
@@ -120,26 +119,26 @@ type item struct {
 const csvAnnotation = "csv"
 
 // writeDocument writes a document as a table, or as CSV: a list as rows, one
-// resource as its fields. It reports whether the API has a next page. A
-// table wider than the terminal is followed, on errw, by how to see it whole.
-func writeDocument(w, errw io.Writer, format render.Format, doc tenjinapi.Document, v view) (next bool, err error) {
-	header, rows, next, err := tableOf(doc, v)
+// resource as its fields. A table wider than the terminal is followed, on
+// errw, by how to see it whole.
+func writeDocument(w, errw io.Writer, format render.Format, doc tenjinapi.Document, v view) error {
+	header, rows, err := tableOf(doc, v)
 	if err != nil {
-		return next, err
+		return err
 	}
 	if format == render.CSV {
 		if header == nil {
 			header = []string{}
 		}
-		return next, render.WriteCSV(w, header, rows)
+		return render.WriteCSV(w, header, rows)
 	}
 	if header == nil {
 		_, err := fmt.Fprintf(w, "No %s.\n", v.noun)
-		return next, err
+		return err
 	}
 	var table bytes.Buffer
 	if err := render.WriteTable(&table, render.NewStyler(w), header, rows); err != nil {
-		return next, err
+		return err
 	}
 	if width := render.Width(w); width > 0 && widest(table.String()) > width && errw != nil {
 		defer func() {
@@ -147,37 +146,52 @@ func writeDocument(w, errw io.Writer, format render.Format, doc tenjinapi.Docume
 		}()
 	}
 	_, err = table.WriteTo(w)
-	return next, err
+	return err
+}
+
+// morePages reports whether a list has pages after this one: it has a next
+// link, or its meta counts more items than the pages up to this one hold, as
+// a report's does.
+func morePages(doc tenjinapi.Document, page int) bool {
+	var body struct {
+		Links struct {
+			Next string `json:"next"`
+		} `json:"links"`
+		Meta struct {
+			Count   int `json:"count"`
+			PerPage int `json:"per_page"`
+		} `json:"meta"`
+	}
+	if json.Unmarshal(doc, &body) != nil {
+		return false
+	}
+	return body.Links.Next != "" || (body.Meta.PerPage > 0 && page*body.Meta.PerPage < body.Meta.Count)
 }
 
 // tableOf lays a document out as a header and rows. A list with no items has
 // no header.
-func tableOf(doc tenjinapi.Document, v view) (header []string, rows [][]string, next bool, err error) {
+func tableOf(doc tenjinapi.Document, v view) (header []string, rows [][]string, err error) {
 	var body struct {
-		Data  json.RawMessage `json:"data"`
-		Links struct {
-			Next string `json:"next"`
-		} `json:"links"`
+		Data json.RawMessage `json:"data"`
 	}
 	if err := json.Unmarshal(doc, &body); err != nil {
-		return nil, nil, false, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned something that is not a JSON:API document")
+		return nil, nil, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned something that is not a JSON:API document")
 	}
-	next = body.Links.Next != ""
 	data := bytes.TrimSpace(body.Data)
 	if len(data) > 0 && data[0] == '[' {
 		var items []item
 		if err := json.Unmarshal(data, &items); err != nil {
-			return nil, nil, next, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned a list that is not one")
+			return nil, nil, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned a list that is not one")
 		}
 		header, rows = itemRows(items, v)
-		return header, rows, next, nil
+		return header, rows, nil
 	}
 	var one item
 	if err := json.Unmarshal(data, &one); err != nil || len(data) == 0 {
-		return nil, nil, next, clierr.New(clierr.Upstream, "the Tenjin API's answer holds no data")
+		return nil, nil, clierr.New(clierr.Upstream, "the Tenjin API's answer holds no data")
 	}
 	header, rows = itemFields(one)
-	return header, rows, next, nil
+	return header, rows, nil
 }
 
 var ansi = regexp.MustCompile(`\x1b\[[0-9;]*m`)
