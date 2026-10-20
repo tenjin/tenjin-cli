@@ -257,7 +257,7 @@ func (k keyAsker) instructions(label string, b project.Build, url string) {
 func (k keyAsker) ask(label string, b project.Build, appKnown bool) (string, error) {
 	for {
 		answer, err := k.env.ask(k.out, fmt.Sprintf("    Paste the %s SDK key (Enter to skip for now):", label))
-		if err != nil && !errors.Is(err, io.EOF) {
+		if err != nil {
 			return "", err
 		}
 		key := cleanKey(answer)
@@ -267,9 +267,6 @@ func (k keyAsker) ask(label string, b project.Build, appKnown bool) (string, err
 		}
 		// Something that cannot be a key is not sent to Tenjin.
 		if !verify.LooksLikeKey(key) {
-			if errors.Is(err, io.EOF) {
-				return "", nil
-			}
 			k.say("    That is not an SDK key: those are 24 to 64 capital letters and digits. Copy it again, or press Enter to skip.")
 			continue
 		}
@@ -277,9 +274,6 @@ func (k keyAsker) ask(label string, b project.Build, appKnown bool) (string, err
 		k.verdict("  "+label+", key "+maskKey(key), verdict)
 		if verdict.ok {
 			return key, nil
-		}
-		if errors.Is(err, io.EOF) {
-			return "", nil
 		}
 		k.say("    Copy it again from the page above, or press Enter to skip.")
 	}

@@ -69,7 +69,9 @@ func (e *environment) interrupted() error {
 func errInterrupted() error { return clierr.New(clierr.Interrupted, "stopped") }
 
 // confirm asks a yes/no question. An empty answer takes the default; an
-// answer that is neither is asked again.
+// answer that is neither is asked again. Input that ends before an answer is
+// io.EOF, which the command reports as a usage error: nothing is created or
+// started on an answer nobody gave, and nobody said no either.
 func (e *environment) confirm(w io.Writer, question string, def bool) (bool, error) {
 	suffix := " [y/N] "
 	if def {
@@ -78,13 +80,10 @@ func (e *environment) confirm(w io.Writer, question string, def bool) (bool, err
 	_, _ = fmt.Fprint(w, question+suffix)
 	for {
 		answer, err := e.readLine()
-		// Input that ends is a no, whatever the default: nothing is created
-		// or started on an answer nobody gave.
-		if errors.Is(err, io.EOF) && strings.TrimSpace(answer) == "" {
-			_, _ = fmt.Fprintln(w)
-			return false, nil
-		}
-		if err != nil && !errors.Is(err, io.EOF) {
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				_, _ = fmt.Fprintln(w)
+			}
 			return false, err
 		}
 		switch strings.ToLower(strings.TrimSpace(answer)) {
@@ -95,17 +94,18 @@ func (e *environment) confirm(w io.Writer, question string, def bool) (bool, err
 		case "n", "no":
 			return false, nil
 		}
-		if errors.Is(err, io.EOF) {
-			return false, nil
-		}
 		_, _ = fmt.Fprint(w, "Answer y or n:"+suffix)
 	}
 }
 
-// ask prompts for a line of text.
+// ask prompts for a line of text. Input that ends before an answer is
+// io.EOF, for the command to report as a usage error.
 func (e *environment) ask(w io.Writer, question string) (string, error) {
 	_, _ = fmt.Fprint(w, question+" ")
 	answer, err := e.readLine()
+	if errors.Is(err, io.EOF) {
+		_, _ = fmt.Fprintln(w)
+	}
 	return strings.TrimSpace(answer), err
 }
 
