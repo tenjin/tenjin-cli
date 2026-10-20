@@ -314,16 +314,79 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 	}
 
 	for _, k := range src.keys {
-		if isPlaceholder(k.Value) && !keyfill.IsPlaceholder(k.Value) {
+		switch {
+		case strayWhitespace(k.Value):
+			r.add(Finding{
+				ID: "sdk.key.whitespace", Severity: Error, Platform: platform,
+				Title:  "The SDK key " + mask(strings.Join(strings.Fields(k.Value), "")) + " has spaces in it",
+				Detail: "The string holds the key with spaces, tabs or line breaks around or inside it. The SDK sends it as written, and Tenjin refuses it.",
+				File:   k.File, Line: k.Line,
+				Fix: "Remove the spaces from the key's string, so that it holds the key alone.",
+			})
+		case isPlaceholder(k.Value) && !keyfill.IsPlaceholder(k.Value):
 			r.add(Finding{
 				ID: "sdk.key.placeholder", Severity: Error, Platform: platform,
 				Title:  "The SDK key is still a placeholder",
-				Detail: "Found " + quote(k.Value) + " where the key should be.",
+				Detail: "Found " + shown(k.Value) + " where the key should be.",
 				File:   k.File, Line: k.Line,
-				Fix: "Replace " + quote(k.Value) + " with " + keyfill.Placeholder(platform) + ", then run 'tenjin project set-keys' (in 'tenjin setup', press Enter at the check): it gets the app's key from Tenjin, checks it, and writes it there.",
+				Fix: "Replace " + shown(k.Value) + " with " + r.placeholderFor(platform) + ", then run 'tenjin project set-keys' (in 'tenjin setup', press Enter at the check): it gets the app's key from Tenjin, checks it, and writes it there.",
 			})
 		}
 	}
+}
+
+// placeholderFor names the placeholder to write for the builds of a
+// platform, or of every platform for "": the build's own when there is one,
+// otherwise each build's with the build it is for.
+func (r *runner) placeholderFor(platform project.Platform) string {
+	type choice struct{ placeholder, label string }
+	var choices []choice
+	for _, t := range r.p.Targets {
+		if platform != "" && t.Platform != platform {
+			continue
+		}
+		if len(t.Builds) == 0 {
+			choices = append(choices, choice{keyfill.Placeholder(t.Platform), platformName(t.Platform)})
+			continue
+		}
+		for _, b := range t.Builds {
+			label := platformName(t.Platform)
+			if t.SeveralBuilds() {
+				label = buildLabel(b)
+			}
+			choices = append(choices, choice{b.SDKKeyPlaceholder, label})
+		}
+	}
+	switch len(choices) {
+	case 0:
+		return keyfill.Placeholder(project.Android) + " (Android) or " + keyfill.Placeholder(project.IOS) + " (iOS), for the platform it is for"
+	case 1:
+		return choices[0].placeholder
+	}
+	var list []string
+	for _, c := range choices {
+		list = append(list, c.placeholder+" for "+c.label)
+	}
+	return "the placeholder of the build it is for (" + strings.Join(list, ", ") + ")"
+}
+
+// strayWhitespace reports whether a key literal is a real key with
+// whitespace around or inside it, which no placeholder looks like.
+func strayWhitespace(key string) bool {
+	joined := strings.Join(strings.Fields(key), "")
+	return joined != key && wholeKey.MatchString(joined) && !isPlaceholder(joined)
+}
+
+// keyLikeRun is a run of characters long enough to be most of a key.
+var keyLikeRun = regexp.MustCompile(`[A-Za-z0-9]{16,}`)
+
+// shown is a literal from where a key belongs, quoted for a finding, or
+// masked when it holds what could be a key: a key is never printed whole.
+func shown(literal string) string {
+	if keyLikeRun.MatchString(literal) {
+		return quote(mask(strings.TrimSpace(literal)))
+	}
+	return quote(literal)
 }
 
 var placeholderKey = regexp.MustCompile(`(?i)^$|[<>{}\s]|your|sdk[_-]?key|api[_-]?key|placeholder|xxxx|changeme|todo`)
