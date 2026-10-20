@@ -78,19 +78,24 @@ func WriteJSON(w io.Writer, v any) error {
 
 // WriteTable writes rows under an upper-cased header, columns aligned. The
 // header is styled after the columns are laid out, so colour codes do not
-// count towards their width.
+// count towards their width. A tab or line break in a cell is a space: it
+// would make a column or a row of its own.
 func WriteTable(w io.Writer, style Styler, header []string, rows [][]string) error {
 	var laid strings.Builder
 	tw := tabwriter.NewWriter(&laid, 0, 0, 2, ' ', 0)
 	upper := make([]string, len(header))
 	for i, h := range header {
-		upper[i] = strings.ToUpper(h)
+		upper[i] = strings.ToUpper(flatten(h))
 	}
 	if _, err := fmt.Fprintln(tw, strings.Join(upper, "\t")); err != nil {
 		return err
 	}
 	for _, row := range rows {
-		if _, err := fmt.Fprintln(tw, strings.Join(row, "\t")); err != nil {
+		cells := make([]string, len(row))
+		for i, c := range row {
+			cells[i] = flatten(c)
+		}
+		if _, err := fmt.Fprintln(tw, strings.Join(cells, "\t")); err != nil {
 			return err
 		}
 	}

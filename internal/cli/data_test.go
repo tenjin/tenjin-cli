@@ -327,6 +327,28 @@ func TestEveryPagedListPages(t *testing.T) {
 	}
 }
 
+// A value or an attribute name from the API cannot add rows, columns or
+// escape codes to a table.
+func TestTablesCannotBeSpoofed(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	h.fake.data = map[string]func(*http.Request) (int, any){
+		"/v2/reports/spend": func(*http.Request) (int, any) {
+			return http.StatusOK, json.RawMessage(`{"data":[{"type":"report","attributes":{"na\u001b[31mme\nFAKE":"Evil\nFAKE ROW\t9","spend":1}}]}`)
+		},
+	}
+	code, stdout, _ := h.run("reports", "spend", "--from", "2026-10-01", "--to", "2026-10-01")
+	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
+	if code != 0 || len(lines) != 2 || strings.Contains(stdout, "\x1b") || !strings.Contains(lines[1], "Evil FAKE ROW 9") {
+		t.Errorf("exit = %d:\n%s", code, stdout)
+	}
+	h.fake.siteIDRules = []map[string]any{{"siteId": "s", "appId": "a\nFAKE", "createTime": "t\x1b[2K"}}
+	_, stdout, _ = h.run("site-ids", "list")
+	if lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n"); len(lines) != 2 || strings.Contains(stdout, "\x1b") {
+		t.Errorf("site-ids list:\n%s", stdout)
+	}
+}
+
 // --channel 0 asks for Organic; a list given no --channel is not narrowed.
 func TestChannelZeroIsOrganic(t *testing.T) {
 	for _, list := range []string{"campaigns list", "ad-accounts list", "apps callbacks list --app " + testApp, "apps callback-templates list --app " + testApp} {

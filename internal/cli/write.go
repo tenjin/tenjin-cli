@@ -365,7 +365,9 @@ bundle ID and platform cannot be changed.`,
 			if format == render.JSON {
 				return render.WriteJSON(cmd.OutOrStdout(), detail)
 			}
-			render.CleanAll(&detail)
+			for _, s := range []*string{&detail.Name, &detail.Platform, &detail.BundleID, &detail.ID} {
+				*s = render.CleanCell(*s)
+			}
 			return writeAppDetail(cmd.OutOrStdout(), detail)
 		},
 	})

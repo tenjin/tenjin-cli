@@ -208,7 +208,7 @@ func writeSiteIDRules(w io.Writer, doc tenjinapi.Document) error {
 		if r.Channel != nil {
 			channel = fmt.Sprint(*r.Channel)
 		}
-		rows = append(rows, []string{render.Clean(r.SiteID), r.AppID, r.CampaignID, channel, r.CreateTime})
+		rows = append(rows, []string{render.Clean(r.SiteID), render.Clean(r.AppID), render.Clean(r.CampaignID), channel, render.Clean(r.CreateTime)})
 	}
 	return render.WriteTable(w, render.NewStyler(w), []string{"site id", "app", "campaign", "channel", "created"}, rows)
 }
@@ -412,14 +412,14 @@ func writeIntegration(w, errw io.Writer, in *tenjinapi.Integration) error {
 		names = append(names, k)
 	}
 	sort.Strings(names)
-	_, _ = fmt.Fprintf(w, "\n%s %s\n", style.Heading("Shared callback settings:"), orNone(render.Clean(strings.Join(names, ", "))))
+	_, _ = fmt.Fprintf(w, "\n%s %s\n", style.Heading("Shared callback settings:"), orNone(render.CleanCell(strings.Join(names, ", "))))
 	events := make([]string, 0, len(in.Events))
 	for _, e := range in.Events {
 		events = append(events, text(e["event"]))
 	}
-	_, _ = fmt.Fprintf(w, "%s %s\n", style.Heading("Events:"), orNone(strings.Join(events, ", ")))
+	_, _ = fmt.Fprintf(w, "%s %s\n", style.Heading("Events:"), orNone(render.CleanCell(strings.Join(events, ", "))))
 	for _, warning := range in.Warnings {
-		_, _ = fmt.Fprintln(errw, "Note: "+render.Clean(warning))
+		_, _ = fmt.Fprintln(errw, "Note: "+render.CleanCell(warning))
 	}
 	return nil
 }
