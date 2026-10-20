@@ -222,7 +222,7 @@ func itemRows(items []item, v view) ([]string, [][]string) {
 	}
 	header := make([]string, 0, len(columns)+1)
 	for _, c := range columns {
-		header = append(header, strings.ReplaceAll(c, "_", " "))
+		header = append(header, strings.ReplaceAll(render.Clean(c), "_", " "))
 	}
 	hasID := len(bytes.TrimSpace(items[0].ID)) > 0
 	if hasID {

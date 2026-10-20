@@ -154,6 +154,20 @@ func TestCleanRemovesControlCharacters(t *testing.T) {
 	}
 }
 
+// A cell cannot make a row or a column of its own.
+func TestTableCellsStayInTheirCell(t *testing.T) {
+	var b bytes.Buffer
+	if err := WriteTable(&b, Styler{}, []string{"na\tme", "id"}, [][]string{{"Evil\nFAKE\tROW\r", "1"}}); err != nil {
+		t.Fatal(err)
+	}
+	if lines := strings.Split(strings.TrimSuffix(b.String(), "\n"), "\n"); len(lines) != 2 || !strings.HasPrefix(lines[1], "Evil FAKE ROW") || !strings.HasPrefix(lines[0], "NA ME") {
+		t.Errorf("table:\n%s", b.String())
+	}
+	if got := CleanCell("a\tb\nc\x1b[2Kd"); got != "a b c[2Kd" {
+		t.Errorf("CleanCell = %q", got)
+	}
+}
+
 // A cell a spreadsheet would run as a formula is written as text; numbers
 // stay numbers.
 func TestCSVCellsDoNotRun(t *testing.T) {

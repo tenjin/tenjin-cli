@@ -24,6 +24,19 @@ func Clean(s string) string {
 	}, s)
 }
 
+// CleanCell is Clean for text that must stay on one line, such as a table's
+// cell: tabs and line breaks become spaces, so that a value cannot make
+// columns or rows of its own.
+func CleanCell(s string) string {
+	return flatten(Clean(s))
+}
+
+var oneLine = strings.NewReplacer("\t", " ", "\n", " ", "\r", " ")
+
+func flatten(s string) string {
+	return oneLine.Replace(s)
+}
+
 func isControl(r rune) bool {
 	return (r < 0x20 && r != '\t' && r != '\n') || r == 0x7f || (r >= 0x80 && r <= 0x9f)
 }
