@@ -51,6 +51,27 @@ func TestAdRevenueFromADetectedNetwork(t *testing.T) {
 	}
 }
 
+// Capacitor copies the built web app into the native projects on each sync.
+// That copy is output, maybe older than the source, and says nothing.
+func TestCapacitorsWebCopyIsNotSource(t *testing.T) {
+	const call = "import { Tenjin } from 'ionic-capacitor-tenjin';\nawait Tenjin.eventWithName({ name: 'level' });\n"
+	files := testproject.Files{
+		"package.json":          `{"dependencies": {"@capacitor/core": "6.0.0", "ionic-capacitor-tenjin": "2.2.0"}}`,
+		"capacitor.config.json": `{"appId": "com.example.sample"}`,
+		"src/main.ts":           "import { Tenjin } from 'ionic-capacitor-tenjin';\nawait Tenjin.initialize({ sdkKey: '" + testproject.Key + "' });\nawait Tenjin.connect();\n",
+		"android/app/src/main/assets/public/main.js": call,
+		"ios/App/App/public/main.js":                 call,
+	}
+	chosen := verify.Options{Features: []string{project.FeatureCustomEvents}}
+	if f := featureFinding(t, run(t, files, chosen), "feature.custom_events"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("a call only in the web copy passed: %+v", f)
+	}
+	files["src/events.ts"] = call
+	if f := featureFinding(t, run(t, files, chosen), "feature.custom_events"); f == nil || f.Severity != verify.Pass || f.File != "src/events.ts" {
+		t.Fatalf("finding = %+v", f)
+	}
+}
+
 // A generic name counts only on a Tenjin receiver.
 func TestAPurchaseIsATenjinCall(t *testing.T) {
 	chosen := verify.Options{Features: []string{project.FeaturePurchases}}
