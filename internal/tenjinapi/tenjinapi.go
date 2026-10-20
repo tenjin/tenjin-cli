@@ -29,12 +29,25 @@ import (
 // maxPageSize is the largest page the API serves. Its default is 25.
 const maxPageSize = 1000
 
-// maxResponse caps what is read of one response.
-const maxResponse = 32 << 20
+// maxResponse caps what is read of one response. Tests lower it.
+var maxResponse int64 = 32 << 20
 
 // TokenSource supplies the bearer token for each request.
 type TokenSource interface {
 	Token(ctx context.Context) (string, error)
+}
+
+// Renewer is a TokenSource that can replace a token the API refused, such as
+// a sign-in this machine's clock still thinks is current. Renew returns the
+// token to send instead, or the error to report when there is none.
+type Renewer interface {
+	Renew(ctx context.Context, refused string) (string, error)
+}
+
+// Refuser is a TokenSource that says what to tell the user when the API
+// refuses its token, naming where the token came from.
+type Refuser interface {
+	Refused() *clierr.Error
 }
 
 // Client calls the API.
@@ -246,6 +259,9 @@ func (c *Client) CreateApp(ctx context.Context, in NewApp) (app *App, created bo
 		Data resource `json:"data"`
 	}
 	if err := receive(api.PostAppsWithBody(ctx, "application/json", bytes.NewReader(raw)))(&body); err != nil { //nolint:bodyclose // receive closes it
+		if e := clierr.From(err); e.Kind == clierr.Permission {
+			return nil, false, e.WithHint("Creating apps needs a manager role in the organization. Ask a manager, or use an app that already exists.")
+		}
 		// The server reports a duplicate as a plain 400 with the existing
 		// app's ID inside the message.
 		if m := existingAppID.FindStringSubmatch(err.Error()); m != nil {
@@ -279,7 +295,7 @@ func (c *Client) clients(ctx context.Context) (clients, error) {
 		return clients{}, err
 	}
 	httpClient := *c.HTTP
-	httpClient.Transport = limitedBody{next: transportOf(c.HTTP)}
+	httpClient.Transport = c.transport()
 	sign := func(_ context.Context, req *http.Request) error {
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Accept", "application/json")
@@ -308,7 +324,10 @@ func receive(resp *http.Response, err error) func(out any) error {
 		}
 		defer func() { _ = resp.Body.Close() }()
 		raw, err := io.ReadAll(resp.Body)
-		if err != nil {
+		switch {
+		case errors.Is(err, errTooLarge):
+			return clierr.Wrap(clierr.Upstream, err, "%v", err)
+		case err != nil:
 			return clierr.Wrap(clierr.Upstream, err, "could not read the Tenjin API's response: %v", err)
 		}
 		if resp.StatusCode/100 != 2 {
@@ -330,24 +349,28 @@ func apiError(resp *http.Response, raw []byte) error {
 		Error string `json:"error"`
 	}
 	_ = json.Unmarshal(raw, &body)
-	message := body.Error
-	if message == "" {
+	message := strings.TrimSpace(body.Error)
+	if message == "" && !looksLikeHTML(raw) {
 		message = strings.TrimSpace(string(raw))
 		if len(message) > 300 {
-			message = message[:300] + "…"
+			message = strings.ToValidUTF8(message[:300], "") + "…"
 		}
 	}
-	signIn := "Run 'tenjin login'."
 
 	switch {
 	case status == http.StatusUnauthorized, status == 498,
 		status == http.StatusForbidden && strings.Contains(message, "DecodeError"):
-		return clierr.New(clierr.NotSignedIn, "Tenjin did not accept the saved sign-in").WithHint("%s", signIn)
+		return refusedToken(resp)
 	case status == http.StatusForbidden:
-		return clierr.New(clierr.Permission, "your Tenjin role does not allow this").
-			WithHint("Creating and changing apps needs a manager role in the organization. Ask a manager, or use an app that already exists.")
+		// The API's own message for a role says only "Unauthorized. You do
+		// not have proper access"; any other names what is missing.
+		if message == "" || strings.HasPrefix(message, "Unauthorized") {
+			return clierr.New(clierr.Permission, "your Tenjin role does not allow this").
+				WithHint("What you can read and change depends on your role in the Tenjin organization. Ask one of its admins.")
+		}
+		return clierr.New(clierr.Permission, "Tenjin does not allow this: %s", message)
 	case status == http.StatusNotFound,
-		status == http.StatusBadRequest && strings.Contains(strings.ToLower(message), "not found"):
+		status == http.StatusBadRequest && notFoundAnswer.MatchString(message):
 		return clierr.New(clierr.NotFound, "%s", firstNonEmpty(message, "not found"))
 	case status == http.StatusTooManyRequests:
 		e := clierr.New(clierr.RateLimited, "Tenjin is rate limiting this token")
@@ -355,15 +378,112 @@ func apiError(resp *http.Response, raw []byte) error {
 			return e.WithHint("Retry in %s seconds.", after)
 		}
 		return e
-	case status == http.StatusServiceUnavailable:
-		return clierr.New(clierr.Upstream, "Tenjin is in read-only maintenance: %s", firstNonEmpty(message, "try again later"))
+	case status == http.StatusServiceUnavailable && strings.Contains(strings.ToLower(body.Error), "maintenance"):
+		return clierr.New(clierr.Upstream, "Tenjin is in read-only maintenance: %s", body.Error)
 	case status >= 500:
-		return clierr.New(clierr.Upstream, "the Tenjin API failed (HTTP %d)", status)
+		return clierr.New(clierr.Upstream, "the Tenjin API is unavailable (HTTP %d)", status).WithHint("Try again in a few minutes.")
+	case status >= 400:
+		if message == "" {
+			return clierr.New(clierr.Refused, "the Tenjin API refused the request (HTTP %d)", status)
+		}
+		return clierr.New(clierr.Refused, "Tenjin refused the request: %s", message)
 	}
-	return clierr.New(clierr.Internal, "%s", firstNonEmpty(message, fmt.Sprintf("the Tenjin API refused the request (HTTP %d)", status)))
+	return clierr.New(clierr.Upstream, "the Tenjin API answered with HTTP %d, which the Tenjin CLI does not expect", status)
 }
 
-// limitedBody caps each response body at maxResponse.
+// notFoundAnswer matches the API's answers, sent as a 400, for something that
+// does not exist: "App not found", "S2S callback with id: 7 not found",
+// "Event purchase not found for this app", "Channel does not exist". A
+// refusal that only mentions something missing, such as "Could not create
+// app from store_url: ... not found", is not one.
+var notFoundAnswer = regexp.MustCompile(`(?i)^(?:[\w ]+|S2S callback with id: \S+|Event .+) (?:not found(?: for this app)?|does not exist)\.?$`)
+
+// looksLikeHTML reports whether a body is a web page, such as a load
+// balancer's error page, which says nothing worth showing.
+func looksLikeHTML(raw []byte) bool {
+	return bytes.HasPrefix(bytes.TrimSpace(raw), []byte("<"))
+}
+
+// refusedToken is the error for a token the API did not accept: what the
+// token source said about it, when it said something (see signedIn).
+func refusedToken(resp *http.Response) error {
+	if resp.Request != nil {
+		if e, ok := resp.Request.Context().Value(refusalKey{}).(*clierr.Error); ok {
+			c := *e
+			return &c
+		}
+	}
+	return clierr.New(clierr.NotSignedIn, "Tenjin did not accept the saved sign-in").WithHint("Run 'tenjin login'.")
+}
+
+// refusalKey carries, on a refused request, what to tell the user.
+type refusalKey struct{}
+
+// transport is what the API's clients send through: signed in, and with each
+// response capped at maxResponse.
+func (c *Client) transport() http.RoundTripper {
+	return limitedBody{next: signedIn{next: transportOf(c.HTTP), tokens: c.Tokens}}
+}
+
+// signedIn sends a request again, once, with a renewed token when the API
+// refuses the one it carried with a 401 or 498. Those come from the API's
+// sign-in check, which runs before anything else, so the request was not
+// acted on and sending it again cannot do anything twice, whatever its
+// method.
+type signedIn struct {
+	next   http.RoundTripper
+	tokens TokenSource
+}
+
+func (s signedIn) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := s.next.RoundTrip(req)
+	if err != nil || !refusesToken(resp.StatusCode) {
+		return resp, err
+	}
+	var refusal *clierr.Error
+	refused, bearer := strings.CutPrefix(req.Header.Get("Authorization"), "Bearer ")
+	renewer, renewable := s.tokens.(Renewer)
+	if bearer && renewable && resp.StatusCode != http.StatusForbidden && (req.Body == nil || req.GetBody != nil) {
+		token, renewErr := renewer.Renew(req.Context(), refused)
+		switch {
+		case renewErr != nil:
+			refusal = clierr.From(renewErr)
+		case token != refused:
+			retry := req.Clone(req.Context())
+			if req.GetBody != nil {
+				if retry.Body, err = req.GetBody(); err != nil {
+					return nil, err
+				}
+			}
+			retry.Header.Set("Authorization", "Bearer "+token)
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponse))
+			_ = resp.Body.Close()
+			if resp, err = s.next.RoundTrip(retry); err != nil || !refusesToken(resp.StatusCode) {
+				return resp, err
+			}
+			req = retry
+		}
+	}
+	if r, ok := s.tokens.(Refuser); ok && refusal == nil {
+		refusal = r.Refused()
+	}
+	if refusal != nil {
+		resp.Request = req.WithContext(context.WithValue(req.Context(), refusalKey{}, refusal))
+	}
+	return resp, nil
+}
+
+// refusesToken reports whether a status can be the API refusing the token. A
+// 403 is also a token it cannot decode, which apiError tells from a role.
+func refusesToken(status int) bool {
+	return status == http.StatusUnauthorized || status == 498 || status == http.StatusForbidden
+}
+
+// errTooLarge is a response over maxResponse.
+var errTooLarge = fmt.Errorf("the Tenjin API's answer is larger than the %d MiB the Tenjin CLI reads: ask for less, such as fewer per page or a shorter date range", maxResponse>>20)
+
+// limitedBody caps each response body at maxResponse. Reading past it fails
+// with errTooLarge, so a long answer is not taken for a short one.
 type limitedBody struct{ next http.RoundTripper }
 
 func (l limitedBody) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -371,12 +491,34 @@ func (l limitedBody) RoundTrip(req *http.Request) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	resp.Body = struct {
-		io.Reader
-		io.Closer
-	}{io.LimitReader(resp.Body, maxResponse), resp.Body}
+	resp.Body = &cappedBody{body: resp.Body, left: maxResponse}
 	return resp, nil
 }
+
+type cappedBody struct {
+	body io.ReadCloser
+	left int64
+}
+
+func (b *cappedBody) Read(p []byte) (int, error) {
+	if b.left <= 0 {
+		// One byte more tells a body of exactly the cap from a longer one.
+		var one [1]byte
+		n, err := b.body.Read(one[:])
+		if n > 0 {
+			return 0, errTooLarge
+		}
+		return 0, err
+	}
+	if int64(len(p)) > b.left {
+		p = p[:b.left]
+	}
+	n, err := b.body.Read(p)
+	b.left -= int64(n)
+	return n, err
+}
+
+func (b *cappedBody) Close() error { return b.body.Close() }
 
 func transportOf(c *http.Client) http.RoundTripper {
 	if c.Transport != nil {

@@ -24,6 +24,9 @@ const (
 	ChecksFailed  Kind = "checks_failed"
 	// Interrupted is a run stopped from outside: Ctrl-C, SIGTERM or SIGHUP.
 	Interrupted Kind = "interrupted"
+	// Refused is a request Tenjin understood and turned down, such as a
+	// value it does not accept: the input is at fault, not the CLI.
+	Refused Kind = "refused"
 )
 
 // ExitCode is the process exit status for a failure of this kind. 8 is kept
@@ -47,6 +50,8 @@ func (k Kind) ExitCode() int {
 		return 10
 	case ChecksFailed:
 		return 9
+	case Refused:
+		return 11
 	case Interrupted:
 		// The shells' code for a program stopped by SIGINT.
 		return 130
