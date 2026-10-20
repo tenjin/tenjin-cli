@@ -476,6 +476,13 @@ func TestProjectTextIsCleanedForPeople(t *testing.T) {
 			t.Errorf("setup, app exists %v, wrote control characters:\n%q\n%q", exists, stdout, stderr)
 		}
 	}
+	// At a terminal, the question that offers to create the app names it too.
+	h := newHarness(t)
+	h.signIn()
+	_, stdout, stderr := h.typing("", "n").run("setup", dir, "--sdk-key", wrongKey)
+	if !strings.Contains(stdout+stderr, "No Tenjin app has the bundle ID com.example.sample") || strings.ContainsAny(stdout+stderr, "\x1b\x07") {
+		t.Errorf("setup's question wrote control characters, or was not asked:\n%q\n%q", stdout, stderr)
+	}
 }
 
 // A repository that keeps its app in a folder of its own is pointed to it.

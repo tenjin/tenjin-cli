@@ -391,7 +391,7 @@ func ensureApp(ctx context.Context, env *environment, prompt io.Writer, bundleID
 			return nil, clierr.New(clierr.NotFound, "no Tenjin app has the bundle ID %s on %s", bundleID, platform).
 				WithHint("Pass --yes to create it.")
 		}
-		question := fmt.Sprintf("No Tenjin app has the bundle ID %s on %s.\nCreate %q? The bundle ID and platform cannot be changed later.", bundleID, platform, name)
+		question := fmt.Sprintf("No Tenjin app has the bundle ID %s on %s.\nCreate %q? The bundle ID and platform cannot be changed later.", oneLine(bundleID), oneLine(platform), name)
 		ok, err := env.confirm(prompt, question, true)
 		if err != nil {
 			return nil, err
