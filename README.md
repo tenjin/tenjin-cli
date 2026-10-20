@@ -284,7 +284,7 @@ For Claude Code, this writes a skill to `.claude/skills/tenjin-cli/` in the proj
 
 Every command except `setup` is built to be driven by a program:
 
-- `--json` (or `-o json`) writes only the result to stdout; everything else goes to stderr. The data commands also take `-o csv`, for a spreadsheet.
+- `--json` (or `-o json`) writes only the result to stdout; everything else goes to stderr. The data commands also take `-o csv`, for a spreadsheet; a text cell that a spreadsheet would run as a formula (it starts with `=`, `+`, `-` or `@`) is written with a leading `'`.
 - A command never prompts when stdin is not a terminal. Anything that creates something needs `--yes` or a flag.
 - A failure with `--json` is written to stderr as `{"error": {"code", "message", "hint"}}`.
 - The JSON of `project detect` and `doctor` is stable: fields are added, never renamed or removed.

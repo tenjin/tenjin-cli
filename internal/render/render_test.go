@@ -153,3 +153,17 @@ func TestCleanRemovesControlCharacters(t *testing.T) {
 		t.Errorf("Next = %q", v.Next.Name)
 	}
 }
+
+// A cell a spreadsheet would run as a formula is written as text; numbers
+// stay numbers.
+func TestCSVCellsDoNotRun(t *testing.T) {
+	var b bytes.Buffer
+	cells := []string{`=HYPERLINK("x")`, "+cmd", "-2+3", "@SUM(A1)", "\tTab", "\rReturn", "-5.2", "+7", "1e5", "plain", ""}
+	if err := WriteCSV(&b, []string{"=header"}, [][]string{cells}); err != nil {
+		t.Fatal(err)
+	}
+	want := "'=header\n" + `"'=HYPERLINK(""x"")",'+cmd,'-2+3,'@SUM(A1),` + "'\tTab,\"'\rReturn\",-5.2,+7,1e5,plain,\n"
+	if b.String() != want {
+		t.Errorf("CSV = %q,\nwant  %q", b.String(), want)
+	}
+}

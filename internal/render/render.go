@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"text/tabwriter"
 
@@ -34,17 +35,37 @@ func ParseFormat(s string) (Format, error) {
 	return "", fmt.Errorf("unknown output format %q (use %q, %q, or %q for the data commands)", s, Table, JSON, CSV)
 }
 
-// WriteCSV writes a header and rows as CSV.
+// WriteCSV writes a header and rows as CSV. A cell a spreadsheet would read
+// as a formula is written as text.
 func WriteCSV(w io.Writer, header []string, rows [][]string) error {
 	cw := csv.NewWriter(w)
-	if err := cw.Write(header); err != nil {
+	if err := cw.Write(inert(header)); err != nil {
 		return err
 	}
-	if err := cw.WriteAll(rows); err != nil {
-		return err
+	for _, row := range rows {
+		if err := cw.Write(inert(row)); err != nil {
+			return err
+		}
 	}
 	cw.Flush()
 	return cw.Error()
+}
+
+var number = regexp.MustCompile(`^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$`)
+
+// inert keeps the cells of a row from running in a spreadsheet: one that
+// starts as a formula does, such as a name from an ad network that starts
+// with =, gets a leading ', which spreadsheets read as "this is text". A
+// number, such as -5.2, stays a number.
+func inert(row []string) []string {
+	out := make([]string, len(row))
+	for i, cell := range row {
+		if cell != "" && strings.ContainsRune("=+-@\t\r", rune(cell[0])) && !number.MatchString(cell) {
+			cell = "'" + cell
+		}
+		out[i] = cell
+	}
+	return out
 }
 
 // WriteJSON writes v as indented JSON followed by a newline.
