@@ -136,11 +136,16 @@ func (c *Client) LookupDevice(ctx context.Context, key, bundleID, platform, inst
 		var body struct {
 			AdNetwork    string `json:"ad_network"`
 			CampaignName string `json:"campaign_name"`
+			// Present in an install's attribution, empty or not.
+			InstallationID *string `json:"analytics_installation_id"`
 		}
 		// Anything but Tenjin's JSON, such as a captive portal's page,
 		// says nothing about the install.
 		if err := json.Unmarshal(raw, &body); err != nil {
 			return Attribution{}, fmt.Errorf("Tenjin's answer could not be read: %s", truncate(string(raw), 80))
+		}
+		if body.InstallationID == nil {
+			return Attribution{}, fmt.Errorf("Tenjin answered HTTP 200 without an install's attribution")
 		}
 		return Attribution{Known: true, AdNetwork: body.AdNetwork, CampaignName: body.CampaignName}, nil
 	case http.StatusNotFound:

@@ -89,7 +89,10 @@ func TestLookupDevice(t *testing.T) {
 		known   bool
 		wantErr bool
 	}{
-		{"processed", http.StatusOK, `{"ad_network":"organic","campaign_name":"Organic"}`, true, false},
+		{"processed", http.StatusOK, `{"advertising_id":"","analytics_installation_id":"install1","developer_device_id":"","ad_network":"organic","campaign_name":"Organic"}`, true, false},
+		// JSON that is not an install's attribution says nothing about one.
+		{"a 200 without an install", http.StatusOK, `{"code":200,"success":true}`, false, true},
+		{"an empty 200", http.StatusOK, `{}`, false, true},
 		{"not processed yet", http.StatusNotFound, `{}`, false, false},
 		// The same status with a different body means the app is unknown,
 		// which is a failed lookup and not an answer about the device.

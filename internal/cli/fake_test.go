@@ -488,19 +488,27 @@ func (f *fakeTenjin) event(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// user answers the attribution lookup: the campaign for an install Tenjin has
-// processed, and an empty object with a 404 for one it has not.
+// user answers the attribution lookup: the device's IDs and campaign for an
+// install Tenjin has processed, an empty object with a 404 for one it has
+// not, and a 401 for a key tied to another app.
 func (f *fakeTenjin) user(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("analytics_installation_id")
+	key, _, _ := r.BasicAuth()
+	q := r.URL.Query()
+	id := q.Get("analytics_installation_id")
 	f.mu.Lock()
 	f.installsAsked = append(f.installsAsked, id)
 	campaign, known := f.installs[id]
+	app, tied := f.keyApps[key]
 	f.mu.Unlock()
-	if !known {
+	switch {
+	case tied && app != q.Get("bundle_id")+"|"+q.Get("platform"):
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": 401, "message": "unauthorized"})
+	case !known:
 		writeJSON(w, http.StatusNotFound, map[string]any{})
-		return
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"advertising_id": "", "analytics_installation_id": id, "developer_device_id": "",
+			"ad_network": "organic", "campaign_name": campaign})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ad_network": "organic", "campaign_name": campaign})
 }
 
 // harness runs the CLI against a fakeTenjin.
