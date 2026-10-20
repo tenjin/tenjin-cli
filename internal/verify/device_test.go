@@ -154,6 +154,9 @@ func TestDeviceWithoutAConnect(t *testing.T) {
 func TestDeviceOtherRequests(t *testing.T) {
 	accepted := `{"code":200}`
 	text := deviceLog(connectURL, connectParams, `{"code":200,"success":true}`) +
+		// Another app on the device with the SDK: its requests are its own.
+		deviceLog("https://track.tenjin.com/v0/purchase", "event=purchase, bundle_id=com.other.app", accepted) +
+		deviceLog("https://track.tenjin.com/v0/ad_impressions", "bundle_id=com.other.app", `{"code":401,"message":"bad key"}`) +
 		deviceLog("https://track.tenjin.com/v0/purchase", "event=purchase, bundle_id=com.example.sample", accepted) +
 		deviceLog("https://track.tenjin.com/v0/purchase", "event=purchase, bundle_id=com.example.sample", accepted) +
 		deviceLog(connectURL, "event=level_up, bundle_id=com.example.sample", accepted)

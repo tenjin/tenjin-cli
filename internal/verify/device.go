@@ -120,7 +120,7 @@ func (r *runner) checkDevice(t *project.Target, src source) {
 			Fix:    "Check that connect() runs on every launch, then launch the app and run this again.",
 		})
 	}
-	r.checkOtherRequests(d.Log, platform)
+	r.checkOtherRequests(d.Log, t)
 }
 
 // lastConnectOf picks the newest connect from the target's own app: one of
@@ -128,21 +128,7 @@ func (r *runner) checkDevice(t *project.Target, src source) {
 // that does not say (an iOS log without debug logs). ours is false when the
 // log has connects only from other apps, and the newest of them is returned.
 func lastConnectOf(log *devicelog.Log, t *project.Target) (connect *devicelog.Request, ours bool) {
-	ids := []string{t.BundleID}
-	for _, b := range t.Builds {
-		ids = append(ids, b.BundleID)
-	}
-	isOurs := func(running string) bool {
-		if running == "" {
-			return true
-		}
-		for _, id := range ids {
-			if id != "" && (running == id || strings.HasPrefix(running, id+".")) {
-				return true
-			}
-		}
-		return t.BundleID == ""
-	}
+	isOurs := ownApp(t)
 	var other *devicelog.Request
 	for i := len(log.Requests) - 1; i >= 0; i-- {
 		c := &log.Requests[i]
@@ -433,12 +419,37 @@ func requestPlatform(sent, store string) string {
 	return ""
 }
 
-// checkOtherRequests summarises everything the SDK sent besides connect.
-func (r *runner) checkOtherRequests(log *devicelog.Log, platform project.Platform) {
+// ownApp reports whether a request's bundle ID is the target's own app: one
+// of its builds' IDs, or one of them with a suffix such as .debug. A request
+// that does not say (an iOS log without debug logs) counts as the app's.
+func ownApp(t *project.Target) func(bundleID string) bool {
+	ids := []string{t.BundleID}
+	for _, b := range t.Builds {
+		ids = append(ids, b.BundleID)
+	}
+	return func(running string) bool {
+		if running == "" {
+			return true
+		}
+		for _, id := range ids {
+			if id != "" && (running == id || strings.HasPrefix(running, id+".")) {
+				return true
+			}
+		}
+		return t.BundleID == ""
+	}
+}
+
+// checkOtherRequests summarises everything the app sent besides connect.
+// Other apps on the device with the Tenjin SDK log the same lines; theirs
+// are left out.
+func (r *runner) checkOtherRequests(log *devicelog.Log, t *project.Target) {
+	platform := t.Platform
+	isOurs := ownApp(t)
 	accepted := map[string]int{}
 	var refused []string
 	for _, req := range log.Requests {
-		if req.IsConnect() {
+		if req.IsConnect() || !isOurs(req.Params["bundle_id"]) {
 			continue
 		}
 		if req.Accepted() {

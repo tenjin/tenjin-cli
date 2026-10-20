@@ -96,6 +96,41 @@ func TestParseOtherLogcatFormatsAndRefusals(t *testing.T) {
 	}
 }
 
+// Two apps with the SDK can log at the same moment; each request keeps its
+// own process's lines, in the time and threadtime formats.
+func TestParseKeepsEachProcessesLinesTogether(t *testing.T) {
+	for name, log := range map[string]string{
+		"time": `10-20 13:42:01.552 D/HttpConnection( 3956): Tenjin request URL: https://track.tenjin.com/v0/purchase
+10-20 13:42:01.553 D/HttpConnection(17522): Tenjin request URL: https://track.tenjin.com/v0/event
+10-20 13:42:01.553 D/HttpConnection( 3956): Tenjin::connect params: {bundle_id=com.other.app, price=2.99}
+10-20 13:42:01.554 D/HttpConnection(17522): Tenjin::connect params: {bundle_id=com.example.sample}
+10-20 13:42:01.560 D/HttpConnection(17522): Tenjin::connect response: {"code":200,"success":true}
+10-20 13:42:01.567 D/HttpConnection( 3956): Tenjin::connect response: {"code":401,"message":"bad key"}
+`,
+		"threadtime": `10-20 13:42:01.552  3956  4012 D HttpConnection: Tenjin request URL: https://track.tenjin.com/v0/purchase
+10-20 13:42:01.553 17522 17600 D HttpConnection: Tenjin request URL: https://track.tenjin.com/v0/event
+10-20 13:42:01.553  3956  4012 D HttpConnection: Tenjin::connect params: {bundle_id=com.other.app, price=2.99}
+10-20 13:42:01.554 17522 17600 D HttpConnection: Tenjin::connect params: {bundle_id=com.example.sample}
+10-20 13:42:01.560 17522 17600 D HttpConnection: Tenjin::connect response: {"code":200,"success":true}
+10-20 13:42:01.567  3956  4012 D HttpConnection: Tenjin::connect response: {"code":401,"message":"bad key"}
+`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := Parse(strings.NewReader(log))
+			if err != nil || len(got.Requests) != 2 {
+				t.Fatalf("requests = %+v, err = %v", got, err)
+			}
+			purchase, connect := got.Requests[0], got.Requests[1]
+			if purchase.Endpoint != "purchase" || purchase.Params["bundle_id"] != "com.other.app" || purchase.Code != 401 {
+				t.Errorf("purchase = %+v", purchase)
+			}
+			if !connect.IsConnect() || connect.Params["bundle_id"] != "com.example.sample" || !connect.Accepted() {
+				t.Errorf("connect = %+v", connect)
+			}
+		})
+	}
+}
+
 func TestParseDedupAndSilence(t *testing.T) {
 	deduped, _ := Parse(strings.NewReader("D/TenjinSDK( 1): Connecting...\nD/TenjinSDK( 1): Connect deduped by persisted timestamp, flushing queue\n"))
 	if !deduped.SawSDK || deduped.Deduped != 1 || deduped.LastConnect() != nil {

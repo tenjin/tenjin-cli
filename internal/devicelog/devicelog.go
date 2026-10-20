@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf16"
@@ -166,10 +167,24 @@ func (l *Log) LastConnect() *Request {
 	return nil
 }
 
-// Parse reads a device log in any logcat format.
+// logPID matches the process ID in a logcat line: "D/Tag( 3956):" in the
+// time and brief formats, or the first number after the time in threadtime.
+var logPID = regexp.MustCompile(`^(?:[^(]*?/[^(]*\(\s*(\d+)\)|\s*\S+\s+\S+\s+(\d+)\s+\d+\s+[VDIWEF]\s)`)
+
+func linePID(line string) string {
+	if m := logPID.FindStringSubmatch(line); m != nil {
+		return m[1] + m[2]
+	}
+	return ""
+}
+
+// Parse reads a device log in any logcat format. Lines are paired into
+// requests per process, so two apps with the Tenjin SDK logging at the same
+// moment do not mix.
 func Parse(r io.Reader) (*Log, error) {
 	log := &Log{}
 	var pending *Request
+	waiting := map[string]*Request{}
 	flush := func() {
 		if pending != nil {
 			log.Requests = append(log.Requests, *pending)
@@ -188,22 +203,26 @@ func Parse(r io.Reader) (*Log, error) {
 			pending = parseIOSLine(log, pending, line, n)
 			continue
 		}
+		pid := linePID(line)
 		switch {
 		case strings.Contains(line, markURL):
+			pending = waiting[pid]
 			flush()
 			url := strings.TrimSpace(after(line, markURL))
-			pending = &Request{URL: url, Endpoint: endpoint(url), Params: map[string]string{}, Line: n, Time: lineTime(line)}
+			waiting[pid] = &Request{URL: url, Endpoint: endpoint(url), Params: map[string]string{}, Line: n, Time: lineTime(line)}
 			log.SawSDK = true
 		case strings.Contains(line, markParams):
-			if pending == nil {
-				pending = &Request{Params: map[string]string{}, Line: n}
+			if waiting[pid] == nil {
+				waiting[pid] = &Request{Params: map[string]string{}, Line: n}
 			}
-			pending.Params = parseParams(after(line, markParams))
+			waiting[pid].Params = parseParams(after(line, markParams))
 			log.SawSDK = true
 		case strings.Contains(line, markResponse):
-			if pending == nil {
-				pending = &Request{Params: map[string]string{}, Line: n}
+			if waiting[pid] == nil {
+				waiting[pid] = &Request{Params: map[string]string{}, Line: n}
 			}
+			pending = waiting[pid]
+			delete(waiting, pid)
 			pending.Response = strings.TrimSpace(after(line, markResponse))
 			pending.Code, pending.Message = parseResponse(pending.Response)
 			log.SawSDK = true
@@ -225,6 +244,14 @@ func Parse(r io.Reader) (*Log, error) {
 		pending.Unread = len(pending.Params) == 0
 	}
 	flush()
+	// Requests still waiting for an answer, in the order they began.
+	var unanswered []Request
+	for _, req := range waiting {
+		unanswered = append(unanswered, *req)
+	}
+	sort.Slice(unanswered, func(i, j int) bool { return unanswered[i].Line < unanswered[j].Line })
+	log.Requests = append(log.Requests, unanswered...)
+	sort.SliceStable(log.Requests, func(i, j int) bool { return log.Requests[i].Line < log.Requests[j].Line })
 	if log.SawSDK && log.Platform == "" {
 		log.Platform = "android"
 	}
