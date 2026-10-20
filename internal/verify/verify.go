@@ -143,6 +143,10 @@ type runner struct {
 	// source files that mention Tenjin.
 	configured *[]keyLiteral
 	code       *tenjinCode
+	// flavors caches the flavor blocks of build files, and placeholders
+	// the key placeholders in the project.
+	flavors      map[string][]project.FlavorBlock
+	placeholders *[]keyfill.Spot
 	// autoTrackingChecked is set once automatic purchase tracking is looked
 	// at, which purchases and subscriptions share.
 	autoTrackingChecked bool
@@ -332,7 +336,7 @@ func (r *runner) checkDependency(spec frameworkSpec, platform project.Platform) 
 // project, which the CLI fills with the developer's keys, one per build.
 func (r *runner) checkUnfilledKeys() {
 	reported := map[string]bool{}
-	for _, spot := range keyfill.Find(r.p.Root) {
+	for _, spot := range r.spots() {
 		// A build left out with --build is not this run's to check.
 		if reported[spot.Placeholder] || r.p.IsOmitted(spot.Placeholder) {
 			continue

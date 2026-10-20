@@ -34,6 +34,52 @@ type Build struct {
 	// Declared is each variant's TENJIN_APP_STORE and where it was read,
 	// for the checks: variants merged into one build may differ in it.
 	Declared []DeclaredStore `json:"-"`
+	// Flavors are the product flavors the build's variants combine, whose
+	// blocks and source sets hold what only this build gets.
+	Flavors []string `json:"-"`
+}
+
+// HasSourceSet reports whether the Android source set or flavor block of
+// this name goes into the build only, not into every build: a variant's, or
+// a flavor's, with or without a build type (amazonRelease).
+func (b Build) HasSourceSet(name string) bool {
+	for _, buildType := range []string{"Release", "Debug"} {
+		if trimmed := strings.TrimSuffix(name, buildType); trimmed != "" {
+			name = trimmed
+		}
+	}
+	for _, n := range append(append([]string{}, b.Variants...), b.Flavors...) {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+// FlavorBlock is one flavor's block in a build file, by line.
+type FlavorBlock struct {
+	Name               string
+	FirstLine, EndLine int
+}
+
+// FlavorBlocks lists the flavors' blocks in a build file's productFlavors.
+// content should have its comments blanked.
+func FlavorBlocks(content string) []FlavorBlock {
+	loc := productFlavors.FindStringIndex(content)
+	if loc == nil {
+		return nil
+	}
+	end := matchingBrace(content, loc[1])
+	var out []FlavorBlock
+	for _, b := range childBlocks(content[loc[1]:end]) {
+		start := loc[1] + b.start
+		out = append(out, FlavorBlock{
+			Name:      b.name,
+			FirstLine: strings.Count(content[:start], "\n") + 1,
+			EndLine:   strings.Count(content[:start+len(b.body)], "\n") + 1,
+		})
+	}
+	return out
 }
 
 // DeclaredStore is what one variant declares in TENJIN_APP_STORE.
@@ -236,17 +282,22 @@ func (d *detector) androidBuilds(t *Target, content, flavorsBlock, rest string) 
 
 		platform := TenjinPlatform(Android, store)
 		declared := DeclaredStore{Variant: name, Store: store, Source: storeSource}
+		var names []string
+		for _, f := range variant {
+			names = append(names, f.name)
+		}
 		key := bundle + "|" + platform
 		if i, ok := index[key]; ok {
 			builds[i].Variants = append(builds[i].Variants, name)
 			builds[i].Declared = append(builds[i].Declared, declared)
+			builds[i].Flavors = dedupe(append(builds[i].Flavors, names...))
 			continue
 		}
 		index[key] = len(builds)
 		builds = append(builds, Build{
 			Variants: []string{name}, BundleID: bundle,
 			Store: store, StoreSource: storeSource, TenjinPlatform: platform,
-			Declared: []DeclaredStore{declared},
+			Declared: []DeclaredStore{declared}, Flavors: names,
 		})
 	}
 
@@ -305,7 +356,12 @@ func parseFlavors(block string) []flavor {
 	return out
 }
 
-type block struct{ name, body string }
+// block is a named block; start is the offset of its body in what it was
+// read from.
+type block struct {
+	name, body string
+	start      int
+}
 
 // childBlocks returns the named blocks directly inside content, skipping
 // anything nested deeper.
@@ -345,7 +401,7 @@ func childBlocks(content string) []block {
 		}
 		start := i + loc[1]
 		end := matchingBrace(content, start)
-		out = append(out, block{name: name, body: content[start:end]})
+		out = append(out, block{name: name, body: content[start:end], start: start})
 		i = end + 1
 	}
 	return out
