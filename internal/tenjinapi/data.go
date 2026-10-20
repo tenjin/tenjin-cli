@@ -41,16 +41,22 @@ func (c *Client) fetch(ctx context.Context, call func(clients) (*http.Response, 
 	return doc, nil
 }
 
-// list fetches the pages p asks for. With All, the result is one document
-// holding every page's data.
+// maxPages caps how many pages one list reads: a server that kept offering
+// another page would otherwise be read for ever.
+const maxPages = 1000
+
+// list fetches the pages p asks for. With All, the result is the first page's
+// document with every page's data in it, and without its links, which named
+// pages.
 func (c *Client) list(ctx context.Context, p Paging, call func(cl clients, page, perPage *int) (*http.Response, error)) (Document, error) {
 	if !p.All {
 		return c.fetch(ctx, func(cl clients) (*http.Response, error) {
 			return call(cl, positive(p.Page), positive(p.PerPage))
 		})
 	}
+	var first map[string]json.RawMessage
 	data := []json.RawMessage{}
-	for page := 1; ; page++ {
+	for page := 1; page <= maxPages; page++ {
 		doc, err := c.fetch(ctx, func(cl clients) (*http.Response, error) {
 			return call(cl, &page, new(maxPageSize))
 		})
@@ -62,15 +68,46 @@ func (c *Client) list(ctx context.Context, p Paging, call func(cl clients, page,
 			Links struct {
 				Next string `json:"next"`
 			} `json:"links"`
+			Meta struct {
+				Count *int `json:"count"`
+			} `json:"meta"`
 		}
 		if err := json.Unmarshal(doc, &body); err != nil {
 			return nil, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned a list that is not one")
 		}
+		if first == nil {
+			if err := json.Unmarshal(doc, &first); err != nil {
+				return nil, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned a list that is not one")
+			}
+		}
 		data = append(data, body.Data...)
-		if body.Links.Next == "" || len(body.Data) == 0 {
-			return json.Marshal(map[string]any{"data": data})
+		// A list says it has more with a next link. Reports may not: a full
+		// page short of meta.count, or with no count, is followed too.
+		full := len(body.Data) >= maxPageSize && (body.Meta.Count == nil || len(data) < *body.Meta.Count)
+		more := len(body.Data) > 0 && (body.Links.Next != "" || full)
+		if !more {
+			return merged(first, data)
 		}
 	}
+	return nil, clierr.New(clierr.Upstream, "the Tenjin API offered more than %d pages of %d; nothing is shown rather than part of the list", maxPages, maxPageSize).
+		WithHint("Narrow it with the command's flags, or read one page at a time with --page.")
+}
+
+// merged is a list's first page with every page's data in it. Its links
+// named single pages, so they are left out.
+func merged(first map[string]json.RawMessage, data []json.RawMessage) (Document, error) {
+	out := make(map[string]json.RawMessage, len(first))
+	for k, v := range first {
+		if k != "links" {
+			out[k] = v
+		}
+	}
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return nil, clierr.Wrap(clierr.Upstream, err, "the Tenjin API returned a list that is not one")
+	}
+	out["data"] = raw
+	return json.Marshal(out)
 }
 
 func positive(n int) *int {

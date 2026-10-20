@@ -170,6 +170,117 @@ func TestDataPaging(t *testing.T) {
 	}
 }
 
+// rows is a page of n report rows.
+func rows(n int) []any {
+	out := make([]any, n)
+	for i := range out {
+		out[i] = map[string]any{"type": "report", "attributes": map[string]any{"date": "2026-10-01", "spend": i}}
+	}
+	return out
+}
+
+// --all --json is the first page's document, its meta kept and its page
+// links left out, with every page's data.
+func TestAllKeepsTheFirstPagesDocument(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	h.fake.data = map[string]func(*http.Request) (int, any){"/v2/channels": func(r *http.Request) (int, any) {
+		doc := map[string]any{
+			"data":  []any{map[string]any{"id": "1", "type": "channel", "attributes": map[string]any{"name": "Page " + r.URL.Query().Get("page")}}},
+			"meta":  map[string]any{"count": 2, "per_page": 1000},
+			"links": map[string]string{"self": r.URL.String()},
+		}
+		if r.URL.Query().Get("page") == "1" {
+			doc["links"] = map[string]string{"self": r.URL.String(), "next": "/v2/channels?page=2"}
+		}
+		return http.StatusOK, doc
+	}}
+	code, stdout, stderr := h.run("channels", "list", "--all", "--json")
+	var got map[string]any
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil || code != 0 {
+		t.Fatalf("exit = %d, err = %v, stderr = %q", code, err, stderr)
+	}
+	data, _ := got["data"].([]any)
+	meta, _ := got["meta"].(map[string]any)
+	if _, hasLinks := got["links"]; len(data) != 2 || meta["count"] != float64(2) || hasLinks {
+		t.Errorf("--all --json = %s", stdout)
+	}
+}
+
+// A report with no next link is read on while its pages come back full and
+// short of meta.count; a full page that reaches the count is the last.
+func TestReportsPageByTheirCount(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		count        any
+		pages, total int
+	}{
+		{"short of the count", 1500, 2, 1500},
+		{"at the count", 1000, 1, 1000},
+		{"no count", nil, 2, 1500},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.signIn()
+			h.fake.data = map[string]func(*http.Request) (int, any){"/v2/reports/spend": func(r *http.Request) (int, any) {
+				n := 1000
+				if r.URL.Query().Get("page") != "1" {
+					n = 500
+				}
+				doc := map[string]any{"data": rows(n), "links": map[string]string{"self": r.URL.String()}}
+				if tc.count != nil {
+					doc["meta"] = map[string]any{"count": tc.count, "per_page": 1000}
+				}
+				return http.StatusOK, doc
+			}}
+			code, stdout, stderr := h.run("reports", "spend", "--from", "2026-10-01", "--to", "2026-10-02", "--json")
+			var got struct {
+				Data []json.RawMessage `json:"data"`
+			}
+			if err := json.Unmarshal([]byte(stdout), &got); err != nil || code != 0 {
+				t.Fatalf("exit = %d, err = %v, stderr = %q", code, err, stderr)
+			}
+			if len(h.fake.dataAsked) != tc.pages || len(got.Data) != tc.total {
+				t.Errorf("%d reads, %d rows; want %d and %d", len(h.fake.dataAsked), len(got.Data), tc.pages, tc.total)
+			}
+		})
+	}
+}
+
+// One page of a report says there is more when its count does.
+func TestOnePageOfAReportSaysThereIsMore(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	h.fake.data = map[string]func(*http.Request) (int, any){"/v2/reports/spend": func(*http.Request) (int, any) {
+		return http.StatusOK, map[string]any{"data": rows(10), "meta": map[string]any{"count": 25, "per_page": 10}}
+	}}
+	code, _, stderr := h.run("reports", "spend", "--from", "2026-10-01", "--to", "2026-10-02", "--per-page", "10", "--page", "2")
+	if code != 0 || !strings.Contains(stderr, "--page 3") {
+		t.Errorf("page 2 of 3: exit = %d, stderr = %q", code, stderr)
+	}
+	_, _, stderr = h.run("reports", "spend", "--from", "2026-10-01", "--to", "2026-10-02", "--per-page", "10", "--page", "3")
+	if strings.Contains(stderr, "There is more") {
+		t.Errorf("the last page: stderr = %q", stderr)
+	}
+}
+
+// A server that never stops offering a next page is read up to a cap, and
+// then the command fails rather than show part of the list.
+func TestEndlessPagesFailLoudly(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	h.fake.data = map[string]func(*http.Request) (int, any){"/v2/channels": func(*http.Request) (int, any) {
+		return http.StatusOK, map[string]any{
+			"data":  []any{map[string]any{"id": "1", "type": "channel", "attributes": map[string]any{"name": "Again"}}},
+			"links": map[string]string{"next": "/v2/channels?page=again"},
+		}
+	}}
+	code, stdout, stderr := h.run("channels", "list", "--all")
+	if code != 7 || stdout != "" || !strings.Contains(stderr, "more than 1000 pages") || len(h.fake.dataAsked) != 1000 {
+		t.Errorf("exit = %d, %d reads, stdout = %q, stderr = %q", code, len(h.fake.dataAsked), stdout, stderr)
+	}
+}
+
 // A command missing what its endpoint needs, or given something that cannot
 // be an ID, fails as a usage error before any request.
 func TestDataUsageErrors(t *testing.T) {

@@ -189,8 +189,7 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), s.done)
 				return err
 			}
-			_, err = writeDocument(cmd.OutOrStdout(), cmd.ErrOrStderr(), render.Table, doc, view{})
-			return err
+			return writeDocument(cmd.OutOrStdout(), cmd.ErrOrStderr(), render.Table, doc, view{})
 		},
 	}
 	fields.bind(cmd.Flags())
