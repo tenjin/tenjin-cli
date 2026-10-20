@@ -41,6 +41,9 @@ if [ "$n" -ge "${FAKE_AGENT_FIX_ON_RUN:-1}" ]; then
     rm -f app/src/main/java/com/example/sample/MainActivity.kt.bak
   fi
   echo "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Edit\",\"input\":{\"file_path\":\"$PWD/app/src/main/AndroidManifest.xml\"}}]}}"
+  if [ -n "$FAKE_AGENT_NEW_FILE" ]; then
+    : > "$FAKE_AGENT_NEW_FILE"
+  fi
 fi
 echo '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"tenjin doctor --json ."}}]}}'
 if [ -n "$FAKE_AGENT_SAYS_KEY" ]; then
@@ -607,6 +610,17 @@ func TestDoctorAgentFlagErrors(t *testing.T) {
 	// --agent none offers nothing, so it goes with JSON.
 	if code, stdout, _ := h.run("doctor", dir, "--offline", "--agent", "none", "--json"); code != 9 || !strings.HasPrefix(stdout, "{") {
 		t.Errorf("--agent none --json: exit = %d, stdout = %q", code, stdout)
+	}
+}
+
+// The names of the files an agent changed reach the terminal cleaned.
+func TestTheChangedFilesAreCleanedForPeople(t *testing.T) {
+	h, dir := brokenAndroid(t)
+	h.installAgent()
+	t.Setenv("FAKE_AGENT_NEW_FILE", "notes\x1b]52;c;cHduZWQ=\x07.txt")
+	_, stdout, stderr := h.run("setup", dir, "--agent", "claude")
+	if !strings.Contains(stdout, "notes]52;c;cHduZWQ=.txt") || strings.ContainsAny(stdout+stderr, "\x1b\x07") {
+		t.Errorf("stdout:\n%q", stdout)
 	}
 }
 

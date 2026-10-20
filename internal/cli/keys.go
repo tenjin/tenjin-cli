@@ -248,9 +248,9 @@ func (k keyAsker) say(format string, a ...any) {
 // instructions print where to copy a platform's key from. url is the app's
 // SDK page, or empty when the app is not known.
 func (k keyAsker) instructions(label string, b project.Build, url string) {
-	k.say("\n  %s SDK key, for %s:", label, firstNonEmpty(b.BundleID, "this app"))
+	k.say("\n  %s SDK key, for %s:", render.Clean(label), render.Clean(firstNonEmpty(b.BundleID, "this app")))
 	for i, step := range keyInstructions(url) {
-		k.say("%s", render.Indent(fmt.Sprintf("%d. %s", i+1, step), 4, render.TextWidth(k.out)))
+		k.say("%s", render.Indent(fmt.Sprintf("%d. %s", i+1, render.Clean(step)), 4, render.TextWidth(k.out)))
 	}
 }
 
@@ -290,7 +290,7 @@ func (k keyAsker) verdict(what string, v keyVerdict) {
 	case !v.checked:
 		mark = k.style.Yellow("!")
 	}
-	k.say("  %s %s: %s", mark, what, v.message)
+	k.say("  %s %s: %s", mark, render.Clean(what), render.Clean(v.message))
 }
 
 // setKeysResult is what `project set-keys` reports.
@@ -380,7 +380,7 @@ once written, a key is in a file the agent reads.`,
 						continue
 					}
 					if note != "" {
-						asker.say("%s %s: %s", asker.style.Yellow("!"), label, note)
+						asker.say("%s %s: %s", asker.style.Yellow("!"), render.Clean(label), render.Clean(note))
 					}
 				}
 				if !env.interactive {
@@ -476,7 +476,8 @@ func buildTitle(t *project.Target, b project.Build) string {
 	if variant == "" {
 		variant = b.ID
 	}
-	return fmt.Sprintf("%s, %s (%s)", name, variant, project.StoreName(b.TenjinPlatform))
+	// Variants are named in the project's files.
+	return render.Clean(fmt.Sprintf("%s, %s (%s)", name, variant, project.StoreName(b.TenjinPlatform)))
 }
 
 // signedInApp is the Tenjin app for a build, when the developer is signed
@@ -505,11 +506,11 @@ func titleOf(p *project.Project, id string) string {
 
 func writeFilled(w io.Writer, style render.Styler, p *project.Project, spots []keyfill.Spot, r setKeysResult) {
 	if len(spots) == 0 {
-		_, _ = fmt.Fprintf(w, "No SDK key placeholders in %s.\n", p.Root)
+		_, _ = fmt.Fprintf(w, "No SDK key placeholders in %s.\n", render.Clean(p.Root))
 		return
 	}
 	for _, s := range r.Filled {
-		_, _ = fmt.Fprintf(w, "%s Wrote %s at %s:%d\n", style.Green("✓"), keyNoun(p, s), s.File, s.Line)
+		_, _ = fmt.Fprintf(w, "%s Wrote %s at %s:%d\n", style.Green("✓"), keyNoun(p, s), render.Clean(s.File), s.Line)
 	}
 	for _, id := range r.Missing {
 		_, _ = fmt.Fprintf(w, "%s The placeholder of %s is left: no key was given for it.\n", style.Yellow("!"), titleOf(p, id))
@@ -518,7 +519,7 @@ func writeFilled(w io.Writer, style render.Styler, p *project.Project, spots []k
 		_, _ = fmt.Fprintf(w, "%s The placeholder of %s is left: Tenjin refused the key.\n", style.Red("✗"), titleOf(p, id))
 	}
 	for _, ph := range r.Unknown {
-		_, _ = fmt.Fprintf(w, "%s %s names no build of this project, so nothing was written for it. tenjin project detect lists the builds.\n", style.Red("✗"), ph)
+		_, _ = fmt.Fprintf(w, "%s %s names no build of this project, so nothing was written for it. tenjin project detect lists the builds.\n", style.Red("✗"), render.Clean(ph))
 	}
 }
 

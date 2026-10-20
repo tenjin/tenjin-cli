@@ -460,6 +460,22 @@ func TestProjectTextIsCleanedForPeople(t *testing.T) {
 			t.Errorf("%v wrote control characters:\n%q", args, stdout)
 		}
 	}
+
+	// Through setup, whether the app is missing or found, and with the key
+	// left as a placeholder so that every step speaks of the build.
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	dir = testproject.Write(t, base.With(testproject.Files{build: evil, activity: strings.Replace(base[activity], testproject.Key, "__TENJIN_ANDROID_SDK_KEY__", 1)}))
+	for _, exists := range []bool{false, true} {
+		h := newHarness(t)
+		if exists {
+			h.fake.addApp("Sample", "com.example.sample\x1b]52;c;cHduZWQ=\x07\x1b[1A", "android")
+		}
+		h.signIn()
+		_, stdout, stderr := h.run("setup", dir, "--sdk-key", wrongKey)
+		if !strings.Contains(stdout, "Step 7 of 7") || strings.ContainsAny(stdout+stderr, "\x1b\x07") {
+			t.Errorf("setup, app exists %v, wrote control characters:\n%q\n%q", exists, stdout, stderr)
+		}
+	}
 }
 
 // A repository that keeps its app in a folder of its own is pointed to it.

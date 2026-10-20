@@ -305,10 +305,10 @@ func (s *setup) chooseBuilds(p *project.Project) error {
 	s.say("This project ships builds that are separate apps in Tenjin, each with its own SDK key:")
 	for i, b := range all {
 		t, _ := p.Build(b.ID)
-		s.say("  %d) %s: %s  %s", i+1, buildTitle(t, b), b.BundleID, s.style.Dim(b.ID))
+		s.say("  %d) %s: %s  %s", i+1, buildTitle(t, b), render.Clean(b.BundleID), s.style.Dim(render.Clean(b.ID)))
 	}
 	if !s.env.interactive {
-		s.say("All of them are set up. To set up only some, pass --build for each, such as --build %s.", all[len(all)-1].ID)
+		s.say("All of them are set up. To set up only some, pass --build for each, such as --build %s.", render.Clean(all[len(all)-1].ID))
 		return nil
 	}
 	var picked []string
@@ -351,7 +351,7 @@ func (s *setup) apps(p *project.Project) error {
 		t := &p.Targets[i]
 		if len(t.Builds) == 0 {
 			if t.BundleID != "" {
-				s.say("  %s %s: the bundle ID is %s, set from build settings that the Tenjin CLI cannot resolve, so its app was not looked up. Create it in the Tenjin dashboard with the ID Xcode shows.", s.style.Yellow("!"), platformNames[t.Platform], t.BundleID)
+				s.say("  %s %s: the bundle ID is %s, set from build settings that the Tenjin CLI cannot resolve, so its app was not looked up. Create it in the Tenjin dashboard with the ID Xcode shows.", s.style.Yellow("!"), platformNames[t.Platform], render.Clean(t.BundleID))
 				continue
 			}
 			s.say("  %s %s: the bundle ID could not be read, so its app was not looked up.", s.style.Yellow("!"), platformNames[t.Platform])
@@ -369,9 +369,9 @@ func (s *setup) apps(p *project.Project) error {
 				if e.Kind != clierr.Permission && e.Kind != clierr.NotFound {
 					return err
 				}
-				s.say("  %s %s %s: %s", s.style.Yellow("!"), label, b.BundleID, e.Message)
+				s.say("  %s %s %s: %s", s.style.Yellow("!"), label, render.Clean(b.BundleID), render.Clean(e.Message))
 				if e.Hint != "" {
-					s.say("      %s", e.Hint)
+					s.say("      %s", render.Clean(e.Hint))
 				}
 				continue
 			}
@@ -381,7 +381,7 @@ func (s *setup) apps(p *project.Project) error {
 			}
 			s.appIDs[b.ID] = result.ID
 			s.keyURLs[b.ID] = s.env.endpoints.SDKKeysURL(result.ID)
-			s.say("  %s %s %s: %s %q", s.style.Green("✓"), label, b.BundleID, verb, result.Name)
+			s.say("  %s %s %s: %s %q", s.style.Green("✓"), label, render.Clean(b.BundleID), verb, render.Clean(result.Name))
 		}
 	}
 	return nil
@@ -443,14 +443,14 @@ func (s *setup) buildKey(t *project.Target, b project.Build, report *verify.Repo
 	label := buildTitle(t, b)
 	// A key written in the project that Tenjin accepts settles it.
 	if f := accepted(report, t, b); f != nil && f.File != "" {
-		s.say("  %s %s: the project already holds a key Tenjin accepts (%s)", s.style.Green("✓"), label, f.File)
+		s.say("  %s %s: the project already holds a key Tenjin accepts (%s)", s.style.Green("✓"), label, render.Clean(f.File))
 		s.inProject[b.ID] = true
 		return nil
 	}
 	// Offline, a key in the project is taken as it is; the launch check, or
 	// a run online, tells whether Tenjin accepts it.
 	if f := findingFor(report, "key.unchecked", t, b); s.offline && f != nil && f.File != "" {
-		s.say("  %s %s: the project holds a key, not checked (--offline) (%s)", s.style.Dim("i"), label, f.File)
+		s.say("  %s %s: the project holds a key, not checked (--offline) (%s)", s.style.Dim("i"), label, render.Clean(f.File))
 		s.inProject[b.ID] = true
 		return nil
 	}
@@ -471,14 +471,14 @@ func (s *setup) buildKey(t *project.Target, b project.Build, report *verify.Repo
 			return nil
 		}
 		if note != "" {
-			s.say("  %s %s: %s", s.style.Yellow("!"), label, note)
+			s.say("  %s %s: %s", s.style.Yellow("!"), label, render.Clean(note))
 		}
 	}
 
 	asker := s.asker()
 	asker.instructions(label, b, s.keyURLs[b.ID])
 	if !s.env.interactive {
-		s.say("    Then pass it with --sdk-key %s=<key>.", b.ID)
+		s.say("    Then pass it with --sdk-key %s=<key>.", render.Clean(b.ID))
 		return nil
 	}
 	key, err := asker.ask(label, b, s.keyURLs[b.ID] != "")
@@ -667,9 +667,9 @@ func (s *setup) manualGuide(report *verify.Report) {
 		if part.File != "" {
 			heading += " (the app starts in " + part.File + ")"
 		}
-		s.say("  %s", s.style.Bold(heading))
+		s.say("  %s", s.style.Bold(render.Clean(heading)))
 		for i, step := range part.Steps {
-			s.say("%s", render.Indent(fmt.Sprintf("%d. %s", i+1, step), 4, width))
+			s.say("%s", render.Indent(fmt.Sprintf("%d. %s", i+1, render.Clean(step)), 4, width))
 		}
 	}
 	if len(parts) > 0 {
@@ -688,7 +688,7 @@ func (s *setup) manualGuide(report *verify.Report) {
 		if len(p.Builds()) > len(p.Targets) {
 			text += " Each build must read its own key: for Android flavors, a buildConfigField in each flavor's block, on a line that says Tenjin, is the usual place."
 		}
-		s.say("%s", render.Indent(text, 2, width))
+		s.say("%s", render.Indent(render.Clean(text), 2, width))
 	}
 	if len(s.features) > 1 {
 		s.say("%s", render.Indent("Also integrate the features chosen in step 1: "+featureList(s.features[1:])+". Each has its own section in the guide.", 2, width))
@@ -720,7 +720,7 @@ func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
 	// works, and are written again when it is done.
 	if len(s.filled) > 0 {
 		if err := keyfill.Unfill(p.Root, s.filled, s.filledKeys); err != nil {
-			s.say("%s Could not take the SDK keys out of the project before %s starts, so it was not started: %v", s.style.Yellow("!"), s.helper.Name, err)
+			s.say("%s Could not take the SDK keys out of the project before %s starts, so it was not started: %s", s.style.Yellow("!"), s.helper.Name, render.Clean(err.Error()))
 			return nil
 		}
 		s.filled = nil
@@ -749,7 +749,7 @@ func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
 	} else {
 		s.say("\n%s changed:", plural(len(changed), "file"))
 		for _, f := range changed {
-			s.say("  %s", f)
+			s.say("  %s", render.Clean(f))
 		}
 	}
 	if result.Summary != "" {
@@ -764,14 +764,14 @@ func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
 	}
 	// A run that failed left nothing worth going back to.
 	if runErr == nil && result.SessionID != "" {
-		s.say("\nTo ask %s about these changes or to keep going, run this in %s:", s.helper.Name, p.Root)
+		s.say("\nTo ask %s about these changes or to keep going, run this in %s:", s.helper.Name, render.Clean(p.Root))
 		s.say("  %s", s.style.Accent(s.helper.ResumeCommand(result.SessionID)))
 	}
 	// The agent left placeholders where the keys go; the keys go in now,
 	// also after Ctrl-C, so a stopped run does not leave the project without
 	// the keys it had.
 	if err := s.fillKeys(p, false); err != nil {
-		s.say("%s %v", s.style.Yellow("!"), err)
+		s.say("%s %s", s.style.Yellow("!"), render.Clean(err.Error()))
 	}
 	return s.env.interrupted()
 }
@@ -812,7 +812,7 @@ func (s *setup) fillKeys(p *project.Project, ask bool) error {
 		s.filledKeys = map[string]string{}
 	}
 	for _, spot := range filled {
-		s.say("  %s Wrote %s at %s:%d", s.style.Green("✓"), keyNoun(p, spot), spot.File, spot.Line)
+		s.say("  %s Wrote %s at %s:%d", s.style.Green("✓"), keyNoun(p, spot), render.Clean(spot.File), spot.Line)
 		s.filled = append(s.filled, spot)
 		s.filledKeys[spot.Placeholder] = keys[spot.Placeholder]
 	}
