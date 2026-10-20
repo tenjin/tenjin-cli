@@ -57,9 +57,11 @@ jobs:
           if ! git merge-base --is-ancestor "refs/tags/$TAG" origin/main; then
             echo "$TAG is not a commit on main."; exit 1
           fi
-          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate > releases.json
-          drafts=$(jq -s --arg tag "$TAG" '[add[] | select(.tag_name == $tag and .name == $tag and .draft)] | length' releases.json)
-          published=$(jq -s --arg tag "$TAG" '[add[] | select((.tag_name == $tag or .name == $tag) and (.draft | not))] | length' releases.json)
+          # Outside the checkout: GoReleaser refuses a tree with new files.
+          releases="$RUNNER_TEMP/releases.json"
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate > "$releases"
+          drafts=$(jq -s --arg tag "$TAG" '[add[] | select(.tag_name == $tag and .name == $tag and .draft)] | length' "$releases")
+          published=$(jq -s --arg tag "$TAG" '[add[] | select((.tag_name == $tag or .name == $tag) and (.draft | not))] | length' "$releases")
           if [ "$published" != 0 ]; then
             echo "$TAG is already published. A release is made once; fix forward with the next version."; exit 1
           fi
