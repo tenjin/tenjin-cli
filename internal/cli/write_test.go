@@ -116,6 +116,81 @@ func TestInactiveCallbackIsSwitchedOff(t *testing.T) {
 	}
 }
 
+// Both writes are said before they are made, and a second write that fails
+// says the callback exists, is active, and how to switch it off.
+func TestInactiveCallbackSaysBothWrites(t *testing.T) {
+	create := []string{"apps", "callbacks", "create", "--app", testApp, "--template", testOther, "--active=false"}
+	h := newHarness(t)
+	h.signIn()
+	h.fake.writeAnswers = map[string]func(*http.Request) (int, any){
+		"POST /v2/apps/" + testApp + "/callbacks": func(*http.Request) (int, any) {
+			return http.StatusCreated, map[string]any{"data": map[string]any{"id": testOther, "type": "callback", "attributes": map[string]any{"active": true}}}
+		},
+		"PATCH /v2/apps/" + testApp + "/callbacks/" + testOther: func(*http.Request) (int, any) {
+			return http.StatusInternalServerError, map[string]string{"error": "boom"}
+		},
+	}
+	if _, _, stderr := h.run(append(create, "--dry-run")...); !strings.Contains(stderr, "then switch it off with a second request") {
+		t.Errorf("dry run: stderr = %q", stderr)
+	}
+	h.typing("n")
+	if _, _, stderr := h.run(create...); !strings.Contains(stderr, "then switch it off with a second request") || len(h.fake.writes) != 0 {
+		t.Errorf("question: stderr = %q", stderr)
+	}
+	h.env.interactive = false
+	code, _, stderr := h.run(append(create, "--yes")...)
+	want := "tenjin apps callbacks update " + testOther + " --app " + testApp + " --active=false"
+	if code != 7 || !strings.Contains(stderr, "the callback "+testOther+" was created") || !strings.Contains(stderr, "is active") || !strings.Contains(stderr, want) {
+		t.Errorf("failed switch-off: exit = %d, stderr = %q", code, stderr)
+	}
+}
+
+// IDs are checked before the question and the dry run.
+func TestWriteChecksIDsBeforeAsking(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	if code, stdout, stderr := h.run("apps", "delete", "not-an-id", "--dry-run"); code != 2 || stdout != "" {
+		t.Errorf("dry run: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+	h.typing("y")
+	if code, _, stderr := h.run("saved-reports", "delete", "nope"); code != 2 || strings.Contains(stderr, "[y/N]") || len(h.fake.writes) != 0 {
+		t.Errorf("question: exit = %d, stderr = %q", code, stderr)
+	}
+}
+
+// A dry run names the request it would send, and needs no sign-in.
+func TestDryRunNamesTheRequest(t *testing.T) {
+	h := newHarness(t)
+	code, stdout, stderr := h.run("apps", "s2s-callbacks", "create", "--app", testApp, "--url", "https://example.com/hook", "--event", "open", "--name", "Opens", "--action", "ping", "--dry-run")
+	if code != 0 || !strings.Contains(stderr, "POST "+h.fake.srv.URL+"/v2/apps/"+testApp+"/s2s_callbacks with this body") || !strings.Contains(stdout, "https://example.com/hook") {
+		t.Errorf("create: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+	code, stdout, stderr = h.run("campaigns", "delete", testOther, "--dry-run")
+	if code != 0 || stdout != "" || !strings.Contains(stderr, "DELETE "+h.fake.srv.URL+"/v2/campaigns/"+testOther+", with no body.") {
+		t.Errorf("delete: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+	if len(h.fake.writes) != 0 {
+		t.Errorf("%d writes", len(h.fake.writes))
+	}
+}
+
+// Every write says what it did when the answer holds nothing to show.
+func TestEveryWriteSaysWhatItDid(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	empty := func(*http.Request) (int, any) { return http.StatusOK, map[string]any{} }
+	h.fake.writeAnswers = map[string]func(*http.Request) (int, any){
+		"PATCH /v2/apps/" + testApp + "/integrations/18/callback_settings": empty,
+		"POST /v2/saved_reports": empty,
+	}
+	if _, stdout, _ := h.run("apps", "callback-settings", "update", "--app", testApp, "--channel", "18", "--setting", "a=b", "--yes"); stdout != "Changed.\n" {
+		t.Errorf("update: stdout = %q", stdout)
+	}
+	if _, stdout, _ := h.run("saved-reports", "create", "--type", "user_acquisition", "--name", "W", "--granularity", "daily", "--group-by", "app", "--yes"); stdout != "Created.\n" {
+		t.Errorf("create: stdout = %q", stdout)
+	}
+}
+
 // --dry-run prints the body and sends nothing.
 func TestWriteDryRun(t *testing.T) {
 	h := newHarness(t)

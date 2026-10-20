@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -13,6 +14,46 @@ import (
 // Fields is a request body, by the API's own field names. Only the fields
 // given are sent, so an update changes those and leaves the rest.
 type Fields map[string]any
+
+// Request is a write as it would be sent.
+type Request struct {
+	Method  string
+	URL     string
+	HasBody bool
+}
+
+var errPlanned = errors.New("planned, not sent")
+
+type planner func(*http.Request) (*http.Response, error)
+
+func (p planner) RoundTrip(r *http.Request) (*http.Response, error) { return p(r) }
+
+type noToken struct{}
+
+func (noToken) Token(context.Context) (string, error) { return "", nil }
+
+// Plan runs write against a copy of c that sends nothing, and returns the
+// first request it would have sent. Everything write checks before sending,
+// such as its IDs, is checked; no sign-in is needed.
+func (c *Client) Plan(write func(*Client) error) (*Request, error) {
+	var planned *Request
+	dry := *c
+	dry.Tokens = noToken{}
+	dry.HTTP = &http.Client{Transport: planner(func(r *http.Request) (*http.Response, error) {
+		if planned == nil {
+			planned = &Request{Method: r.Method, URL: r.URL.String(), HasBody: r.Body != nil && r.Body != http.NoBody}
+		}
+		return nil, errPlanned
+	})}
+	err := write(&dry)
+	if planned != nil {
+		return planned, nil
+	}
+	if err == nil {
+		err = clierr.New(clierr.Internal, "the change would send nothing")
+	}
+	return nil, err
+}
 
 const contentJSON = "application/json"
 
