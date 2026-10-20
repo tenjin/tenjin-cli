@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -69,6 +70,29 @@ func TestSiteIDsAreChecked(t *testing.T) {
 		if code, _, stderr := h.run(args...); code != 2 || len(h.fake.siteIDCalls) != 0 || strings.Contains(stderr, "[Y/n]") {
 			t.Errorf("%q: exit = %d, calls = %v, stderr = %q", args, code, h.fake.siteIDCalls, stderr)
 		}
+	}
+}
+
+// The Site ID service's refusals read as the API's do: a refused token names
+// where it came from, and a value it does not accept is refused (exit 11).
+func TestSiteIDRefusals(t *testing.T) {
+	h := newHarness(t)
+	h.vars["TENJIN_API_TOKEN"] = "not-a-jwt"
+	code, _, stderr := h.run("site-ids", "list", "--json")
+	if body := errorBody(t, stderr); code != 3 || !strings.Contains(body["message"], "TENJIN_API_TOKEN") || strings.Contains(body["message"], "saved sign-in") {
+		t.Errorf("refused token: exit = %d, stderr = %q", code, stderr)
+	}
+
+	h = newHarness(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"code": "invalid_argument", "message": "site_id is too long"})
+	}))
+	defer srv.Close()
+	h.env.endpoints.SiteIDs = srv.URL
+	h.vars["TENJIN_API_TOKEN"] = "dashboard-token"
+	code, _, stderr = h.run("site-ids", "block", "abc", "--yes", "--json")
+	if body := errorBody(t, stderr); code != 11 || body["code"] != "refused" || !strings.Contains(body["message"], "site_id is too long") {
+		t.Errorf("invalid argument: exit = %d, stderr = %q", code, stderr)
 	}
 }
 

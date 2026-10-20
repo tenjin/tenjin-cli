@@ -118,7 +118,7 @@ func (c *Client) siteIDs(ctx context.Context, method string, in any) (Document, 
 		return nil, clierr.Wrap(clierr.Upstream, err, "could not read the Site ID Optimization service's answer: %v", err)
 	}
 	if resp.StatusCode/100 != 2 {
-		return nil, connectError(resp.StatusCode, body)
+		return nil, connectError(resp, body)
 	}
 	if len(bytes.TrimSpace(body)) == 0 {
 		return Document("{}"), nil
@@ -130,7 +130,8 @@ func (c *Client) siteIDs(ctx context.Context, method string, in any) (Document, 
 }
 
 // connectError classifies a Connect error: {"code": "...", "message": "..."}.
-func connectError(status int, body []byte) error {
+func connectError(resp *http.Response, body []byte) error {
+	status := resp.StatusCode
 	var e struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
@@ -139,18 +140,18 @@ func connectError(status int, body []byte) error {
 	message := firstNonEmpty(e.Message, e.Code, http.StatusText(status))
 	switch e.Code {
 	case "unauthenticated":
-		return clierr.New(clierr.NotSignedIn, "Tenjin did not accept the saved sign-in").WithHint("Run 'tenjin login'.")
+		return refusedToken(resp)
 	case "permission_denied":
 		return clierr.New(clierr.Permission, "your Tenjin role does not allow this: %s", message)
 	case "not_found":
 		return clierr.New(clierr.NotFound, "%s", message)
 	case "invalid_argument", "failed_precondition", "out_of_range", "already_exists":
-		return clierr.New(clierr.Internal, "Tenjin refused it: %s", message)
+		return clierr.New(clierr.Refused, "Tenjin refused it: %s", message)
 	case "resource_exhausted":
 		return clierr.New(clierr.RateLimited, "Tenjin is rate limiting this token")
 	}
 	if status == http.StatusUnauthorized {
-		return clierr.New(clierr.NotSignedIn, "Tenjin did not accept the saved sign-in").WithHint("Run 'tenjin login'.")
+		return refusedToken(resp)
 	}
 	return clierr.New(clierr.Upstream, "the Site ID Optimization service failed (HTTP %d): %s", status, message)
 }
