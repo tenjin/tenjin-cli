@@ -1,6 +1,9 @@
 package project
 
-import "strings"
+import (
+	"path"
+	"strings"
+)
 
 // BlankComments returns source code with its // and /* */ comments replaced
 // by spaces, every line break kept, so offsets and line numbers in the result
@@ -49,6 +52,44 @@ func BlankComments(s string) string {
 		}
 	}
 	return string(b)
+}
+
+// readDependencies reads a file that declares dependencies without its
+// comments, as its own tool reads it: Ruby's # in a Podfile, # in YAML and
+// TOML, none in JSON or a lock file, // and /* */ in Gradle and the rest.
+func (d *detector) readDependencies(rel string) string {
+	raw := d.read(rel)
+	switch {
+	case path.Base(rel) == "Podfile":
+		return stripRubyComments(raw)
+	case strings.HasSuffix(rel, ".lock"), strings.HasSuffix(rel, ".json"):
+		return raw
+	case strings.HasSuffix(rel, ".yaml"), strings.HasSuffix(rel, ".yml"), strings.HasSuffix(rel, ".toml"):
+		return hashComments(raw)
+	}
+	return stripComments(raw)
+}
+
+// hashComments blanks from a # outside quotes to the end of its line,
+// keeping line breaks.
+func hashComments(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		var quote byte
+	scan:
+		for j := 0; j < len(line); j++ {
+			switch c := line[j]; {
+			case quote != 0 && c == quote:
+				quote = 0
+			case quote == 0 && (c == '"' || c == '\''):
+				quote = c
+			case quote == 0 && c == '#':
+				lines[i] = line[:j] + strings.Repeat(" ", len(line)-j)
+				break scan
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // endOfString returns the offset just past the string literal that starts

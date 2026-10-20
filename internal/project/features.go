@@ -136,7 +136,7 @@ func (d *detector) findFeatures() {
 	}
 
 	for _, f := range d.dependencyFiles() {
-		raw := d.read(f)
+		raw := d.readDependencies(f)
 		for _, s := range dependencySignals {
 			if s.pattern.MatchString(raw) {
 				add(s.feature, s.what, f)

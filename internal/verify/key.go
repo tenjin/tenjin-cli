@@ -2,7 +2,6 @@ package verify
 
 import (
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -436,32 +435,4 @@ func mask(key string) string {
 		return "…"
 	}
 	return "…" + key[len(key)-4:]
-}
-
-var (
-	xmlComment      = regexp.MustCompile(`(?s)<!--.*?-->`)
-	propertyComment = regexp.MustCompile(`(?m)^[ \t]*[#!].*$`)
-)
-
-// withoutComments blanks a file's comments as its own language writes them,
-// keeping every line break: properties files' # and ! lines, XML's <!-- -->,
-// none in JSON, and // and /* */ in the rest.
-func withoutComments(rel, text string) string {
-	blank := func(m string) string {
-		return strings.Map(func(r rune) rune {
-			if r == '\n' {
-				return r
-			}
-			return ' '
-		}, m)
-	}
-	switch path.Ext(rel) {
-	case ".properties":
-		return propertyComment.ReplaceAllStringFunc(text, blank)
-	case ".plist", ".xml":
-		return xmlComment.ReplaceAllStringFunc(text, blank)
-	case ".json":
-		return text
-	}
-	return blankComments(text)
 }

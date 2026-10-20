@@ -29,8 +29,8 @@ func (r *runner) checkIOS(spec frameworkSpec, t *project.Target, src source) {
 		})
 		return
 	}
-	plist := r.readRel(t.IOS.InfoPlist)
-	pbx := r.readRel(t.IOS.Xcodeproj + "/project.pbxproj")
+	plist := r.readCode(t.IOS.InfoPlist)
+	pbx := r.readCode(t.IOS.Xcodeproj + "/project.pbxproj")
 	if t.IOS.InfoPlist != "" && !strings.Contains(plist, "<plist") {
 		r.add(Finding{
 			ID: "ios.plist", Severity: Info, Platform: project.IOS,

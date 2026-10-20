@@ -143,6 +143,28 @@ func TestAndroidFaults(t *testing.T) {
 		{"connect in the Application class",
 			base.With(testproject.Files{activity: strings.Replace(base[activity], "class MainActivity : Activity()", "class App : Application()", 1)}),
 			"android.connect.location", verify.Warning},
+		// What is commented out is not there.
+		{"ads identifier library commented out",
+			base.With(testproject.Files{build: strings.Replace(base[build], `implementation("com.google.android.gms:play-services-ads-identifier:18.1.0")`, `// implementation("com.google.android.gms:play-services-ads-identifier:18.1.0")`, 1)}),
+			"android.play_services.ads_identifier", verify.Error},
+		{"ads identifier library commented out in the version catalog",
+			base.With(testproject.Files{
+				build:                       strings.Replace(base[build], `implementation("com.google.android.gms:play-services-ads-identifier:18.1.0")`, "implementation(libs.ads.identifier)", 1),
+				"gradle/libs.versions.toml": "[libraries]\n# ads-identifier = { module = \"com.google.android.gms:play-services-ads-identifier\", version = \"18.1.0\" }\n",
+			}),
+			"android.play_services.ads_identifier", verify.Error},
+		{"internet only from a commented-out Mobile Ads",
+			base.With(testproject.Files{
+				manifest: strings.Replace(base[manifest], `<uses-permission android:name="android.permission.INTERNET" />`, "", 1),
+				build:    strings.Replace(base[build], "dependencies {", "dependencies {\n    /* implementation(\"com.google.android.gms:play-services-ads:23.0.0\") */", 1),
+			}),
+			"android.permission.internet", verify.Error},
+		{"keep rules commented out",
+			base.With(testproject.Files{
+				build:                    strings.Replace(strings.Replace(base[build], "isMinifyEnabled = false", "isMinifyEnabled = true", 1), "android-sdk:2.0.0", "android-sdk:1.24.0", 1),
+				"app/proguard-rules.pro": "# -keep class com.tenjin.** { *; }\n",
+			}),
+			"android.proguard", verify.Warning},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -198,6 +220,9 @@ func TestIOSFaults(t *testing.T) {
 			"sdk.dependency", verify.Error},
 		{"no tracking text",
 			base.With(testproject.Files{plist: strings.Replace(base[plist], "NSUserTrackingUsageDescription", "SomethingElse", 1)}),
+			"ios.plist.att_description", verify.Warning},
+		{"tracking text commented out",
+			base.With(testproject.Files{plist: strings.Replace(strings.Replace(base[plist], "<key>NSUserTrackingUsageDescription</key>", "<!-- <key>NSUserTrackingUsageDescription</key>", 1), "people to the app.</string>", "people to the app.</string> -->", 1)}),
 			"ios.plist.att_description", verify.Warning},
 		{"no skan endpoint",
 			base.With(testproject.Files{plist: strings.Replace(base[plist], "NSAdvertisingAttributionReportEndpoint", "SomethingElse", 1)}),

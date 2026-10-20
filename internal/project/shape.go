@@ -277,13 +277,7 @@ func (d *detector) findAdSDKs() {
 	}
 	contents := map[string]string{}
 	for _, f := range dedupe(files) {
-		raw := d.read(f)
-		if strings.HasSuffix(f, "Podfile") {
-			raw = stripRubyComments(raw)
-		} else if !strings.HasSuffix(f, ".lock") {
-			raw = stripComments(raw)
-		}
-		contents[f] = raw
+		contents[f] = d.readDependencies(f)
 	}
 	for _, sdk := range adSDKs {
 		for _, f := range dedupe(files) {
