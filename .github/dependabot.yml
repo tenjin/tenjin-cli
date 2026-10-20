@@ -1,5 +1,8 @@
 # Weekly pull requests for the Go modules and the pinned actions, grouped so
-# each ecosystem is one pull request. Titles are conventional commits.
+# each ecosystem is one pull request. Titles are conventional commits, which
+# release-please reads: the binary is built from the Go modules, so their
+# updates (security ones included) are fixes that make a patch release; the
+# actions only run CI, so theirs make none.
 version: 2
 updates:
   - package-ecosystem: gomod
@@ -10,7 +13,7 @@ updates:
       go:
         patterns: ["*"]
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "fix(deps)"
   - package-ecosystem: github-actions
     directory: /
     schedule:
