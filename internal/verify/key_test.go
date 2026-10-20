@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/project"
 	"github.com/tenjin/tenjin-cli/internal/testproject"
 	"github.com/tenjin/tenjin-cli/internal/verify"
@@ -64,4 +65,100 @@ func TestAKeyWithSpacesIsItsOwnFinding(t *testing.T) {
 	if has(r, "sdk.key.placeholder") || has(r, "key.unchecked") || len(keys.asked) != 0 {
 		t.Errorf("findings: %s; asked: %q", ids(r), keys.asked)
 	}
+}
+
+// findBuild returns a build's finding with this ID.
+func findBuild(r *verify.Report, id, build string) *verify.Finding {
+	for i := range r.Findings {
+		if r.Findings[i].ID == id && r.Findings[i].Build == build {
+			return &r.Findings[i]
+		}
+	}
+	return nil
+}
+
+// Each build is checked against the keys that go into it: its flavor's
+// block, then what every build shares. A key elsewhere cannot pass for a
+// build, and a key in a comment is no key at all.
+func TestEachBuildIsCheckedAgainstItsOwnKey(t *testing.T) {
+	base := testproject.AndroidMultiStore()
+	const build = "app/build.gradle.kts"
+	const wrongKey = "WRONGKEY34567890ABCDEFGHIJKLWRNG"
+	valid := func() *fakeKeys {
+		return &fakeKeys{answers: map[string]track.KeyStatus{
+			testproject.PlayKey + "|com.example.sample|android":  track.KeyValid,
+			testproject.AmazonKey + "|com.example.sample|amazon": track.KeyValid,
+		}}
+	}
+	swap := strings.NewReplacer(testproject.PlayKey, testproject.AmazonKey, testproject.AmazonKey, testproject.PlayKey)
+	playLine := `            buildConfigField("String", "TENJIN_SDK_KEY", "\"` + testproject.PlayKey + `\"")` + "\n"
+	cases := []struct {
+		name         string
+		files        testproject.Files
+		main, amazon string // the finding expected for each build
+	}{
+		{"own keys", base, "key.valid", "key.valid"},
+		{"swapped", base.With(testproject.Files{build: swap.Replace(base[build])}), "key.rejected", "key.rejected"},
+		{"the right key only in a comment", base.With(testproject.Files{
+			build: strings.Replace(base[build], testproject.AmazonKey, wrongKey, 1) + "// old Tenjin amazon key \"" + testproject.AmazonKey + "\"\n",
+		}), "key.valid", "key.rejected"},
+		{"a shared key and one build's own", base.With(testproject.Files{
+			build: strings.Replace(strings.Replace(base[build], playLine, "", 1),
+				"minSdk = 24", "minSdk = 24\n"+playLine, 1),
+		}), "key.valid", "key.valid"},
+		{"keys that cannot be tied to a build", base.With(testproject.Files{
+			build:               strings.NewReplacer(testproject.PlayKey, "${tenjinPlayKey}", testproject.AmazonKey, "${tenjinAmazonKey}").Replace(base[build]),
+			"gradle.properties": "# Tenjin keys\ntenjinPlayKey=" + testproject.PlayKey + " # tenjin\ntenjinAmazonKey=" + testproject.AmazonKey + " # tenjin\n",
+		}), "key.unverified", "key.unverified"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := run(t, tc.files, verify.Options{Keys: valid()})
+			for build, want := range map[string]string{"android": tc.main, "android:amazon": tc.amazon} {
+				f := findBuild(r, want, build)
+				if f == nil {
+					t.Errorf("%s: no %s; got %s", build, want, ids(r))
+					continue
+				}
+				if want == "key.unverified" && (f.Severity != verify.Info || !strings.Contains(f.Detail, "gradle.properties")) {
+					t.Errorf("%s: %+v", build, f)
+				}
+				if strings.Contains(f.Title+f.Detail+f.Fix, testproject.PlayKey) || strings.Contains(f.Title+f.Detail+f.Fix, testproject.AmazonKey) {
+					t.Errorf("%s: a whole key is printed: %+v", build, f)
+				}
+			}
+		})
+	}
+}
+
+// When the project's own key cannot be read, a given key that Tenjin
+// accepts says nothing about what the app sends, so it does not pass; where
+// the project holds the build's placeholder, the given key is what the CLI
+// writes there, and it does.
+func TestAGivenKeyPassesOnlyWhereItIsWhatTheAppSends(t *testing.T) {
+	base := testproject.AndroidNative()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	const build = "app/build.gradle.kts"
+	const given = "GIVENKEY34567890ABCDEFGHIJKLGIVN"
+	fromBuildConfig := base.With(testproject.Files{activity: strings.Replace(base[activity], `"`+testproject.Key+`"`, "BuildConfig.TENJIN_SDK_KEY", 1)})
+	opts := func() verify.Options {
+		return verify.Options{
+			Keys:  &fakeKeys{answers: map[string]track.KeyStatus{given + "|com.example.sample|android": track.KeyValid}},
+			Given: verify.GivenKeys{All: verify.GivenKey{Value: given, Source: "the key you pasted"}, PreferSource: true},
+		}
+	}
+
+	f := expect(t, run(t, fromBuildConfig, opts()), "key.unverified", project.Android, verify.Info)
+	if !strings.Contains(f.Title, "Tenjin accepts the SDK key …GIVN (from the key you pasted) for com.example.sample, but whether the app sends it could not be read") ||
+		!strings.Contains(f.Detail, "not written as a string literal") || strings.Contains(f.Title+f.Detail+f.Fix, given) {
+		t.Errorf("finding = %+v", f)
+	}
+
+	withPlaceholder := fromBuildConfig.With(testproject.Files{build: strings.Replace(fromBuildConfig[build], "minSdk = 24",
+		"minSdk = 24\n        buildConfigField(\"String\", \"TENJIN_SDK_KEY\", \"\\\"__TENJIN_ANDROID_SDK_KEY__\\\"\")", 1)})
+	expect(t, run(t, withPlaceholder, opts()), "key.valid", project.Android, verify.Pass)
+
+	// With no call to the SDK yet, there is no other key the app could send.
+	noCall := base.With(testproject.Files{activity: "package com.example.sample\n\nclass MainActivity\n"})
+	expect(t, run(t, noCall, opts()), "key.valid", project.Android, verify.Pass)
 }

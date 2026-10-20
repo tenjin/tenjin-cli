@@ -496,9 +496,13 @@ func (s *setup) asker() keyAsker {
 	return keyAsker{env: s.env, out: s.out, style: s.style, ctx: s.cmd.Context(), check: s.keyCheck()}
 }
 
-// accepted returns the finding that says Tenjin accepts a build's key.
+// accepted returns the finding that says Tenjin accepts a build's key, also
+// when which key the build sends could not be told.
 func accepted(report *verify.Report, t *project.Target, b project.Build) *verify.Finding {
-	return findingFor(report, "key.valid", t, b)
+	if f := findingFor(report, "key.valid", t, b); f != nil {
+		return f
+	}
+	return findingFor(report, "key.unverified", t, b)
 }
 
 // findingFor returns a build's finding with this ID, or nil.

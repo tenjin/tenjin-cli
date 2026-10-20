@@ -2,11 +2,14 @@ package verify
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/tenjin/tenjin-cli/internal/track"
+	"github.com/tenjin/tenjin-cli/internal/keyfill"
 	"github.com/tenjin/tenjin-cli/internal/project"
 )
 
@@ -38,8 +41,8 @@ func (r *runner) checkKey(t *project.Target, src source) {
 func (r *runner) offlineKeys(t *project.Target, src source) {
 	multi := t.SeveralBuilds()
 	for _, b := range t.Builds {
-		candidates, _ := r.candidateKeys(src, b.ID, multi)
-		if len(candidates) == 0 {
+		candidates, _, source := r.candidateKeys(t, src, b.ID, multi)
+		if len(candidates) == 0 || source != "" {
 			continue
 		}
 		f := Finding{
@@ -65,7 +68,7 @@ func (r *runner) checkBuildKey(t *project.Target, b project.Build, src source, m
 		scope.Build = b.ID
 		label = " (" + buildLabel(b) + ")"
 	}
-	candidates, source := r.candidateKeys(src, b.ID, multi)
+	candidates, unsure, source := r.candidateKeys(t, src, b.ID, multi)
 	if len(candidates) == 0 {
 		f := scope
 		f.ID, f.Severity = "key.unchecked", Info
@@ -105,6 +108,17 @@ func (r *runner) checkBuildKey(t *project.Target, b project.Build, src source, m
 			f.ID, f.Severity = "key.valid", Pass
 			f.Title = title + " for " + b.BundleID + label
 			f.File, f.Line = k.File, k.Line
+			// A check that cannot tell which key the build sends must not
+			// say it passed.
+			if unsure != "" {
+				f.ID, f.Severity = "key.unverified", Info
+				f.Title += ", but whether the app sends it could not be read"
+				f.Detail = unsure
+				f.Fix = "Make sure this is the key the build passes to the SDK."
+				if source == "" {
+					f.Fix = "To have the key checked as this build's, put it in the build's own flavor block of the build file, as buildConfigField(\"String\", \"TENJIN_SDK_KEY\", \"\\\"<key>\\\"\"), or in the flavor's source set."
+				}
+			}
 			r.add(f)
 			return true
 		}
@@ -150,31 +164,173 @@ func maskAll(keys []keyLiteral) string {
 	return strings.Join(out, ", ")
 }
 
-// candidateKeys returns the keys to check for a build, and where they came
+// candidateKeys returns the keys to check for a build, why the check cannot
+// tell whether the build sends them ("" when it can), and where they came
 // from when that is outside the project. A key given from outside wins over
 // the ones written in source, unless the options prefer the source. wide
-// adds the keys kept in build configuration.
-func (r *runner) candidateKeys(src source, build string, wide bool) (keys []keyLiteral, source string) {
+// adds the keys kept in build configuration, and ties each key to the
+// builds it goes into, so that one build's key never passes for another.
+func (r *runner) candidateKeys(t *project.Target, src source, build string, wide bool) (keys []keyLiteral, unsure, source string) {
 	seen := map[string]bool{}
+	var all []keyLiteral
+	// With several builds one key may sit in two builds' blocks, and each
+	// place counts for its own build.
 	add := func(k keyLiteral) {
-		if !isPlaceholder(k.Value) && !seen[k.Value] {
-			seen[k.Value] = true
-			keys = append(keys, k)
+		id := k.Value
+		if wide {
+			id += "|" + k.File + "|" + strconv.Itoa(k.Line)
+		}
+		if !isPlaceholder(k.Value) && !strayWhitespace(k.Value) && !seen[id] {
+			seen[id] = true
+			all = append(all, k)
 		}
 	}
 	for _, k := range src.keys {
 		add(k)
 	}
+	keys = all
 	if wide {
 		for _, k := range r.configuredKeys() {
 			add(k)
 		}
+		keys, unsure = r.buildsOwnKeys(t, build, all)
 	}
 	given, ok := r.opts.Given.For(build)
 	if !ok || (r.opts.Given.PreferSource && len(keys) > 0) {
-		return keys, ""
+		return keys, unsure, ""
 	}
-	return []keyLiteral{{Value: given.Value}}, given.Source
+	// The project initialises the SDK with a key that is not a literal, and
+	// holds no placeholder for the CLI to write the given key over: what the
+	// app sends is that value, which a check of the given key says nothing
+	// about.
+	if len(src.inits) > 0 && len(keys) == 0 && len(src.keys) == 0 && !r.placeholderInProject(project.Placeholder(build)) {
+		unsure = "The SDK is initialised with a key that is not written as a string literal, such as a BuildConfig field or a variable, so the key the project holds could not be read. The key checked is " + mask(given.Value) + ", from " + given.Source + "."
+		if given.Source == "" {
+			unsure = "The SDK is initialised with a key that is not written as a string literal, such as a BuildConfig field or a variable, so the key the project holds could not be read."
+		}
+	} else {
+		unsure = ""
+	}
+	return []keyLiteral{{Value: given.Value}}, unsure, given.Source
+}
+
+// buildsOwnKeys narrows a target's keys to one build's: those in its own
+// flavor block or source set, otherwise those every build shares, otherwise
+// those that cannot be tied to any build, with why the check is then unsure.
+// A key tied to another build is never this one's.
+func (r *runner) buildsOwnKeys(t *project.Target, build string, all []keyLiteral) ([]keyLiteral, string) {
+	var own, shared, loose []keyLiteral
+	for _, k := range all {
+		builds, everyBuild := r.keyBuilds(t, k)
+		switch {
+		case builds[build]:
+			own = append(own, k)
+		case len(builds) > 0:
+		case everyBuild:
+			shared = append(shared, k)
+		default:
+			loose = append(loose, k)
+		}
+	}
+	own, shared, loose = distinct(own), distinct(shared), distinct(loose)
+	switch {
+	case len(own) > 0:
+		return own, ""
+	case len(shared) == 1:
+		return shared, ""
+	case len(shared) > 1:
+		return shared, "The project holds " + maskAll(shared) + " where every build reads them, and which of them this build sends could not be read."
+	case len(loose) > 0:
+		return loose, "The key is in " + loose[0].File + ", which the checks cannot tie to this build or to every build."
+	}
+	return nil, ""
+}
+
+// distinct keeps the first of each key.
+func distinct(keys []keyLiteral) []keyLiteral {
+	seen := map[string]bool{}
+	var out []keyLiteral
+	for _, k := range keys {
+		if !seen[k.Value] {
+			seen[k.Value] = true
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// keyBuilds says which builds of an Android target a key literal goes into:
+// the builds whose flavor block or source set holds it, or every build that
+// has no key of its own, for the module's main source set and the rest of
+// its build file. Neither means it cannot be told.
+func (r *runner) keyBuilds(t *project.Target, k keyLiteral) (builds map[string]bool, everyBuild bool) {
+	builds = map[string]bool{}
+	if t.Android == nil {
+		return builds, false
+	}
+	owners := func(name string) {
+		for _, b := range t.Builds {
+			if b.HasSourceSet(name) {
+				builds[b.ID] = true
+			}
+		}
+	}
+	for _, module := range append([]string{t.Android.ModuleDir}, t.Android.LibraryModules...) {
+		prefix := module + "/"
+		if module == "." {
+			prefix = ""
+		}
+		if k.File == prefix+"build.gradle" || k.File == prefix+"build.gradle.kts" {
+			for _, block := range r.flavorBlocks(k.File) {
+				if k.Line >= block.FirstLine && k.Line <= block.EndLine {
+					owners(block.Name)
+					return builds, false
+				}
+			}
+			return builds, true
+		}
+		if rest, ok := strings.CutPrefix(k.File, prefix+"src/"); ok {
+			set, _, _ := strings.Cut(rest, "/")
+			if set == "main" || set == "release" || set == "debug" {
+				return builds, true
+			}
+			owners(set)
+			return builds, false
+		}
+	}
+	return builds, false
+}
+
+// flavorBlocks reads the flavors' blocks of a build file, once.
+func (r *runner) flavorBlocks(rel string) []project.FlavorBlock {
+	if r.flavors == nil {
+		r.flavors = map[string][]project.FlavorBlock{}
+	}
+	blocks, ok := r.flavors[rel]
+	if !ok {
+		blocks = project.FlavorBlocks(blankComments(r.readRel(rel)))
+		r.flavors[rel] = blocks
+	}
+	return blocks
+}
+
+// placeholderInProject reports whether a build's placeholder is written in
+// the project, for the CLI to write the key over.
+func (r *runner) placeholderInProject(placeholder string) bool {
+	for _, spot := range r.spots() {
+		if spot.Placeholder == placeholder {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *runner) spots() []keyfill.Spot {
+	if r.placeholders == nil {
+		spots := keyfill.Find(r.p.Root)
+		r.placeholders = &spots
+	}
+	return *r.placeholders
 }
 
 // Keys kept outside the init call: a flavor's buildConfigField, a properties
@@ -200,11 +356,14 @@ func (r *runner) configuredKeys() []keyLiteral {
 			continue
 		}
 		raw, err := os.ReadFile(path)
-		if err != nil || !strings.Contains(strings.ToLower(string(raw)), "tenjin") {
+		if err != nil || testSource(rel) || !strings.Contains(strings.ToLower(string(raw)), "tenjin") {
 			continue
 		}
+		// A key in a comment is not one the app sends, but a comment that
+		// names Tenjin still says whose the key beside it is.
 		lines := strings.Split(string(raw), "\n")
-		for i, line := range lines {
+		code := strings.Split(withoutComments(rel, string(raw)), "\n")
+		for i := range lines {
 			named := false
 			for j := max(0, i-nearTenjin); j <= i; j++ {
 				if strings.Contains(strings.ToLower(lines[j]), "tenjin") {
@@ -214,7 +373,7 @@ func (r *runner) configuredKeys() []keyLiteral {
 			if !named {
 				continue
 			}
-			for _, m := range keyShaped.FindAllStringSubmatch(line, -1) {
+			for _, m := range keyShaped.FindAllStringSubmatch(code[i], -1) {
 				keys = append(keys, keyLiteral{Value: m[1], File: rel, Line: i + 1})
 			}
 			if len(keys) >= maxKeyChecks {
@@ -277,4 +436,32 @@ func mask(key string) string {
 		return "…"
 	}
 	return "…" + key[len(key)-4:]
+}
+
+var (
+	xmlComment      = regexp.MustCompile(`(?s)<!--.*?-->`)
+	propertyComment = regexp.MustCompile(`(?m)^[ \t]*[#!].*$`)
+)
+
+// withoutComments blanks a file's comments as its own language writes them,
+// keeping every line break: properties files' # and ! lines, XML's <!-- -->,
+// none in JSON, and // and /* */ in the rest.
+func withoutComments(rel, text string) string {
+	blank := func(m string) string {
+		return strings.Map(func(r rune) rune {
+			if r == '\n' {
+				return r
+			}
+			return ' '
+		}, m)
+	}
+	switch path.Ext(rel) {
+	case ".properties":
+		return propertyComment.ReplaceAllStringFunc(text, blank)
+	case ".plist", ".xml":
+		return xmlComment.ReplaceAllStringFunc(text, blank)
+	case ".json":
+		return text
+	}
+	return blankComments(text)
 }

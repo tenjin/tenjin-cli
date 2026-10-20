@@ -347,7 +347,7 @@ func (r *runner) checkProcessed(t *project.Target, src source, c *devicelog.Requ
 	var keys []keyLiteral
 	seen := map[string]bool{}
 	for _, b := range t.Builds {
-		candidates, _ := r.candidateKeys(src, b.ID, t.SeveralBuilds())
+		candidates, _, _ := r.candidateKeys(t, src, b.ID, t.SeveralBuilds())
 		for _, k := range candidates {
 			if !seen[k.Value] {
 				seen[k.Value] = true
@@ -356,7 +356,7 @@ func (r *runner) checkProcessed(t *project.Target, src source, c *devicelog.Requ
 		}
 	}
 	if len(t.Builds) == 0 {
-		keys, _ = r.candidateKeys(src, string(t.Platform), false)
+		keys, _, _ = r.candidateKeys(t, src, string(t.Platform), false)
 	}
 	unchecked := func(why string) {
 		r.add(Finding{
