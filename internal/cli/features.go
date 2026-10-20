@@ -70,6 +70,7 @@ func containsString(values []string, v string) bool {
 // Whichever it is, the choice is said back.
 func (s *setup) chooseFeatures(p *project.Project) error {
 	if s.features != nil {
+		s.say("\nIntegrating: %s (--features).", featureList(s.features))
 		return nil
 	}
 	chosen := map[string]bool{}
