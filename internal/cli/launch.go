@@ -92,9 +92,10 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		raw, from, err := readLaunch(s.cmd.Context(), s.env, p, platform, s.serial, mark)
 		var unavailable *devicelog.Unavailable
 		if errors.As(err, &unavailable) {
-			s.say("%s %s", s.style.Yellow("!"), unavailable.Reason)
+			// Device names come from the device.
+			s.say("%s %s", s.style.Yellow("!"), render.Clean(unavailable.Reason))
 			if unavailable.Fix != "" {
-				s.say("  %s", unavailable.Fix)
+				s.say("  %s", render.Clean(unavailable.Fix))
 			}
 			continue
 		}

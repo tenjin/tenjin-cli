@@ -173,7 +173,7 @@ otherwise. With --strict, warnings count too.`,
 					return err
 				}
 				if err := fixer.writeGivenKeys(p); err != nil {
-					fixer.say("%s %v", fixer.style.Yellow("!"), err)
+					fixer.say("%s %s", fixer.style.Yellow("!"), render.Clean(err.Error()))
 				}
 				vopts.Device = nil
 				report = verify.Run(cmd.Context(), p, vopts)

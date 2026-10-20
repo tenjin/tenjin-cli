@@ -8,6 +8,7 @@ import (
 
 	"github.com/tenjin/tenjin-cli/internal/clierr"
 	"github.com/tenjin/tenjin-cli/internal/project"
+	"github.com/tenjin/tenjin-cli/internal/render"
 )
 
 // addFeaturesFlag adds --features; verb says what is done with them, such as
@@ -117,7 +118,7 @@ func (s *setup) listFeatures(p *project.Project, chosen map[string]bool) {
 		case len(f.Evidence) > 0:
 			var why []string
 			for _, e := range f.Evidence {
-				why = append(why, e.What+" in "+e.File)
+				why = append(why, render.Clean(e.What+" in "+e.File))
 			}
 			line += s.style.Dim("  (" + strings.Join(why, "; ") + ")")
 		}
