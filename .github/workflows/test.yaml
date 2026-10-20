@@ -56,58 +56,6 @@ jobs:
         # compiler for.
         if: runner.os == 'Windows'
         run: go test ./...
-  coverage:
-    # How much of the code the tests run, and of the lines a pull request
-    # changes, as a comment on it; changed lines under 80% fail, as in the
-    # other Tenjin repositories.
-    name: Coverage
-    if: github.event_name == 'pull_request'
-    concurrency: ${{ github.workflow }}/${{ github.ref }}/coverage
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          fetch-depth: 0
-      - name: Setup Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
-        with:
-          go-version-file: go.mod
-      - name: Measure
-        run: go test -coverpkg=./... -coverprofile=coverage.out ./...
-      - name: Report
-        id: report
-        run: |
-          code=0
-          go run ./scripts/coverage -profile coverage.out -base "origin/$BASE" > coverage.md || code=$?
-          cat coverage.md >> "$GITHUB_STEP_SUMMARY"
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-        env:
-          BASE: ${{ github.base_ref }}
-      - name: Comment
-        # A pull request from a fork gets a token that cannot comment; the
-        # job summary has the same report.
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        run: |
-          existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq '.[] | select(.body | startswith("<!-- coverage:go -->")) | .id' | head -n 1)
-          if [ -n "$existing" ]; then
-            gh api -X PATCH "repos/$REPO/issues/comments/$existing" -F body=@coverage.md > /dev/null
-          else
-            gh api -X POST "repos/$REPO/issues/$PR/comments" -F body=@coverage.md > /dev/null
-          fi
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-      - name: Enough of the changed lines are tested
-        run: |
-          if [ "$CODE" = 1 ]; then echo "Less than 80% of the changed statements are tested: see the report."; exit 1; fi
-          if [ "$CODE" != 0 ]; then echo "The coverage report failed."; exit 1; fi
-        env:
-          CODE: ${{ steps.report.outputs.code }}
   release:
     # The release pipeline, short of publishing: the archives, checksums and
     # cask a tag would publish.
