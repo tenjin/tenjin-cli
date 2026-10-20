@@ -61,6 +61,15 @@ func TestNoArgsPrintsHelp(t *testing.T) {
 	if lines := strings.Count(stdout, "\n"); code != 0 || lines > 25 || !strings.Contains(stdout, "tenjin setup") || !strings.Contains(stdout, "tenjin --help") {
 		t.Errorf("landing: exit = %d, %d lines:\n%s", code, lines, stdout)
 	}
+	// The landing is prose: asked for JSON, there is no result to give, so
+	// stdout stays empty and the error is JSON.
+	for _, args := range [][]string{{"--json"}, {"-o", "json"}} {
+		code, stdout, stderr := h.run(args...)
+		var e struct{ Error struct{ Code string } }
+		if code != 2 || stdout != "" || json.Unmarshal([]byte(stderr), &e) != nil || e.Error.Code != "usage" {
+			t.Errorf("%v: exit = %d, stdout = %q, stderr = %q", args, code, stdout, stderr)
+		}
+	}
 	code, stdout, _ = h.run("project")
 	if code != 0 || !strings.Contains(stdout, "Usage:") || !strings.Contains(stdout, "Use \"tenjin") {
 		t.Errorf("project: exit = %d, stdout = %q", code, stdout)
