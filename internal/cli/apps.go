@@ -93,8 +93,15 @@ func writeAppDetail(w io.Writer, a appDetail) error {
 		events = "being received"
 	}
 	_, err := fmt.Fprintf(w, "Name       %s\nPlatform   %s\nBundle ID  %s\nApp ID     %s\nEvents     %s\nSDK keys   %s\n",
-		a.Name, a.Platform, a.BundleID, a.ID, events, a.DashboardURL)
+		oneLine(a.Name), oneLine(a.Platform), oneLine(a.BundleID), oneLine(a.ID), events, oneLine(a.DashboardURL))
 	return err
+}
+
+// oneLine is a value from the API as it reads on one line of a terminal.
+// Anyone in the organization can name an app, and a name could otherwise
+// carry escape sequences, or a line break that passes for another field.
+func oneLine(s string) string {
+	return strings.NewReplacer("\t", " ", "\n", " ").Replace(render.Clean(s))
 }
 
 func newAppsGetCmd(opts *options, env *environment) *cobra.Command {
@@ -176,7 +183,7 @@ ensure' to get the app whether or not it exists.`,
 				return err
 			}
 			if !created {
-				return clierr.New(clierr.AlreadyExists, "an app with the bundle ID %s on %s already exists: %s (%s)", app.BundleID, app.Platform, app.Name, app.ID).
+				return clierr.New(clierr.AlreadyExists, "an app with the bundle ID %s on %s already exists: %s (%s)", app.BundleID, app.Platform, oneLine(app.Name), app.ID).
 					WithHint("Use it as it is, or run 'tenjin apps ensure' to get the app whether or not it exists.")
 			}
 			detail := appDetail{App: *app, DashboardURL: env.endpoints.SDKKeysURL(app.ID)}
@@ -260,9 +267,9 @@ To write a key into a project, leave a placeholder where it belongs and run
 			}
 			var b strings.Builder
 			if result.Available {
-				fmt.Fprintf(&b, "SDK keys of %s (%s, %s):\n", app.Name, app.Platform, app.BundleID)
+				fmt.Fprintf(&b, "SDK keys of %s (%s, %s):\n", oneLine(app.Name), oneLine(app.Platform), oneLine(app.BundleID))
 				for _, k := range result.Keys {
-					fmt.Fprintf(&b, "  %s  %s\n", k.Masked, k.Name)
+					fmt.Fprintf(&b, "  %s  %s\n", oneLine(k.Masked), oneLine(k.Name))
 				}
 				if len(result.Keys) == 0 {
 					b.WriteString("  none yet\n")
@@ -270,7 +277,7 @@ To write a key into a project, leave a placeholder where it belongs and run
 				b.WriteString("To write one into a project, leave a placeholder where it belongs and run tenjin setup. ")
 				b.WriteString("To copy one yourself:\n")
 			} else {
-				fmt.Fprintf(&b, "To get the SDK key of %s (%s, %s):\n", app.Name, app.Platform, app.BundleID)
+				fmt.Fprintf(&b, "To get the SDK key of %s (%s, %s):\n", oneLine(app.Name), oneLine(app.Platform), oneLine(app.BundleID))
 			}
 			for i, step := range result.Instructions {
 				fmt.Fprintf(&b, "  %d. %s\n", i+1, step)
@@ -302,7 +309,7 @@ func writeApps(w io.Writer, apps []tenjinapi.App) error {
 		if a.SendingEvents {
 			events = "yes"
 		}
-		rows = append(rows, []string{a.Name, a.Platform, a.BundleID, events, a.ID})
+		rows = append(rows, []string{oneLine(a.Name), oneLine(a.Platform), oneLine(a.BundleID), events, oneLine(a.ID)})
 	}
 	return render.WriteTable(w, render.NewStyler(w), []string{"name", "platform", "bundle id", "events", "id"}, rows)
 }
@@ -352,7 +359,7 @@ creation, so creating asks for confirmation unless --yes is given.`,
 				verb = "Created"
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "%s %s (%s, %s)\nApp ID  %s\nSDK key %s\n",
-				verb, result.Name, result.Platform, result.BundleID, result.ID, env.endpoints.SDKKeysURL(result.ID))
+				verb, oneLine(result.Name), oneLine(result.Platform), oneLine(result.BundleID), oneLine(result.ID), oneLine(env.endpoints.SDKKeysURL(result.ID)))
 			return err
 		},
 	}

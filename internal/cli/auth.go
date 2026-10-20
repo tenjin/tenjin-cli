@@ -45,7 +45,7 @@ in the dashboard.`,
 				return render.WriteJSON(cmd.OutOrStdout(), status)
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Signed in to %s (%s). The session is saved in %s.\n",
-				status.OrganizationName, status.Environment, location)
+				oneLine(status.OrganizationName), status.Environment, location)
 			return err
 		},
 	}
@@ -158,7 +158,7 @@ func writeStatus(w io.Writer, s session.Status) error {
 		_, err := fmt.Fprintf(w, "Using the access token in TENJIN_API_TOKEN (%s).\n", s.Environment)
 		return err
 	}
-	_, err := fmt.Fprintf(w, "Signed in to %s (%s).\n", s.OrganizationName, s.Environment)
+	_, err := fmt.Fprintf(w, "Signed in to %s (%s).\n", oneLine(s.OrganizationName), s.Environment)
 	if err == nil && s.TokenExpiry != nil {
 		_, err = fmt.Fprintf(w, "API token renews automatically; the current one expires %s.\n", s.TokenExpiry.Local().Format(time.RFC1123))
 	}
