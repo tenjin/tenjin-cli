@@ -28,7 +28,7 @@ func TestThePlaceholderFixNamesTheBuildsPlaceholders(t *testing.T) {
 		want     string
 	}{
 		{"one build", android.With(testproject.Files{activity: strings.Replace(android[activity], testproject.Key, "YOUR_SDK_KEY", 1)}), project.Android,
-			`Replace "YOUR_SDK_KEY" with __TENJIN_ANDROID_SDK_KEY__, then`},
+			`Replace "YOUR_SDK_KEY" with __TENJIN_ANDROID_SDK_KEY__. Then`},
 		{"flavors", multi.With(testproject.Files{activity: strings.Replace(multi[activity], "BuildConfig.TENJIN_SDK_KEY", `"YOUR_SDK_KEY"`, 1)}), project.Android,
 			"with the placeholder of the build it is for (__TENJIN_ANDROID_SDK_KEY__ for the main build, Google Play, __TENJIN_ANDROID_SDK_KEY_AMAZON__ for the amazon build, Amazon Appstore)"},
 		{"both platforms in one codebase", flutter.With(testproject.Files{"lib/main.dart": strings.Replace(flutter["lib/main.dart"], testproject.Key, "YOUR_SDK_KEY", 1)}), "",
