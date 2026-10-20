@@ -204,7 +204,11 @@ func PlanInstall(t Target, loc Location) (Change, error) {
 		change.content = []byte(skillFile())
 	} else {
 		change.Detail = "the section between the tenjin-cli markers; the rest of the file is kept"
-		change.content = []byte(withBlock(string(existing)))
+		content, err := withBlock(string(existing))
+		if err != nil {
+			return Change{}, fmt.Errorf("%s: %w", path, err)
+		}
+		change.content = []byte(content)
 	}
 	switch {
 	case !exists:
@@ -235,7 +239,10 @@ func PlanRemove(t Target, loc Location) (Change, error) {
 		change.remove = true
 		return change, nil
 	}
-	rest, had := withoutBlock(string(existing))
+	rest, had, err := withoutBlock(string(existing))
+	if err != nil {
+		return Change{}, fmt.Errorf("%s: %w", path, err)
+	}
 	switch {
 	case !had:
 		change.Action = Absent
@@ -303,53 +310,76 @@ func Apply(c Change) error {
 }
 
 // withBlock returns content with the section added at the end, or replaced
-// where it stands if it is already there.
-func withBlock(content string) string {
-	if begin, end, ok := findBlock(content); ok {
-		return content[:begin] + strings.TrimSuffix(block(), "\n") + content[end:]
-	}
+// where it stands if it is already there. The line breaks it adds are the
+// ones withoutBlock takes away, so that removing it gives the file back as
+// it was.
+func withBlock(content string) (string, error) {
+	begin, end, ok, err := findBlock(content)
 	switch {
+	case err != nil:
+		return "", err
+	case ok:
+		return content[:begin] + strings.TrimSuffix(block(), "\n") + content[end:], nil
 	case strings.TrimSpace(content) == "":
-		return block()
-	case strings.HasSuffix(content, "\n\n"):
-		return content + block()
+		return block(), nil
 	case strings.HasSuffix(content, "\n"):
-		return content + "\n" + block()
+		return content + "\n" + block(), nil
 	}
-	return content + "\n\n" + block()
+	// A file without a line break at its end gets none after the section.
+	return content + "\n\n" + strings.TrimSuffix(block(), "\n"), nil
 }
 
-// findBlock locates the section, markers included.
-func findBlock(content string) (begin, end int, ok bool) {
-	begin = strings.Index(content, "<!-- tenjin-cli:begin")
-	if begin < 0 {
-		return 0, 0, false
+// findBlock locates the section, markers included. Only whole lines that
+// are the markers count, so that text which merely mentions one is left
+// alone; markers that do not fence exactly one section are an error, and
+// the file is not touched.
+func findBlock(content string) (begin, end int, ok bool, err error) {
+	var begins, ends []int
+	for pos := 0; pos < len(content); {
+		lineEnd := len(content)
+		if i := strings.IndexByte(content[pos:], '\n'); i >= 0 {
+			lineEnd = pos + i
+		}
+		switch strings.TrimSuffix(content[pos:lineEnd], "\r") {
+		case beginMarker:
+			begins = append(begins, pos)
+		case endMarker:
+			ends = append(ends, pos)
+		}
+		pos = lineEnd + 1
 	}
-	length := strings.Index(content[begin:], endMarker)
-	if length < 0 {
-		return 0, 0, false
+	switch {
+	case len(begins) == 0 && len(ends) == 0:
+		return 0, 0, false, nil
+	case len(begins) == 1 && len(ends) == 1 && begins[0] < ends[0]:
+		return begins[0], ends[0] + len(endMarker), true, nil
 	}
-	return begin, begin + length + len(endMarker), true
+	return 0, 0, false, fmt.Errorf("the tenjin-cli marker lines in it do not fence one section (%d begin and %d end lines), so it was left as it is. "+
+		"Remove the section by hand, markers included, then run this again", len(begins), len(ends))
 }
 
 // withoutBlock returns content with the section cut out, and whether it was
-// there. The blank line that set it apart from its surroundings goes too.
-func withoutBlock(content string) (string, bool) {
-	begin, end, ok := findBlock(content)
-	if !ok {
-		return content, false
+// there. The line breaks withBlock added go with it.
+func withoutBlock(content string) (string, bool, error) {
+	begin, end, ok, err := findBlock(content)
+	if err != nil || !ok {
+		return content, false, err
 	}
-	before, after := content[:begin], strings.TrimPrefix(content[end:], "\n")
-	switch {
-	case after == "":
-		// The section was last: leave the file ending in one line break.
-		if before = strings.TrimRight(before, "\n"); before != "" {
-			before += "\n"
+	before, after := content[:begin], content[end:]
+	switch after {
+	case "":
+		// The file had no line break at its end.
+		before = strings.TrimSuffix(before, "\n\n")
+	case "\n":
+		before, after = strings.TrimSuffix(before, "\n"), ""
+	default:
+		// Between other text: the blank line that set it apart goes too.
+		after = strings.TrimPrefix(after, "\n")
+		if strings.HasSuffix(before, "\n\n") && strings.HasPrefix(after, "\n") {
+			after = after[1:]
 		}
-	case strings.HasSuffix(before, "\n\n") && strings.HasPrefix(after, "\n"):
-		after = after[1:]
 	}
-	return before + after, true
+	return before + after, true, nil
 }
 
 func contains(values []string, v string) bool {
