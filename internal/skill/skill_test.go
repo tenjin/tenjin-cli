@@ -133,8 +133,12 @@ func TestAgentsFileKeepsEverythingElse(t *testing.T) {
 	cases := []struct{ name, before, after string }{
 		{"no file", "", ""},
 		{"ends with a newline", "# Notes\n\nUse tabs.\n", "# Notes\n\nUse tabs.\n"},
-		{"no trailing newline", "# Notes", "# Notes\n"},
+		{"no trailing newline", "# Notes", "# Notes"},
+		{"ends with a blank line", "# Notes\n\n", "# Notes\n\n"},
 		{"windows line endings", "# Notes\r\n\r\nUse tabs.\r\n", "# Notes\r\n\r\nUse tabs.\r\n"},
+		// Text that only mentions a marker is the developer's, not a section.
+		{"mentions the markers", "The CLI writes between `<!-- tenjin-cli:begin` and\n<!-- tenjin-cli:end --> lines.\n\nKeep this.\n",
+			"The CLI writes between `<!-- tenjin-cli:begin` and\n<!-- tenjin-cli:end --> lines.\n\nKeep this.\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -155,7 +159,7 @@ func TestAgentsFileKeepsEverythingElse(t *testing.T) {
 			if !strings.HasPrefix(string(raw), tc.before) || !strings.Contains(string(raw), "tenjin doctor --json") {
 				t.Errorf("after install:\n%.200s", raw)
 			}
-			if strings.Count(string(raw), "tenjin-cli:begin") != 1 {
+			if strings.Count(string(raw), beginMarker) != 1 {
 				t.Error("the section is not there exactly once")
 			}
 			// Installing again replaces the section; it does not add another.
@@ -178,7 +182,7 @@ func TestAgentsFileKeepsEverythingElse(t *testing.T) {
 func TestAgentsFileSectionInTheMiddleIsReplacedInPlace(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "AGENTS.md")
-	old := "# Top\n\n<!-- tenjin-cli:begin (an older wording) -->\nold instructions\n<!-- tenjin-cli:end -->\n\n# Bottom\n"
+	old := "# Top\n\n" + beginMarker + "\nold instructions\n" + endMarker + "\n\n# Bottom\n"
 	if err := os.WriteFile(file, []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -196,6 +200,39 @@ func TestAgentsFileSectionInTheMiddleIsReplacedInPlace(t *testing.T) {
 	raw, _ = os.ReadFile(file)
 	if string(raw) != "# Top\n\n# Bottom\n" {
 		t.Errorf("after removal = %q", raw)
+	}
+}
+
+// Markers that do not fence one section are not guessed at: install and
+// removal refuse, and the file stays as it was.
+func TestAgentsFileWithBrokenMarkersIsLeftAlone(t *testing.T) {
+	cases := map[string]string{
+		"a begin line only": "# Notes\n\n" + beginMarker + "\nmy own text\n",
+		"an end line only":  "# Notes\n" + endMarker + "\nmy own text\n",
+		"two sections":      beginMarker + "\na\n" + endMarker + "\n\nmine\n\n" + beginMarker + "\nb\n" + endMarker + "\n",
+		"end before begin":  endMarker + "\nmine\n" + beginMarker + "\n",
+	}
+	for name, content := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			file := filepath.Join(dir, "AGENTS.md")
+			if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			agents, loc := target(t, "agents-md"), Location{ProjectDir: dir}
+			if _, err := PlanInstall(agents, loc); err == nil || !strings.Contains(err.Error(), "do not fence one section") || !strings.Contains(err.Error(), file) {
+				t.Errorf("install: err = %v", err)
+			}
+			if _, err := PlanRemove(agents, loc); err == nil || !strings.Contains(err.Error(), "Remove the section by hand") {
+				t.Errorf("remove: err = %v", err)
+			}
+			if _, _, err := Check(agents, loc); err == nil {
+				t.Error("status: no error")
+			}
+			if raw, _ := os.ReadFile(file); string(raw) != content {
+				t.Errorf("the file was changed: %q", raw)
+			}
+		})
 	}
 }
 

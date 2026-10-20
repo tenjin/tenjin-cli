@@ -197,3 +197,23 @@ func TestAgentInstallTakesCodex(t *testing.T) {
 		t.Errorf("AGENTS.md not written: %v", err)
 	}
 }
+
+// An AGENTS.md whose markers do not fence one section is refused as it is:
+// guessing could remove the developer's own text.
+func TestAgentInstallLeavesBrokenMarkersAlone(t *testing.T) {
+	h, dir := newHarness(t), t.TempDir()
+	file := filepath.Join(dir, "AGENTS.md")
+	content := "# Notes\n\n<!-- tenjin-cli:begin (written by `tenjin agent install`; edits are overwritten) -->\nmy own text\n"
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range []string{"install", "uninstall"} {
+		code, stdout, stderr := h.run("agent", command, dir, "--agent", "codex", "--yes")
+		if code != 1 || stdout != "" || !strings.Contains(stderr, "do not fence one section") {
+			t.Errorf("%s: exit = %d, stdout = %q, stderr = %q", command, code, stdout, stderr)
+		}
+	}
+	if raw, _ := os.ReadFile(file); string(raw) != content {
+		t.Errorf("AGENTS.md was changed: %q", raw)
+	}
+}
