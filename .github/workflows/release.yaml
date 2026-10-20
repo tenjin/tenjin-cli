@@ -9,7 +9,7 @@ on:
     secrets:
       CODE_OPS_APP_PRIVATE_KEY:
         required: true
-  # To run a failed release again, while it is still a draft.
+  # To run a failed release again, from main, while it is still a draft.
   workflow_dispatch:
     inputs:
       tag:
@@ -33,13 +33,47 @@ jobs:
     name: Release
     needs: test
     runs-on: ubuntu-latest
+    # Its protection rules (who approves, which branch may deploy) are the
+    # repository's gate on what becomes the latest release.
+    environment: release
+    concurrency: release
     steps:
-      - name: Token for the tap
-        # The organization's Code Ops app, as the SDK releases use it: a token
-        # for tenjin/homebrew-tap alone, which expires within the hour. It is
-        # made before anything is published, so a missing app or permission
-        # stops the release here and not between the release and its cask.
-        id: tap-token
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - name: The tag is a draft release of a commit on main
+        # GoReleaser fills the draft named after the tag. Without one it makes
+        # a new release, so a run for a published tag would add a second
+        # release and a cask that does not match the first one's archives.
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "Releases run from main, not $GITHUB_REF."; exit 1
+          fi
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "$TAG is not a version tag such as v0.1.0."; exit 1
+          fi
+          if ! git merge-base --is-ancestor "refs/tags/$TAG" origin/main; then
+            echo "$TAG is not a commit on main."; exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate > releases.json
+          drafts=$(jq -s --arg tag "$TAG" '[add[] | select(.tag_name == $tag and .name == $tag and .draft)] | length' releases.json)
+          published=$(jq -s --arg tag "$TAG" '[add[] | select((.tag_name == $tag or .name == $tag) and (.draft | not))] | length' releases.json)
+          if [ "$published" != 0 ]; then
+            echo "$TAG is already published. A release is made once; fix forward with the next version."; exit 1
+          fi
+          if [ "$drafts" != 1 ]; then
+            echo "Expected one draft release named $TAG, with that tag, and found $drafts. Release Please makes it when its pull request is merged."; exit 1
+          fi
+        env:
+          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: The tap can be reached
+        # The organization's Code Ops app, as the SDK releases use it, limited
+        # to tenjin/homebrew-tap. Checked before anything is published, so a
+        # missing app or permission stops the release here; the cask job
+        # makes its own token.
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ vars.CODE_OPS_APP_ID }}
@@ -48,16 +82,13 @@ jobs:
           repositories: homebrew-tap
           permission-contents: write
           permission-pull-requests: write
-      - name: Checkout
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
-          ref: ${{ inputs.tag }}
-          fetch-depth: 0
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
       - name: Release
+        # Fills the draft with the archives and checksums, and writes the cask
+        # to dist without pushing it.
         uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a # v6.4.0
         with:
           distribution: goreleaser
@@ -66,7 +97,6 @@ jobs:
         env:
           GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_TOKEN: ${{ steps.tap-token.outputs.token }}
       - name: Attest
         # Anyone can check a download came from this workflow:
         # gh attestation verify <archive> --repo tenjin/tenjin-cli
@@ -76,11 +106,79 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
             dist/checksums.txt
+      - name: Keep the cask
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cask
+          path: dist/homebrew/Casks/tenjin.rb
+          if-no-files-found: error
+          overwrite: true
       - name: Publish
-        # GoReleaser fills release-please's draft and leaves it a draft, so
-        # the release goes public, and becomes the latest the install scripts
-        # and the update notice find, only once its archives and cask exist.
+        # The release goes public, and becomes the latest the install scripts
+        # and the update notice find, only once its archives are uploaded and
+        # attested.
         run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
         env:
           TAG: ${{ inputs.tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  cask:
+    # Proposed only once the release is public, so the tap's checks can
+    # download what the cask names, and nobody can merge a cask for a
+    # release that never went out. Its own job: if it fails, re-running the
+    # failed jobs proposes it again without touching the published release.
+    name: Homebrew cask
+    needs: release
+    # Pre-releases stay out of the tap.
+    if: ${{ !contains(inputs.tag, '-') }}
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Token for the tap
+        # Expires within the hour.
+        id: tap-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ vars.CODE_OPS_APP_ID }}
+          private-key: ${{ secrets.CODE_OPS_APP_PRIVATE_KEY }}
+          owner: tenjin
+          repositories: homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Fetch the cask
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: cask
+      - name: Propose the cask
+        # What GoReleaser does for a cask pull request: a branch from the
+        # tap's main, the file committed through the contents API (so it is
+        # signed as the app), and a pull request, each skipped when an earlier
+        # run already made it. The tap's main is protected; someone merges it.
+        run: |
+          branch="tenjin-${TAG#v}"
+          message="chore: update tenjin to $TAG"
+          if ! gh api "repos/$TAP/branches/$branch" > /dev/null 2>&1; then
+            main=$(gh api "repos/$TAP/git/ref/heads/main" --jq .object.sha)
+            gh api -X POST "repos/$TAP/git/refs" -f ref="refs/heads/$branch" -f sha="$main" > /dev/null
+          fi
+          sha=""
+          if gh api "repos/$TAP/contents/$CASK?ref=$branch" > current.json 2> /dev/null; then
+            sha=$(jq -r .sha current.json)
+            if jq -r .content current.json | base64 -d | cmp -s - tenjin.rb; then sha=same; fi
+          fi
+          if [ "$sha" != same ]; then
+            content=$(base64 -w 0 tenjin.rb)
+            set -- -f message="$message" -f branch="$branch" -f content="$content"
+            if [ -n "$sha" ]; then set -- "$@" -f sha="$sha"; fi
+            gh api -X PUT "repos/$TAP/contents/$CASK" "$@" > /dev/null
+          fi
+          open=$(gh api "repos/$TAP/pulls?head=${TAP%%/*}:$branch&base=main&state=open" --jq length)
+          if [ "$open" = 0 ]; then
+            body=$(printf '**What changes, and why:**\n\n- The cask for [tenjin %s](%s), published.\n\n**How it was tested:**\n\n- The release workflow tested the tagged commit on macOS, Linux and Windows, and installed this cask from a snapshot of it.\n' \
+              "$TAG" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG")
+            gh api -X POST "repos/$TAP/pulls" -f title="$message" -f head="$branch" -f base=main -f body="$body" --jq .html_url
+          fi
+        env:
+          TAG: ${{ inputs.tag }}
+          TAP: tenjin/homebrew-tap
+          CASK: Casks/tenjin.rb
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
