@@ -182,6 +182,46 @@ func TestReadAndroid(t *testing.T) {
 	})
 }
 
+// The mark is the newest line of the whole log, read without the tag filter:
+// logcat applies -t before it filters by tag, so the SDK's own newest line
+// cannot be asked for.
+func TestAndroidMarkReadsTheWholeLog(t *testing.T) {
+	adb := &fakeADB{devices: "List of devices attached\nemulator-5554\tdevice\n\n"}
+	run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if _, err := adb.run(ctx, name, args...); err != nil || len(args) == 1 {
+			return []byte(adb.devices), err
+		}
+		return []byte("--------- beginning of main\n10-01 21:30:00.000 I/ActivityManager(  612): Displayed com.android.settings/.Settings\n"), nil
+	}
+	if got := AndroidMark(context.Background(), run, "adb", ""); got != "10-01 21:30:00.000" {
+		t.Errorf("mark = %q", got)
+	}
+	if got := strings.Join(adb.calls[1], " "); got != "-s emulator-5554 logcat -d -t 1 -v time" {
+		t.Errorf("logcat call = %q", got)
+	}
+}
+
+func TestSince(t *testing.T) {
+	log := "--------- beginning of main\n" +
+		"10-01 21:55:02.319 D/TenjinSDK(17352): earlier\n" +
+		"10-01 21:56:00.000 D/TenjinSDK(17352): new\n" +
+		"--------- beginning of system\n" +
+		"10-01 21:56:00.001 D/TenjinSDK(17352): newer\n"
+	if got := string(Since([]byte(log), "10-01 21:55:02.319")); got != "10-01 21:56:00.000 D/TenjinSDK(17352): new\n--------- beginning of system\n10-01 21:56:00.001 D/TenjinSDK(17352): newer\n" {
+		t.Errorf("since the mark:\n%s", got)
+	}
+	if got := string(Since([]byte(log), "")); got != log {
+		t.Errorf("no mark:\n%s", got)
+	}
+	// The format has no year: a January line comes after a December mark.
+	if got := string(Since([]byte("01-01 00:00:01.000 D/TenjinSDK(1): new year\n"), "12-31 23:59:59.000")); !strings.Contains(got, "new year") {
+		t.Errorf("across the year: %q", got)
+	}
+	if got := string(Since([]byte("12-31 23:59:58.000 D/TenjinSDK(1): old year\n"), "01-01 00:00:01.000")); got != "" {
+		t.Errorf("before the mark, across the year: %q", got)
+	}
+}
+
 func TestFindADB(t *testing.T) {
 	notOnPath := func(string) (string, error) { return "", errors.New("not found") }
 

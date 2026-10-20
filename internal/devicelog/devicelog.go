@@ -111,31 +111,49 @@ func lineTime(line string) string {
 	return ""
 }
 
-// After returns the part of a log that comes after its last line equal to
-// mark: what a device logged since mark was its newest line. When mark is
-// empty or no longer in the log, the whole log is new.
-func After(raw []byte, mark string) []byte {
+// Since returns the lines of a logcat log written after mark, a time as
+// AndroidMark gives it. A line without a time, such as logcat's
+// "--------- beginning of main", goes with the line before it. When mark is
+// empty, the whole log is new.
+func Since(raw []byte, mark string) []byte {
 	if mark == "" {
 		return raw
 	}
-	lines := strings.Split(string(raw), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.TrimRight(lines[i], "\r") == mark {
-			return []byte(strings.Join(lines[i+1:], "\n"))
+	var kept []string
+	keep := false
+	for _, line := range strings.Split(string(raw), "\n") {
+		if t := lineTime(line); t != "" {
+			keep = later(t, mark)
+		}
+		if keep {
+			kept = append(kept, line)
 		}
 	}
-	return raw
+	return []byte(strings.Join(kept, "\n"))
 }
 
-// LastLine is the newest non-empty line of a log, to pass to After later.
-func LastLine(raw []byte) string {
-	lines := strings.Split(strings.TrimRight(string(raw), "\r\n"), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		if line := strings.TrimRight(lines[i], "\r"); strings.TrimSpace(line) != "" {
-			return line
+// newestTime is the latest time on any line of a logcat log, or "".
+func newestTime(raw []byte) string {
+	newest := ""
+	for _, line := range strings.Split(string(raw), "\n") {
+		if t := lineTime(line); t != "" && (newest == "" || later(t, newest)) {
+			newest = t
 		}
 	}
-	return ""
+	return newest
+}
+
+// later reports whether logcat time a is after b. Logcat's "time" format
+// (10-02 15:07:34.121) has no year, so a January line is after a December
+// mark.
+func later(a, b string) bool {
+	switch {
+	case strings.HasPrefix(a, "01-") && strings.HasPrefix(b, "12-"):
+		return true
+	case strings.HasPrefix(a, "12-") && strings.HasPrefix(b, "01-"):
+		return false
+	}
+	return a > b
 }
 
 // LastConnect returns the most recent connect request, or nil.

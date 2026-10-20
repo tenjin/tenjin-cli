@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -509,6 +511,8 @@ type harness struct {
 	env   *environment
 	store *session.MemoryStore
 	vars  map[string]string
+	// device is the Android device connectDevice connected, if any.
+	device *fakeDevice
 }
 
 func newHarness(t *testing.T) *harness {
@@ -547,6 +551,8 @@ func newHarness(t *testing.T) *harness {
 // the given text. It returns the adb calls made, for the test to inspect.
 func (h *harness) connectDevice(log string) *[][]string {
 	calls := &[][]string{}
+	device := &fakeDevice{launch: log}
+	h.device = device
 	h.env.lookPath = func(name string) (string, error) {
 		if name == "adb" {
 			return "/opt/android/platform-tools/adb", nil
@@ -558,17 +564,60 @@ func (h *harness) connectDevice(log string) *[][]string {
 		if len(args) == 1 && args[0] == "devices" {
 			return []byte("List of devices attached\nemulator-5554\tdevice\n\n"), nil
 		}
-		// The newest line, which setup notes before asking for a launch: the
-		// log held nothing of the SDK's before it.
-		for _, a := range args {
-			if a == "-t" {
-				return []byte("--------- beginning of main\n"), nil
-			}
-		}
-		return []byte(log), nil
+		return device.logcat(args), nil
 	}
 	return calls
 }
+
+// fakeDevice is an Android device's log buffer, served as logcat serves it.
+type fakeDevice struct {
+	// earlier is what the buffer held before the app's launch, and launch
+	// what the launch logged. The launch comes right after the first look
+	// at the newest line, as when setup asks for one; a read made without
+	// that look finds it there already, as doctor --device does.
+	earlier, launch string
+	marked          bool
+}
+
+// logcat answers `logcat -d [-t n] -v time [-s tag...]` as the real one
+// does: each dump starts with the buffer's divider, and -t takes the newest
+// lines of the whole buffer before the tag filter leaves out other tags.
+func (d *fakeDevice) logcat(args []string) []byte {
+	buffer := d.earlier + d.launch
+	tail, tags := 0, []string(nil)
+	for i, a := range args {
+		switch {
+		case a == "-t" && i+1 < len(args):
+			tail, _ = strconv.Atoi(args[i+1])
+		case a == "-s" && i > 0 && containsString(args[:i], "logcat"):
+			tags = args[i+1:]
+		}
+	}
+	if tail > 0 {
+		if !d.marked {
+			buffer = d.earlier
+		}
+		d.marked = true
+	}
+	lines := strings.Split(strings.TrimRight(buffer, "\n"), "\n")
+	if buffer == "" {
+		lines = nil
+	}
+	if tail > 0 && tail < len(lines) {
+		lines = lines[len(lines)-tail:]
+	}
+	out := "--------- beginning of main\n"
+	for _, line := range lines {
+		if m := logcatTag.FindStringSubmatch(line); len(tags) > 0 && m != nil && !containsString(tags, m[1]) {
+			continue
+		}
+		out += line + "\n"
+	}
+	return []byte(out)
+}
+
+// logcatTag reads the tag of a line in logcat's "time" format.
+var logcatTag = regexp.MustCompile(`^\d{2}-\d{2} [\d:.]+ [VDIWEF]/([^(]+)\(`)
 
 // bootSimulator puts xcrun on the PATH with one iOS simulator booted, whose
 // log is the given text. It returns the simctl calls made.
