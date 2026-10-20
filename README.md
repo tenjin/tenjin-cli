@@ -56,7 +56,7 @@ tenjin setup
 | Windows (PowerShell) | `irm https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.ps1 \| iex` |
 | Anywhere with Go | `go install github.com/tenjin/tenjin-cli/cmd/tenjin@latest` |
 
-Archives for macOS, Linux and Windows (Intel and ARM) are also on the [releases page](https://github.com/tenjin/tenjin-cli/releases), with a `checksums.txt`. Both install scripts check each download against it, and neither needs sudo or administrator rights.
+Archives for macOS, Linux and Windows (Intel and ARM) are also on the [releases page](https://github.com/tenjin/tenjin-cli/releases), with a `checksums.txt`. Both install scripts check each download against it, which catches a damaged download; to check that an archive was built by this repository's release workflow, see [Privacy and security](#privacy-and-security). Neither script needs sudo or administrator rights.
 
 <details>
 <summary>What the install scripts do, and how to change it</summary>
@@ -339,7 +339,7 @@ It holds the time of the last update check and the newest SDK releases it found.
 - **No analytics of its own.** The CLI sends no telemetry. Tenjin's API, like any server, records the requests it gets, with the CLI's version in the User-Agent.
 - **What it contacts:** Tenjin's dashboard, API, collector and Site ID Optimization service for the commands you run; Tenjin's documentation site for `docs search`; GitHub, once a day, for the newest release of the CLI; and, once a day for `doctor`, the public registries of the Tenjin SDKs (Maven Central, pub.dev, npm, GitHub). `--offline` keeps `doctor` from contacting Tenjin and the registries.
 - **Credentials and SDK keys are never printed.** Keys are shown by their last four characters, in tables, JSON, `--verbose` and an agent's report. The data commands show what the dashboard shows you, callback URLs and parameters included.
-- **Downloads can be verified.** Each release's archives carry build provenance: `gh attestation verify tenjin_<version>_<os>_<arch>.tar.gz --repo tenjin/tenjin-cli` shows they were built by this repository's release workflow, from the tagged commit. The install scripts and Homebrew check each archive against the release's checksums.
+- **Downloads can be verified.** Each release's archives carry build provenance, signed by GitHub: `gh attestation verify tenjin_<version>_<os>_<arch>.tar.gz --repo tenjin/tenjin-cli --signer-workflow tenjin/tenjin-cli/.github/workflows/release.yaml` shows an archive was built by this repository's release workflow, and names the commit. The install scripts and Homebrew check each archive against the `checksums.txt` of the same release, so they catch a damaged download, not a release replaced as a whole.
 - **It changes your project only to write an SDK key** where a placeholder was left for it. Code changes are yours or your agent's.
 
 Report a vulnerability privately: see [SECURITY.md](SECURITY.md).
