@@ -2,6 +2,9 @@ package cli
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -46,6 +49,44 @@ func TestSetupDoesNotPassAPastedKeyTheAppMayNotSend(t *testing.T) {
 	lacks(t, stdout, "Tenjin accepts the SDK key …GOOD (from the key you pasted) for com.example.sample, but whether the app sends it could not be read")
 	if strings.Contains(stdout, "✓ Tenjin accepts the SDK key …GOOD") {
 		t.Errorf("the pasted key passed:\n%s", stdout)
+	}
+}
+
+// set-keys writes a key over a placeholder in a Unity scene, and says why it
+// leaves one in a symbolic link, which it does not write through.
+func TestSetKeysInScenesAndLinks(t *testing.T) {
+	scene := "%YAML 1.1\n--- !u!114 &1\nMonoBehaviour:\n  m_Script: {fileID: 11500000, guid: e3e00e20639f4f469350ac04120ef3b0, type: 3}\n  sdkKey: __TENJIN_ANDROID_SDK_KEY__\n"
+	dir := testproject.Write(t, testproject.Unity().With(testproject.Files{"Assets/Scenes/Main.unity": scene}))
+	h := newHarness(t)
+	code, stdout, _ := h.run("project", "set-keys", dir, "--offline", "--sdk-key", "android="+goodKey)
+	raw, _ := os.ReadFile(filepath.Join(dir, "Assets/Scenes/Main.unity"))
+	if code != 0 || !strings.Contains(stdout, "Wrote the Android SDK key at Assets/Scenes/Main.unity:5") || !strings.Contains(string(raw), "sdkKey: "+goodKey) {
+		t.Errorf("exit = %d\n%s\nscene:\n%s", code, stdout, raw)
+	}
+
+	if runtime.GOOS == "windows" {
+		return
+	}
+	base := testproject.AndroidNative()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	dir = testproject.Write(t, base.Without(activity))
+	outside := filepath.Join(t.TempDir(), "MainActivity.kt")
+	if err := os.WriteFile(outside, []byte(strings.Replace(base[activity], testproject.Key, "__TENJIN_ANDROID_SDK_KEY__", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, filepath.FromSlash(activity))
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr := h.run("project", "set-keys", dir, "--offline", "--sdk-key", "android="+goodKey)
+	if code != 9 || !strings.Contains(stdout, "__TENJIN_ANDROID_SDK_KEY__ at "+activity+":9 is left: it is a symbolic link") || strings.Contains(stdout, "No SDK key placeholders") {
+		t.Errorf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	if raw, _ := os.ReadFile(outside); strings.Contains(string(raw), goodKey) {
+		t.Error("the key was written through the link")
 	}
 }
 

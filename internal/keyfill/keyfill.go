@@ -36,6 +36,10 @@ type Spot struct {
 	Placeholder string `json:"placeholder"`
 	File        string `json:"file"`
 	Line        int    `json:"line"`
+	// Blocked says why the CLI cannot write the key here, when it cannot:
+	// the file is a symbolic link, or a Unity file saved in binary form.
+	// The developer writes it there instead.
+	Blocked string `json:"blocked,omitempty"`
 }
 
 // The files a key can end up in: source code in every language the SDKs
@@ -45,15 +49,19 @@ var exts = []string{
 	".swift", ".m", ".mm", ".h", ".plist", ".xcconfig",
 	".dart", ".js", ".jsx", ".ts", ".tsx", ".vue", ".json",
 	".cs", ".cpp", ".ini", ".xml", ".yaml", ".yml",
+	// Unity scenes, prefabs and assets, where the TenjinObject component
+	// keeps its SDK Key.
+	".unity", ".prefab", ".asset",
 }
 
-const maxFileSize = 2 << 20
+// maxFileSize leaves out what no key is kept in; a Unity scene can be large.
+const maxFileSize = 32 << 20
 
 // Find lists every placeholder in the project, in file order.
 func Find(root string) []Spot {
 	var spots []Spot
 	for _, rel := range files(root) {
-		text, ok := read(root, rel)
+		text, blocked, ok := find(root, rel)
 		if !ok {
 			continue
 		}
@@ -63,20 +71,71 @@ func Find(root string) []Spot {
 				Placeholder: text[m[0]:m[1]],
 				File:        rel,
 				Line:        strings.Count(text[:m[0]], "\n") + 1,
+				Blocked:     blocked,
 			})
 		}
 	}
 	return spots
 }
 
+// Writable returns the spots the CLI can write a key over.
+func Writable(spots []Spot) []Spot {
+	var out []Spot
+	for _, s := range spots {
+		if s.Blocked == "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// unityFile is a Unity scene, prefab or asset. Unity saves them as YAML
+// text, or in a binary form whose strings carry their length, which a key
+// written over a placeholder would break.
+func unityFile(rel string) bool {
+	switch filepath.Ext(rel) {
+	case ".unity", ".prefab", ".asset":
+		return true
+	}
+	return false
+}
+
+// find reads a file for its placeholders, and says why a key cannot be
+// written in it, if it cannot. A symbolic link is read, so that its
+// placeholders are reported, but never written through.
+func find(root, rel string) (text, blocked string, ok bool) {
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	raw, err := readRegular(path)
+	if err != nil {
+		if info, lerr := os.Lstat(path); lerr != nil || info.Mode()&os.ModeSymlink == 0 {
+			return "", "", false
+		}
+		target, serr := os.Stat(path)
+		if serr != nil || !target.Mode().IsRegular() || target.Size() > maxFileSize {
+			return "", "", false
+		}
+		if raw, err = os.ReadFile(path); err != nil {
+			return "", "", false
+		}
+		blocked = "it is a symbolic link, which the Tenjin CLI does not write through"
+	}
+	if !strings.Contains(string(raw), "__TENJIN_") {
+		return "", "", false
+	}
+	if blocked == "" && unityFile(rel) && !strings.HasPrefix(string(raw), "%YAML") {
+		blocked = "Unity saved the file in binary form, which the Tenjin CLI does not write to"
+	}
+	return string(raw), blocked, true
+}
+
 // Fill replaces the placeholders for which a key is given, keyed by
-// placeholder, and returns the spots it filled. A placeholder with no key is
-// left as it is.
+// placeholder, and returns the spots it filled. A placeholder with no key,
+// or in a file it cannot write (Spot.Blocked), is left as it is.
 func Fill(root string, keys map[string]string) ([]Spot, error) {
 	var filled []Spot
 	byFile := map[string][]Spot{}
 	for _, s := range Find(root) {
-		if keys[s.Placeholder] != "" {
+		if keys[s.Placeholder] != "" && s.Blocked == "" {
 			byFile[s.File] = append(byFile[s.File], s)
 		}
 	}

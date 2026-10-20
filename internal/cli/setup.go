@@ -785,7 +785,9 @@ func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
 // of any placeholder it has no key for.
 func (s *setup) fillKeys(p *project.Project, ask bool) error {
 	keys := map[string]string{}
-	builds, _ := placeholderBuilds(p, keyfill.Find(p.Root))
+	// A placeholder the CLI cannot write over is the developer's; the
+	// checks say so.
+	builds, _ := placeholderBuilds(p, keyfill.Writable(keyfill.Find(p.Root)))
 	// Only keys settled in step 4 are written: each was checked against its
 	// own build's app there, and one Tenjin refused never gets this far.
 	for _, pb := range builds {

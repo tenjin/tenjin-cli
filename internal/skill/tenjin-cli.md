@@ -55,7 +55,7 @@ You are not given the SDK keys, and you do not ask for them: a key that passes t
 
 In a cross-platform project, choose between them at runtime, as you would between the real keys. Where a platform has several builds, each build must send its own key, and two builds never share a placeholder: for Android product flavors, put each placeholder in its flavor's block of the build file, for example `buildConfigField("String", "TENJIN_SDK_KEY", "\"<placeholder>\"")`, and read `BuildConfig.TENJIN_SDK_KEY` where the SDK starts; in Flutter, choose by `appFlavor`. Keep the word Tenjin on each line that holds a placeholder, so that `doctor` can find the key there later. If the developer gives you a key anyway, still write the placeholder, and do not repeat the key.
 
-Leave the placeholders in place. The keys go in after you are done, when the developer runs `tenjin setup` (or, in a script of theirs, `tenjin project set-keys`): it fetches each build's key from Tenjin or asks for it, checks it, and writes it over the placeholder, changing nothing else. Neither is yours to run: once a key is written, it is in a file you read.
+Leave the placeholders in place. The keys go in after you are done, when the developer runs `tenjin setup` (or, in a script of theirs, `tenjin project set-keys`): it fetches each build's key from Tenjin or asks for it, checks it, and writes it over the placeholder, changing nothing else. Neither is yours to run: once a key is written, it is in a file you read. Write each placeholder in a regular file of the project, not through a symbolic link: the CLI does not write through one.
 
 ### 5. Integrate, then check
 
