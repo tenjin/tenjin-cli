@@ -99,7 +99,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Attest
         # Anyone can check a download came from this workflow:
-        # gh attestation verify <archive> --repo tenjin/tenjin-cli
+        # gh attestation verify <archive> --repo tenjin/tenjin-cli \
+        #   --signer-workflow tenjin/tenjin-cli/.github/workflows/release.yaml
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
