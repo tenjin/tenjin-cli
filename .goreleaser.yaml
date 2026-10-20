@@ -74,7 +74,7 @@ release:
     owner: tenjin
     name: tenjin-cli
   # Fills the draft release-please made, found by this name (v0.1.0), and
-  # leaves it a draft: release.yaml publishes it after the cask.
+  # leaves it a draft: release.yaml publishes it once it is attested.
   name_template: "{{ .Tag }}"
   use_existing_draft: true
   draft: true
@@ -86,28 +86,15 @@ release:
 
 homebrew_casks:
   - name: tenjin
+    # Written to dist/homebrew/Casks/tenjin.rb and not pushed: GoReleaser
+    # would propose it while the release is still a draft, so release.yaml
+    # proposes it to the tap once the release is published.
     repository:
       owner: tenjin
       name: homebrew-tap
-      # A Code Ops app token (release.yaml). The tap's main is protected, so
-      # each release proposes its cask in a pull request for someone to merge.
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
-      branch: "tenjin-{{ .Version }}"
-      pull_request:
-        enabled: true
-        base:
-          owner: tenjin
-          name: homebrew-tap
-          branch: main
-    # Committed and signed as the app.
-    commit_author:
-      use_github_app_token: true
-    # Also the pull request's title: the tap uses Conventional Commits.
-    commit_msg_template: "chore: update tenjin to {{ .Tag }}"
+    skip_upload: true
     homepage: https://github.com/tenjin/tenjin-cli
     description: Integrate and verify the Tenjin SDK from your terminal
-    # Pre-releases stay out of the tap.
-    skip_upload: auto
     completions:
       bash: completions/tenjin.bash
       zsh: completions/tenjin.zsh
