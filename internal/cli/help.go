@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/tenjin/tenjin-cli/internal/clierr"
 	"github.com/tenjin/tenjin-cli/internal/render"
 )
 
@@ -78,8 +79,15 @@ func colourHelp(text string, style render.Styler, cmd *cobra.Command) string {
 
 // writeLanding is what 'tenjin' alone shows: the wordmark at a terminal, then
 // where each kind of user starts, short enough to read without scrolling.
-// 'tenjin --help' lists every command.
+// 'tenjin --help' lists every command. Asked for JSON or CSV, it is a usage
+// error instead: the landing is prose for people, and there is no result to
+// give a script without a command.
 func writeLanding(root *cobra.Command) error {
+	asJSON, _ := root.Flags().GetBool("json")
+	if output, _ := root.Flags().GetString("output"); asJSON || output != string(render.Table) {
+		return clierr.New(clierr.Usage, "a command is needed: tenjin on its own prints no result").
+			WithHint("Run 'tenjin --help' for the commands.")
+	}
 	w := root.OutOrStdout()
 	style := render.NewStyler(w)
 	var b strings.Builder
