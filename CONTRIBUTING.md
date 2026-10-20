@@ -66,7 +66,7 @@ The reasoning behind the language, the repository and the scope is in [docs/adr/
 
 ## Releases
 
-Releases are made with [release-please](https://github.com/googleapis/release-please), from the titles of the commits on `main`. It keeps a pull request open with the next version and its changelog: a `feat:` raises the minor version, a `fix:` the patch version, and a breaking change (`feat!:`) the minor version until 1.0. `chore:`, `ci:`, `docs:`, `test:` and `refactor:` make no release.
+Releases are made with [release-please](https://github.com/googleapis/release-please), from the titles of the commits on `main`. It keeps a pull request open with the next version and its changelog: a `feat:` raises the minor version, a `fix:` the patch version, and a breaking change (`feat!:`) the minor version until 1.0. `chore:`, `ci:`, `docs:`, `test:` and `refactor:` make no release. Dependabot titles Go module updates `fix(deps):`, so they ship in a patch release, and action updates `ci(deps):`, which ship nothing.
 
 Merging that pull request tags the release as a draft. The release workflow then runs the tests on the tagged commit, builds the archives for macOS, Linux and Windows with GoReleaser (`.goreleaser.yaml`), uploads them with their checksums, attests their build provenance, and publishes the release. Only then does it open a pull request with the new cask in [tenjin/homebrew-tap](https://github.com/tenjin/homebrew-tap); Homebrew users get the release once that is merged. Pre-releases (`v0.2.0-rc.1`) get no cask. The job that publishes runs in the repository's `release` environment, so that environment's protection rules decide who may approve a release.
 
