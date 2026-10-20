@@ -60,8 +60,14 @@ site ID everywhere unless --app, --campaign or --channel narrows it to one.
 				what += ", removing every other rule"
 			}
 			if dryRun {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Would %s. Nothing was sent; the body it would send:\n", lowerFirst(render.Clean(what)))
-				return render.WriteJSON(cmd.OutOrStdout(), map[string]any{"rules": rules, "clear": replace})
+				planned, err := env.api().Plan(func(api *tenjinapi.Client) error {
+					_, err := api.BlockSiteIDs(cmd.Context(), rules, replace)
+					return err
+				})
+				if err != nil {
+					return err
+				}
+				return writeDryRun(cmd, what, planned, map[string]any{"rules": rules, "clear": replace}, false)
 			}
 			if err := confirmChange(cmd, env, yes, what, replace); err != nil {
 				return err
@@ -91,11 +97,18 @@ site ID everywhere unless --app, --campaign or --channel narrows it to one.
 			if err != nil {
 				return err
 			}
+			what := "Remove every rule for " + strings.Join(args, ", ")
 			if reinstateDry {
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Would remove every rule for %s. Nothing was sent; the body it would send:\n", render.Clean(strings.Join(args, ", ")))
-				return render.WriteJSON(cmd.OutOrStdout(), map[string]any{"siteIds": args})
+				planned, err := env.api().Plan(func(api *tenjinapi.Client) error {
+					_, err := api.ReinstateSiteIDs(cmd.Context(), args)
+					return err
+				})
+				if err != nil {
+					return err
+				}
+				return writeDryRun(cmd, what, planned, map[string]any{"siteIds": args}, false)
 			}
-			if err := confirmChange(cmd, env, reinstateYes, "Remove every rule for "+strings.Join(args, ", "), false); err != nil {
+			if err := confirmChange(cmd, env, reinstateYes, what, false); err != nil {
 				return err
 			}
 			doc, err := env.api().ReinstateSiteIDs(cmd.Context(), args)
@@ -147,7 +160,7 @@ site ID everywhere unless --app, --campaign or --channel narrows it to one.
 
 func addChangeFlags(cmd *cobra.Command, yes, dryRun *bool) {
 	cmd.Flags().BoolVarP(yes, "yes", "y", false, "do it without asking")
-	cmd.Flags().BoolVar(dryRun, "dry-run", false, "print the request body and send nothing")
+	cmd.Flags().BoolVar(dryRun, "dry-run", false, "say the request it would send, print its body, and send nothing")
 }
 
 func scope(app, campaign string, byChannel bool, channel uint32) string {

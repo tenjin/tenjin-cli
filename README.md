@@ -165,7 +165,7 @@ For anyone with a Tenjin account, from any directory: none of these reads a proj
 | `tenjin site-ids list` | Site ID Optimization: the site IDs whose installs are not attributed |
 | `tenjin docs search <words>` | Tenjin's documentation, with links |
 
-Changes are commands too. Each sends only the fields given as flags, asks before it changes anything (deletes default to no), and needs `--yes` when nothing can ask. `--dry-run` prints the request body and sends nothing.
+Changes are commands too. Each sends only the fields given as flags, asks before it changes anything (deletes default to no), and needs `--yes` when nothing can ask. `--dry-run` sends nothing: it says on stderr the request it would send, its method and address, and prints the request's body on stdout. A change the API needs two requests for, such as a callback created switched off, says so before either is sent.
 
 | Command | What it does |
 | --- | --- |

@@ -47,6 +47,11 @@ func TestSiteIDs(t *testing.T) {
 	if code, _, _ := signedOut.run("site-ids", "list"); code != 3 {
 		t.Errorf("signed out: exit = %d, want 3", code)
 	}
+	calls := len(h.fake.siteIDCalls)
+	code, stdout, stderr = h.run("site-ids", "reinstate", "bad-site", "--dry-run")
+	if code != 0 || !strings.Contains(stdout, "bad-site") || !strings.Contains(stderr, "POST "+h.fake.srv.URL+"/management.v2.SiteIDFilter/Reinstate with this body") || len(h.fake.siteIDCalls) != calls {
+		t.Errorf("reinstate --dry-run: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
 }
 
 // The documentation is searched without a token.

@@ -19,7 +19,8 @@ import (
 // The write commands: one API write each, its body's fields as flags. Only
 // the flags given are sent, so an update changes those and leaves the rest.
 // Each asks before it writes, at a terminal; elsewhere it needs --yes.
-// --dry-run prints the body it would send and sends nothing.
+// --dry-run says the request it would send, prints its body, and sends
+// nothing.
 
 type fieldKind int
 
@@ -155,9 +156,18 @@ type writeSpec struct {
 	send        func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (tenjinapi.Document, error)
 	// show, instead of send, makes the write and writes what it did in the
 	// CLI's own form: an app's answer holds its shared secrets.
-	show func(cmd *cobra.Command, format render.Format, args []string, body tenjinapi.Fields) error
-	// done is what a person is told after an answer with no resource in it.
-	done string
+	show func(cmd *cobra.Command, format render.Format, api *tenjinapi.Client, args []string, body tenjinapi.Fields) error
+}
+
+// done is what a person is told after an answer with no resource in it.
+func (s writeSpec) done() string {
+	switch {
+	case s.destructive:
+		return "Deleted."
+	case s.update:
+		return "Changed."
+	}
+	return "Created."
 }
 
 func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
@@ -191,33 +201,38 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			write := func(api *tenjinapi.Client) error {
+				if s.show != nil {
+					return s.show(cmd, format, api, args, body)
+				}
+				doc, err := s.send(cmd.Context(), api, args, body)
+				if err != nil {
+					return err
+				}
+				if format == render.JSON {
+					return writeRawJSON(cmd.OutOrStdout(), doc)
+				}
+				if !hasData(doc) {
+					_, err = fmt.Fprintln(cmd.OutOrStdout(), s.done())
+					return err
+				}
+				return writeDocument(cmd.OutOrStdout(), cmd.ErrOrStderr(), render.Table, doc, view{})
+			}
+			// Planned first, so that what the request needs, such as its
+			// IDs, is checked before the question and the dry run.
+			api := env.api()
+			planned, err := api.Plan(write)
+			if err != nil {
+				return err
+			}
 			if dryRun {
 				shown, masked := fields.masked(body)
-				note := ""
-				if masked {
-					note = ", its secrets by their last four characters"
-				}
-				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Would %s. Nothing was sent; the body it would send%s:\n", lowerFirst(render.Clean(what)), note)
-				return render.WriteJSON(cmd.OutOrStdout(), shown)
+				return writeDryRun(cmd, what, planned, shown, masked)
 			}
 			if err := confirmChange(cmd, env, yes, what, s.destructive); err != nil {
 				return err
 			}
-			if s.show != nil {
-				return s.show(cmd, format, args, body)
-			}
-			doc, err := s.send(cmd.Context(), env.api(), args, body)
-			if err != nil {
-				return err
-			}
-			if format == render.JSON {
-				return writeRawJSON(cmd.OutOrStdout(), doc)
-			}
-			if !hasData(doc) {
-				_, err = fmt.Fprintln(cmd.OutOrStdout(), s.done)
-				return err
-			}
-			return writeDocument(cmd.OutOrStdout(), cmd.ErrOrStderr(), render.Table, doc, view{})
+			return write(api)
 		},
 	}
 	fields.bind(cmd.Flags())
@@ -225,8 +240,24 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 		s.flags(cmd.Flags())
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do it without asking")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the request body and send nothing")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "say the request it would send, print its body, and send nothing")
 	return cmd
+}
+
+// writeDryRun says, on stderr, what a write would do and the request it
+// would send, and writes the request's body, if it has one, on stdout.
+func writeDryRun(cmd *cobra.Command, what string, planned *tenjinapi.Request, body any, masked bool) error {
+	request := planned.Method + " " + planned.URL
+	if !planned.HasBody {
+		_, err := fmt.Fprintf(cmd.ErrOrStderr(), "Would %s. Nothing was sent: it would send %s, with no body.\n", lowerFirst(render.Clean(what)), render.Clean(request))
+		return err
+	}
+	note := ""
+	if masked {
+		note = ", its secrets by their last four characters"
+	}
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Would %s. Nothing was sent: it would send %s with this body%s:\n", lowerFirst(render.Clean(what)), render.Clean(request), note)
+	return render.WriteJSON(cmd.OutOrStdout(), body)
 }
 
 // confirmChange asks before a change to the account: at a terminal, with
@@ -325,8 +356,8 @@ bundle ID and platform cannot be changed.`,
 		prepare: func(args []string, body tenjinapi.Fields, said string) (string, error) {
 			return fmt.Sprintf("Change the app %s: %s", args[0], said), nil
 		},
-		show: func(cmd *cobra.Command, format render.Format, args []string, body tenjinapi.Fields) error {
-			app, err := env.api().UpdateApp(cmd.Context(), args[0], body)
+		show: func(cmd *cobra.Command, format render.Format, api *tenjinapi.Client, args []string, body tenjinapi.Fields) error {
+			app, err := api.UpdateApp(cmd.Context(), args[0], body)
 			if err != nil {
 				return err
 			}
@@ -349,8 +380,8 @@ dashboard or the API, and its SDK keys stop being accepted.`,
 		prepare: func(args []string, _ tenjinapi.Fields, said string) (string, error) {
 			return "Delete the app " + args[0], nil
 		},
-		show: func(cmd *cobra.Command, format render.Format, args []string, _ tenjinapi.Fields) error {
-			if err := env.api().DeleteApp(cmd.Context(), args[0]); err != nil {
+		show: func(cmd *cobra.Command, format render.Format, api *tenjinapi.Client, args []string, _ tenjinapi.Fields) error {
+			if err := api.DeleteApp(cmd.Context(), args[0]); err != nil {
 				return err
 			}
 			if format == render.JSON {
@@ -414,7 +445,7 @@ part of a campaign the API lets change.`,
 			},
 		}),
 		writeCmd(opts, env, writeSpec{
-			use: "delete <campaign-id>", short: "Delete a campaign that has not tracked installs", destructive: true, done: "Deleted.",
+			use: "delete <campaign-id>", short: "Delete a campaign that has not tracked installs", destructive: true,
 			long: `Delete a campaign. Tenjin refuses to delete one that has started tracking
 installs.`,
 			args: exactArgs(1, "the campaign's ID, from 'tenjin campaigns list'"),
@@ -496,7 +527,11 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 				use: "create --app <app-id> --template <template-id>", short: "Create a callback from a template",
 				fields: callbackFields(true), flags: needApp,
 				prepare: func(_ []string, body tenjinapi.Fields, said string) (string, error) {
-					return "Create a callback on app " + app + ": " + said, checkApp()
+					what := "Create a callback on app " + app + ": " + said
+					if body["active"] == false {
+						what += ", then switch it off with a second request (Tenjin creates every callback active)"
+					}
+					return what, checkApp()
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, _ []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 					doc, err := api.CreateAppCallback(ctx, app, body)
@@ -514,10 +549,25 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 							} `json:"attributes"`
 						} `json:"data"`
 					}
-					if json.Unmarshal(doc, &created) != nil || !created.Data.Attributes.Active || created.Data.ID == "" {
+					if json.Unmarshal(doc, &created) != nil || created.Data.ID == "" {
+						return nil, clierr.New(clierr.Upstream, "a callback was created on app %s, but Tenjin's answer does not say which, so it was not switched off: it may be active", app).
+							WithHint("Find it with 'tenjin apps callbacks list --app %s', and switch it off with 'tenjin apps callbacks update <callback-id> --app %s --active=false'.", app, app)
+					}
+					if !created.Data.Attributes.Active {
 						return doc, nil
 					}
-					return api.UpdateAppCallback(ctx, app, created.Data.ID, tenjinapi.Fields{"active": false})
+					id := render.Clean(created.Data.ID)
+					switched, err := api.UpdateAppCallback(ctx, app, created.Data.ID, tenjinapi.Fields{"active": false})
+					if err != nil {
+						e := clierr.From(err)
+						kind := e.Kind
+						if kind == clierr.Usage {
+							kind = clierr.Upstream
+						}
+						return nil, clierr.Wrap(kind, err, "the callback %s was created on app %s and is active: switching it off failed: %s", id, app, e.Message).
+							WithHint("Switch it off with 'tenjin apps callbacks update %s --app %s --active=false'. Creating it again would make a second callback.", id, app)
+					}
+					return switched, nil
 				},
 			}),
 			writeCmd(opts, env, writeSpec{
@@ -586,7 +636,7 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 		},
 		"callback-settings": {
 			writeCmd(opts, env, writeSpec{
-				use: "update --app <app-id> --channel <channel-id> --setting <key=value>", short: "Change an app's callback settings for one channel",
+				use: "update --app <app-id> --channel <channel-id> --setting <key=value>", short: "Change an app's callback settings for one channel", update: true,
 				long: `Change the callback settings of an app for one channel: they apply to all of
 its callback groups for that channel. Check the current ones first with
 'tenjin apps callback-settings get'.`,
@@ -642,7 +692,7 @@ func newSavedReportWriteCmds(opts *options, env *environment) []*cobra.Command {
 			},
 		}),
 		writeCmd(opts, env, writeSpec{
-			use: "delete <saved-report-id>", short: "Delete a saved report", destructive: true, done: "Deleted.",
+			use: "delete <saved-report-id>", short: "Delete a saved report", destructive: true,
 			args: exactArgs(1, "the saved report's ID, from 'tenjin saved-reports list'"),
 			prepare: func(args []string, _ tenjinapi.Fields, said string) (string, error) {
 				return "Delete the saved report " + args[0], nil
