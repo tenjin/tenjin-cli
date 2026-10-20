@@ -77,7 +77,7 @@ func (c *Client) siteIDs(ctx context.Context, method string, in any) (Document, 
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("User-Agent", c.UserAgent)
 	httpClient := *c.HTTP
-	httpClient.Transport = limitedBody{next: transportOf(c.HTTP)}
+	httpClient.Transport = c.transport()
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, clierr.Wrap(clierr.Upstream, err, "could not reach Tenjin's Site ID Optimization service: %v", err)

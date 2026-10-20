@@ -529,7 +529,7 @@ func TestAppsCreate(t *testing.T) {
 		}
 		// Tenjin's own explanation of a URL it cannot use is passed on.
 		code, _, stderr = h.run("apps", "create", "--store-url", "https://example.com/app", "--yes")
-		if code != 1 || !strings.Contains(stderr, "store_url could not be resolved") {
+		if code != 11 || !strings.Contains(stderr, "store_url could not be resolved") {
 			t.Errorf("bad URL: exit = %d, stderr = %q", code, stderr)
 		}
 	})
