@@ -149,12 +149,12 @@ type runner struct {
 }
 
 // dropUncheckedBesidePlaceholders leaves out "the key was not checked"
-// where a finding already says the key is a placeholder: there is no key to
-// check, and the placeholder finding says what to do.
+// where a finding already says the key is a placeholder, or has spaces in
+// it: there is no key to check, and that finding says what to do.
 func (r *runner) dropUncheckedBesidePlaceholders() {
 	placeholder := map[project.Platform]bool{}
 	for _, f := range r.report.Findings {
-		if f.ID == "sdk.key.placeholder" || f.ID == "sdk.key.unfilled" {
+		if f.ID == "sdk.key.placeholder" || f.ID == "sdk.key.unfilled" || f.ID == "sdk.key.whitespace" {
 			placeholder[f.Platform] = true
 		}
 	}
