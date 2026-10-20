@@ -303,7 +303,7 @@ Every command except `setup` is built to be driven by a program:
 | 7 | Tenjin is unavailable |
 | 9 | `doctor` found problems |
 | 10 | Already exists |
-| 130 | Stopped with Ctrl-C |
+| 130 | Stopped: Ctrl-C, or SIGTERM or SIGHUP (a closed terminal) |
 
 `--verbose` (`-v`) writes a line to stderr for each request to Tenjin and each program run, with the address, the answer and the time taken. It never shows a credential or a request body, so it is safe to paste into a support request. Requests that fail in transit are retried up to twice when that is safe.
 
