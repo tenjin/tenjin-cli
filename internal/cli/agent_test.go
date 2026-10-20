@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tenjin/tenjin-cli/internal/session"
 	"github.com/tenjin/tenjin-cli/internal/testproject"
 )
 
@@ -383,7 +384,7 @@ func TestSetupIntegratesUsingCodex(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Codex is installed on this machine and can do the integration for you",
-		"it runs in Codex's sandbox: it can change files in this project only, and has no network access",
+		"it runs in Codex's sandbox: it can change files in this project only and has no network access, but it can read files elsewhere on this machine",
 		"Integrate the Tenjin SDK using Codex? [Y/n]",
 		"· edit app/src/main/AndroidManifest.xml",
 		"· run tenjin doctor --offline --json .",
@@ -407,13 +408,56 @@ func TestSetupIntegratesUsingCodex(t *testing.T) {
 	if !strings.Contains(prompt, "run `tenjin doctor --offline --json .`") || !strings.Contains(prompt, "INTERNET permission is missing") {
 		t.Errorf("the task:\n%s", prompt)
 	}
-	for _, want := range []string{"exec\n--json\n", "--sandbox\nworkspace-write\n", "mcp_servers={}", "-C\n" + dir} {
+	for _, want := range []string{
+		"exec\n--json\n", "--sandbox\nworkspace-write\n", "mcp_servers={}", "-C\n" + dir,
+		// Nothing but the project is writable: not /tmp, not $TMPDIR.
+		"sandbox_workspace_write.writable_roots=[]",
+		"sandbox_workspace_write.exclude_slash_tmp=true",
+		"sandbox_workspace_write.exclude_tmpdir_env_var=true",
+	} {
 		if !strings.Contains(args, want) {
 			t.Errorf("args lack %q: %q", want, args)
 		}
 	}
 	if strings.Contains(args, "KEYFORTHEAGENT") || strings.Contains(args, "dangerously") {
 		t.Errorf("args = %q", args)
+	}
+}
+
+// filedStore keeps the sign-in in memory but says it is in a file, as on a
+// machine without a keychain.
+type filedStore struct {
+	*session.MemoryStore
+	path string
+}
+
+func (f filedStore) CredentialsFile(string) string { return f.path }
+
+// Codex's sandbox reads the whole disk, so it is not started where the
+// sign-in is in a file it could read.
+func TestCodexIsNotStartedWhereTheSignInIsInAFile(t *testing.T) {
+	const file = "/home/me/.config/tenjin/credentials-production.json"
+	h, dir := brokenAndroid(t)
+	codex := h.installCodex()
+	h.env.store = filedStore{h.store, file}
+	code, stdout, _ := h.run("setup", dir, "--agent", "codex")
+	if codex.read("args") != "" {
+		t.Fatal("Codex was started")
+	}
+	if code != 9 || !strings.Contains(stdout, "Codex was not started: its sandbox can read files outside this project, and this machine keeps your Tenjin sign-in in a file ("+file+")") ||
+		!strings.Contains(stdout, "Make the changes yourself; 'tenjin sdk guide' prints the integration guide.") {
+		t.Errorf("exit = %d\n%s", code, stdout)
+	}
+
+	// With Claude Code installed too, it is named as the way to go.
+	h.installAgent()
+	code, stdout, _ = h.run("doctor", dir, "--offline", "--agent", "codex")
+	if codex.read("args") != "" || code != 9 || !strings.Contains(stdout, "Use Claude Code instead, with 'tenjin doctor --agent claude'") || strings.Contains(stdout, "Checking again") {
+		t.Errorf("exit = %d\n%s", code, stdout)
+	}
+	// Claude Code keeps to the project, so it starts.
+	if code, stdout, _ := h.run("setup", dir, "--agent", "claude"); code != 0 {
+		t.Errorf("--agent claude: exit = %d\n%s", code, stdout)
 	}
 }
 

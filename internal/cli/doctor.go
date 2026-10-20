@@ -229,6 +229,9 @@ func (s *setup) offerFix(p *project.Project, report *verify.Report) (fixed, offe
 		}
 	}
 	s.helper = helper
+	if s.refuseAgent() {
+		return false, true, nil
+	}
 	if err := s.runAgent(p, report); err != nil {
 		return false, true, err
 	}

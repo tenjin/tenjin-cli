@@ -12,19 +12,25 @@ import (
 // Codex has no list of allowed commands. It is kept to the task by its own
 // sandbox instead: files outside the project cannot be written, and there is
 // no network. So it checks its work with the doctor's offline form; the key
-// check against Tenjin is made afterwards, outside the sandbox.
+// check against Tenjin is made afterwards, outside the sandbox. The sandbox
+// still reads the whole disk, which is why Codex is not started where the
+// Tenjin sign-in is kept in a file (see the CLI's runAgent).
 var codex = driver{
 	id: "codex", name: "Codex", binary: "codex",
-	limits: "it runs in Codex's sandbox: it can change files in this project only, and has no network access; it is told not to commit",
-	doctor: "tenjin doctor --offline --json .",
+	limits:       "it runs in Codex's sandbox: it can change files in this project only and has no network access, but it can read files elsewhere on this machine; it is told not to commit",
+	readsOutside: true,
+	doctor:       "tenjin doctor --offline --json .",
 	args: func(task Task, _ string) []string {
 		return []string{
 			"exec", "--json",
 			"--sandbox", "workspace-write",
 			// Pinned here, so that the developer's own Codex configuration
 			// cannot open the sandbox to the network or to other folders.
+			// Without the last two, /tmp and $TMPDIR stay writable.
 			"-c", "sandbox_workspace_write.network_access=false",
 			"-c", "sandbox_workspace_write.writable_roots=[]",
+			"-c", "sandbox_workspace_write.exclude_slash_tmp=true",
+			"-c", "sandbox_workspace_write.exclude_tmpdir_env_var=true",
 			// A project need not be a Git repository to be integrated.
 			"--skip-git-repo-check",
 			// The developer's connectors have no part in this task. The rest

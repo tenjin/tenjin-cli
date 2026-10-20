@@ -126,3 +126,46 @@ func TestAKeychainThatDoesNotAnswerIsPassedOver(t *testing.T) {
 		t.Errorf("loaded %+v, %v", got, err)
 	}
 }
+
+// Where the sign-in is kept is something a caller can ask: a file is
+// readable by any program the user runs, the keychain is not.
+func TestCredentialsFileSaysWhereTheSignInIs(t *testing.T) {
+	keyring.MockInitWithError(errors.New("no secret service"))
+	dir := t.TempDir()
+	store := newStoreIn(dir)
+	if got := CredentialsFile(store, "production"); got != "" {
+		t.Errorf("nothing stored: %q", got)
+	}
+	if _, err := store.Save(creds()); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "credentials-production.json")
+	if got := CredentialsFile(store, "production"); got != path {
+		t.Errorf("signed in to a file: %q", got)
+	}
+	// Signed out, the file keeps only the client ID, which is no secret.
+	if _, err := store.Save(&Credentials{Environment: "production", ClientID: "client"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := CredentialsFile(store, "production"); got != "" {
+		t.Errorf("signed out: %q", got)
+	}
+	// A file that cannot be read as credentials may still hold a token.
+	if err := os.WriteFile(path, []byte(`{"refresh_token":"tok`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := CredentialsFile(store, "production"); got != path {
+		t.Errorf("an undecodable file: %q", got)
+	}
+
+	keyring.MockInit()
+	if _, err := store.Save(creds()); err != nil {
+		t.Fatal(err)
+	}
+	if got := CredentialsFile(store, "production"); got != "" {
+		t.Errorf("signed in to the keychain: %q", got)
+	}
+	if got := CredentialsFile(&MemoryStore{}, "production"); got != "" {
+		t.Errorf("memory: %q", got)
+	}
+}

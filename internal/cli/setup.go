@@ -717,6 +717,9 @@ func (s *setup) manualGuide(report *verify.Report) {
 // did. A failure here is not fatal: the check that follows is what decides
 // whether the integration works. Only Ctrl-C stops setup here.
 func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
+	if s.refuseAgent() {
+		return nil
+	}
 	// Keys this run wrote go back to their placeholders while the agent
 	// works, and are written again when it is done.
 	if len(s.filled) > 0 {
