@@ -35,6 +35,9 @@ type driver struct {
 	id, name, binary string
 	// limits says, to the person deciding, what the agent can and cannot do.
 	limits string
+	// readsOutside is true when the agent can read files outside the
+	// project, such as the CLI's own session file.
+	readsOutside bool
 	// doctor is the check the agent is told to run on its own work.
 	doctor string
 	// ownSession is true when this package picks the conversation's ID and
@@ -90,6 +93,10 @@ func InsideAgent(getenv func(string) string) bool {
 
 // Limits says what the agent is and is not able to do while it works.
 func (a Agent) Limits() string { return a.limits }
+
+// ReadsOutsideProject reports whether the agent can read files outside the
+// project while it works.
+func (a Agent) ReadsOutsideProject() bool { return a.readsOutside }
 
 // DoctorCommand is the check the agent runs on its own work.
 func (a Agent) DoctorCommand() string { return a.doctor }

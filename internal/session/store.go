@@ -127,6 +127,31 @@ func (s *systemStore) Save(c *Credentials) (string, error) {
 	return path + " (no system keychain is available)", nil
 }
 
+// CredentialsFile returns the file that holds the sign-in to environment,
+// or "" when it is in the system keychain or there is none. A program that
+// can read the user's files, such as a coding agent, can read this one.
+func CredentialsFile(s Store, environment string) string {
+	if f, ok := s.(interface{ CredentialsFile(string) string }); ok {
+		return f.CredentialsFile(environment)
+	}
+	return ""
+}
+
+// CredentialsFile is the store's side of the function above. A file that
+// cannot be decoded counts, since it may still hold a token.
+func (s *systemStore) CredentialsFile(environment string) string {
+	path := s.file(environment)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var c Credentials
+	if json.Unmarshal(b, &c) == nil && c.RefreshToken == "" && c.JWT == "" {
+		return ""
+	}
+	return path
+}
+
 var errKeychainTimeout = errors.New("the system keychain did not answer")
 
 func (s *systemStore) keychainGet(environment string) (string, error) {
