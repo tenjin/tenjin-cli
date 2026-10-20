@@ -288,7 +288,7 @@ Every command except `setup` is built to be driven by a program:
 - A command never prompts when stdin is not a terminal. Anything that creates something needs `--yes` or a flag.
 - A failure with `--json` is written to stderr as `{"error": {"code", "message", "hint"}}`.
 - The JSON of `project detect` and `doctor` is stable: fields are added, never renamed or removed.
-- The data commands (campaigns, channels, reports and the others in [Your Tenjin data](#your-tenjin-data)) print the API's answer as it is.
+- The data commands (campaigns, channels, reports and the others in [Your Tenjin data](#your-tenjin-data)) print the API's answer as it is. The `apps` commands that read or change an app itself (`list`, `get`, `create`, `ensure`, `update`, `delete`) print the CLI's own JSON instead, which leaves out the shared secrets the API returns with an app.
 - `TENJIN_API_TOKEN`, an access token from the dashboard, signs in without a browser.
 
 | Exit code | Meaning |

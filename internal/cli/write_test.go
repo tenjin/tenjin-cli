@@ -179,6 +179,54 @@ func TestWriteAnswers(t *testing.T) {
 	}
 }
 
+// An app's answer holds its shared secrets: a change to an app is shown in
+// the CLI's own form, as 'apps get' shows it, and the secrets it was given
+// are said by their last four characters.
+func TestAppWritesShowNoSecret(t *testing.T) {
+	secrets := []string{"ios-secret-0000-wxyz", "play-public-key-0000-abcd", "amazon-secret-0000", "fb-decryption-0000"}
+	h := newHarness(t)
+	h.signIn()
+	h.fake.writeAnswers = map[string]func(*http.Request) (int, any){
+		"PATCH /v2/apps/" + testApp: func(*http.Request) (int, any) {
+			return http.StatusOK, map[string]any{"data": map[string]any{"id": testApp, "type": "app", "attributes": map[string]any{
+				"name": "New name", "bundle_id": "com.example.sample", "platform": "ios",
+				"ios_shared_secret": secrets[0], "public_key": secrets[1], "amazon_shared_secret": secrets[2], "facebook_referrer_decryption_key": secrets[3],
+			}}}
+		},
+		"DELETE /v2/apps/" + testApp: func(*http.Request) (int, any) {
+			return http.StatusOK, map[string]any{"data": map[string]any{"id": testApp, "type": "app", "attributes": map[string]any{"ios_shared_secret": secrets[0]}}}
+		},
+	}
+	update := []string{"apps", "update", testApp, "--name", "New name", "--ios-shared-secret", secrets[0], "--yes"}
+	for _, args := range [][]string{update, append(update, "--json"), append(update, "--dry-run"), {"apps", "delete", testApp, "--yes"}, {"apps", "delete", testApp, "--yes", "--json"}} {
+		code, stdout, stderr := h.run(args...)
+		if code != 0 {
+			t.Fatalf("%v: exit = %d, stderr = %q", args, code, stderr)
+		}
+		for _, s := range secrets {
+			if strings.Contains(stdout+stderr, s) {
+				t.Errorf("%v shows a secret:\nstdout:\n%s\nstderr:\n%s", args, stdout, stderr)
+			}
+		}
+	}
+	_, stdout, _ := h.run(update...)
+	if !strings.Contains(stdout, "New name") || !strings.Contains(stdout, "com.example.sample") {
+		t.Errorf("update:\n%s", stdout)
+	}
+	_, stdout, _ = h.run(append(update, "--json")...)
+	var app map[string]any
+	if err := json.Unmarshal([]byte(stdout), &app); err != nil || app["name"] != "New name" || app["id"] != testApp || app["dashboard_url"] == nil {
+		t.Errorf("update --json:\n%s", stdout)
+	}
+	_, stdout, stderr := h.run(append(update, "--dry-run")...)
+	if !strings.Contains(stdout, "…wxyz") || !strings.Contains(stderr, "…wxyz") {
+		t.Errorf("dry run:\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
+	}
+	if _, stdout, _ = h.run("apps", "delete", testApp, "--yes", "--json"); !strings.Contains(stdout, `"deleted": true`) {
+		t.Errorf("delete --json:\n%s", stdout)
+	}
+}
+
 // An answer that is neither yes nor no is asked again.
 func TestUnclearAnswerIsAskedAgain(t *testing.T) {
 	h := newHarness(t)

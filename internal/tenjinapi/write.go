@@ -55,24 +55,41 @@ func (c *Client) send(ctx context.Context, call func(cl clients) (*http.Response
 	return Document(raw), nil
 }
 
-// UpdateApp changes an app's fields.
-func (c *Client) UpdateApp(ctx context.Context, id string, f Fields) (Document, error) {
-	app, err := ParseID(id, "app")
+// UpdateApp changes an app's fields and returns the app as the CLI shows it:
+// the API's answer also holds the app's shared secrets.
+func (c *Client) UpdateApp(ctx context.Context, id string, f Fields) (*App, error) {
+	appID, err := ParseID(id, "app")
 	if err != nil {
 		return nil, err
 	}
-	return c.write(ctx, f, func(cl clients, body io.Reader) (*http.Response, error) {
-		return cl.cma.PatchAppsIdWithBody(ctx, app, contentJSON, body)
+	doc, err := c.write(ctx, f, func(cl clients, body io.Reader) (*http.Response, error) {
+		return cl.cma.PatchAppsIdWithBody(ctx, appID, contentJSON, body)
 	})
+	if err != nil {
+		return nil, err
+	}
+	var body struct {
+		Data resource `json:"data"`
+	}
+	if err := json.Unmarshal(doc, &body); err != nil {
+		return nil, clierr.Wrap(clierr.Upstream, err, "the Tenjin API answered the change with something that is not an app")
+	}
+	app := body.Data.app()
+	if app.ID == "" {
+		app.ID = appID.String()
+	}
+	return &app, nil
 }
 
-// DeleteApp soft-deletes an app.
-func (c *Client) DeleteApp(ctx context.Context, id string) (Document, error) {
+// DeleteApp soft-deletes an app. Its answer is not kept: nothing of an app
+// is shown but what App holds.
+func (c *Client) DeleteApp(ctx context.Context, id string) error {
 	app, err := ParseID(id, "app")
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return c.send(ctx, func(cl clients) (*http.Response, error) { return cl.cma.DeleteAppsId(ctx, app) })
+	_, err = c.send(ctx, func(cl clients) (*http.Response, error) { return cl.cma.DeleteAppsId(ctx, app) })
+	return err
 }
 
 // CreateCampaign creates a campaign: name, app_id, and channel_id or
