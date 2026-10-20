@@ -378,7 +378,6 @@ func TestSetupSurvivesAFailingAgent(t *testing.T) {
 func TestSetupIntegratesUsingCodex(t *testing.T) {
 	h, dir := brokenAndroid(t)
 	codex := h.installCodex()
-	h.vars["TENJIN_SDK_KEY"] = "KEYFORTHEAGENT1234567890ABCDEFGH"
 
 	// With one agent installed it is a yes-or-no question, as for Claude Code.
 	code, stdout, stderr := h.typing("", "y").run("setup", dir)
@@ -422,7 +421,7 @@ func TestSetupIntegratesUsingCodex(t *testing.T) {
 			t.Errorf("args lack %q: %q", want, args)
 		}
 	}
-	if strings.Contains(args, "KEYFORTHEAGENT") || strings.Contains(args, "dangerously") {
+	if strings.Contains(args, "dangerously") {
 		t.Errorf("args = %q", args)
 	}
 }
@@ -461,6 +460,43 @@ func TestCodexIsNotStartedWhereTheSignInIsInAFile(t *testing.T) {
 	// Claude Code keeps to the project, so it starts.
 	if code, stdout, _ := h.run("setup", dir, "--agent", "claude"); code != 0 {
 		t.Errorf("--agent claude: exit = %d\n%s", code, stdout)
+	}
+}
+
+func TestCodexIsNotStartedWithAKeyOrTokenGiven(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		vars map[string]string
+	}{
+		{"--sdk-key", []string{"--sdk-key", goodKey}, nil},
+		{"TENJIN_SDK_KEY_ANDROID", nil, map[string]string{"TENJIN_SDK_KEY_ANDROID": goodKey}},
+		{"TENJIN_API_TOKEN", nil, map[string]string{"TENJIN_API_TOKEN": "token"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, dir := brokenAndroid(t)
+			codex := h.installCodex()
+			for k, v := range tc.vars {
+				h.vars[k] = v
+			}
+			_, stdout, stderr := h.run(append([]string{"doctor", dir, "--offline", "--agent", "codex"}, tc.args...)...)
+			if codex.read("args") != "" {
+				t.Fatal("Codex was started")
+			}
+			if !strings.Contains(stdout, "Codex was not started: its sandbox can read outside this project, including what this run of tenjin was given") {
+				t.Errorf("stdout = %s\nstderr = %s", stdout, stderr)
+			}
+			if strings.Contains(stdout+stderr, goodKey) {
+				t.Error("the whole key was printed")
+			}
+		})
+	}
+	// Claude Code keeps to the project, so a given key does not stop it.
+	h, dir := brokenAndroid(t)
+	h.installAgent()
+	if _, stdout, _ := h.run("doctor", dir, "--offline", "--agent", "claude", "--sdk-key", goodKey); strings.Contains(stdout, "was not started") {
+		t.Errorf("Claude Code was refused:\n%s", stdout)
 	}
 }
 

@@ -118,6 +118,27 @@ func TestSetKeysFetchesTheKey(t *testing.T) {
 	}
 }
 
+func TestSetKeysDoesNotRunInsideAnAgent(t *testing.T) {
+	for _, name := range []string{"CLAUDECODE", "CODEX_SANDBOX"} {
+		t.Run(name, func(t *testing.T) {
+			h, dir := agentPlaceholderAndroid(t)
+			app := h.fake.addApp("Sample", "com.example.sample", "android")
+			h.fake.serveKeys(app.ID, goodKey)
+			h.signIn()
+			h.vars[name] = "1"
+
+			code, stdout, stderr := h.run("project", "set-keys", dir, "--json")
+			if code != 2 || stdout != "" || !strings.Contains(stderr, "does not run inside a coding agent") {
+				t.Errorf("exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+			}
+			source, _ := os.ReadFile(filepath.Join(dir, androidActivity))
+			if !strings.Contains(string(source), keyfill.Placeholder(project.Android)) {
+				t.Errorf("a key was written:\n%s", source)
+			}
+		})
+	}
+}
+
 func TestAppsKeysListShowsTheKeysMasked(t *testing.T) {
 	h := newHarness(t)
 	app := h.fake.addApp("Sample", "com.example.sample", "android")
