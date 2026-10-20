@@ -63,21 +63,27 @@ func findADB(lookPath func(string) (string, error), getenv func(string) string, 
 // emulator. serial picks one when several are connected. The error is an
 // *Unavailable when there is nothing to read from.
 func ReadAndroid(ctx context.Context, run Runner, adb, serial string) ([]byte, error) {
-	return readAndroid(ctx, run, adb, serial)
+	return readAndroid(ctx, run, adb, serial, true)
 }
 
-// AndroidMark is the newest of the SDK's lines in a device's log now, or ""
-// when there is none or the device cannot be read. Passed to After with a
-// later read, it leaves only what was logged since.
+// AndroidMark is the time of the newest line in a device's whole log now, as
+// logcat writes it, or "" when the log is empty or the device cannot be read.
+// Passed to Since with a later read, it leaves only what was logged after.
+//
+// The mark is read without the SDK's tag filter: logcat takes the last lines
+// of the buffer (-t) before it filters them by tag, so asking for the SDK's
+// newest line finds nothing once any other app has logged since.
 func AndroidMark(ctx context.Context, run Runner, adb, serial string) string {
-	raw, err := readAndroid(ctx, run, adb, serial, "-t", "1")
+	raw, err := readAndroid(ctx, run, adb, serial, false, "-t", "1")
 	if err != nil {
 		return ""
 	}
-	return LastLine(raw)
+	return newestTime(raw)
 }
 
-func readAndroid(ctx context.Context, run Runner, adb, serial string, extra ...string) ([]byte, error) {
+// readAndroid dumps a device's log, in logcat's "time" format; filtered, it
+// holds the SDK's tags only.
+func readAndroid(ctx context.Context, run Runner, adb, serial string, filtered bool, extra ...string) ([]byte, error) {
 	out, err := run(ctx, adb, "devices")
 	if err != nil {
 		return nil, &Unavailable{
@@ -118,8 +124,10 @@ func readAndroid(ctx context.Context, run Runner, adb, serial string, extra ...s
 
 	// -d dumps what is in the buffer and exits; -s silences every tag but
 	// the ones listed.
-	args := append(append([]string{"-s", serial, "logcat", "-d"}, extra...), "-v", "time", "-s")
-	args = append(args, logcatTags...)
+	args := append(append([]string{"-s", serial, "logcat", "-d"}, extra...), "-v", "time")
+	if filtered {
+		args = append(append(args, "-s"), logcatTags...)
+	}
 	log, err := run(ctx, adb, args...)
 	if err != nil {
 		return nil, &Unavailable{Reason: fmt.Sprintf("adb could not read the log of %s: %s", serial, describe(err))}

@@ -1,12 +1,10 @@
 package cli
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/tenjin/tenjin-cli/internal/devicelog"
 	"github.com/tenjin/tenjin-cli/internal/testproject"
 )
 
@@ -118,24 +116,16 @@ func TestSetupWithoutATerminalLeavesTheLaunchToTheDeveloper(t *testing.T) {
 }
 
 // Step 7 reads only the launch it asked for: an earlier launch's refused
-// connect, still in the device's log, does not stand for it.
+// connect, still in the device's log, does not stand for it. Other apps have
+// logged since that launch, as they do on any device.
 func TestSetupReadsOnlyTheNewLaunch(t *testing.T) {
 	h, dir := correctAndroid(t)
 	h.fake.installs[capturedInstall] = "Organic"
 	launch := readCapturedLog(t)
-	earlier := strings.ReplaceAll(strings.ReplaceAll(launch, "10-01 21:", "10-01 20:"),
-		`{"code":200,"success":true}`, `{"code":401,"message":"invalid api key"}`)
-	h.connectDevice(earlier + launch)
-	run := h.env.run
-	h.env.run = func(ctx context.Context, name string, args ...string) ([]byte, error) {
-		for _, a := range args {
-			if a == "-t" {
-				// Before this launch, the log ended with the earlier one.
-				return []byte(devicelog.LastLine([]byte(earlier)) + "\n"), nil
-			}
-		}
-		return run(ctx, name, args...)
-	}
+	h.connectDevice(launch)
+	h.device.earlier = strings.ReplaceAll(strings.ReplaceAll(launch, "10-01 21:", "10-01 20:"),
+		`{"code":200,"success":true}`, `{"code":401,"message":"invalid api key"}`) +
+		"10-01 21:30:00.000 I/ActivityManager(  612): Displayed com.android.settings/.Settings\n"
 
 	code, stdout, stderr := h.typing("", "").run("setup", dir)
 	if code != 0 {
@@ -144,6 +134,21 @@ func TestSetupReadsOnlyTheNewLaunch(t *testing.T) {
 	lacks(t, stdout, "Tenjin accepted the app's connect request (SDK 1.23.0)", "The integration works end to end.")
 	if strings.Contains(stdout, "invalid api key") {
 		t.Errorf("the earlier launch was read:\n%s", stdout)
+	}
+}
+
+// A launch that sent nothing is not stood in for by an earlier one that
+// worked, still in the device's log.
+func TestSetupDoesNotTakeAnEarlierLaunchForTheNewOne(t *testing.T) {
+	h, dir := correctAndroid(t)
+	h.fake.installs[capturedInstall] = "Organic"
+	h.connectDevice("10-01 22:10:00.000 I/ActivityManager(  612): Start proc 4242:com.example.sample/u0a190\n")
+	h.device.earlier = readCapturedLog(t) + "10-01 22:00:00.000 I/ActivityManager(  612): Displayed com.android.settings/.Settings\n"
+
+	_, stdout, _ := h.typing("", "", "s").run("setup", dir)
+	lacks(t, stdout, "Fix what is marked above, rebuild and relaunch the app")
+	if strings.Contains(stdout, "works end to end") || strings.Contains(stdout, "Tenjin accepted the app's connect request") {
+		t.Errorf("the earlier launch was read for this one:\n%s", stdout)
 	}
 }
 

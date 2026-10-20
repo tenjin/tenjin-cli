@@ -448,8 +448,9 @@ func readDeviceLog(ctx context.Context, env *environment, p *project.Project, pl
 	return readLaunch(ctx, env, p, platform, serial, nil)
 }
 
-// launchMark is where a device's log stood before a launch: the newest line
-// of an Android device's, and the time for a simulator's.
+// launchMark is where a device's log stood before a launch: the time of the
+// newest line in an Android device's, on the device's clock, and this Mac's
+// time for a simulator's, which logs on this Mac's clock.
 type launchMark struct {
 	android string
 	since   time.Time
@@ -526,7 +527,7 @@ func readLaunch(ctx context.Context, env *environment, p *project.Project, platf
 	}
 	raw, err := devicelog.ReadAndroid(ctx, env.runner(), adb, serial)
 	if err == nil && mark != nil {
-		raw = devicelog.After(raw, mark.android)
+		raw = devicelog.Since(raw, mark.android)
 	}
 	return raw, fromAndroid, err
 }
