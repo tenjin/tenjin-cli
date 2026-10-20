@@ -13,7 +13,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -348,8 +347,10 @@ func Execute(args []string, stdout, stderr io.Writer) int {
 
 func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	// Ctrl-C cancels the command's context, which stops anything it started,
-	// such as a coding agent.
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	// such as a coding agent. So do SIGTERM and SIGHUP, with the same exit
+	// status, 130 (interrupted): one code says the run was stopped from
+	// outside, whichever way.
+	ctx, stop := proc.StopContext(context.Background())
 	defer stop()
 
 	env.ctx = ctx

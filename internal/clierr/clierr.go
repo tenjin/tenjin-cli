@@ -22,7 +22,7 @@ const (
 	// AlreadyExists is a create that found the thing already there.
 	AlreadyExists Kind = "already_exists"
 	ChecksFailed  Kind = "checks_failed"
-	// Interrupted is a run the user stopped, with Ctrl-C.
+	// Interrupted is a run stopped from outside: Ctrl-C, SIGTERM or SIGHUP.
 	Interrupted Kind = "interrupted"
 )
 
