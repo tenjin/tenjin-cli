@@ -307,7 +307,8 @@ func (e *environment) session() *session.Manager {
 		Environment: e.endpoints.Name,
 		Store:       e.store,
 		Authority:   loginAuthority{Client: authority, timeout: e.loginTimeout},
-		APIToken:    e.getenv("TENJIN_API_TOKEN"),
+		// A token pasted into a file or a CI secret often ends in a line break.
+		APIToken: strings.TrimSpace(e.getenv("TENJIN_API_TOKEN")),
 	}
 }
 
@@ -375,8 +376,10 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	if ctx.Err() != nil {
 		err = errInterrupted()
 	}
-	// Input that ended where a person was to answer.
-	if errors.Is(err, io.EOF) {
+	// Input that ended where a person was to answer. An error already
+	// classified, such as a connection Tenjin closed early, is not that.
+	var classified *clierr.Error
+	if errors.Is(err, io.EOF) && !errors.As(err, &classified) {
 		err = clierr.New(clierr.Usage, "the input ended before an answer was given").
 			WithHint("Run it in a terminal to answer, or give the answers as flags (see --help).")
 	}
@@ -390,7 +393,9 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 }
 
 // writeError reports a failure on stderr: prose for people, an object with a
-// stable code for scripts and agents.
+// stable code for scripts and agents. A message can carry text from outside,
+// such as the API's own explanation, so what people see is cleaned; JSON
+// escapes it on its own.
 func writeError(w io.Writer, e *clierr.Error, asJSON bool) {
 	hint := e.Hint
 	if hint == "" && e.Kind == clierr.Usage {
@@ -406,9 +411,9 @@ func writeError(w io.Writer, e *clierr.Error, asJSON bool) {
 		return
 	}
 	style := render.NewStyler(w)
-	_, _ = fmt.Fprintf(w, "%s %s\n", style.Red("tenjin:"), e.Message)
+	_, _ = fmt.Fprintf(w, "%s %s\n", style.Red("tenjin:"), render.Clean(e.Message))
 	if hint != "" {
-		_, _ = fmt.Fprintln(w, style.Dim(hint))
+		_, _ = fmt.Fprintln(w, style.Dim(render.Clean(hint)))
 	}
 }
 
