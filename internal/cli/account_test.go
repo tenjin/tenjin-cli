@@ -45,15 +45,42 @@ func TestLoginStatusLogout(t *testing.T) {
 		t.Errorf("status = %+v", status)
 	}
 
+	creds, _ := h.store.Load("test")
+	if creds.ClientID != "tenjin-cli" {
+		t.Errorf("signed in as client %q, want the CLI's own", creds.ClientID)
+	}
 	code, stdout, _ = h.run("logout")
-	if code != 0 || !strings.Contains(stdout, "expires within two hours") || !strings.Contains(stdout, "/dashboard/access_tokens") {
+	if code != 0 || !strings.Contains(stdout, "The session's API access has ended") || strings.Contains(stdout, "two hours") {
 		t.Errorf("logout: exit = %d, stdout = %q", code, stdout)
 	}
+	// The API token the session held stops working at once.
+	h.vars["TENJIN_API_TOKEN"] = creds.JWT
+	if code, _, _ := h.run("apps", "list"); code != 3 {
+		t.Errorf("the session's API token still works after logout: exit = %d", code)
+	}
+	delete(h.vars, "TENJIN_API_TOKEN")
 	if code, _, _ = h.run("auth", "status"); code != 3 {
 		t.Errorf("after logout: exit = %d, want 3", code)
 	}
 	if code, stdout, _ = h.run("logout"); code != 0 || !strings.Contains(stdout, "Not signed in") {
 		t.Errorf("second logout: exit = %d, stdout = %q", code, stdout)
+	}
+}
+
+// The sign-in lasts as long as the exchange says; a server that does not say
+// leaves it to the token's own expiry.
+func TestTheSignInLastsAsTheExchangeSays(t *testing.T) {
+	for _, tc := range []struct {
+		expiresIn int
+		want      time.Duration
+	}{{600, 10 * time.Minute}, {0, 2 * time.Hour}} {
+		h := newHarness(t)
+		h.fake.exchangeExpiresIn = tc.expiresIn
+		h.signIn()
+		creds, _ := h.store.Load("test")
+		if got := time.Until(creds.JWTExpiry); got < tc.want-time.Minute || got > tc.want+time.Minute {
+			t.Errorf("expires_in %d: the sign-in lasts %v, want about %v", tc.expiresIn, got.Round(time.Minute), tc.want)
+		}
 	}
 }
 
@@ -72,15 +99,70 @@ func TestLoginNeverPrintsACredential(t *testing.T) {
 	}
 }
 
-// The client registration survives sign-out, so signing in again does not
-// register a second client with the server.
-func TestLoginReusesItsClientRegistration(t *testing.T) {
+// A session an earlier build signed in with a client it registered for
+// itself keeps working with that client, and its logout says what is true of
+// it: the API token lasts until it expires.
+func TestASessionFromAnEarlierClient(t *testing.T) {
+	h := newHarness(t)
+	h.signInAsAnEarlierClient()
+	if code, _, stderr := h.run("apps", "list"); code != 0 {
+		t.Fatalf("an earlier client's session: exit = %d, stderr = %q", code, stderr)
+	}
+	code, stdout, _ := h.run("logout")
+	if code != 0 || !strings.Contains(stdout, "expires within two hours") || !strings.Contains(stdout, "/dashboard/access_tokens") {
+		t.Errorf("logout: exit = %d, stdout = %q", code, stdout)
+	}
+	if got := h.fake.revocations; len(got) != 1 || !strings.HasPrefix(got[0], "client-1 ") {
+		t.Errorf("revocations = %q, want one with the earlier client", got)
+	}
+}
+
+// A new sign-in over an earlier client's session is the CLI's own client,
+// and revokes the earlier client's grant, which nothing would end otherwise.
+func TestSigningInOverAnEarlierClientsSession(t *testing.T) {
+	h := newHarness(t)
+	h.signInAsAnEarlierClient()
+	old, _ := h.store.Load("test")
+	h.signIn()
+	creds, _ := h.store.Load("test")
+	if creds.ClientID != "tenjin-cli" {
+		t.Errorf("signed in as client %q, want the CLI's own", creds.ClientID)
+	}
+	if got := h.fake.revocations; len(got) != 1 || got[0] != "client-1 "+old.RefreshToken {
+		t.Errorf("revocations = %q, want the earlier client's grant", got)
+	}
+	// Signing in again over the CLI's own client revokes nothing: that would
+	// end the new session too.
+	h.signIn()
+	if got := h.fake.revocations; len(got) != 1 {
+		t.Errorf("revocations = %q after a second sign-in", got)
+	}
+	if code, _, _ := h.run("apps", "list"); code != 0 {
+		t.Errorf("the new session does not work: exit = %d", code)
+	}
+}
+
+// When Tenjin does not confirm the revocation, logout says the session may
+// still be open, and how to end it.
+func TestLogoutThatTenjinDoesNotConfirm(t *testing.T) {
 	h := newHarness(t)
 	h.signIn()
-	h.run("logout")
+	h.fake.revokeFails = true
+	code, stdout, stderr := h.run("logout")
+	if code != 7 || strings.Contains(stdout, "has ended") || !strings.Contains(stderr, "may still be open") || !strings.Contains(stderr, "/dashboard/access_tokens") {
+		t.Errorf("exit = %d\nstdout = %q\nstderr = %q", code, stdout, stderr)
+	}
+}
+
+// With TENJIN_API_TOKEN set, logout ends the saved session and says that
+// commands still use the token.
+func TestLogoutWithAnAPIToken(t *testing.T) {
+	h := newHarness(t)
 	h.signIn()
-	if h.fake.registrations != 1 {
-		t.Errorf("registrations = %d, want 1", h.fake.registrations)
+	h.vars["TENJIN_API_TOKEN"] = "dashboard-token"
+	code, stdout, stderr := h.run("logout")
+	if code != 0 || !strings.Contains(stdout, "has ended") || !strings.Contains(stderr, "TENJIN_API_TOKEN is still set") {
+		t.Errorf("exit = %d\nstdout = %q\nstderr = %q", code, stdout, stderr)
 	}
 }
 
@@ -99,11 +181,6 @@ func TestLoginNoBrowserPrintsTheURL(t *testing.T) {
 		t.Errorf("exit = %d, stderr = %q", code, stderr)
 	}
 
-	// An abandoned sign-in keeps its client registration for the retry.
-	h.run("login", "--no-browser")
-	if h.fake.registrations != 1 {
-		t.Errorf("registrations = %d after two abandoned sign-ins, want 1", h.fake.registrations)
-	}
 	if code, _, _ := h.run("auth", "status"); code != 3 {
 		t.Error("an abandoned sign-in left the user signed in")
 	}

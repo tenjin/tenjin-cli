@@ -16,7 +16,6 @@ const refreshMargin = time.Minute
 
 // Authority is the part of the authorization server a session needs.
 type Authority interface {
-	Register(ctx context.Context) (clientID string, err error)
 	Login(ctx context.Context, opts oauth.LoginOptions) (oauth.Tokens, error)
 	Refresh(ctx context.Context, clientID, refreshToken string) (oauth.Tokens, error)
 	Exchange(ctx context.Context, accessToken string) (oauth.Identity, error)
@@ -98,16 +97,11 @@ func (m *Manager) Login(ctx context.Context, open func(url string) error, pasted
 	if c == nil {
 		c = &Credentials{Environment: m.Environment}
 	}
-	if c.ClientID == "" {
-		if c.ClientID, err = m.Authority.Register(ctx); err != nil {
-			return nil, "", clierr.Wrap(clierr.Upstream, err, "%v", err)
-		}
-		// Keep the registration even if the sign-in is abandoned, so a retry
-		// does not leave a second client behind on the server.
-		if _, err := m.Store.Save(c); err != nil {
-			return nil, "", err
-		}
-	}
+	// A session an earlier build signed in may name a client it registered
+	// for itself; a new sign-in is always the CLI's own client, and the
+	// earlier client's grant is revoked once the new one is saved.
+	previousClient, previousRefresh := c.ClientID, c.RefreshToken
+	c.ClientID = oauth.ClientID
 	tokens, err := m.Authority.Login(ctx, oauth.LoginOptions{ClientID: c.ClientID, Open: open, Pasted: pasted})
 	if err != nil {
 		return nil, "", clierr.Wrap(clierr.NotSignedIn, err, "sign-in failed: %v", err)
@@ -120,6 +114,11 @@ func (m *Manager) Login(ctx context.Context, open func(url string) error, pasted
 	location, err := m.Store.Save(c)
 	if err != nil {
 		return nil, "", err
+	}
+	// Not for an earlier session of the CLI's own client: its revocation
+	// would end this new session too.
+	if previousRefresh != "" && previousClient != "" && previousClient != oauth.ClientID {
+		_ = m.Authority.Revoke(ctx, previousClient, previousRefresh)
 	}
 	return c, location, nil
 }
@@ -293,22 +292,33 @@ func notSignedIn(message string) error {
 	return clierr.New(clierr.NotSignedIn, "%s", message).WithHint("Run 'tenjin login', or set TENJIN_API_TOKEN to a token from the Tenjin dashboard.")
 }
 
-// Logout forgets the stored credentials and revokes the refresh token. It
-// reports whether there was a sign-in to end. An API token already issued
-// keeps working until it expires; the server offers no way to cancel it from
-// here.
-func (m *Manager) Logout(ctx context.Context) (wasSignedIn bool, err error) {
+// Signout is what Logout did.
+type Signout struct {
+	// WasSignedIn is false when there was no sign-in to end.
+	WasSignedIn bool
+	// AccessEnded is true when the session's API access has ended: Tenjin
+	// confirmed the revocation of a sign-in with the CLI's own client. A
+	// session of a client an earlier build registered keeps its API token
+	// until it expires.
+	AccessEnded bool
+}
+
+// Logout forgets the stored credentials and revokes the refresh token. An
+// error with WasSignedIn set means the session was forgotten here but its
+// revocation was not confirmed.
+func (m *Manager) Logout(ctx context.Context) (Signout, error) {
 	c, err := m.Store.Load(m.Environment)
 	if err != nil || !c.SignedIn() {
-		return false, err
+		return Signout{}, err
 	}
 	// Forget locally first: that must succeed even when the server is
 	// unreachable.
-	if _, err := m.Store.Save(&Credentials{Environment: c.Environment, ClientID: c.ClientID}); err != nil {
-		return true, err
+	if _, err := m.Store.Save(&Credentials{Environment: c.Environment}); err != nil {
+		return Signout{}, err
 	}
+	// Signed out here; an error now means Tenjin did not confirm it.
 	if err := m.Authority.Revoke(ctx, c.ClientID, c.RefreshToken); err != nil {
-		return true, clierr.Wrap(clierr.Upstream, err, "signed out on this machine, but the server did not confirm the revocation: %v", err)
+		return Signout{WasSignedIn: true}, err
 	}
-	return true, nil
+	return Signout{WasSignedIn: true, AccessEnded: c.ClientID == oauth.ClientID}, nil
 }

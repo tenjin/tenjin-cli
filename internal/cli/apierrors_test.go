@@ -14,7 +14,7 @@ func TestASignInTheAPIRefusesIsRenewed(t *testing.T) {
 	h.signIn()
 	forget := func() {
 		h.fake.mu.Lock()
-		h.fake.jwts = map[string]bool{}
+		h.fake.jwts = map[string]string{}
 		h.fake.mu.Unlock()
 	}
 

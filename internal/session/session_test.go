@@ -20,7 +20,6 @@ type rotating struct {
 	exchangeErr error
 }
 
-func (a *rotating) Register(context.Context) (string, error) { return "client", nil }
 func (a *rotating) Login(context.Context, oauth.LoginOptions) (oauth.Tokens, error) {
 	return oauth.Tokens{}, nil
 }

@@ -191,7 +191,7 @@ tenjin campaigns create --app <app-id> --name "Summer UA" --channel <channel-id>
 
 | Command | What it does |
 | --- | --- |
-| `tenjin login`, `tenjin logout`, `tenjin auth status` | Sign in through the browser (`--no-browser` over SSH), sign out, see who is signed in |
+| `tenjin login`, `tenjin logout`, `tenjin auth status` | Sign in through the browser (`--no-browser` over SSH); sign out, which ends the session's API access at once, and that of your other Tenjin CLI sessions still open in the same organization, on any machine; see who is signed in |
 
 `tenjin version` prints the version, commit and build date.
 

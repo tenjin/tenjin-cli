@@ -31,17 +31,24 @@ type fakeTenjin struct {
 	srv *httptest.Server
 	mu  sync.Mutex
 
-	registrations int
-	challenge     string // PKCE challenge of the pending authorization
-	refreshToken  string // the one currently valid; rotates on use
-	accessTokens  map[string]bool
-	jwts          map[string]bool
-	issued        int
+	challenge    string            // PKCE challenge of the pending authorization
+	refreshToken string            // the one currently valid; rotates on use
+	refreshOwner string            // the client refreshToken was issued to
+	accessTokens map[string]string // access token -> client
+	jwts         map[string]string // API token -> the client it came from
+	// revocations records each revocation asked for, "client token";
+	// revokeFails makes the server answer 503 instead.
+	revocations []string
+	revokeFails bool
+	issued      int
 
 	apps       []tenjinapi.App
 	pageSize   int
 	denyCreate bool
-	keyAnswers map[string]string // SDK key -> Tenjin's message; default accepts
+	// exchangeExpiresIn is the exchange's expires_in, in seconds; 0 leaves
+	// it out, as an older server does.
+	exchangeExpiresIn int
+	keyAnswers        map[string]string // SDK key -> Tenjin's message; default accepts
 	// keyApps ties an SDK key to one app, "bundle|platform"; it is refused
 	// for any other app.
 	keyApps map[string]string
@@ -78,10 +85,9 @@ type apiWrite struct {
 
 func newFakeTenjin(t *testing.T) *fakeTenjin {
 	t.Helper()
-	f := &fakeTenjin{t: t, accessTokens: map[string]bool{}, jwts: map[string]bool{}, pageSize: 1000, keyAnswers: map[string]string{}, keyApps: map[string]string{}, installs: map[string]string{}}
+	f := &fakeTenjin{t: t, accessTokens: map[string]string{}, jwts: map[string]string{}, pageSize: 1000, exchangeExpiresIn: 7200, keyAnswers: map[string]string{}, keyApps: map[string]string{}, installs: map[string]string{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", f.metadata)
-	mux.HandleFunc("POST /oauth/registration", f.register)
 	mux.HandleFunc("GET /oauth/authorize", f.authorize)
 	mux.HandleFunc("POST /oauth/token", f.token)
 	mux.HandleFunc("POST /oauth/revoke", f.revoke)
@@ -118,22 +124,7 @@ func (f *fakeTenjin) metadata(w http.ResponseWriter, _ *http.Request) {
 		"authorization_endpoint": f.srv.URL + "/oauth/authorize",
 		"token_endpoint":         f.srv.URL + "/oauth/token",
 		"revocation_endpoint":    f.srv.URL + "/oauth/revoke",
-		"registration_endpoint":  f.srv.URL + "/oauth/registration",
 	})
-}
-
-func (f *fakeTenjin) register(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		RedirectURIs []string `json:"redirect_uris"`
-	}
-	_ = json.NewDecoder(r.Body).Decode(&body)
-	if len(body.RedirectURIs) != 1 || body.RedirectURIs[0] != "http://127.0.0.1/callback" {
-		f.t.Errorf("registered redirect URIs = %q", body.RedirectURIs)
-	}
-	f.mu.Lock()
-	f.registrations++
-	f.mu.Unlock()
-	writeJSON(w, http.StatusCreated, map[string]string{"client_id": "client-1"})
 }
 
 // authorize plays the browser and the consenting user: it sends the caller
@@ -141,8 +132,8 @@ func (f *fakeTenjin) register(w http.ResponseWriter, r *http.Request) {
 func (f *fakeTenjin) authorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	redirect := q.Get("redirect_uri")
-	if q.Get("resource") != "https://mcp.test" || q.Get("code_challenge_method") != "S256" || q.Get("scope") != "mcp" ||
-		!strings.HasPrefix(redirect, "http://127.0.0.1:") {
+	if q.Get("client_id") != "tenjin-cli" || q.Get("resource") != "https://mcp.test" || q.Get("code_challenge_method") != "S256" || q.Get("scope") != "mcp" ||
+		!strings.HasPrefix(redirect, "http://127.0.0.1:") || !strings.HasSuffix(redirect, "/callback") {
 		http.Error(w, "invalid_target", http.StatusBadRequest)
 		return
 	}
@@ -152,11 +143,11 @@ func (f *fakeTenjin) authorize(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirect+"?"+url.Values{"code": {"auth-code"}, "state": {q.Get("state")}, "iss": {f.srv.URL}}.Encode(), http.StatusFound)
 }
 
-func (f *fakeTenjin) issue() (access, refresh string) {
+func (f *fakeTenjin) issue(client string) (access, refresh string) {
 	f.issued++
 	access, refresh = fmt.Sprintf("access-%d", f.issued), fmt.Sprintf("refresh-%d", f.issued)
-	f.accessTokens[access] = true
-	f.refreshToken = refresh
+	f.accessTokens[access] = client
+	f.refreshToken, f.refreshOwner = refresh, client
 	return access, refresh
 }
 
@@ -169,29 +160,35 @@ func (f *fakeTenjin) token(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.PostForm.Get("grant_type") {
 	case "authorization_code":
+		if r.PostForm.Get("client_id") != "tenjin-cli" {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_client"})
+			return
+		}
 		sum := sha256.Sum256([]byte(r.PostForm.Get("code_verifier")))
 		if r.PostForm.Get("code") != "auth-code" || base64.RawURLEncoding.EncodeToString(sum[:]) != f.challenge {
 			invalid("bad code or verifier")
 			return
 		}
-		access, refresh := f.issue()
+		access, refresh := f.issue("tenjin-cli")
 		writeJSON(w, http.StatusOK, map[string]any{"access_token": access, "refresh_token": refresh, "expires_in": 7200})
 	case "refresh_token":
-		if f.refreshToken == "" || r.PostForm.Get("refresh_token") != f.refreshToken {
+		// A refresh token is good only with the client it was issued to.
+		if f.refreshToken == "" || r.PostForm.Get("refresh_token") != f.refreshToken || r.PostForm.Get("client_id") != f.refreshOwner {
 			invalid("refresh token is revoked or unknown")
 			return
 		}
-		access, refresh := f.issue()
+		access, refresh := f.issue(f.refreshOwner)
 		writeJSON(w, http.StatusOK, map[string]any{"access_token": access, "refresh_token": refresh, "expires_in": 7200})
 	case "urn:ietf:params:oauth:grant-type:token-exchange":
-		if !f.accessTokens[r.PostForm.Get("subject_token")] {
+		client := f.accessTokens[r.PostForm.Get("subject_token")]
+		if client == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request", "error_description": "subject_token is missing or invalid"})
 			return
 		}
 		jwt := makeJWT(time.Now().Add(2*time.Hour), f.issued)
-		f.jwts[jwt] = true
-		writeJSON(w, http.StatusOK, map[string]string{
-			"access_token": jwt, "user_id": "user-1", "organization_id": "org-1", "organization_name": "Acme Games",
+		f.jwts[jwt] = client
+		writeJSON(w, http.StatusOK, map[string]any{
+			"access_token": jwt, "user_id": "user-1", "organization_id": "org-1", "organization_name": "Acme Games", "expires_in": f.exchangeExpiresIn,
 		})
 	default:
 		invalid("unsupported grant")
@@ -203,13 +200,32 @@ func makeJWT(expiry time.Time, n int) string {
 	return "eyJhbGciOiJFUzUxMiJ9." + base64.RawURLEncoding.EncodeToString(payload) + ".signature"
 }
 
-// revoke ends the ability to refresh; a JWT already exchanged keeps
-// working until it expires.
+// revoke ends the ability to refresh. For the CLI's own client it also ends
+// the API access exchanged from it; for an older version's registered client,
+// a JWT already exchanged keeps working until it expires.
 func (f *fakeTenjin) revoke(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	f.mu.Lock()
-	if r.PostForm.Get("token") == f.refreshToken {
+	f.revocations = append(f.revocations, r.PostForm.Get("client_id")+" "+r.PostForm.Get("token"))
+	if f.revokeFails {
+		f.mu.Unlock()
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "temporarily_unavailable"})
+		return
+	}
+	if token := r.PostForm.Get("token"); token == f.refreshToken {
+		if r.PostForm.Get("client_id") != f.refreshOwner {
+			f.mu.Unlock()
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "unauthorized_client"})
+			return
+		}
 		f.refreshToken = ""
+		if f.refreshOwner == "tenjin-cli" {
+			for jwt, client := range f.jwts {
+				if client == "tenjin-cli" {
+					delete(f.jwts, jwt)
+				}
+			}
+		}
 	}
 	f.mu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]string{})
@@ -243,7 +259,7 @@ func (f *fakeTenjin) siteIDs(w http.ResponseWriter, r *http.Request) {
 	}
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	f.mu.Lock()
-	signedIn := f.jwts[token] || token == "dashboard-token"
+	signedIn := f.jwts[token] != "" || token == "dashboard-token"
 	f.mu.Unlock()
 	if !signedIn {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"code": "unauthenticated", "message": "invalid token"})
@@ -326,7 +342,7 @@ func (f *fakeTenjin) dataWrite(w http.ResponseWriter, r *http.Request) {
 func (f *fakeTenjin) authorized(w http.ResponseWriter, r *http.Request) bool {
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	f.mu.Lock()
-	ok := f.jwts[token]
+	ok := f.jwts[token] != ""
 	f.mu.Unlock()
 	switch {
 	case ok || token == "dashboard-token":
@@ -704,6 +720,24 @@ func (h *harness) run(args ...string) (code int, stdout, stderr string) {
 }
 
 // signIn logs the harness in and fails the test if that does not work.
+// signInAsAnEarlierClient stores a session as an earlier build left it:
+// signed in with a client it registered for itself, here "client-1".
+func (h *harness) signInAsAnEarlierClient() {
+	h.t.Helper()
+	f := h.fake
+	f.mu.Lock()
+	access, refresh := f.issue("client-1")
+	jwt := makeJWT(time.Now().Add(2*time.Hour), f.issued)
+	f.jwts[jwt] = f.accessTokens[access]
+	f.mu.Unlock()
+	if _, err := h.store.Save(&session.Credentials{
+		Environment: "test", ClientID: "client-1", RefreshToken: refresh, JWT: jwt, JWTExpiry: time.Now().Add(2 * time.Hour),
+		UserID: "user-1", OrganizationID: "org-1", OrganizationName: "Acme Games",
+	}); err != nil {
+		h.t.Fatal(err)
+	}
+}
+
 func (h *harness) signIn() {
 	h.t.Helper()
 	if code, _, stderr := h.run("login"); code != 0 {

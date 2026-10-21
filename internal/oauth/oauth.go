@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -25,11 +26,14 @@ const (
 	grantTokenExchange = "urn:ietf:params:oauth:grant-type:token-exchange"
 	tokenTypeAccess    = "urn:ietf:params:oauth:token-type:access_token"
 	scope              = "mcp"
-	// The redirect is registered without a port. The authorization server
-	// ignores the port for loopback IP addresses, so any free port works. It
-	// does not do this for the name "localhost".
-	registeredRedirect = "http://127.0.0.1/callback"
 )
+
+// ClientID is this CLI's own client at Tenjin's authorization server, a
+// public client: the browser sign-in proves who the user is, PKCE that the
+// code is this process's. Its redirect is http://127.0.0.1/callback on any
+// port: the server ignores the port for a loopback IP address, but not for
+// the name "localhost".
+const ClientID = "tenjin-cli"
 
 // ErrGrantInvalid means the refresh token or access token is no longer good
 // and the user has to sign in again.
@@ -70,7 +74,6 @@ type metadata struct {
 	Authorization string `json:"authorization_endpoint"`
 	Token         string `json:"token_endpoint"`
 	Revocation    string `json:"revocation_endpoint"`
-	Registration  string `json:"registration_endpoint"`
 }
 
 func (c *Client) discover(ctx context.Context) (metadata, error) {
@@ -83,33 +86,6 @@ func (c *Client) discover(ctx context.Context) (metadata, error) {
 		return m, fmt.Errorf("%s does not describe an authorization server (HTTP %d)", c.Issuer, status)
 	}
 	return m, nil
-}
-
-// Register creates a public client for this CLI and returns its ID. The ID is
-// not a secret and can be reused for later sign-ins.
-func (c *Client) Register(ctx context.Context) (string, error) {
-	m, err := c.discover(ctx)
-	if err != nil {
-		return "", err
-	}
-	request, _ := json.Marshal(map[string]any{
-		"client_name":                "Tenjin CLI",
-		"redirect_uris":              []string{registeredRedirect},
-		"grant_types":                []string{"authorization_code", "refresh_token"},
-		"response_types":             []string{"code"},
-		"token_endpoint_auth_method": "none",
-	})
-	status, body, err := c.do(ctx, http.MethodPost, m.Registration, "application/json", string(request))
-	if err != nil {
-		return "", err
-	}
-	var reg struct {
-		ClientID string `json:"client_id"`
-	}
-	if json.Unmarshal(body, &reg) != nil || reg.ClientID == "" {
-		return "", fmt.Errorf("could not register with %s (HTTP %d): %s", c.Issuer, status, describe(body))
-	}
-	return reg.ClientID, nil
 }
 
 // LoginOptions controls an interactive sign-in.
@@ -270,6 +246,10 @@ func (c *Client) token(ctx context.Context, endpoint string, form url.Values) (T
 	if status == http.StatusOK && json.Unmarshal(body, &t) == nil && t.AccessToken != "" {
 		return Tokens{AccessToken: t.AccessToken, RefreshToken: t.RefreshToken}, nil
 	}
+	if status == http.StatusOK {
+		// A success's body holds tokens; it is never shown.
+		return Tokens{}, errors.New("the token request answered HTTP 200 without a token")
+	}
 	if status == http.StatusBadRequest || status == http.StatusUnauthorized {
 		return Tokens{}, fmt.Errorf("%w: %s", ErrGrantInvalid, describe(body))
 	}
@@ -292,20 +272,29 @@ func (c *Client) Exchange(ctx context.Context, accessToken string) (Identity, er
 		return Identity{}, err
 	}
 	var ex struct {
-		AccessToken      string `json:"access_token"`
-		UserID           string `json:"user_id"`
-		OrganizationID   string `json:"organization_id"`
-		OrganizationName string `json:"organization_name"`
+		AccessToken      string          `json:"access_token"`
+		UserID           string          `json:"user_id"`
+		OrganizationID   string          `json:"organization_id"`
+		OrganizationName string          `json:"organization_name"`
+		ExpiresIn        json.RawMessage `json:"expires_in"`
 	}
-	if status != http.StatusOK || json.Unmarshal(body, &ex) != nil || ex.AccessToken == "" {
+	if status == http.StatusOK && (json.Unmarshal(body, &ex) != nil || ex.AccessToken == "") {
+		// A success's body holds the token; it is never shown.
+		return Identity{}, errors.New("the token exchange answered HTTP 200 without a token")
+	}
+	if status != http.StatusOK {
 		if status == http.StatusBadRequest || status == http.StatusUnauthorized {
 			return Identity{}, fmt.Errorf("%w: %s", ErrGrantInvalid, describe(body))
 		}
 		return Identity{}, fmt.Errorf("token exchange failed (HTTP %d): %s", status, describe(body))
 	}
-	expiry, err := jwtExpiry(ex.AccessToken)
-	if err != nil {
-		return Identity{}, err
+	// The answer says how long the token lasts; an older server only says
+	// it inside the token.
+	expiry, ok := expiresIn(ex.ExpiresIn)
+	if !ok {
+		if expiry, err = jwtExpiry(ex.AccessToken); err != nil {
+			return Identity{}, err
+		}
 	}
 	return Identity{
 		JWT:              ex.AccessToken,
@@ -316,8 +305,10 @@ func (c *Client) Exchange(ctx context.Context, accessToken string) (Identity, er
 	}, nil
 }
 
-// Revoke invalidates a token at the authorization server. It ends the ability
-// to refresh; a JWT that was already exchanged stays valid until it expires.
+// Revoke invalidates a token at the authorization server. For ClientID it
+// also ends the API access the token was exchanged for, at once; for a
+// client an older version registered, a JWT already exchanged keeps working
+// until it expires.
 func (c *Client) Revoke(ctx context.Context, clientID, token string) error {
 	m, err := c.discover(ctx)
 	if err != nil {
@@ -375,6 +366,17 @@ func jwtExpiry(jwt string) (time.Time, error) {
 }
 
 // describe turns an OAuth error body into one line.
+// expiresIn reads an expires_in, a number of seconds or a string holding
+// one, as the time it ends. ok is false when there is none to read.
+func expiresIn(raw json.RawMessage) (time.Time, bool) {
+	text := strings.Trim(strings.TrimSpace(string(raw)), `"`)
+	seconds, err := strconv.ParseFloat(text, 64)
+	if err != nil || seconds <= 0 {
+		return time.Time{}, false
+	}
+	return time.Now().Add(time.Duration(seconds * float64(time.Second))), true
+}
+
 func describe(body []byte) string {
 	var e struct {
 		Error       string `json:"error"`

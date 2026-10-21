@@ -85,32 +85,42 @@ func login(cmd *cobra.Command, env *environment, noBrowser bool) (session.Status
 func newLogoutCmd(opts *options, env *environment) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
-		Short: "Sign out on this machine",
-		Long: `Forget the saved session and revoke its refresh token.
-
-Tenjin's API token for the session is short-lived and cannot be cancelled from
-here: it stops working within two hours. To cut access immediately, remove the
-connection on the dashboard's access tokens page.`,
+		Short: "Sign out, and end the session's API access",
+		Long: `Forget the saved session and revoke it, which ends its API access at once.
+Tenjin CLI sessions of one person in one organization share that access, so
+signing out also signs out the others still open, on any machine.`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			format, err := opts.format(cmd)
 			if err != nil {
 				return err
 			}
-			wasSignedIn, err := env.session().Logout(cmd.Context())
+			manager := env.session()
+			out, err := manager.Logout(cmd.Context())
 			if err != nil {
+				if out.WasSignedIn {
+					// Forgotten here, but the session may still be open at Tenjin.
+					return clierr.Wrap(clierr.Upstream, err, "signed out on this machine, but Tenjin did not confirm it, so the session's API access may still be open (%v)", err).
+						WithHint("End it on the dashboard: remove the connection at %s", env.endpoints.AccessTokensURL())
+				}
 				return err
 			}
 			if format == render.JSON {
-				return render.WriteJSON(cmd.OutOrStdout(), map[string]bool{"signed_out": wasSignedIn})
+				return render.WriteJSON(cmd.OutOrStdout(), map[string]bool{"signed_out": out.WasSignedIn, "access_ended": out.AccessEnded})
 			}
-			if !wasSignedIn {
+			switch {
+			case !out.WasSignedIn:
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), "Not signed in.")
-				return err
+			case out.AccessEnded:
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), "Signed out. The session's API access has ended.")
+			default:
+				_, err = fmt.Fprintf(cmd.OutOrStdout(),
+					"Signed out on this machine.\nThe session's API token expires within two hours. To end it now, remove the connection at %s\n",
+					env.endpoints.AccessTokensURL())
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(),
-				"Signed out on this machine.\nThe session's API token expires within two hours. To end it now, remove the connection at %s\n",
-				env.endpoints.AccessTokensURL())
+			if err == nil && out.WasSignedIn && manager.APIToken != "" {
+				_, err = fmt.Fprintln(cmd.ErrOrStderr(), "TENJIN_API_TOKEN is still set, and commands keep using it.")
+			}
 			return err
 		},
 	}
