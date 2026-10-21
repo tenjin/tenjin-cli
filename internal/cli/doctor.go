@@ -16,11 +16,11 @@ import (
 
 	"github.com/tenjin/tenjin-cli/internal/agent"
 	"github.com/tenjin/tenjin-cli/internal/clierr"
-	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
 	"github.com/tenjin/tenjin-cli/internal/keyfill"
 	"github.com/tenjin/tenjin-cli/internal/project"
 	"github.com/tenjin/tenjin-cli/internal/render"
+	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/verify"
 )
 

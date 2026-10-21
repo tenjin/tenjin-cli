@@ -140,7 +140,7 @@ func (c *Client) FindApp(ctx context.Context, bundleID, platform string) (*App, 
 		return nil, err
 	}
 	for i := range apps {
-		// Bundle IDs are matched as Tenjin matches them: exactly.
+		// Bundle IDs are matched exactly.
 		if apps[i].BundleID == bundleID && apps[i].Platform == platform {
 			return &apps[i], nil
 		}

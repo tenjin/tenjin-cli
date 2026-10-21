@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/keyfill"
 	"github.com/tenjin/tenjin-cli/internal/project"
+	"github.com/tenjin/tenjin-cli/internal/track"
 )
 
 // Severity ranks a finding.

@@ -23,7 +23,6 @@ import (
 
 	"github.com/tenjin/tenjin-cli/internal/buildinfo"
 	"github.com/tenjin/tenjin-cli/internal/clierr"
-	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/config"
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
 	"github.com/tenjin/tenjin-cli/internal/oauth"
@@ -32,6 +31,7 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/sdkrelease"
 	"github.com/tenjin/tenjin-cli/internal/session"
 	"github.com/tenjin/tenjin-cli/internal/tenjinapi"
+	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/transport"
 	"github.com/tenjin/tenjin-cli/internal/update"
 )

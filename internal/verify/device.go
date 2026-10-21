@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
 	"github.com/tenjin/tenjin-cli/internal/project"
+	"github.com/tenjin/tenjin-cli/internal/track"
 )
 
 // DeviceLookup asks Tenjin whether it has processed a device's install.

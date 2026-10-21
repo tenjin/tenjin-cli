@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
 	"github.com/tenjin/tenjin-cli/internal/project"
 	"github.com/tenjin/tenjin-cli/internal/testproject"
+	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/verify"
 )
 

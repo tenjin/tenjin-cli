@@ -98,7 +98,7 @@ docs/adr              architecture decisions
 ## Tests
 
 - Tests go through `execute` with a `harness` (`internal/cli/fake_test.go`) and assert on exit code, stdout and stderr separately.
-- `fakeTenjin` stands in for the authorization server, the API and Tenjin, and answers as they do, quirks included (see `fake_test.go`).
+- `fakeTenjin` stands in for the authorization server, the API and the tracking service, and answers as they do, quirks included (see `fake_test.go`).
 - Project fixtures come from `internal/testproject`: start from a correct integration and change one thing.
 - `internal/devicelog/testdata/android-accepted.log` and `ios-accepted.log` are real captures with every identifier, receipt, signature, key and location replaced. Scrub any new capture the same way before committing it.
 - A booted iOS simulator is faked with `harness.bootSimulator(log)`, which stands in for `xcrun simctl`, and a connected iPhone with `harness.connectIPhone(console)`, for `xcrun devicectl`. `ios-device-accepted.log` is a real iPhone capture, scrubbed.

@@ -25,7 +25,7 @@ import (
 )
 
 // fakeTenjin stands in for the three services the CLI talks to: the
-// authorization server, the API and the tracking service, answering as they do.
+// authorization server, the API and Tenjin, answering as they do.
 type fakeTenjin struct {
 	t   *testing.T
 	srv *httptest.Server

@@ -32,13 +32,13 @@ type Endpoints struct {
 
 // production is where Tenjin's services live.
 var production = Endpoints{
-	Name:      "production",
-	Issuer:    "https://dashboard.tenjin.com",
-	API:       "https://api.tenjin.com/v2",
-	Track:     "https://track.tenjin.com",
-	Resource:  "https://mcp.tenjin.com",
-	SiteIDs:   "https://connect.tenjin.com",
-	Docs:      "https://tenjin.com",
+	Name:     "production",
+	Issuer:   "https://dashboard.tenjin.com",
+	API:      "https://api.tenjin.com/v2",
+	Track:    "https://track.tenjin.com",
+	Resource: "https://mcp.tenjin.com",
+	SiteIDs:  "https://connect.tenjin.com",
+	Docs:     "https://tenjin.com",
 }
 
 // Resolve returns the endpoints the environment variables ask for: Tenjin's
