@@ -553,7 +553,7 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 				send: func(ctx context.Context, api *tenjinapi.Client, _ []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 					doc, err := api.CreateAppCallback(ctx, app, body)
 					if err != nil || body["active"] != false {
-						return doc, err
+						return doc, withParametersHint(err, fmt.Sprintf("tenjin apps callback-templates get %v --app %s", body["callback_template_id"], app))
 					}
 					// The API creates a callback active whatever it is sent; one
 					// asked for inactive is switched off at once, before it can
@@ -595,7 +595,8 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 					return "Change the callback " + args[0] + ": " + said, checkApp()
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
-					return api.UpdateAppCallback(ctx, app, args[0], body)
+					doc, err := api.UpdateAppCallback(ctx, app, args[0], body)
+					return doc, withParametersHint(err, fmt.Sprintf("tenjin apps callbacks get %s --app %s", args[0], app))
 				},
 			}),
 		},
@@ -719,4 +720,17 @@ func newSavedReportWriteCmds(opts *options, env *environment) []*cobra.Command {
 			},
 		}),
 	}
+}
+
+// withParametersHint points a callback Tenjin refused at where the values it
+// takes are listed: most refusals are a parameter missing or not accepted.
+func withParametersHint(err error, command string) error {
+	if err == nil {
+		return nil
+	}
+	e := clierr.From(err)
+	if e.Kind != clierr.Refused || e.Hint != "" {
+		return err
+	}
+	return e.WithHint("The parameters it takes: '%s'. Step by step: 'tenjin help callbacks'.", render.Clean(command))
 }

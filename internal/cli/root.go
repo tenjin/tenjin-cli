@@ -505,6 +505,9 @@ terminal, so scripts and coding agents can drive them.`,
 		}
 	}
 	root.AddCommand(newDocsCmd(opts, env), newVersionCmd(opts))
+	root.AddCommand(newGuideCmds()...)
+	root.SetUsageTemplate(rootUsageTemplate)
+	applyCommandHelp(root)
 	return root
 }
 

@@ -21,6 +21,8 @@ var (
 	// (cobra pads names to the longest, which gets just one).
 	helpEntry = regexp.MustCompile(`^  (\S+)(\s+\S.*)$`)
 	helpFlag  = regexp.MustCompile(`^(\s+)((?:-\w, )?--[\w-]+)`)
+	// A guide's row: "tenjin help <guide>", then its summary.
+	helpGuide = regexp.MustCompile(`^  (tenjin help \S+)(\s+\S.*)$`)
 )
 
 // styleHelp makes help for root and every command under it coloured on a
@@ -61,6 +63,13 @@ func colourHelp(text string, style render.Styler, cmd *cobra.Command) string {
 		case titles[line] || commandTitles[line]:
 			section = line
 			lines[i] = style.Heading(line)
+		case line == guidesTitle:
+			section = line
+			lines[i] = style.Heading(line)
+		case section == guidesTitle:
+			if m := helpGuide.FindStringSubmatch(line); m != nil {
+				lines[i] = "  " + style.Accent(m[1]) + m[2]
+			}
 		case commandTitles[section]:
 			if m := helpEntry.FindStringSubmatch(line); m != nil {
 				lines[i] = "  " + style.Accent(m[1]) + m[2]
@@ -129,6 +138,7 @@ func writeLanding(root *cobra.Command) error {
 	}
 	fmt.Fprintf(&b, "Those are the greatest hits. %d more commands live behind %s:\n", countCommands(root)-shown, style.Accent("tenjin --help"))
 	b.WriteString("campaigns, callbacks, site IDs, saved reports, your coding agent and friends.\n")
+	fmt.Fprintf(&b, "Step by step: %s, for integration, callbacks, reporting or scripting.\n", style.Accent("tenjin help <guide>"))
 	fmt.Fprintf(&b, "Stuck? %s has read the documentation for you.\n", style.Accent("tenjin docs search <words>"))
 	_, err := io.WriteString(w, b.String())
 	return err

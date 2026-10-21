@@ -38,12 +38,25 @@ func TestTheReadmeOnlyNamesCommandsThatExist(t *testing.T) {
 	if len(lines) < 20 {
 		t.Fatalf("found only %d commands in the README; the patterns no longer match it", len(lines))
 	}
+	checkCommandLines(t, lines)
+}
+
+// checkCommandLines fails for each line, "tenjin <command> [flags]", that
+// names a command or a flag this binary does not have.
+func checkCommandLines(t *testing.T, lines []string) {
+	t.Helper()
 	root := newRootCmd(newHarness(t).env)
 	root.InitDefaultCompletionCmd() // cobra adds it only when the CLI runs
 	for _, line := range lines {
 		words := strings.Fields(line)[1:]
 		if len(words) == 0 || strings.HasPrefix(words[0], "<") {
 			continue // tenjin <command> --help
+		}
+		if words[0] == "help" {
+			words = words[1:] // tenjin help <command or guide>
+			if len(words) == 0 || strings.HasPrefix(words[0], "<") {
+				continue
+			}
 		}
 		cmd, rest, err := root.Find(words)
 		if err != nil || cmd == root {

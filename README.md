@@ -195,7 +195,7 @@ tenjin campaigns create --app <app-id> --name "Summer UA" --channel <channel-id>
 
 `tenjin version` prints the version, commit and build date.
 
-`tenjin <command> --help` describes every flag.
+`tenjin <command> --help` describes every flag, with examples. For a task that takes several commands, `tenjin help <guide>` walks through it: `tenjin help integration`, `tenjin help callbacks`, `tenjin help reporting` and `tenjin help scripting`.
 
 ### The steps of setup
 

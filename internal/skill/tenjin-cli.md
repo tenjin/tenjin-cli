@@ -112,6 +112,8 @@ On iOS, `doctor --device` reads an iPhone connected by cable, launching the inst
 
 Outside an integration, the CLI also reads the signed-in organization's data, one API read per command: `tenjin campaigns list`, `tenjin channels list`, `tenjin ad-accounts list`, `tenjin apps events list --app <id>`, `tenjin apps callbacks list --app <id>`, `tenjin reports spend --from <date> --to <date>` (and `ad-revenue`, `skadnetwork`, `skan`), `tenjin saved-reports run <id>`. With `--json` each prints the API's answer as it is; lists are one page unless `--all` is given, and reports are every row. The same groups have commands that change the account (`create`, `update`, `delete`): run one only when the person asked for that change, show them the command first, and use `--dry-run` to show the request and body it would send.
 
+For a task that takes several commands, read its guide before starting: `tenjin help callbacks` (callbacks to ad networks and to a server), `tenjin help reporting`, `tenjin help scripting`. Each command's `--help` has examples.
+
 ## Rules
 
 - Call `connect()` on every launch, not only the first. On Android it belongs in the launcher Activity's `onResume()`, not in the `Application` class. On iOS it runs after the user has answered the tracking prompt.

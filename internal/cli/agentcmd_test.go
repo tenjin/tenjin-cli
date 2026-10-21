@@ -165,26 +165,7 @@ func TestTheSkillOnlyNamesCommandsThatExist(t *testing.T) {
 	if len(lines) < 8 {
 		t.Fatalf("found only %d commands in the skill; the patterns no longer match it", len(lines))
 	}
-	root := newRootCmd(newHarness(t).env)
-	for _, line := range lines {
-		words := strings.Fields(line)[1:]
-		cmd, rest, err := root.Find(words)
-		if err != nil || cmd == root {
-			t.Errorf("%q: no such command", line)
-			continue
-		}
-		// Whatever follows the command path must be a flag, a placeholder
-		// or a value, never a word that was meant to be a subcommand.
-		if len(rest) > 0 && !strings.HasPrefix(rest[0], "-") && !strings.HasPrefix(rest[0], "<") && cmd.HasSubCommands() {
-			t.Errorf("%q: %q is not a subcommand of %q", line, rest[0], cmd.CommandPath())
-		}
-		for _, flag := range longFlag.FindAllString(line, -1) {
-			name := strings.TrimPrefix(flag, "--")
-			if cmd.Flags().Lookup(name) == nil && cmd.InheritedFlags().Lookup(name) == nil {
-				t.Errorf("%q: %q has no flag %s", line, cmd.CommandPath(), flag)
-			}
-		}
-	}
+	checkCommandLines(t, lines)
 }
 
 // codex names the AGENTS.md target, which Codex reads.
