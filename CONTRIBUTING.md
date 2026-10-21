@@ -42,7 +42,7 @@ internal/cli          command tree; commands parse flags, call one operation and
 internal/project      detects what a project is; reads files only
 internal/verify       the doctor checks
 internal/agent        hands a task to an installed coding agent
-internal/proc         starts programs in their own process group, so Ctrl-C stops them
+internal/proc         starts programs in their own process group (a job object on Windows), so Ctrl-C stops them and their children
 internal/guides       the SDK integration guides, embedded
 internal/skill        the instructions for coding agents, and their installer
 internal/keyfill      finds the SDK key placeholders agents leave, and fills them
@@ -53,16 +53,17 @@ internal/tenjinapi    operations on the Tenjin API, over clients generated from 
 internal/oauth        browser sign-in
 internal/session      stored credentials and token refresh
 internal/config       service URLs
-internal/render       output: table, JSON and colour
+internal/render       output: table, CSV, JSON and colour
 internal/sdkrelease   the newest release of each SDK, once a day
 internal/update       the once-a-day check for a newer CLI release
 internal/buildinfo    the version, commit and date stamped in at build time
 internal/clierr       error kinds and exit codes
+internal/catalog      the metric and callback macro catalogs, as JSON
 internal/testproject  sample projects for tests
 docs/adr              architecture decisions
 ```
 
-The reasoning behind the language, the repository and the scope is in [docs/adr/0001-language-repository-and-scope.md](docs/adr/0001-language-repository-and-scope.md).
+The reasoning behind the language, the repository and the scope is in [docs/adr/0001-language-repository-and-scope.md](docs/adr/0001-language-repository-and-scope.md), and behind the data commands in [docs/adr/0002-tenjin-data-as-commands.md](docs/adr/0002-tenjin-data-as-commands.md).
 
 ## Releases
 

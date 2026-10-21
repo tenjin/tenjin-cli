@@ -99,7 +99,7 @@ Homebrew installs completions for bash, zsh and fish. Otherwise, `tenjin complet
 
 ## Requirements
 
-- A Tenjin account, for anything that signs in: apps and SDK keys. Detecting and checking a project work without one.
+- A Tenjin account, for anything that signs in: apps, SDK keys and everything under [Your Tenjin data](#your-tenjin-data). Detecting and checking a project work without one, and so does `docs search`.
 - To verify a launch: `adb` for an Android device or emulator, or Xcode for an iPhone or an iOS simulator.
 - Optional: [Claude Code](https://claude.com/claude-code) or [Codex](https://github.com/openai/codex), for `setup` to integrate with.
 
@@ -127,7 +127,7 @@ For app developers, in the app's project.
 | `tenjin project detect [path]` | Framework, platforms, bundle IDs, where the app starts, ad SDKs, any Tenjin SDK already declared |
 | `tenjin doctor [path]` | Check the integration on disk, and each SDK key against Tenjin |
 | `tenjin doctor --device` | Also read a connected device: what the SDK sent and what Tenjin answered |
-| `tenjin project set-keys [path]` | Write SDK keys where a coding agent left placeholders |
+| `tenjin project set-keys [path]` | Write SDK keys where a coding agent left placeholders. Run it yourself: it does not run inside a coding agent, which would then read the keys |
 | `tenjin sdk guide [platform]` | The SDK integration guide, as tested with this version; works offline |
 | `tenjin agent install [path]` | Teach your coding agent to use this CLI |
 
@@ -150,7 +150,7 @@ For anyone with a Tenjin account, from any directory: none of these reads a proj
 | `tenjin apps callback-templates list --app <id>`, `get <id>` | The callback templates the app can use |
 | `tenjin apps callback-groups list --app <id> --channel <id>`, `get <id>` | The app's callback groups for one channel |
 | `tenjin apps callback-settings get --app <id> --channel <id>` | The app's callback settings for one channel |
-| `tenjin campaigns list`, `get <id>` | Campaigns and their tracking links; `--app`, `--channel`, `--platform` and `--query` narrow the list |
+| `tenjin campaigns list`, `get <id>` | Campaigns and their tracking links; `--app`, `--channel`, `--platform` and `--query` narrow the list. A table leaves out hidden campaigns, as the dashboard does, and says how many; `--json` lists them |
 | `tenjin channels list`, `get <id>` | Marketing channels, by ID |
 | `tenjin channels callback-group-templates <id>` | A channel's callback group templates |
 | `tenjin ad-accounts list`, `get <id>` | The ad network accounts Tenjin reads spend from |
@@ -229,7 +229,7 @@ tenjin doctor --device            # a connected Android device or emulator, an i
 tenjin doctor --logs logcat.txt   # a saved log; - reads standard input
 ```
 
-Launch a debug build first. `doctor` reports what Tenjin answered to the SDK, why a request was refused, whether the build that ran has the application ID the project declares, and whether Tenjin has processed the install. `--serial` picks a device when several are connected.
+Launch a debug build first. `doctor` reports what Tenjin answered to the SDK, why a request was refused, whether the build that ran has the application ID the project declares, and whether Tenjin has processed the install. Other apps on the device with the Tenjin SDK log the same way; their requests are left out. `--serial` picks a device when several are connected.
 
 On iOS, the SDK logs its requests only when the build calls `TenjinSDK.debugLogs()`; `doctor` checks that debug builds do and release builds don't. Tenjin accepts a simulator's requests but leaves its installs out of attribution by design: the SDK marks them, and Android emulators it recognises too. A physical device is what confirms the install.
 
@@ -306,7 +306,7 @@ Every command except `setup` is built to be driven by a program:
 | 11 | Tenjin refused the request, such as a value it does not accept; its message says why |
 | 130 | Stopped: Ctrl-C, or SIGTERM or SIGHUP (a closed terminal) |
 
-`--verbose` (`-v`) writes a line to stderr for each request to Tenjin and each program run, with the address, the answer and the time taken. It never shows a credential or a request body, so it is safe to paste into a support request. Requests that fail in transit are retried up to twice when that is safe.
+`--verbose` (`-v`) writes a line to stderr for each request to Tenjin and each program run, with the address, the answer and the time taken. It never shows a credential or a request body, so it is safe to paste into a support request. Requests that fail in transit are retried up to twice when that is safe. When Tenjin refuses a sign-in that looked current, the CLI renews it and sends the request once more.
 
 ## Configuration
 
@@ -333,7 +333,7 @@ The CLI keeps a few small files in a `tenjin` folder in your user configuration 
 | Linux | `$XDG_CONFIG_HOME/tenjin`, or `~/.config/tenjin` |
 | Windows | `%AppData%\tenjin` |
 
-It holds the time of the last update check and the newest SDK releases it found. Your session is kept in the system keychain (macOS Keychain, Windows Credential Manager, the Secret Service on Linux), or in this folder, readable only by you, where there is no keychain.
+It holds the time of the last update check and the newest SDK releases it found, and a lock file that keeps two `tenjin` commands from renewing the sign-in at once. Your session is kept in the system keychain (macOS Keychain, Windows Credential Manager, the Secret Service on Linux), or in this folder, readable only by you, where there is no keychain.
 
 ## Privacy and security
 
@@ -352,6 +352,7 @@ Report a vulnerability privately: see [SECURITY.md](SECURITY.md).
 - **Windows PowerShell reports a TLS error** when installing: run `[Net.ServicePointManager]::SecurityProtocol = 'Tls12'` first.
 - **`tenjin login` on a remote machine** (SSH): use `tenjin login --no-browser`, open the address it prints in your local browser, and paste back the address you land on.
 - **`doctor --device` finds no device:** check that `adb devices` lists it, or that the simulator is booted, and pass `--serial` when there are several.
+- **The SDK skipped its connect:** it sends at most one every 30 seconds, also across launches. Wait 30 seconds, launch the app again, and check again.
 
 Questions about your Tenjin account or integration: [support@tenjin.com](mailto:support@tenjin.com). Bugs and ideas: [open an issue](https://github.com/tenjin/tenjin-cli/issues/new/choose).
 

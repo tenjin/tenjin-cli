@@ -1,6 +1,6 @@
 # ADR 0001: Language, repository and scope
 
-Status: accepted, October 2026.
+Status: accepted, October 2026. Partly superseded by [ADR 0002](0002-tenjin-data-as-commands.md).
 
 ## Context
 
@@ -16,7 +16,7 @@ It covers the local half of SDK onboarding: the app and its SDK key, a launch on
 
 It does not edit the developer's project itself. The developer makes the code changes, or their own coding agent does: `tenjin setup` can start an installed agent on the open findings, with the developer's consent, confined to file edits, `tenjin doctor` and `tenjin sdk guide`. The CLI then checks the result itself. It embeds no model and calls no model API.
 
-It does not mirror the dashboard. Campaign, callback and reporting commands are out until someone needs them.
+It does not mirror the dashboard. Campaign, callback and reporting commands are out until someone needs them. (Superseded: [ADR 0002](0002-tenjin-data-as-commands.md) makes the API's operations commands.)
 
 People should not have to learn the individual commands. `tenjin setup` runs them in order and repeats the checks after each fix. It composes the same operations the commands expose and adds none of its own, so anything it does, a script or agent can do step by step.
 
@@ -40,7 +40,7 @@ TypeScript on an agent SDK was the alternative. It would make an embedded coding
 
 A tool that runs next to a customer's source is easier to trust when its own source is readable, and a public repository is what makes `go install` and a Homebrew formula straightforward.
 
-The generated API clients and the operations built on them live in a separate public Go module, used by both this CLI and the MCP server. One copy of the OpenAPI specs, one generated client. The module's name is settled when it is created.
+The generated API clients and the operations built on them live in a separate public Go module, used by both this CLI and the MCP server. One copy of the OpenAPI specs, one generated client. The module's name is settled when it is created. (Superseded in part: [ADR 0002](0002-tenjin-data-as-commands.md) shares the specs and clients, not the operations.)
 
 ### 5. `cobra` for the command tree
 
@@ -64,7 +64,7 @@ internal/clierr     error kinds and exit codes
 
 The rule: a command parses flags, calls one operation, and renders the result. No HTTP in the command layer. Operations know nothing about terminals. Thin in scope, but laid out so that a later command is a new noun, not a rewrite.
 
-`internal/tenjinapi` is a small hand-written client for now. It is the part that moves into the shared module, on generated clients, when that module exists.
+`internal/tenjinapi` is a small hand-written client for now. It is the part that moves into the shared module, on generated clients, when that module exists. (Since then it is built on the generated clients; see [ADR 0002](0002-tenjin-data-as-commands.md).)
 
 ## Not decided here
 

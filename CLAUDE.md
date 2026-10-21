@@ -30,23 +30,24 @@ cmd/tenjin            entry point; only calls cli.Execute
 internal/cli          command tree; root.go holds shared flags and the environment
 internal/project      detection: framework, platforms, bundle IDs. Reads files only, no network
 internal/verify       doctor checks; source.go holds the per-framework call patterns
-internal/proc         starts programs in their own process group, so Ctrl-C reaches them
+internal/proc         starts programs in their own process group (a job object on Windows), so Ctrl-C, SIGTERM and SIGHUP reach them and their children
 internal/agent        starts an installed coding agent on a task and follows its output; one driver each for Claude Code and Codex
 internal/guides       the SDK integration guides from sdk-llm-guides, embedded at a pinned revision (scripts/sync-guides.sh)
 internal/skill        tenjin-cli.md, the instructions for agents (embedded), and the installer behind `tenjin agent`
 internal/keyfill      finds and fills the SDK key placeholders agents leave
-internal/devicelog    parses the SDK's log lines (Android logcat, iOS log and console); reads them through adb, simctl, or devicectl on an iPhone
+internal/devicelog    parses the SDK's log lines (Android logcat, iOS log and console), pairing them per process; reads them through adb, simctl, or devicectl on an iPhone
 internal/track        the SDK key check and the device lookup against Tenjin's tracking service (track.tenjin.com)
 internal/transport    every HTTP client's transport: retries where safe, and the --verbose log
-internal/tenjinapi    API operations (apps, SDK keys) over the clients generated from the API's specs (openapi/, cma/, rma/: the same specs and edits as the MCP server's); the seed of the shared module
+internal/tenjinapi    every API read and write, Site ID rules and docs search, over the clients generated from the API's specs (openapi/, cma/, rma/: the same specs and edits as the MCP server's); the seed of the shared module
 internal/oauth        browser sign-in: PKCE on a loopback port, then token exchange
-internal/session      credential store (keychain, file fallback) and token refresh
+internal/session      credential store (keychain, file fallback) and token refresh, one process at a time (a lock file)
 internal/config       service URLs per environment
-internal/render       table and JSON output, terminal colour (a muted palette, 24-bit where the terminal says it can)
+internal/render       table, CSV and JSON output, terminal colour (a muted palette, 24-bit where the terminal says it can)
 internal/sdkrelease   the newest release of each SDK, from Maven Central, pub.dev, npm and GitHub, once a day
 internal/update       the once-a-day check for a newer release, told on stderr to a person at a terminal
 internal/buildinfo    version, commit and date, stamped in by GoReleaser and make build
 internal/clierr       error kinds and their exit codes
+internal/catalog      the MCP server's metric and callback macro catalogs, as JSON
 internal/testproject  builds sample projects on disk for tests
 docs/adr              architecture decisions
 ```
@@ -80,9 +81,9 @@ docs/adr              architecture decisions
 - **The skill describes this binary.** `internal/skill/tenjin-cli.md` is what agents are told. When a command or flag it mentions changes, change it too; `TestTheSkillOnlyNamesCommandsThatExist` fails if it names something that is not there.
 - **Data commands that write** (`internal/cli/write.go`, over `tenjinapi/write.go`) send only the fields given as flags, ask first at a terminal (deletes default to no), need `--yes` otherwise, and print the request and its body with `--dry-run`. Each is planned first (`tenjinapi.Client.Plan`, which sends nothing), so its IDs are checked before the question and the dry run. Writes are never retried (`internal/transport` retries only safe requests), only sent once more after the API refused the token. Fields the dashboard shows, such as callback URLs and parameters, are printed as the API returns them.
 - **What the MCP server offers, the CLI offers.** Besides the API's reads and writes: `site-ids` (Site ID Optimization, Connect JSON at `connect.tenjin.com` with the API's token, `tenjinapi/siteids.go`), `docs search` (the public docs site, no token), `reports metrics` and `apps s2s-callbacks macros` (`internal/catalog`, the MCP server's catalogs as JSON; change both together until the shared module holds them), and `apps callback-groups inspect` (its `inspect_app_integration`). A new MCP tool needs a CLI command.
-- **Data commands are one API read each** (`internal/cli/data.go`, over `tenjinapi/data.go`): its parameters as flags, a table at a terminal (a view's columns, or every attribute in the API's order for reports), and with `--json` the API's document as it is, so the API's docs describe it. Lists show one page with a hint on stderr; `--all` merges every page; reports read every page unless `--page`/`--per-page` is given. IDs are checked before any request. `apps list|get|create|ensure|update|delete` and `apps keys list` keep the CLI's own JSON, which leaves out the shared secrets an app carries; a secret given as a flag is said by its last four characters in the question and the dry run.
+- **Data commands are one API read each** (`internal/cli/data.go`, over `tenjinapi/data.go`): its parameters as flags, a table at a terminal (a view's columns, or every attribute in the API's order for reports), and with `--json` the API's document as it is, so the API's docs describe it. Lists show one page with a hint on stderr; `--all` merges every page; reports read every page unless `--page`/`--per-page` is given. A view may name an attribute that hides an item (`hidden` on campaigns, which the dashboard leaves out): tables and CSV leave those items out and say how many on stderr; `--json` keeps them. IDs are checked before any request. `apps list|get|create|ensure|update|delete` and `apps keys list` keep the CLI's own JSON, which leaves out the shared secrets an app carries; a secret given as a flag is said by its last four characters in the question and the dry run.
 - **JSON output is a contract.** `project detect --json` and `doctor --json` are pinned by golden files in `internal/cli/testdata`. Add fields; do not rename or remove them.
-- **`agent install` writes only what it lists.** It owns one file (the Claude Code skill) and one marked section (in `AGENTS.md`), and removes exactly those.
+- **`agent install` writes only what it lists.** It owns one file (the Claude Code skill) and one marked section (in `AGENTS.md`), and removes exactly those, with the folders an install made when nothing else is left in them.
 
 ## Releases
 
@@ -104,4 +105,4 @@ docs/adr              architecture decisions
 - A device is faked with `harness.connectDevice(log)`, which stands in for `adb`.
 - A real-agent test must call `isolate(t, h)`. It points every `tenjin` an agent starts at the fake, through `TENJIN_*_URL`, so an agent can never act on production or on the session of whoever runs the test.
 
-Scope and reasoning: `docs/adr/0001-language-repository-and-scope.md`.
+Scope and reasoning: `docs/adr/0001-language-repository-and-scope.md`, and for the data commands `docs/adr/0002-tenjin-data-as-commands.md`.
