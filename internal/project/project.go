@@ -321,6 +321,8 @@ type detector struct {
 	// cross-platform app in a subdirectory.
 	skipWrapped bool
 	wrapped     map[string]bool
+	// skip are folders, relative to the root, that a walk does not enter.
+	skip map[string]bool
 }
 
 // insideWrapper reports whether rel, a directory below the root, is inside a

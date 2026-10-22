@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -41,7 +42,7 @@ func (d *detector) walk(rel string, maxDepth int, fn func(path string, entry fs.
 		depth := strings.Count(filepath.ToSlash(fromStart), "/") + 1
 
 		if entry.IsDir() {
-			if skipDirs[entry.Name()] || webCopy(relPath) {
+			if skipDirs[entry.Name()] || webCopy(relPath) || d.skip[relPath] {
 				return filepath.SkipDir
 			}
 			fn(relPath, entry)
@@ -63,6 +64,57 @@ func webCopy(rel string) bool {
 	return strings.HasSuffix(rel, "/src/main/assets/public") || strings.HasSuffix(rel, "/App/App/public")
 }
 
+var (
+	buildScript  = regexp.MustCompile(`"build"\s*:\s*"`)
+	webDir       = regexp.MustCompile(`["']?webDir["']?\s*:\s*["']([^"']+)["']`)
+	outputPath   = regexp.MustCompile(`"outputPath"\s*:\s*(?:\{[^{}]*"base"\s*:\s*)?"([^"]+)"`)
+	bundlerFiles = []string{"angular.json", "ionic.config.json", "vite.config.ts", "vite.config.js", "vite.config.mjs", "webpack.config.js",
+		"rollup.config.js", "rollup.config.mjs", "next.config.js", "next.config.mjs", "nuxt.config.ts", "svelte.config.js", "vue.config.js"}
+)
+
+// webOutput lists the folders, relative to root, that a web app's build
+// writes: Capacitor's webDir, Angular's outputPath, www and dist. Only when
+// the project builds its web app, with a build script or a bundler: without
+// one, webDir holds the web app as written, and is read.
+func webOutput(root string) map[string]bool {
+	read := func(name string) string {
+		b, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			return ""
+		}
+		return string(b)
+	}
+	pkg := read("package.json")
+	if pkg == "" {
+		return nil
+	}
+	built := buildScript.MatchString(pkg)
+	for _, name := range bundlerFiles {
+		if _, err := os.Stat(filepath.Join(root, name)); err == nil {
+			built = true
+		}
+	}
+	if !built {
+		return nil
+	}
+	out := map[string]bool{"www": true, "dist": true}
+	add := func(dir string) {
+		dir = path.Clean(strings.TrimPrefix(filepath.ToSlash(dir), "./"))
+		if dir != "." && !path.IsAbs(dir) && !strings.HasPrefix(dir, "..") {
+			out[dir] = true
+		}
+	}
+	for _, name := range []string{"capacitor.config.ts", "capacitor.config.js", "capacitor.config.json"} {
+		if m := webDir.FindStringSubmatch(read(name)); m != nil {
+			add(m[1])
+		}
+	}
+	for _, m := range outputPath.FindAllStringSubmatch(read("angular.json"), -1) {
+		add(m[1])
+	}
+	return out
+}
+
 func isBundle(name string) bool {
 	for _, suffix := range bundleSuffixes {
 		if strings.HasSuffix(name, suffix) {
@@ -72,12 +124,18 @@ func isBundle(name string) bool {
 	return false
 }
 
+// sourceDepth is how many folders down source files are looked for: enough
+// for a module's package folders, as in
+// feature/home/src/main/kotlin/com/company/app/feature/home/ui/screen.
+const sourceDepth = 24
+
 // SourceFiles returns the project's source files with one of the given
-// extensions, relative to root and slash-separated.
+// extensions, relative to root and slash-separated. A web build's output is
+// not source.
 func SourceFiles(root, rel string, exts ...string) []string {
-	d := &detector{root: root}
+	d := &detector{root: root, skip: webOutput(root)}
 	var files []string
-	d.walk(rel, 12, func(path string, entry fs.DirEntry) {
+	d.walk(rel, sourceDepth, func(path string, entry fs.DirEntry) {
 		if entry.IsDir() {
 			return
 		}
@@ -97,14 +155,15 @@ func SourceFiles(root, rel string, exts ...string) []string {
 func TestSource(rel string) bool {
 	for _, part := range strings.Split(path.Dir(rel), "/") {
 		switch {
-		case part == "test", part == "tests", part == "__tests__", part == "integration_test",
+		case part == "test", part == "tests", part == "__tests__", part == "__mocks__", part == "integration_test", part == "e2e",
 			strings.HasPrefix(part, "androidTest"), strings.HasPrefix(part, "test") && len(part) > 4 && part[4] >= 'A' && part[4] <= 'Z',
 			strings.HasSuffix(part, "Tests"), strings.HasSuffix(part, "UITests"):
 			return true
 		}
 	}
 	base := path.Base(rel)
-	for _, suffix := range []string{".test.ts", ".test.tsx", ".test.js", ".test.jsx", ".spec.ts", ".spec.tsx", ".spec.js", ".spec.jsx", "_test.dart", "Tests.swift", "Test.kt", "Test.java"} {
+	for _, suffix := range []string{".test.ts", ".test.tsx", ".test.js", ".test.jsx", ".spec.ts", ".spec.tsx", ".spec.js", ".spec.jsx",
+		".e2e.ts", ".e2e.tsx", ".e2e.js", ".e2e.jsx", "_test.dart", "Tests.swift", "Test.kt", "Test.java"} {
 		if strings.HasSuffix(base, suffix) {
 			return true
 		}

@@ -39,8 +39,8 @@ func BlankComments(s string) string {
 			}
 			blank(i, i+2+end+2)
 			i += 2 + end + 2
-		case strings.HasPrefix(s[i:], `"""`):
-			end := strings.Index(s[i+3:], `"""`)
+		case strings.HasPrefix(s[i:], `"""`), strings.HasPrefix(s[i:], `'''`):
+			end := strings.Index(s[i+3:], s[i:i+3])
 			if end < 0 {
 				return string(b)
 			}
@@ -52,6 +52,66 @@ func BlankComments(s string) string {
 		}
 	}
 	return string(b)
+}
+
+// BlankStrings returns code with the contents of its string literals
+// replaced by spaces, their quotes and every line break kept, so that
+// offsets and line numbers are those of the file and nothing written inside
+// a string reads as code. s has its comments blanked already
+// (BlankComments); ext is the file's extension, for C#'s verbatim strings.
+func BlankStrings(s, ext string) string {
+	b := []byte(s)
+	blank := func(from, to int) {
+		for i := from; i < to && i < len(b); i++ {
+			if b[i] != '\n' {
+				b[i] = ' '
+			}
+		}
+	}
+	for i := 0; i < len(b); {
+		switch {
+		case strings.HasPrefix(s[i:], `"""`), strings.HasPrefix(s[i:], `'''`):
+			end := strings.Index(s[i+3:], s[i:i+3])
+			if end < 0 {
+				blank(i+3, len(s))
+				return string(b)
+			}
+			blank(i+3, i+3+end)
+			i += 3 + end + 3
+		case ext == ".cs" && (strings.HasPrefix(s[i:], `@"`) || strings.HasPrefix(s[i:], `$@"`) || strings.HasPrefix(s[i:], `@$"`)):
+			start := i + strings.IndexByte(s[i:], '"') + 1
+			end := endOfVerbatim(s, start)
+			blank(start, end)
+			i = end + 1
+		case b[i] == '"' || b[i] == '\'' || b[i] == '`':
+			end := endOfString(s, i)
+			closing := end
+			if end-1 > i && s[end-1] == b[i] {
+				closing = end - 1
+			}
+			blank(i+1, closing)
+			i = end
+		default:
+			i++
+		}
+	}
+	return string(b)
+}
+
+// endOfVerbatim returns the offset of the quote that closes a C# verbatim
+// string whose contents start at i, where "" is a quote and a backslash is
+// itself.
+func endOfVerbatim(s string, i int) int {
+	for j := i; j < len(s); j++ {
+		if s[j] == '"' {
+			if j+1 < len(s) && s[j+1] == '"' {
+				j++
+				continue
+			}
+			return j
+		}
+	}
+	return len(s)
 }
 
 // readDependencies reads a file that declares dependencies without its
