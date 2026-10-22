@@ -320,3 +320,67 @@ func TestUnclearAnswerIsAskedAgain(t *testing.T) {
 		t.Errorf("exit = %d, %d writes, stderr = %q", code, len(h.fake.writes), stderr)
 	}
 }
+
+// Creating a callback group from a template that allows one per app, where
+// the app has one, changes that group: the question says so, and asks with
+// no as the default when it would switch a live group off.
+func TestCallbackGroupCreateSaysTheGroupItChanges(t *testing.T) {
+	groups := "/v2/apps/" + testApp + "/integrations/18/callback_groups"
+	templates := "/v2/integrations/18/callback_group_templates"
+	create := []string{"apps", "callback-groups", "create", "--app", testApp, "--channel", "18", "--template", testOther, "--event", "open", "--active=false"}
+	setUp := func(multiple bool) *harness {
+		h := newHarness(t)
+		h.signIn()
+		h.fake.data = map[string]func(*http.Request) (int, any){
+			groups: func(*http.Request) (int, any) {
+				return http.StatusOK, map[string]any{"data": []any{map[string]any{"id": testApp, "type": "callback_group", "attributes": map[string]any{
+					"name": "Installs", "active": true, "callback_group_template_id": testOther,
+				}}}}
+			},
+			templates: func(*http.Request) (int, any) {
+				return http.StatusOK, map[string]any{"data": []any{map[string]any{"id": testOther, "type": "callback_group_template", "attributes": map[string]any{
+					"name": "Install", "allow_multiple": multiple,
+				}}}}
+			},
+		}
+		return h
+	}
+	change := `hange the app's existing callback group "Installs" (` + testApp + `) for channel 18, which is active`
+
+	h := setUp(false)
+	h.typing("")
+	code, stdout, stderr := h.run(create...)
+	if code != 0 || stdout != "" || len(h.fake.writes) != 0 || !strings.Contains(stderr, "C"+change) || !strings.Contains(stderr, "switches it off") ||
+		!strings.Contains(stderr, "[y/N]") || !strings.Contains(stderr, "Nothing was changed.") {
+		t.Errorf("question: exit = %d, %d writes, stdout = %q, stderr = %q", code, len(h.fake.writes), stdout, stderr)
+	}
+	if code, _, stderr := h.run(append(create, "--dry-run")...); code != 0 || !strings.Contains(stderr, "Would c"+change) || len(h.fake.writes) != 0 {
+		t.Errorf("dry run: exit = %d, stderr = %q", code, stderr)
+	}
+	h.env.interactive = false
+	if code, _, stderr := h.run(create...); code != 2 || !strings.Contains(stderr, "Pass --yes to c"+change) {
+		t.Errorf("without --yes: exit = %d, stderr = %q", code, stderr)
+	}
+
+	h = setUp(true)
+	h.typing("")
+	if code, _, stderr := h.run(create...); code != 0 || len(h.fake.writes) != 1 || !strings.Contains(stderr, "Create a callback group on app") || !strings.Contains(stderr, "[Y/n]") {
+		t.Errorf("a template that allows several: exit = %d, %d writes, stderr = %q", code, len(h.fake.writes), stderr)
+	}
+
+	h = setUp(false)
+	h.fake.data[groups] = func(*http.Request) (int, any) { return http.StatusOK, map[string]any{"data": []any{}} }
+	h.typing("")
+	if code, _, stderr := h.run(create...); code != 0 || len(h.fake.writes) != 1 || !strings.Contains(stderr, "Create a callback group on app") {
+		t.Errorf("no group yet: exit = %d, %d writes, stderr = %q", code, len(h.fake.writes), stderr)
+	}
+
+	h = setUp(false)
+	h.fake.data[groups] = func(*http.Request) (int, any) {
+		return http.StatusInternalServerError, map[string]string{"error": "boom"}
+	}
+	h.typing("")
+	if code, _, stderr := h.run(create...); code != 0 || len(h.fake.writes) != 0 || !strings.Contains(stderr, "could not be checked") || !strings.Contains(stderr, "[y/N]") {
+		t.Errorf("lookup failed: exit = %d, %d writes, stderr = %q", code, len(h.fake.writes), stderr)
+	}
+}

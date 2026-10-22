@@ -164,6 +164,11 @@ type writeSpec struct {
 	// and says what will be done, for the question: "Create the campaign ...".
 	// said is the body as the flags that set it, for the question.
 	prepare func(args []string, body tenjinapi.Fields, said string) (string, error)
+	// look reads what the question must say when what the write does
+	// depends on what the account holds: a new what, or "" to keep it, and
+	// whether to ask with no as the default. It runs before the question and
+	// the dry run, not with --yes alone, where nothing is said.
+	look func(ctx context.Context, api *tenjinapi.Client, body tenjinapi.Fields, said string) (what string, cautious bool)
 	// update refuses an empty body: there would be nothing to change.
 	update bool
 	// destructive asks with no as the default.
@@ -212,7 +217,8 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 			if s.update && len(body) == 0 {
 				return clierr.New(clierr.Usage, "nothing to change: give at least one of %s", fields.flagNames())
 			}
-			what, err := s.prepare(args, body, fields.describe(body))
+			said := fields.describe(body)
+			what, err := s.prepare(args, body, said)
 			if err != nil {
 				return err
 			}
@@ -240,11 +246,18 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			cautious := false
+			if s.look != nil && (dryRun || !yes) {
+				var looked string
+				if looked, cautious = s.look(cmd.Context(), api, body, said); looked != "" {
+					what = looked
+				}
+			}
 			if dryRun {
 				shown, masked := fields.masked(body)
 				return writeDryRun(cmd, what, planned, shown, masked)
 			}
-			if err := confirmChange(cmd, env, yes, what, s.destructive); err != nil {
+			if err := confirmChange(cmd, env, yes, what, s.destructive || cautious); err != nil {
 				return err
 			}
 			return write(api)
@@ -626,6 +639,10 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 		"callback-groups": {
 			writeCmd(opts, env, writeSpec{
 				use: "create --app <app-id> --channel <channel-id> --template <template-id>", short: "Create a callback group from a template",
+				long: `Create a callback group from one of the channel's group templates. Where the
+template allows one group per app and the app has one already, Tenjin changes
+that group with what is sent instead of making another: --active=false
+switches it off. The question says which it will be.`,
 				fields: groupFields(true), flags: needAppChannel,
 				prepare: func(_ []string, body tenjinapi.Fields, said string) (string, error) {
 					if err := checkAppChannel(); err != nil {
@@ -635,6 +652,30 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 						return "", clierr.New(clierr.Usage, "--event or --event-definition is required")
 					}
 					return fmt.Sprintf("Create a callback group on app %s for channel %d: %s", app, channel, said), nil
+				},
+				look: func(ctx context.Context, api *tenjinapi.Client, body tenjinapi.Fields, said string) (string, bool) {
+					template, _ := body["callback_group_template_id"].(string)
+					group, err := api.GroupCreateWouldChange(ctx, app, channel, template)
+					if err != nil {
+						return fmt.Sprintf("Create a callback group on app %s for channel %d, or change the app's group from this template if it has one (that could not be checked): %s", app, channel, said), true
+					}
+					if group == nil {
+						return "", false
+					}
+					state := "switched off"
+					if group.Active {
+						state = "active"
+					}
+					name := group.ID
+					if group.Name != "" {
+						name = fmt.Sprintf("%q (%s)", group.Name, group.ID)
+					}
+					what := fmt.Sprintf("Change the app's existing callback group %s for channel %d, which is %s: %s", name, channel, state, said)
+					stops := group.Active && body["active"] == false
+					if stops {
+						what += ". This switches it off, and its callbacks stop"
+					}
+					return what, stops
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, _ []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 					return api.CreateAppCallbackGroup(ctx, app, channel, body)

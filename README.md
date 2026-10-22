@@ -161,7 +161,7 @@ For anyone with a Tenjin account, from any directory: none of these reads a proj
 | `tenjin saved-reports list`, `get <id>`, `run <id>` | Reports saved in the dashboard, and their data |
 | `tenjin reports metrics [words]` | The metrics each report can show, for `--metrics`; `roi_7d` finds `roi_Nd` |
 | `tenjin apps s2s-callbacks macros [words]` | The macros a callback URL can use, such as `{{country}}` |
-| `tenjin apps callback-groups inspect --app <id> --channel <id>` | An app's callbacks to one channel in one view: templates, groups with the settings each still lacks, shared settings, events |
+| `tenjin apps callback-groups inspect --app <id> --channel <id>` | An app's callback groups for one channel in one view: the channel's group templates, the app's groups with the settings each still lacks, the shared settings, the app's events |
 | `tenjin site-ids list` | Site ID Optimization: the site IDs whose installs are not attributed |
 | `tenjin docs search <words>` | Tenjin's documentation, with links |
 
@@ -174,7 +174,7 @@ Changes are commands too. Each sends only the fields given as flags, asks before
 | `tenjin campaigns update <id> --attribution-window <seconds>`, `delete <id>` | Change a campaign's attribution window; delete one that has not tracked installs |
 | `tenjin apps callbacks create --app <id> --template <id>`, `update <id>` | Callbacks from a channel's templates; `--param key=value` for its parameters |
 | `tenjin apps s2s-callbacks create --app <id> --url <url> --event <event> --name <name> --action ping`, `update <id>` | Server-to-server callbacks |
-| `tenjin apps callback-groups create --app <id> --channel <id> --template <id>`, `update <id>` | Callback groups; `--setting key=value` for their settings |
+| `tenjin apps callback-groups create --app <id> --channel <id> --template <id>`, `update <id>` | Callback groups; `--setting key=value` for their settings. Where a template allows one group per app and the app has one, `create` changes that group with what it sends; its question says so |
 | `tenjin apps callback-settings update --app <id> --channel <id> --setting <key=value>` | An app's callback settings for one channel |
 | `tenjin saved-reports create --type <type> --name <name> --granularity <g> --group-by <g>`, `update <id>`, `delete <id>` | Saved reports |
 | `tenjin site-ids block <site-id>...`, `reinstate <site-id>...`, `clear` | Block site IDs, everywhere or for one `--app`, `--campaign` or `--channel`; `--replace` makes them the only rules |

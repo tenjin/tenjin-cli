@@ -49,9 +49,9 @@ edit 6 adds an endpoint, and edit 9 adds the paging parameters the API reads.
    which were repointed accordingly. `Event` has no single-resource endpoint, so
    no `EventResponse` was added. **Unlike edits 1–4, this corrects the modeled
    response shape to match what the API actually returns**: `App`/`Channel`/
-   `Campaign` were verified live against `GET /apps`; `Event`/`AdAccount` were
-   verified against the API's JSON:API renderer, which emits every
-   list element as a bare `{id, type, attributes}` resource identically to `App`.
+   `Campaign` were verified live against `GET /apps`; `Event`/`AdAccount` lists
+   are JSON:API documents too, and the API answers every list element with a
+   bare `{id, type, attributes}` resource, as it does for `App`.
 
    The `components.examples` and inline `example` blocks are documentation only:
    oapi-codegen ignores them. Use them as a cross-check of the wire shape, never
@@ -59,7 +59,7 @@ edit 6 adds an endpoint, and edit 9 adds the paging parameters the API reads.
 
 6. **Added the SDK keys endpoint** (cma.json: `/apps/{app_id}/sdk_keys`,
    `SdkKey`, `ArrayOfSdkKeys`). It was added to the API on 15 October 2026,
-   after these specs were taken. The shape follows the API's serializer: type
+   after these specs were taken. The shape is what the API answers: type
    `sdk_key`, an integer ID written as a string, and `name`, `key` and
    `created_at` attributes.
 

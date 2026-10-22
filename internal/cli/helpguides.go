@@ -12,8 +12,8 @@ const guidesTitle = "Guides, step by step:"
 // A guide walks through one task with the commands it takes, where --help is
 // the reference for each command. A command with no action of its own is a
 // help topic to cobra: 'tenjin help callbacks' prints it, and 'tenjin --help'
-// lists it. TestTheGuidesOnlyNameCommandsThatExist checks every command and
-// flag a guide names.
+// lists it. TestTheHelpTextsOnlyNameCommandsThatExist checks every command
+// and flag a guide names, and TestTheGuides that each is listed.
 var helpGuides = []struct{ name, short, text string }{
 	{"integration", "Add the Tenjin SDK to an app, check it, and check a launch", `Add the Tenjin SDK to an app, check it, and check a real launch.
 
@@ -55,8 +55,9 @@ To an ad network, step by step:
 
   1. Find the network's channel ID:
        tenjin channels list --query lifestreet
-  2. See what the app has for it, and what each group still lacks:
-       tenjin apps callback-groups inspect --app <app-id> --channel <channel-id>
+  2. See the callbacks the app already has for it: a callback cannot be
+     deleted, so one made twice stays twice.
+       tenjin apps callbacks list --app <app-id> --channel <channel-id>
   3. Pick a template, and read the parameters it needs:
        tenjin apps callback-templates list --app <app-id> --channel <channel-id>
        tenjin apps callback-templates get <template-id> --app <app-id>
@@ -68,9 +69,19 @@ To an ad network, step by step:
 
 A callback group instead:
 
-  tenjin channels callback-group-templates <channel-id>
-  tenjin apps callback-groups create --app <app-id> --channel <channel-id> --template <group-template-id> --event open --active=false
-  tenjin apps callback-settings update --app <app-id> --channel <channel-id> --setting key=value
+  1. See the network's group templates, the groups the app already has, and
+     the settings each still lacks:
+       tenjin apps callback-groups inspect --app <app-id> --channel <channel-id>
+  2. If the app has no group from the template, create one switched off:
+       tenjin apps callback-groups create --app <app-id> --channel <channel-id> --template <group-template-id> --event open --active=false
+     If it has one, change that group instead: where a template allows one
+     group per app, create changes the app's group with what it sends, so
+     --active=false would switch a live group off.
+       tenjin apps callback-groups update <group-id> --app <app-id> --channel <channel-id> --setting key=value
+  3. Give the settings the network's groups share:
+       tenjin apps callback-settings update --app <app-id> --channel <channel-id> --setting key=value
+  4. Switch the group on once inspect shows it lacks nothing:
+       tenjin apps callback-groups update <group-id> --app <app-id> --channel <channel-id> --active
 
 To your own server:
 
@@ -90,10 +101,11 @@ first; --yes skips the question, and --dry-run sends nothing.`},
 
 --group-by and --granularity take the values each report's --help lists.
 --app and --channel narrow it, each repeated or comma-separated. --metrics
-picks the columns; the names are here:
+picks the columns; the names are here (--report is user_acquisition for
+spend, ad_monetization for ad-revenue, skan for skadnetwork and skan):
 
   tenjin reports metrics roi
-  tenjin reports metrics --report spend
+  tenjin reports metrics --report user_acquisition
 
 A report reads every page. -o csv writes it for a spreadsheet, and --json
 prints Tenjin's own answer:
@@ -139,8 +151,9 @@ For a coding agent (Claude Code, Codex, Cursor and others):
   tenjin agent install       teach it the CLI, in this project
   tenjin agent skill         the same instructions, for any other agent
 
-Sign in yourself with 'tenjin login' rather than giving an agent
-TENJIN_API_TOKEN: an agent can read the environment it is started in.`},
+An agent that can run tenjin acts as you, however you signed in. Prefer
+'tenjin login' to giving it TENJIN_API_TOKEN, so the token is not in its
+environment or its logs; 'tenjin logout' ends that access.`},
 }
 
 // newGuideCmds returns the guides as help topics.
@@ -187,8 +200,8 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.{{e
 
 // commandHelp adds to a command's help: a description where it has none,
 // and examples. Keys are command paths below 'tenjin'.
-// TestTheHelpTextsNameCommandsThatExist checks the paths, and the commands
-// and flags the texts name.
+// TestTheHelpTextsOnlyNameCommandsThatExist checks the paths, and the
+// commands and flags the texts name.
 var commandHelp = map[string]struct{ long, example string }{
 	"apps": {long: `Your apps, and their keys, events and callbacks. A command about one app
 takes its ID, from 'tenjin apps list'.
@@ -196,7 +209,7 @@ takes its ID, from 'tenjin apps list'.
 Setting up callbacks? 'tenjin help callbacks' walks through it.`},
 	"apps callbacks": {long: `Callbacks send an app's installs and events to an ad network. Each one comes
 from one of the network's callback templates, with the parameters that
-template needs: 'tenjin apps callback-templates list' shows them. Several set
+template needs: 'tenjin apps callback-templates get' shows them. Several set
 up together are a callback group: 'tenjin apps callback-groups'. To an
 address of your own, use 'tenjin apps s2s-callbacks'.
 
@@ -234,12 +247,19 @@ Step by step: 'tenjin help callbacks'.`},
 	"apps callback-groups": {long: `A callback group is an ad network's callbacks set up together, from one of
 the network's group templates, with settings they share. The group templates
 are in 'tenjin channels callback-group-templates', the shared settings in
-'tenjin apps callback-settings'. 'inspect' shows an app's callbacks to one
-network in one view, and what each group still lacks.
+'tenjin apps callback-settings'. 'inspect' shows, for one network, its group
+templates, the app's groups with the settings each still lacks, the shared
+settings and the app's events. Where a template allows one group per app,
+'create' changes the app's group if it has one.
 Step by step: 'tenjin help callbacks'.`},
 	"apps callback-groups inspect": {example: `  tenjin apps callback-groups inspect --app <app-id> --channel <channel-id>`},
-	"apps callback-groups create": {example: `  tenjin channels callback-group-templates <channel-id>
+	"apps callback-groups create": {example: `  # The group templates, and the groups the app already has
+  tenjin apps callback-groups inspect --app <app-id> --channel <channel-id>
+
+  # A group, switched off; the request is shown and not sent
   tenjin apps callback-groups create --app <app-id> --channel <channel-id> --template <group-template-id> --event open --active=false --dry-run`},
+	"apps callback-groups update": {example: `  tenjin apps callback-groups update <group-id> --app <app-id> --channel <channel-id> --active
+  tenjin apps callback-groups update <group-id> --app <app-id> --channel <channel-id> --setting key=value`},
 
 	"apps callback-settings": {long: `The settings an app's callback groups to one ad network share.
 'tenjin apps callback-groups inspect' shows which ones each group still needs.
@@ -256,7 +276,7 @@ Step by step: 'tenjin help reporting'.`},
 	"reports spend": {example: `  tenjin reports spend --from 2026-10-01 --to 2026-10-07
   tenjin reports spend --from 2026-10-01 --to 2026-10-07 --group-by channel,app --granularity totals-daily -o csv`},
 	"reports metrics": {example: `  tenjin reports metrics roi
-  tenjin reports metrics --report spend`},
+  tenjin reports metrics --report user_acquisition`},
 
 	"saved-reports run": {example: `  tenjin saved-reports list
   tenjin saved-reports run <saved-report-id> -o csv`},
@@ -268,7 +288,7 @@ func applyCommandHelp(root *cobra.Command) {
 	for path, h := range commandHelp {
 		cmd, _, err := root.Find(strings.Fields(path))
 		if err != nil || cmd == root {
-			continue // TestTheHelpTextsNameCommandsThatExist reports it
+			continue // TestTheHelpTextsOnlyNameCommandsThatExist reports it
 		}
 		if cmd.Long == "" && h.long != "" {
 			cmd.Long = h.long

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/tenjin/tenjin-cli/internal/clierr"
 )
@@ -77,6 +78,68 @@ func (c *Client) InspectIntegration(ctx context.Context, app string, channel int
 		return nil, err
 	}
 	return out, nil
+}
+
+// CallbackGroup is one of an app's callback groups, as a question about it
+// names it.
+type CallbackGroup struct {
+	ID, Name string
+	Active   bool
+}
+
+// GroupCreateWouldChange is the app's callback group on a channel that
+// creating another from template would change, or nil when it would make a
+// new one. A template that does not allow more than one group per app gets
+// the app's existing group changed, with what the create sends, rather than
+// a second one.
+func (c *Client) GroupCreateWouldChange(ctx context.Context, app string, channel int, template string) (*CallbackGroup, error) {
+	every := Paging{All: true}
+	groups, err := flatList(c.AppCallbackGroups(ctx, app, channel, every))
+	if err != nil {
+		return nil, err
+	}
+	var found *CallbackGroup
+	for _, g := range groups {
+		if t, _ := g["callback_group_template_id"].(string); strings.EqualFold(t, template) {
+			id, _ := g["id"].(string)
+			name, _ := g["name"].(string)
+			active, _ := g["active"].(bool)
+			found = &CallbackGroup{ID: id, Name: name, Active: active}
+			break
+		}
+	}
+	if found == nil {
+		return nil, nil
+	}
+	templates, err := flatList(c.CallbackGroupTemplates(ctx, channel, every))
+	if err != nil {
+		return nil, err
+	}
+	for _, t := range templates {
+		if id, _ := t["id"].(string); strings.EqualFold(id, template) {
+			if multiple, _ := t["allow_multiple"].(bool); multiple {
+				return nil, nil
+			}
+			if found.Name == "" {
+				found.Name, _ = t["name"].(string)
+			}
+		}
+	}
+	return found, nil
+}
+
+// flatList flattens the resources of a list read.
+func flatList(doc Document, err error) ([]map[string]any, error) {
+	if err != nil {
+		return nil, err
+	}
+	var body struct {
+		Data any `json:"data"`
+	}
+	if err := json.Unmarshal(doc, &body); err != nil {
+		return nil, clierr.Wrap(clierr.Upstream, err, "Tenjin's answer is not a JSON:API document")
+	}
+	return list(flatten(body.Data)), nil
 }
 
 type signInError struct{ err error }
