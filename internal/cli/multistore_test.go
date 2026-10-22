@@ -256,7 +256,7 @@ func TestSetupAsksWhichFeatures(t *testing.T) {
 		"1) App opens and attribution  installs and opens, by campaign (always included)",
 		"2) In-app purchases           the app sells items: revenue per campaign",
 		"suggested: Google Play Billing in app/build.gradle.kts",
-		"Not sure? Keep app opens",
+		"Keep app opens: running setup again adds the rest.",
 		"Press Enter when the",
 		"Integrating: App opens and attribution, In-app purchases.",
 		"In-app purchases: chosen for the integration, but not sent to Tenjin",
