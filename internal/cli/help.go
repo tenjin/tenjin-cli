@@ -92,8 +92,7 @@ func colourHelp(text string, style render.Styler, cmd *cobra.Command) string {
 // error instead: the landing is prose for people, and there is no result to
 // give a script without a command.
 func writeLanding(root *cobra.Command) error {
-	asJSON, _ := root.Flags().GetBool("json")
-	if output, _ := root.Flags().GetString("output"); asJSON || output != string(render.Table) {
+	if wantsResult(root) {
 		return clierr.New(clierr.Usage, "a command is needed: tenjin on its own prints no result").
 			WithHint("Run 'tenjin --help' for the commands.")
 	}
@@ -142,6 +141,102 @@ func writeLanding(root *cobra.Command) error {
 	fmt.Fprintf(&b, "Stuck? %s has read the documentation for you.\n", style.Accent("tenjin docs search <words>"))
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+// wantsResult reports whether a command was asked for JSON or CSV: a result
+// for a program, which prose for people is not.
+func wantsResult(cmd *cobra.Command) bool {
+	asJSON, _ := cmd.Flags().GetBool("json")
+	output, _ := cmd.Flags().GetString("output")
+	return asJSON || (output != "" && output != string(render.Table))
+}
+
+// newHelpCmd is 'tenjin help <command or guide>'. Unlike cobra's, it fails
+// on a topic it does not know, with a suggestion and the guides, rather than
+// printing the commands with exit status 0.
+func newHelpCmd(root *cobra.Command) *cobra.Command {
+	return &cobra.Command{
+		Use:   "help [command | guide]",
+		Short: "Help about any command, or a guide",
+		Long: `Help about any command: 'tenjin help apps list' is 'tenjin apps list --help'.
+A guide walks through a task step by step: 'tenjin help callbacks'.`,
+		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+			cmd, _, err := root.Find(args)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+			var out []cobra.Completion
+			for _, c := range cmd.Commands() {
+				if (c.IsAvailableCommand() || c.IsAdditionalHelpTopicCommand()) && strings.HasPrefix(c.Name(), toComplete) {
+					out = append(out, cobra.CompletionWithDesc(c.Name(), c.Short))
+				}
+			}
+			return out, cobra.ShellCompDirectiveNoFileComp
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if wantsResult(cmd) {
+				return clierr.New(clierr.Usage, "help is prose for people and has no JSON or CSV form").
+					WithHint("Run it without --json or -o.")
+			}
+			found, rest, err := root.Find(args)
+			if err == nil && (len(rest) == 0 || !found.HasSubCommands()) {
+				return found.Help()
+			}
+			if found == nil {
+				found = root
+			}
+			name := strings.Join(args, " ")
+			if len(rest) > 0 {
+				name = rest[0]
+			}
+			msg := fmt.Sprintf("no help topic %q", name)
+			if s := helpSuggestions(found, name); len(s) > 0 {
+				msg += fmt.Sprintf("; did you mean %q?", s[0])
+			}
+			guides := make([]string, len(helpGuides))
+			for i, g := range helpGuides {
+				guides[i] = g.name
+			}
+			return clierr.New(clierr.Usage, "%s", msg).
+				WithHint("The guides are %s: 'tenjin help <guide>'. 'tenjin --help' lists the commands.", strings.Join(guides, ", "))
+		},
+	}
+}
+
+// helpSuggestions is what name may have meant under cmd: a command, as
+// cobra suggests one, or a guide.
+func helpSuggestions(cmd *cobra.Command, name string) []string {
+	out := cmd.SuggestionsFor(name)
+	if cmd.HasParent() {
+		return out
+	}
+	for _, g := range helpGuides {
+		if strings.HasPrefix(g.name, strings.ToLower(name)) || editDistance(strings.ToLower(name), g.name) <= 2 {
+			out = append(out, g.name)
+		}
+	}
+	return out
+}
+
+// editDistance is the Levenshtein distance between a and b.
+func editDistance(a, b string) int {
+	prev := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		cur := make([]int, len(b)+1)
+		cur[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			cur[j] = min(prev[j]+1, cur[j-1]+1, prev[j-1]+cost)
+		}
+		prev = cur
+	}
+	return prev[len(b)]
 }
 
 // countCommands counts the commands that do something, leaving out help

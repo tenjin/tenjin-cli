@@ -532,6 +532,7 @@ terminal, so scripts and coding agents can drive them.`,
 	root.AddCommand(newDocsCmd(opts, env), newVersionCmd(opts))
 	root.AddCommand(newGuideCmds()...)
 	root.SetUsageTemplate(rootUsageTemplate)
+	root.SetHelpCommand(newHelpCmd(root))
 	applyCommandHelp(root)
 	return root
 }
@@ -552,6 +553,10 @@ func group(use, short string, subcommands ...*cobra.Command) *cobra.Command {
 		SuggestionsMinimumDistance: 2,
 		Args:                       cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 && wantsResult(cmd) {
+				return clierr.New(clierr.Usage, "a command is needed: %s on its own prints no result", cmd.CommandPath()).
+					WithHint("Run '%s --help' for its commands.", cmd.CommandPath())
+			}
 			if len(args) == 0 {
 				return cmd.Help()
 			}

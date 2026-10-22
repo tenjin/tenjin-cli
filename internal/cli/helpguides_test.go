@@ -84,6 +84,34 @@ func TestTheGuides(t *testing.T) {
 	}
 }
 
+// Help for a topic that does not exist is a usage error that suggests one,
+// and help asked for as JSON is refused like the landing: it is prose.
+func TestHelpRefusesWhatItCannotAnswer(t *testing.T) {
+	h := newHarness(t)
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"help", "callback"}, `did you mean "callbacks"?`},
+		{[]string{"help", "reprting"}, `did you mean "reporting"?`},
+		{[]string{"help", "apps", "callbakcs"}, `did you mean "callbacks"?`},
+		{[]string{"help", "nothing-like-it"}, "integration, callbacks, reporting, scripting"},
+		{[]string{"help", "callbacks", "--json"}, "no JSON"},
+		{[]string{"help", "-o", "csv"}, "no JSON"},
+		{[]string{"apps", "--json"}, "tenjin apps on its own prints no result"},
+	} {
+		code, stdout, stderr := h.run(tc.args...)
+		if code != 2 || stdout != "" || !strings.Contains(stderr, tc.want) {
+			t.Errorf("%v: exit = %d, stdout = %q, stderr = %q", tc.args, code, stdout, stderr)
+		}
+	}
+	for _, args := range [][]string{{"help"}, {"help", "apps"}, {"help", "apps", "list"}, {"help", "reports", "metrics", "roi"}} {
+		if code, stdout, stderr := h.run(args...); code != 0 || !strings.Contains(stdout, "Usage:") {
+			t.Errorf("%v: exit = %d, stdout = %q, stderr = %q", args, code, stdout, stderr)
+		}
+	}
+}
+
 var exitCodeLine = regexp.MustCompile(`(?m)^  (\d+)\s{2,}`)
 
 // The scripting guide's exit codes are the README's: every code the CLI can
