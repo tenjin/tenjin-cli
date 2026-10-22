@@ -291,8 +291,8 @@ func (s *setup) signIn() error {
 }
 
 // chooseBuilds asks which builds ship, when a target has several and none
-// were named with --build. Enter keeps them all; without a terminal they are
-// all kept, and the list says how to narrow it.
+// were named with --build. They start ticked, so Enter keeps them all;
+// without a terminal they are all kept, and the list says how to narrow it.
 func (s *setup) chooseBuilds(p *project.Project) error {
 	all := p.Builds()
 	several := false
@@ -302,7 +302,36 @@ func (s *setup) chooseBuilds(p *project.Project) error {
 	if !several || len(s.chosen) > 0 {
 		return nil
 	}
-	s.say("This project ships builds that are separate apps in Tenjin, each with its own SDK key:")
+	const ships = "This project ships builds that are separate apps in Tenjin, each with its own SDK key"
+	choice := &picker{needOne: "Tick at least one build."}
+	for _, b := range all {
+		t, _ := p.Build(b.ID)
+		choice.items = append(choice.items, pickItem{label: buildTitle(t, b) + ": " + render.Clean(b.BundleID), about: render.Clean(b.ID), ticked: true})
+	}
+	if s.env.canPick() {
+		s.say("%s. Which of these do you ship?", ships)
+	} else {
+		s.say("%s:", ships)
+	}
+	usedKeys, err := s.env.pick(s.out, s.style, choice)
+	if err != nil {
+		return err
+	}
+	if usedKeys {
+		ticked := choice.ticked()
+		if len(ticked) == len(all) {
+			s.say("Setting up all %s.", plural(len(all), "build"))
+			return nil
+		}
+		for _, i := range ticked {
+			s.chosen = append(s.chosen, all[i].ID)
+		}
+		if err := narrowBuilds(p, s.chosen); err != nil {
+			return err
+		}
+		s.say("Setting up %s.", plural(len(s.chosen), "build"))
+		return nil
+	}
 	for i, b := range all {
 		t, _ := p.Build(b.ID)
 		s.say("  %d) %s: %s  %s", i+1, buildTitle(t, b), render.Clean(b.BundleID), s.style.Dim(render.Clean(b.ID)))

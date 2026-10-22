@@ -71,6 +71,11 @@ type environment struct {
 	// interactive is true when a person is at the terminal. Commands never
 	// prompt otherwise.
 	interactive bool
+	// rawInput puts the terminal in raw mode, for a choice made with the
+	// arrow keys, and returns what puts it back. Nil where there is no such
+	// terminal (TERM=dumb, or a console without escape codes) and in tests:
+	// choices are then typed a line at a time.
+	rawInput    func() (restore func(), err error)
 	openBrowser func(url string) error
 	// loginTimeout bounds the wait for the browser; zero means the default.
 	loginTimeout time.Duration
@@ -136,6 +141,7 @@ func defaultEnvironment() (*environment, error) {
 	if err != nil {
 		return nil, clierr.Wrap(clierr.Usage, err, "%v", err)
 	}
+	interactive := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 	return &environment{
 		getenv:      os.Getenv,
 		updates:     updateChecker(os.Getenv),
@@ -143,7 +149,8 @@ func defaultEnvironment() (*environment, error) {
 		endpoints:   endpoints,
 		store:       session.NewStore(),
 		stdin:       bufio.NewReader(os.Stdin),
-		interactive: term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())),
+		interactive: interactive,
+		rawInput:    rawInput(interactive),
 		openBrowser: openBrowser,
 		lookPath:    exec.LookPath,
 		executable:  os.Executable,
@@ -156,6 +163,24 @@ func defaultEnvironment() (*environment, error) {
 		},
 		stream: streamProgram,
 	}, nil
+}
+
+// rawInput returns what puts the terminal in raw mode, or nil where a
+// choice cannot be made with the arrow keys. On Windows, raw mode also turns
+// on the console's escape sequences for input, so the arrow keys arrive as
+// they do elsewhere.
+func rawInput(interactive bool) func() (func(), error) {
+	if !interactive || os.Getenv("TERM") == "dumb" || !render.CursorControl(os.Stdout) {
+		return nil
+	}
+	fd := int(os.Stdin.Fd())
+	return func() (func(), error) {
+		state, err := term.MakeRaw(fd)
+		if err != nil {
+			return nil, err
+		}
+		return func() { _ = term.Restore(fd, state) }, nil
+	}
 }
 
 // updateChecker returns the update check for a person at a terminal, or nil.

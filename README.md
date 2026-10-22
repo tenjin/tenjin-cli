@@ -199,7 +199,7 @@ tenjin campaigns create --app <app-id> --name "Summer UA" --channel <channel-id>
 
 ### The steps of setup
 
-1. **Your project.** What `project detect` reports, and which Tenjin features to integrate. App opens are always included. Purchases, subscriptions, ad revenue, consent, deep links, SKAdNetwork conversion values, custom events and the customer user ID are offered, and the ones the project shows a reason for are suggested. `--features` chooses without asking.
+1. **Your project.** What `project detect` reports, and which Tenjin features to integrate. App opens are always included. Purchases, subscriptions, ad revenue, consent, deep links, SKAdNetwork conversion values, custom events and the customer user ID are offered, and the ones the project shows a reason for are suggested. Move through the list with the arrow keys, tick or untick with space, and press Enter. `--features` chooses without asking.
 2. **Sign in**, through the browser, if there is no session.
 3. **Tenjin apps.** Finds the app for each build, or creates it after asking (`--yes` to skip the question).
 4. **SDK keys.** Fetches each app's key from Tenjin, or says where to copy it in the dashboard, and checks it at once, so a wrong key, or the other platform's, is caught before a build.

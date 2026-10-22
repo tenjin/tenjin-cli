@@ -66,8 +66,9 @@ func containsString(values []string, v string) bool {
 }
 
 // chooseFeatures settles which features setup integrates: the ones named
-// with --features; at a terminal, the suggested ones changed one by one until
-// the developer presses Enter; without a terminal, the suggested ones.
+// with --features; at a terminal, the suggested ones changed with the arrow
+// keys and space (or a line at a time, where the terminal cannot do that)
+// until the developer presses Enter; without a terminal, the suggested ones.
 // Whichever it is, the choice is said back.
 func (s *setup) chooseFeatures(p *project.Project) error {
 	if s.features != nil {
@@ -79,6 +80,18 @@ func (s *setup) chooseFeatures(p *project.Project) error {
 		chosen[id] = true
 	}
 	s.say("\nTenjin features for this integration (%s = included). Each one is code in the\napp, which your coding agent or you add, and the checks look for. Not sure?\nKeep app opens: running setup again adds the rest.\n", s.style.Green("✓"))
+	choice := &picker{items: featureItems(p, chosen)}
+	picked, err := s.env.pick(s.out, s.style, choice)
+	if err != nil {
+		return err
+	}
+	if picked {
+		for _, i := range choice.ticked() {
+			s.features = append(s.features, p.Features[i].ID)
+		}
+		s.say("Integrating: %s.", featureList(s.features))
+		return nil
+	}
 	s.listFeatures(p, chosen)
 	if !s.env.interactive {
 		s.features = inOrder(p, chosen)
@@ -104,30 +117,33 @@ func (s *setup) chooseFeatures(p *project.Project) error {
 	}
 }
 
-// listFeatures prints the project's features, the chosen ones ticked, each
-// with what it is for and, when the project suggests it, why.
-func (s *setup) listFeatures(p *project.Project, chosen map[string]bool) {
-	width := 0
+// featureItems are the project's features as choices, the chosen ones
+// ticked, each with what it is for and, when the project suggests it, why.
+func featureItems(p *project.Project, chosen map[string]bool) []pickItem {
+	items := make([]pickItem, len(p.Features))
 	for i, f := range p.Features {
-		width = max(width, len(fmt.Sprintf("%d) %s", i+1, f.Name)))
-	}
-	for i, f := range p.Features {
-		mark := " "
-		if chosen[f.ID] || f.Required {
-			mark = s.style.Green("✓")
-		}
-		about := project.FeatureAbout(f.ID)
+		it := pickItem{label: f.Name, about: project.FeatureAbout(f.ID), ticked: chosen[f.ID]}
 		if f.Required {
-			about += " (always included)"
-		}
-		s.say("  %s %-*s  %s", mark, width, fmt.Sprintf("%d) %s", i+1, f.Name), s.style.Dim(about))
-		if len(f.Evidence) > 0 && !f.Required {
+			it.about += " (always included)"
+			it.fixed = f.Name + " are always included."
+		} else if len(f.Evidence) > 0 {
 			var why []string
 			for _, e := range f.Evidence {
 				why = append(why, render.Clean(e.What+" in "+e.File))
 			}
-			s.say("    %*s  %s", width, "", s.style.Dim("suggested: "+strings.Join(why, "; ")))
+			it.detail = "suggested: " + strings.Join(why, "; ")
 		}
+		items[i] = it
+	}
+	return items
+}
+
+// listFeatures prints the features as they are chosen, for the choice made
+// a line at a time.
+func (s *setup) listFeatures(p *project.Project, chosen map[string]bool) {
+	list := &picker{items: featureItems(p, chosen)}
+	for _, line := range list.lines(s.style, frame{final: true}) {
+		s.say("%s", line)
 	}
 }
 
