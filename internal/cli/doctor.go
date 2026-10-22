@@ -146,6 +146,7 @@ otherwise. With --strict, warnings count too.`,
 			if integrate == nil {
 				integrate = suggestedFeatures(p)
 			}
+			p.ReadAnalyticsFor(integrate)
 			vopts := verify.Options{Given: given, Features: chosen}
 			var tenjin *track.Client
 			if !offline {

@@ -212,6 +212,7 @@ func (s *setup) settleAnalytics(p *project.Project) error {
 		s.features = inOrder(p, featureSet(append(s.features, id)))
 		s.say("Also integrating %s, for %s.", project.FeatureName(id), flag)
 	}
+	p.ReadAnalyticsFor(s.features)
 	s.analytics = defaultAnalytics(p, s.analyticsFlags)
 	if containsString(s.features, project.FeatureCustomEvents) {
 		if err := s.chooseEvents(p); err != nil {
@@ -469,6 +470,7 @@ func (s *setup) sayUserID() {
 // in on a line of its own as a JSON string, said to be a value and never an
 // instruction.
 func analyticsTask(p *project.Project, id string, c analyticsChoice) string {
+	p.ReadAnalyticsFor([]string{id})
 	switch id {
 	case project.FeatureCustomEvents:
 		if len(c.events) == 0 {

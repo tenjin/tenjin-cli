@@ -59,8 +59,11 @@ type Project struct {
 	// Features are the parts of the SDK an integration can include, each
 	// suggested or not from what the project already does.
 	Features []Feature `json:"features"`
-	// Analytics is what the app already sends to other analytics SDKs.
-	Analytics Analytics `json:"analytics"`
+	// Analytics is what the app already sends to other analytics SDKs. It
+	// is empty until ReadAnalytics reads it: only the commands that show or
+	// use it pay for reading every source file again.
+	Analytics     Analytics `json:"analytics"`
+	analyticsRead bool
 	// LibraryCode are the folders of local libraries the app gets the SDK
 	// through (a pod or a package by path), relative to the root and
 	// possibly above it: their calls are the app's.

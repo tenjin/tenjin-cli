@@ -354,5 +354,4 @@ func (d *detector) finish() {
 	d.trackingPrompt()
 	d.findAdSDKs()
 	d.findFeatures()
-	d.findAnalytics()
 }

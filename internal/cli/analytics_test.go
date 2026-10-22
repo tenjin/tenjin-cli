@@ -311,6 +311,7 @@ func TestTheAgentIsToldTheEventsAndTheUserID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	p.ReadAnalytics()
 	prompt := task(t, withAnalytics(), defaultAnalytics(p, analyticsFlags{}))
 	for _, want := range []string{
 		"- Custom events: send exactly the events listed below, by these names, each where the app already does the corresponding thing, and add no others. " +

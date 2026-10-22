@@ -1,15 +1,17 @@
 package project
 
 import (
-	"fmt"
+	"bytes"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
-	"strconv"
 	"strings"
+	"sync"
 	"unicode"
+	"unicode/utf16"
 )
 
 // Analytics is what the app already sends to other analytics SDKs, read from
@@ -82,6 +84,29 @@ func (a Analytics) EventsNamed(name string) []AnalyticsEvent {
 	return out
 }
 
+// ReadAnalytics reads what the app sends to other analytics SDKs into
+// p.Analytics, once. It reads every source file, so Detect leaves it to
+// the commands that show or use it.
+func (p *Project) ReadAnalytics() {
+	if p.analyticsRead {
+		return
+	}
+	p.analyticsRead = true
+	d := &detector{root: p.Root, p: p}
+	d.findAnalytics()
+}
+
+// ReadAnalyticsFor reads them when the features include custom events or
+// the customer user ID, which are what they are for.
+func (p *Project) ReadAnalyticsFor(features []string) {
+	for _, id := range features {
+		if id == FeatureCustomEvents || id == FeatureUserID {
+			p.ReadAnalytics()
+			return
+		}
+	}
+}
+
 const (
 	maxAnalyticsEvents  = 50
 	maxAnalyticsUserIDs = 10
@@ -107,6 +132,10 @@ func anywhere(patterns ...string) []receiver {
 // framework the CLI supports.
 type analyticsSDK struct {
 	name string
+	// hints are words one of which a file must hold for uses to match: a
+	// cheap test that leaves most files out before any pattern runs. Each
+	// alternative of uses holds one (TestEveryImportHasAHint).
+	hints []string
 	// uses matches what shows that a file uses the SDK: its import, or a
 	// name only the SDK has. Nothing in a file without it counts.
 	uses *regexp.Regexp
@@ -118,6 +147,9 @@ type analyticsSDK struct {
 	// variable of one of the types, or set from one of the factories.
 	types     []string
 	factories []string
+	// accessors are calls that reach the SDK from a name the file gives
+	// it, as amplitude.getInstance() does.
+	accessors string
 	// jsModules are the JavaScript packages the SDK is imported from.
 	jsModules string
 	// events and userIDs are the methods that send an event, by its name,
@@ -126,6 +158,10 @@ type analyticsSDK struct {
 	events, userIDs         []string
 	objcEvents, objcUserIDs []string
 	userIDProperties        []string
+	// labels are methods that count only when their first argument has
+	// this label, as Flurry's log(eventName:) does: its other log calls
+	// send errors.
+	labels map[string]string
 	// nameSecond lists the file extensions where an event's name is the
 	// second argument, after a context.
 	nameSecond []string
@@ -134,19 +170,23 @@ type analyticsSDK struct {
 	functionArg int
 	// conveniences are methods that send one event of the SDK's own.
 	conveniences map[string]string
-	// known maps the SDK's constants to the names they stand for.
-	known func(expression, ext string) string
+	// constant reads the SDK's own constants: the name one stands for when
+	// its value is known, and whether the expression is the SDK's at all.
+	constant func(expr string, f *sourceFile) (string, bool)
 	// constructors build an event from a token (Adjust), not a name.
 	constructors     []string
 	objcConstructors []string
+
+	m *sdkMatchers
 }
 
 const getInstanceArgs = `\s*\(\s*(?:[^()]|\([^()]*\))*\)`
 
 var analyticsSDKs = []analyticsSDK{
 	{
-		name: "Firebase Analytics",
-		uses: regexp.MustCompile(`com\.google\.firebase\.analytics|com\.google\.firebase\.Firebase\b|import\s+Firebase(?:Analytics|Core)?\b|@import\s+Firebase|#import\s+[<"]Firebase|package:firebase_analytics/|using\s+Firebase\.Analytics|@react-native-firebase/analytics|['"]@?firebase/analytics['"]|@capacitor-firebase/analytics|@capacitor-community/firebase-analytics`),
+		name:  "Firebase Analytics",
+		hints: []string{"irebase"},
+		uses:  regexp.MustCompile(`com\.google\.firebase\.analytics|com\.google\.firebase\.Firebase\b|import\s+Firebase(?:Analytics|Core)?\b|@import\s+Firebase|#import\s+[<"]Firebase|package:firebase_analytics/|using\s+Firebase\.Analytics|@react-native-firebase/analytics|['"]@?firebase/analytics['"]|@capacitor-firebase/analytics|@capacitor-community/firebase-analytics`),
 		receivers: append(anywhere(`FirebaseAnalytics\s*\.\s*getInstance`+getInstanceArgs, `Firebase\s*\.\s*analytics`, `FirebaseAnalytics\s*\.\s*instance`,
 			`FirebaseAnalytics`, `analytics\s*\(\s*\)`, `firebase\s*\.\s*analytics\s*\(\s*\)`),
 			// In Swift the SDK's class is Analytics; elsewhere that name is
@@ -162,25 +202,29 @@ var analyticsSDKs = []analyticsSDK{
 		objcUserIDs:   []string{"setUserID"},
 		functionArg:   1,
 		conveniences:  firebaseConveniences(),
-		known:         firebaseConstant,
+		constant:      firebaseConstant,
 	},
 	{
-		name: "Amplitude",
-		uses: regexp.MustCompile(`com\.amplitude\.|import\s+Amplitude(?:Swift)?\b|@import\s+Amplitude|#import\s+[<"]Amplitude|package:amplitude_flutter/|@amplitude/|amplitude-js|\bAmplitude\s*\.\s*(?:Instance|getInstance|instance)\b`),
+		name:  "Amplitude",
+		hints: []string{"mplitude"},
+		uses:  regexp.MustCompile(`com\.amplitude\.|import\s+Amplitude(?:Swift)?\b|@import\s+Amplitude|#import\s+[<"]Amplitude|package:amplitude_flutter/|@amplitude/|amplitude-js|\bAmplitude\s*\.\s*(?:Instance|getInstance|instance)\b`),
 		receivers: anywhere(`Amplitude\s*\.\s*getInstance`+getInstanceArgs, `Amplitude\s*\.\s*instance\s*\(\s*\)`, `Amplitude\s*\.\s*Instance`,
 			`Amplitude\s*\.\s*instance`),
 		objcReceivers: []string{`\[\s*Amplitude\s+instance\s*\]`, `Amplitude`},
 		types:         []string{"Amplitude"},
 		factories:     []string{`Amplitude\s*\(`, `Amplitude\s*\.\s*getInstance`, `Amplitude\s*\.\s*instance`},
-		jsModules:     `@amplitude/[\w-]+|amplitude-js`,
-		events:        []string{"logEvent", "track"},
-		objcEvents:    []string{"logEvent"},
-		userIDs:       []string{"setUserId", "setUserID"},
-		objcUserIDs:   []string{"setUserId"},
+		// amplitude-js: amplitude.getInstance().logEvent(…).
+		accessors:   `getInstance`,
+		jsModules:   `@amplitude/[\w-]+|amplitude-js`,
+		events:      []string{"logEvent", "track"},
+		objcEvents:  []string{"logEvent"},
+		userIDs:     []string{"setUserId", "setUserID"},
+		objcUserIDs: []string{"setUserId"},
 	},
 	{
-		name: "Mixpanel",
-		uses: regexp.MustCompile(`com\.mixpanel\.|import\s+Mixpanel\b|@import\s+Mixpanel|#import\s+[<"]Mixpanel|package:mixpanel_flutter/|mixpanel-react-native|mixpanel-browser|using\s+mixpanel\b`),
+		name:  "Mixpanel",
+		hints: []string{"ixpanel"},
+		uses:  regexp.MustCompile(`com\.mixpanel\.|import\s+Mixpanel\b|@import\s+Mixpanel|#import\s+[<"]Mixpanel|package:mixpanel_flutter/|mixpanel-react-native|mixpanel-browser|using\s+mixpanel\b`),
 		receivers: anywhere(`MixpanelAPI\s*\.\s*getInstance`+getInstanceArgs, `Mixpanel\s*\.\s*mainInstance\s*\(\s*\)`, `Mixpanel\s*\.\s*sharedInstance\s*\(\s*\)`,
 			`Mixpanel`),
 		objcReceivers: []string{`\[\s*Mixpanel\s+sharedInstance\s*\]`},
@@ -193,8 +237,9 @@ var analyticsSDKs = []analyticsSDK{
 		objcUserIDs:   []string{"identify"},
 	},
 	{
-		name: "AppsFlyer",
-		uses: regexp.MustCompile(`com\.appsflyer|import\s+AppsFlyerLib\b|@import\s+AppsFlyerLib|#import\s+[<"]AppsFlyerLib|package:appsflyer_sdk/|react-native-appsflyer|appsflyer-capacitor-plugin|using\s+AppsFlyerSDK`),
+		name:  "AppsFlyer",
+		hints: []string{"ppsflyer", "ppsFlyer"},
+		uses:  regexp.MustCompile(`com\.appsflyer|import\s+AppsFlyerLib\b|@import\s+AppsFlyerLib|#import\s+[<"]AppsFlyerLib|package:appsflyer_sdk/|react-native-appsflyer|appsflyer-capacitor-plugin|using\s+AppsFlyerSDK`),
 		receivers: anywhere(`AppsFlyerLib\s*\.\s*getInstance\s*\(\s*\)`, `AppsFlyerLib\s*\.\s*shared\s*\(\s*\)`, `AppsFlyerLib\s*\.\s*shared`,
 			`\[\s*AppsFlyerLib\s+shared\s*\]`, `AppsFlyer`),
 		objcReceivers:    []string{`\[\s*AppsFlyerLib\s+shared\s*\]`},
@@ -207,16 +252,19 @@ var analyticsSDKs = []analyticsSDK{
 		objcUserIDs:      []string{"setCustomerUserID"},
 		userIDProperties: []string{"customerUserID"},
 		nameSecond:       []string{".kt", ".java"},
-		known:            appsFlyerConstant,
+		constant:         appsFlyerConstant,
 	},
 	{
-		name:             "Adjust",
-		uses:             regexp.MustCompile(`com\.adjust\.sdk|import\s+Adjust(?:Sdk)?\b|@import\s+Adjust|#import\s+[<"]Adjust|package:adjust_sdk/|react-native-adjust|using\s+(?:com\.adjust\.sdk|AdjustSdk)\b`),
-		constructors:     []string{`(?:new\s+)?(?:AdjustEvent|ADJEvent)(?:\s*\.\s*init)?`},
-		objcConstructors: []string{`\[\s*ADJEvent\s+eventWithEventToken`},
+		name:         "Adjust",
+		hints:        []string{"djust"},
+		uses:         regexp.MustCompile(`com\.adjust\.sdk|import\s+Adjust(?:Sdk)?\b|@import\s+Adjust|#import\s+[<"]Adjust|package:adjust_sdk/|react-native-adjust|using\s+(?:com\.adjust\.sdk|AdjustSdk)\b`),
+		constructors: []string{`(?:new\s+)?(?:AdjustEvent|ADJEvent)(?:\s*\.\s*init)?`},
+		objcConstructors: []string{`\[\s*ADJEvent\s+eventWithEventToken`,
+			`\[\s*\[\s*ADJEvent\s+alloc\s*\]\s+initWithEventToken`},
 	},
 	{
 		name:          "GameAnalytics",
+		hints:         []string{"ameanalytics", "ameAnalytics"},
 		uses:          regexp.MustCompile(`com\.gameanalytics|import\s+GameAnalytics\b|@import\s+GameAnalytics|#import\s+[<"]GameAnalytics|package:gameanalytics_sdk/|react-native-gameanalytics|using\s+GameAnalyticsSDK`),
 		receivers:     anywhere(`GameAnalytics`),
 		objcReceivers: []string{`GameAnalytics`},
@@ -227,8 +275,9 @@ var analyticsSDKs = []analyticsSDK{
 		objcUserIDs:   []string{"configureUserId"},
 	},
 	{
-		name: "Facebook App Events",
-		uses: regexp.MustCompile(`com\.facebook\.appevents|import\s+FacebookCore\b|import\s+FBSDKCoreKit\b|@import\s+FBSDKCoreKit|#import\s+[<"]FBSDKCoreKit|package:facebook_app_events/|react-native-fbsdk(?:-next)?\b|using\s+Facebook\.Unity`),
+		name:  "Facebook App Events",
+		hints: []string{"acebook", "FBSDKCoreKit", "fbsdk"},
+		uses:  regexp.MustCompile(`com\.facebook\.appevents|import\s+FacebookCore\b|import\s+FBSDKCoreKit\b|@import\s+FBSDKCoreKit|#import\s+[<"]FBSDKCoreKit|package:facebook_app_events/|react-native-fbsdk(?:-next)?\b|using\s+Facebook\.Unity`),
 		receivers: append(anywhere(`AppEventsLogger\s*\.\s*newLogger`+getInstanceArgs, `AppEventsLogger`, `FBSDKAppEvents\s*\.\s*shared`, `FBSDKAppEvents`),
 			receiver{`AppEvents\s*\.\s*shared`, []string{".swift"}}, receiver{`AppEvents`, []string{".swift"}}, receiver{`FB`, []string{".cs"}}),
 		objcReceivers:    []string{`\[\s*FBSDKAppEvents\s+shared\s*\]`, `FBSDKAppEvents\s*\.\s*shared`, `FBSDKAppEvents`},
@@ -240,35 +289,167 @@ var analyticsSDKs = []analyticsSDK{
 		userIDs:          []string{"setUserID", "setUserId"},
 		objcUserIDs:      []string{"setUserID"},
 		userIDProperties: []string{"userID"},
+		constant:         facebookConstant,
 	},
 	{
 		name:          "Flurry",
-		uses:          regexp.MustCompile(`com\.flurry\.android|import\s+Flurry_iOS_SDK\b|import\s+FlurryAnalytics\b|#import\s+[<"]Flurry|@import\s+Flurry|package:flutter_flurry_sdk/|react-native-flurry-sdk`),
+		hints:         []string{"lurry"},
+		uses:          regexp.MustCompile(`com\.flurry\.android|import\s+Flurry_iOS_SDK\b|import\s+FlurryAnalytics\b|#import\s+[<"]Flurry|@import\s+Flurry|package:flutter_flurry_sdk/|react-native-flurry-sdk|using\s+FlurrySDK\b`),
 		receivers:     anywhere(`FlurryAgent`, `Flurry`),
 		objcReceivers: []string{`Flurry`},
 		jsModules:     `react-native-flurry-sdk`,
-		events:        []string{"logEvent"},
-		objcEvents:    []string{"logEvent"},
-		userIDs:       []string{"setUserId", "setUserID"},
-		objcUserIDs:   []string{"setUserID"},
+		// log(eventName:) and set(userId:) in Swift; LogEvent and SetUserId
+		// in Unity.
+		events:      []string{"logEvent", "LogEvent", "log"},
+		objcEvents:  []string{"logEvent"},
+		userIDs:     []string{"setUserId", "setUserID", "SetUserId", "set"},
+		objcUserIDs: []string{"setUserID"},
+		labels:      map[string]string{"log": "eventName", "set": "userId"},
 	},
+}
+
+// sdkMatchers are an SDK's patterns, compiled once.
+type sdkMatchers struct {
+	// events, userIDs and properties match a call or an assignment from
+	// its dot on; the receiver is read back from there.
+	events, userIDs, properties *regexp.Regexp
+	// objcEvents and objcUserIDs match a message, the receiver in the first
+	// group and the method in the second; objcReceiver says which
+	// receivers are the SDK's.
+	objcEvents, objcUserIDs *regexp.Regexp
+	objcReceiver            *regexp.Regexp
+	constructors            []*regexp.Regexp
+	objcConstructors        []*regexp.Regexp
+	// aliases find the names a file gives the SDK, in their first group.
+	aliases   []*regexp.Regexp
+	jsAliases []*regexp.Regexp
+	jsNamed   *regexp.Regexp
+	accessor  *regexp.Regexp
+
+	mu     sync.Mutex
+	static map[string]*regexp.Regexp
+}
+
+func init() {
+	for i := range analyticsSDKs {
+		analyticsSDKs[i].compile()
+	}
+}
+
+func (sdk *analyticsSDK) compile() {
+	m := &sdkMatchers{static: map[string]*regexp.Regexp{}}
+	if len(sdk.events)+len(sdk.conveniences) > 0 {
+		m.events = regexp.MustCompile(`\.\s*(` + methods(sdk.events, sdk.conveniences) + `)\s*\(`)
+	}
+	if len(sdk.userIDs) > 0 {
+		m.userIDs = regexp.MustCompile(`\.\s*(` + methods(sdk.userIDs, nil) + `)\s*\(`)
+	}
+	if len(sdk.userIDProperties) > 0 {
+		m.properties = regexp.MustCompile(`\.\s*(` + strings.Join(sdk.userIDProperties, "|") + `)\s*=[^=]`)
+	}
+	message := `\[\s*(\[[^\[\]]*\]|[A-Za-z_][\w.]*)\s+(`
+	if len(sdk.objcEvents) > 0 {
+		m.objcEvents = regexp.MustCompile(message + methods(sdk.objcEvents, nil) + `)\s*:`)
+	}
+	if len(sdk.objcUserIDs) > 0 {
+		m.objcUserIDs = regexp.MustCompile(message + methods(sdk.objcUserIDs, nil) + `)\s*:`)
+	}
+	objc := append([]string{}, sdk.objcReceivers...)
+	for _, r := range sdk.receivers {
+		if len(r.exts) == 0 {
+			objc = append(objc, r.pattern)
+		}
+	}
+	if len(objc) > 0 {
+		m.objcReceiver = regexp.MustCompile(`^(?:` + strings.Join(objc, "|") + `)$`)
+	}
+	for _, c := range sdk.constructors {
+		m.constructors = append(m.constructors, regexp.MustCompile(`(?:^|[^\w$.])(`+c+`)\s*\(`))
+	}
+	for _, c := range sdk.objcConstructors {
+		m.objcConstructors = append(m.objcConstructors, regexp.MustCompile(`(`+c+`)\s*:`))
+	}
+	for _, t := range sdk.types {
+		t = regexp.QuoteMeta(t)
+		m.aliases = append(m.aliases,
+			regexp.MustCompile(`\b(\w+)\s*:\s*`+t+`\b`),
+			regexp.MustCompile(`\b`+t+`\b[?!]?[ \t]+(\w+)\s*[=;,)]`),
+			regexp.MustCompile(`\b`+t+`\s*\*\s*(?:const\s+)?(\w+)`))
+	}
+	if len(sdk.factories) > 0 {
+		factories := strings.Join(sdk.factories, "|")
+		m.aliases = append(m.aliases,
+			regexp.MustCompile(`\b(\w+)\s*(?::\s*[\w.<>?!]+\s*)?=\s*(?:await\s+)?(?:new\s+)?(?:`+factories+`)`),
+			regexp.MustCompile(`\b(\w+)\s+by\s+lazy\s*\{\s*(?:`+factories+`)`))
+	}
+	if sdk.jsModules != "" {
+		module := `\s*['"](?:` + sdk.jsModules + `)['"]`
+		m.jsAliases = []*regexp.Regexp{
+			regexp.MustCompile(`import\s+(\w+)\s*(?:,\s*\{[^}]*\})?\s+from` + module),
+			regexp.MustCompile(`import\s+\*\s+as\s+(\w+)\s+from` + module),
+			regexp.MustCompile(`(?:const|let|var)\s+(\w+)\s*=\s*require\(` + module + `\s*\)`),
+		}
+		m.jsNamed = regexp.MustCompile(`import\s*(?:\w+\s*,\s*)?\{([^}]*)\}\s*from` + module + `|(?:const|let|var)\s*\{([^}]*)\}\s*=\s*require\(` + module + `\s*\)`)
+	}
+	if sdk.accessors != "" {
+		m.accessor = regexp.MustCompile(`\s*\.\s*(?:` + sdk.accessors + `)\s*\([^()]*\)$`)
+	}
+	sdk.m = m
+}
+
+// static matches a receiver, as receiverOf reads it, that ends in one of
+// the SDK's own receivers for files with that extension.
+func (sdk *analyticsSDK) static(ext string) *regexp.Regexp {
+	m := sdk.m
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if re, ok := m.static[ext]; ok {
+		return re
+	}
+	var alternatives []string
+	for _, r := range sdk.receivers {
+		if len(r.exts) == 0 || contains(r.exts, ext) {
+			alternatives = append(alternatives, r.pattern)
+		}
+	}
+	var re *regexp.Regexp
+	if len(alternatives) > 0 {
+		re = regexp.MustCompile(`(?:^|[^\w$])(?:` + strings.Join(alternatives, "|") + `)\s*[!?]*$`)
+	}
+	m.static[ext] = re
+	return re
+}
+
+func (sdk *analyticsSDK) hinted(text string) bool {
+	for _, h := range sdk.hints {
+		if strings.Contains(text, h) {
+			return true
+		}
+	}
+	return false
 }
 
 // vendoredSDK matches a file that declares one of the analytics SDKs' own
 // classes: the SDK's source, copied into the project, whose calls are not
-// the app's.
-var vendoredSDK = regexp.MustCompile(`(?:@implementation|@interface|\bclass|\bobject|\bstruct)\s+(?:Amplitude|Mixpanel|MixpanelAPI|Flurry|FlurryAgent|AppsFlyerLib|AppsFlyer|GameAnalytics|FirebaseAnalytics|FIRAnalytics|Adjust|ADJEvent|AdjustEvent|FBSDKAppEvents|AppEventsLogger)\b`)
+// the app's. vendoredNames are the names, one of which such a file holds.
+var (
+	vendoredSDK   = regexp.MustCompile(`(?:@implementation|@interface|\bclass|\bobject|\bstruct)\s+(?:Amplitude|Mixpanel|MixpanelAPI|Flurry|FlurryAgent|AppsFlyerLib|AppsFlyer|GameAnalytics|FirebaseAnalytics|FIRAnalytics|Adjust|ADJEvent|AdjustEvent|FBSDKAppEvents|AppEventsLogger)\b`)
+	vendoredNames = []string{"Amplitude", "Mixpanel", "Flurry", "AppsFlyer", "GameAnalytics", "FirebaseAnalytics", "FIRAnalytics", "Adjust", "ADJEvent",
+		"FBSDKAppEvents", "AppEventsLogger"}
+)
+
+func vendored(text string) bool {
+	for _, n := range vendoredNames {
+		if strings.Contains(text, n) {
+			return vendoredSDK.MatchString(text)
+		}
+	}
+	return false
+}
 
 // unityVendorFolders are where SDKs unpack themselves in a Unity project.
 var unityVendorFolders = []string{"Plugins", "Firebase", "GameAnalytics", "AppsFlyer", "FacebookSDK", "Adjust", "AdjustSdk", "Mixpanel", "Amplitude",
 	"Flurry", "Tenjin", "ExternalDependencyManager", "MaxSdk", "GoogleMobileAds", "LevelPlay", "IronSource", "Samples"}
-
-// sourceFile is one of the app's source files, comments blanked.
-type sourceFile struct {
-	rel, ext, text string
-	// index is the file's place in the scan, which orders what is found.
-	index int
-}
 
 // analyticsKind is what a call gives an SDK.
 type analyticsKind int
@@ -299,34 +480,73 @@ func (d *detector) findAnalytics() {
 	default:
 		return
 	}
-	var files []sourceFile
+	var rels []string
 	for _, rel := range SourceFiles(d.root, ".", featureCodeExts...) {
-		if len(files) >= maxFeatureScanFiles {
+		if len(rels) >= maxFeatureScanFiles {
 			break
 		}
-		if TestSource(rel) || (d.p.Framework == Unity && unityVendor(rel)) {
-			continue
+		if !TestSource(rel) && (d.p.Framework != Unity || !unityVendor(rel)) && !bundled(rel) {
+			rels = append(rels, rel)
 		}
-		raw, err := os.ReadFile(filepath.Join(d.root, filepath.FromSlash(rel)))
-		if err != nil || len(raw) > 2<<20 {
-			continue
-		}
-		text := BlankComments(string(raw))
-		if vendoredSDK.MatchString(text) {
-			continue
-		}
-		files = append(files, sourceFile{rel: rel, ext: path.Ext(rel), text: text, index: len(files)})
 	}
-	s := &analyticsScan{files: files, constants: appConstants(files), sdkCalls: map[string]bool{}, declared: map[string][]declaration{}}
-	for i := range files {
-		for j := range analyticsSDKs {
-			if analyticsSDKs[j].uses.MatchString(files[i].text) {
-				s.scan(&files[i], &analyticsSDKs[j])
+	// Reading a file costs more waiting than work: read several at once.
+	read := make([]*sourceFile, len(rels))
+	next := make(chan int)
+	var wg sync.WaitGroup
+	for range min(8, runtime.GOMAXPROCS(0), len(rels)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range next {
+				read[i] = readSource(d.root, rels[i])
 			}
+		}()
+	}
+	for i := range rels {
+		next <- i
+	}
+	close(next)
+	wg.Wait()
+	var files []*sourceFile
+	for _, f := range read {
+		if f != nil {
+			f.index = len(files)
+			files = append(files, f)
+		}
+	}
+	s := &analyticsScan{files: files, sdkCalls: map[spot]bool{}, patterns: map[string][]*regexp.Regexp{}}
+	for _, f := range files {
+		for _, sdk := range f.sdks {
+			s.scan(f, sdk)
 		}
 	}
 	s.followWrappers()
 	d.p.Analytics = s.result()
+}
+
+// readSource reads one of the app's source files, or returns nil for one
+// that is not the app's own: too large, minified, or an SDK's copied in.
+func readSource(root, rel string) *sourceFile {
+	raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	if err != nil || len(raw) > 2<<20 {
+		return nil
+	}
+	ext := path.Ext(rel)
+	src := decodeSource(raw)
+	if isJS(ext) && minified(src) {
+		return nil
+	}
+	text := BlankComments(src)
+	if vendored(text) {
+		return nil
+	}
+	f := &sourceFile{rel: rel, ext: ext, text: text, code: BlankStrings(text, ext)}
+	for i := range analyticsSDKs {
+		if sdk := &analyticsSDKs[i]; sdk.hinted(text) && sdk.uses.MatchString(text) {
+			f.sdks = append(f.sdks, sdk)
+		}
+	}
+	return f
 }
 
 func unityVendor(rel string) bool {
@@ -342,109 +562,170 @@ func unityVendor(rel string) bool {
 	return false
 }
 
-type analyticsScan struct {
-	files     []sourceFile
-	constants map[string]map[string]bool
-	sightings []sighting
-	// sdkCalls are the places of the SDK calls found, by file and offset,
-	// so that a wrapper named like the SDK's method does not count them
-	// again.
-	sdkCalls map[string]bool
-	wrappers []wrapper
-	declared map[string][]declaration
-}
-
-// wrapper is a function of the app's own that passes one of its
-// parameters on to an SDK as an event's name or the user's ID.
-type wrapper struct {
-	sdk    *analyticsSDK
-	kind   analyticsKind
-	name   string
-	family string
-	param  int // position among the positional parameters, or -1
-	label  string
-	file   string
-	line   int
-	// container is the class or object the wrapper is declared in, or ""
-	// for a function of its own.
-	container string
-	inside    sighting
-	callers   int
-}
-
-// scan finds one SDK's calls in a file.
-func (s *analyticsScan) scan(f *sourceFile, sdk *analyticsSDK) {
-	recv, functions := s.receivers(f, sdk)
-	if len(recv) > 0 {
-		alternatives := `(?:^|[^\w$])(?:` + strings.Join(recv, "|") + `)\s*[!?]*\s*\.\s*`
-		s.calls(f, sdk, regexp.MustCompile(alternatives+`(`+methods(sdk.events, sdk.conveniences)+`)\s*\(`), eventCall, false)
-		if len(sdk.userIDs) > 0 {
-			s.calls(f, sdk, regexp.MustCompile(alternatives+`(`+strings.Join(sdk.userIDs, "|")+`)\s*\(`), userIDCall, false)
+// bundled reports a JavaScript file a bundler or a minifier wrote, by its
+// name.
+func bundled(rel string) bool {
+	base := path.Base(rel)
+	for _, suffix := range []string{".min.js", ".bundle.js", ".chunk.js"} {
+		if strings.HasSuffix(base, suffix) {
+			return true
 		}
-		if len(sdk.userIDProperties) > 0 {
-			re := regexp.MustCompile(alternatives + `(?:` + strings.Join(sdk.userIDProperties, "|") + `)\s*=[^=]`)
-			for _, loc := range re.FindAllStringIndex(f.text, -1) {
-				end := loc[1] - 1
-				value := f.text[end:]
-				if stop := strings.IndexAny(value, ";\n"); stop >= 0 {
-					value = value[:stop]
-				}
-				s.add(f, sdk, userIDCall, end, strings.TrimSpace(value), "")
+	}
+	return false
+}
+
+// minified reports a large file of long lines: code a minifier wrote, not
+// the app's source, and costly to read.
+func minified(src string) bool {
+	if len(src) < 64<<10 {
+		return false
+	}
+	return len(src)/(strings.Count(src, "\n")+1) > 500
+}
+
+// decodeSource returns a source file as UTF-8 text: from UTF-8, with or
+// without a byte-order mark, or from UTF-16 with one, which Visual Studio
+// writes C# in.
+func decodeSource(raw []byte) string {
+	switch {
+	case bytes.HasPrefix(raw, []byte{0xEF, 0xBB, 0xBF}):
+		return string(raw[3:])
+	case len(raw) >= 2 && (raw[0] == 0xFF && raw[1] == 0xFE || raw[0] == 0xFE && raw[1] == 0xFF):
+		little := raw[0] == 0xFF
+		units := make([]uint16, (len(raw)-2)/2)
+		for i := range units {
+			lo, hi := raw[2+2*i], raw[3+2*i]
+			if !little {
+				lo, hi = hi, lo
 			}
+			units[i] = uint16(lo) | uint16(hi)<<8
+		}
+		return string(utf16.Decode(units))
+	}
+	return string(raw)
+}
+
+// spot is a place in a file: its index and an offset.
+type spot struct{ file, offset int }
+
+type analyticsScan struct {
+	files     []*sourceFile
+	constants *constantTable
+	sightings []sighting
+	// sdkCalls are the places of the SDK calls found, so that a wrapper
+	// named like the SDK's method does not count them again.
+	sdkCalls map[spot]bool
+	wrappers []wrapper
+	// patterns are the compiled patterns for a wrapper's container, by
+	// container and file.
+	patterns map[string][]*regexp.Regexp
+}
+
+// scan finds one SDK's calls in a file. Calls are matched on the code
+// without its strings, and their arguments read from the code with them.
+func (s *analyticsScan) scan(f *sourceFile, sdk *analyticsSDK) {
+	aliases, functions := aliasesIn(f, sdk)
+	m := sdk.m
+	static := sdk.static(f.ext)
+	onSDK := func(dot int) bool {
+		_, recv := receiverAt(f.code, dot)
+		return isReceiver(sdk, static, aliases, recv)
+	}
+	if m.events != nil {
+		for _, loc := range m.events.FindAllStringSubmatchIndex(f.code, -1) {
+			if onSDK(loc[0]) {
+				s.call(f, sdk, loc[2], loc[3], loc[1], eventCall, false)
+			}
+		}
+	}
+	if m.userIDs != nil {
+		for _, loc := range m.userIDs.FindAllStringSubmatchIndex(f.code, -1) {
+			if onSDK(loc[0]) {
+				s.call(f, sdk, loc[2], loc[3], loc[1], userIDCall, false)
+			}
+		}
+	}
+	if m.properties != nil {
+		for _, loc := range m.properties.FindAllStringIndex(f.code, -1) {
+			if !onSDK(loc[0]) {
+				continue
+			}
+			end := loc[1] - 1
+			value := f.text[end:]
+			if stop := strings.IndexAny(value, ";\n"); stop >= 0 {
+				value = value[:stop]
+			}
+			s.add(f, sdk, userIDCall, end, strings.TrimSpace(value), "")
 		}
 	}
 	if f.ext == ".m" || f.ext == ".mm" {
-		objc := append(append([]string{}, sdk.objcReceivers...), recv...)
-		if len(objc) > 0 {
-			prefix := `\[\s*(?:` + strings.Join(objc, "|") + `)\s+`
-			if len(sdk.objcEvents) > 0 {
-				s.calls(f, sdk, regexp.MustCompile(prefix+`(`+strings.Join(sdk.objcEvents, "|")+`)\s*:`), eventCall, true)
+		for kind, re := range []*regexp.Regexp{eventCall: m.objcEvents, userIDCall: m.objcUserIDs} {
+			if re == nil {
+				continue
 			}
-			if len(sdk.objcUserIDs) > 0 {
-				s.calls(f, sdk, regexp.MustCompile(prefix+`(`+strings.Join(sdk.objcUserIDs, "|")+`)\s*:`), userIDCall, true)
+			for _, loc := range re.FindAllStringSubmatchIndex(f.code, -1) {
+				recv := f.code[loc[2]:loc[3]]
+				if (m.objcReceiver != nil && m.objcReceiver.MatchString(recv)) || aliases[recv] {
+					s.call(f, sdk, loc[4], loc[5], loc[1], analyticsKind(kind), true)
+				}
 			}
 		}
-		for _, c := range sdk.objcConstructors {
-			s.calls(f, sdk, regexp.MustCompile(`(`+c+`)\s*:`), tokenCall, true)
+		for _, re := range m.objcConstructors {
+			for _, loc := range re.FindAllStringSubmatchIndex(f.code, -1) {
+				s.call(f, sdk, loc[2], loc[3], loc[1], tokenCall, true)
+			}
 		}
 	}
-	for _, c := range sdk.constructors {
-		s.calls(f, sdk, regexp.MustCompile(`(?:^|[^\w$.])(`+c+`)\s*\(`), tokenCall, false)
+	for _, re := range m.constructors {
+		for _, loc := range re.FindAllStringSubmatchIndex(f.code, -1) {
+			s.call(f, sdk, loc[2], loc[3], loc[1], tokenCall, false)
+		}
 	}
 	for kind, names := range functions {
-		re := regexp.MustCompile(`(?:^|[^\w$.])(` + strings.Join(names, "|") + `)\s*\(`)
-		for _, m := range re.FindAllStringSubmatchIndex(f.text, -1) {
-			args := splitArgs(f.text, m[1], false)
-			if sdk.functionArg < len(args) {
-				s.sdkCalls[spot(f.rel, m[2])] = true
-				s.add(f, sdk, kind, args[sdk.functionArg].start, f.text[args[sdk.functionArg].start:args[sdk.functionArg].end], "")
+		for _, name := range names {
+			for _, c := range f.calls()[name] {
+				if c.member {
+					continue
+				}
+				args := splitArgs(f.text, c.open, false)
+				if sdk.functionArg < len(args) {
+					s.sdkCalls[spot{f.index, c.at}] = true
+					a := args[sdk.functionArg]
+					s.add(f, sdk, kind, a.start, f.text[a.start:a.end], "")
+				}
 			}
 		}
 	}
 }
 
-// calls records the calls a pattern finds. Its first group is the method;
-// the arguments start where the match ends.
-func (s *analyticsScan) calls(f *sourceFile, sdk *analyticsSDK, re *regexp.Regexp, kind analyticsKind, objc bool) {
-	for _, m := range re.FindAllStringSubmatchIndex(f.text, -1) {
-		method := f.text[m[2]:m[3]]
-		s.sdkCalls[spot(f.rel, m[2])] = true
-		if kind == eventCall {
-			if name, ok := sdk.conveniences[method]; ok {
-				s.sightings = append(s.sightings, sighting{sdk: sdk.name, kind: eventCall, name: name, expr: method, file: f.rel, index: f.index, line: lineAt(f.text, m[2])})
-				continue
-			}
+// call records a call: its method at [start, end), its arguments from
+// argsAt.
+func (s *analyticsScan) call(f *sourceFile, sdk *analyticsSDK, start, end, argsAt int, kind analyticsKind, objc bool) {
+	method := f.code[start:end]
+	s.sdkCalls[spot{f.index, start}] = true
+	if kind == eventCall {
+		if name, ok := sdk.conveniences[method]; ok {
+			s.sightings = append(s.sightings, sighting{sdk: sdk.name, kind: eventCall, name: name, expr: method, file: f.rel, index: f.index, line: f.line(start)})
+			return
 		}
-		args := splitArgs(f.text, m[1], objc)
-		n := 0
-		if kind == eventCall && contains(sdk.nameSecond, f.ext) {
-			n = 1
-		}
-		if n >= len(args) {
-			continue
-		}
-		s.add(f, sdk, kind, args[n].start, f.text[args[n].start:args[n].end], "")
 	}
+	args := splitArgs(f.text, argsAt, objc)
+	n := 0
+	if kind == eventCall && contains(sdk.nameSecond, f.ext) {
+		n = 1
+	}
+	if n >= len(args) {
+		return
+	}
+	if label, ok := sdk.labels[method]; ok && !labelled(f.text[args[0].start:args[0].end], label) {
+		return
+	}
+	s.add(f, sdk, kind, args[n].start, f.text[args[n].start:args[n].end], "")
+}
+
+func labelled(arg, label string) bool {
+	arg = strings.TrimSpace(arg)
+	return strings.HasPrefix(arg, label) && strings.HasPrefix(strings.TrimSpace(arg[len(label):]), ":")
 }
 
 // add classifies the code that gives an event's name, a token or a user ID,
@@ -457,16 +738,17 @@ func (s *analyticsScan) add(f *sourceFile, sdk *analyticsSDK, kind analyticsKind
 	if code == "" || nothing(code) {
 		return
 	}
-	sight := sighting{sdk: sdk.name, kind: kind, expr: squash(code), file: f.rel, index: f.index, line: lineAt(f.text, at), through: through}
+	sight := sighting{sdk: sdk.name, kind: kind, expr: squash(code), file: f.rel, index: f.index, line: f.line(at), through: through}
 	if kind != userIDCall {
 		if value, ok := literal(code, f.ext); ok {
 			sight.name, sight.expr = value, ""
 		} else {
-			if kind == eventCall && sdk.known != nil {
-				sight.name = sdk.known(sight.expr, f.ext)
+			owned := false
+			if kind == eventCall {
+				sight.name, owned = sdkConstant(sdk, sight.expr, f)
 			}
-			if sight.name == "" {
-				sight.name = s.constant(sight.expr)
+			if sight.name == "" && !owned {
+				sight.name = s.constant(sight.expr, f, at)
 			}
 		}
 		if hasControl(sight.name) || (sight.name == "" && sight.expr == "") {
@@ -482,62 +764,86 @@ func (s *analyticsScan) add(f *sourceFile, sdk *analyticsSDK, kind analyticsKind
 	s.sightings = append(s.sightings, sight)
 }
 
-// receivers are the patterns for what the SDK's calls are made on in a
-// file: its own, and the names the file gives them. functions are the SDK's
-// functions the file imports in JavaScript, by what they send.
-func (s *analyticsScan) receivers(f *sourceFile, sdk *analyticsSDK) ([]string, map[analyticsKind][]string) {
-	var recv []string
-	for _, r := range sdk.receivers {
-		if len(r.exts) == 0 || contains(r.exts, f.ext) {
-			recv = append(recv, r.pattern)
-		}
-	}
-	var names []string
-	for _, t := range sdk.types {
-		t = regexp.QuoteMeta(t)
-		names = append(names,
-			aliasNames(`\b(\w+)\s*:\s*`+t+`\b`, f.text),
-			aliasNames(`\b`+t+`\b[?!]?[ \t]+(\w+)\s*[=;,)]`, f.text),
-			aliasNames(`\b`+t+`\s*\*\s*(?:const\s+)?(\w+)`, f.text))
-	}
-	if len(sdk.factories) > 0 {
-		factories := strings.Join(sdk.factories, "|")
-		names = append(names,
-			aliasNames(`\b(\w+)\s*(?::\s*[\w.<>?!]+\s*)?=\s*(?:await\s+)?(?:new\s+)?(?:`+factories+`)`, f.text),
-			aliasNames(`\b(\w+)\s+by\s+lazy\s*\{\s*(?:`+factories+`)`, f.text))
-	}
-	functions := map[analyticsKind][]string{}
-	if sdk.jsModules != "" && isJS(f.ext) {
-		module := `\s*['"](?:` + sdk.jsModules + `)['"]`
-		names = append(names,
-			aliasNames(`import\s+(\w+)\s*(?:,\s*\{[^}]*\})?\s+from`+module, f.text),
-			aliasNames(`import\s+\*\s+as\s+(\w+)\s+from`+module, f.text),
-			aliasNames(`(?:const|let|var)\s+(\w+)\s*=\s*require\(`+module+`\s*\)`, f.text))
-		named := regexp.MustCompile(`import\s*(?:\w+\s*,\s*)?\{([^}]*)\}\s*from` + module + `|(?:const|let|var)\s*\{([^}]*)\}\s*=\s*require\(` + module + `\s*\)`)
-		for _, m := range named.FindAllStringSubmatch(f.text, -1) {
-			for _, item := range strings.Split(m[1]+","+m[2], ",") {
-				fields := strings.Fields(strings.ReplaceAll(item, ":", " as "))
-				if len(fields) == 0 {
-					continue
-				}
-				original, local := fields[0], fields[len(fields)-1]
-				switch {
-				case contains(sdk.events, original):
-					functions[eventCall] = append(functions[eventCall], regexp.QuoteMeta(local))
-				case contains(sdk.userIDs, original):
-					functions[userIDCall] = append(functions[userIDCall], regexp.QuoteMeta(local))
-				default:
-					names = append(names, local)
-				}
+// aliasesIn returns the names a file gives an SDK, and the SDK's functions
+// it imports in JavaScript, by what they send.
+func aliasesIn(f *sourceFile, sdk *analyticsSDK) (map[string]bool, map[analyticsKind][]string) {
+	aliases := map[string]bool{}
+	add := func(re *regexp.Regexp) {
+		for _, m := range re.FindAllStringSubmatch(f.text, -1) {
+			if n := m[1]; n != "" && !tenjinName(n) && !jsKeywords[n] {
+				aliases[n] = true
 			}
 		}
 	}
-	for _, n := range strings.Split(strings.Join(names, " "), " ") {
-		if n != "" && !tenjinName(n) && !jsKeywords[n] {
-			recv = append(recv, regexp.QuoteMeta(n)+`(?:\s*\(\s*\))?`)
+	for _, re := range sdk.m.aliases {
+		add(re)
+	}
+	functions := map[analyticsKind][]string{}
+	if !isJS(f.ext) || sdk.m.jsNamed == nil {
+		return aliases, functions
+	}
+	for _, re := range sdk.m.jsAliases {
+		add(re)
+	}
+	for _, m := range sdk.m.jsNamed.FindAllStringSubmatch(f.text, -1) {
+		for _, item := range strings.Split(m[1]+","+m[2], ",") {
+			fields := strings.Fields(strings.ReplaceAll(item, ":", " as "))
+			if len(fields) == 0 {
+				continue
+			}
+			original, local := fields[0], fields[len(fields)-1]
+			switch {
+			case contains(sdk.events, original):
+				functions[eventCall] = append(functions[eventCall], local)
+			case contains(sdk.userIDs, original):
+				functions[userIDCall] = append(functions[userIDCall], local)
+			case !tenjinName(local) && !jsKeywords[local]:
+				aliases[local] = true
+			}
 		}
 	}
-	return dedupe(recv), functions
+	return aliases, functions
+}
+
+// isReceiver reports whether recv, what a call is made on, is the SDK: one
+// of its own receivers, or ends in a name the file gives it.
+func isReceiver(sdk *analyticsSDK, static *regexp.Regexp, aliases map[string]bool, recv string) bool {
+	if recv == "" {
+		return false
+	}
+	if static != nil && static.MatchString(recv) {
+		return true
+	}
+	if len(aliases) == 0 {
+		return false
+	}
+	if aliasAtEnd(recv, aliases) {
+		return true
+	}
+	if sdk.m.accessor != nil {
+		if loc := sdk.m.accessor.FindStringIndex(recv); loc != nil {
+			return aliasAtEnd(recv[:loc[0]], aliases)
+		}
+	}
+	return false
+}
+
+// aliasAtEnd reports whether recv ends in one of the names, called with no
+// arguments or not.
+func aliasAtEnd(recv string, aliases map[string]bool) bool {
+	r := strings.TrimRight(recv, "!? \t\n")
+	if strings.HasSuffix(r, ")") {
+		open := strings.LastIndexByte(r, '(')
+		if open < 0 || strings.TrimSpace(r[open+1:len(r)-1]) != "" {
+			return false
+		}
+		r = strings.TrimRight(r[:open], " \t\n")
+	}
+	i := len(r)
+	for i > 0 && wordByte(r[i-1]) {
+		i--
+	}
+	return i < len(r) && aliases[r[i:]]
 }
 
 // tenjinName is a name the app gives Tenjin's SDK, which another SDK's
@@ -547,19 +853,6 @@ func tenjinName(n string) bool {
 }
 
 var jsKeywords = map[string]bool{"type": true, "default": true, "from": true, "as": true, "this": true, "self": true, "return": true, "new": true}
-
-// aliasNames returns the names a pattern's groups capture, space-separated.
-func aliasNames(pattern, text string) string {
-	var out []string
-	for _, m := range regexp.MustCompile(pattern).FindAllStringSubmatch(text, -1) {
-		for _, name := range m[1:] {
-			if name != "" {
-				out = append(out, name)
-			}
-		}
-	}
-	return strings.Join(out, " ")
-}
 
 func methods(names []string, conveniences map[string]string) string {
 	all := append([]string{}, names...)
@@ -661,39 +954,6 @@ func nothing(code string) bool {
 	return false
 }
 
-var (
-	dollarTemplate = regexp.MustCompile(`\$[A-Za-z_{]`)
-	stringLiteral  = regexp.MustCompile(`^@?(?:"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|` + "`[^`]*`" + `)$`)
-	unescape       = strings.NewReplacer(`\"`, `"`, `\'`, `'`, `\\`, `\`)
-)
-
-// literal returns the value of a string literal that is the whole of code,
-// and false for anything else, including a string built from variables.
-func literal(code, ext string) (string, bool) {
-	if !stringLiteral.MatchString(code) {
-		return "", false
-	}
-	body := strings.TrimPrefix(code, "@")
-	quote := body[0]
-	body = body[1 : len(body)-1]
-	if interpolates(body, quote, ext) {
-		return "", false
-	}
-	return unescape.Replace(body), true
-}
-
-// interpolates reports whether a string literal's body takes values in, as
-// the language of the file reads it.
-func interpolates(body string, quote byte, ext string) bool {
-	switch ext {
-	case ".kt", ".dart":
-		return dollarTemplate.MatchString(body)
-	case ".swift":
-		return strings.Contains(body, `\(`)
-	}
-	return isJS(ext) && quote == '`' && strings.Contains(body, "${")
-}
-
 func hasControl(s string) bool {
 	return strings.IndexFunc(s, unicode.IsControl) >= 0
 }
@@ -707,470 +967,8 @@ func squash(code string) string {
 	return code
 }
 
-// constant resolves a constant of the app's own to its value: one that
-// looks like a constant (LEVEL_UP, kLevelUp, or a member of a type, such as
-// Events.levelUp) and is set to exactly one string literal in the project.
-func (s *analyticsScan) constant(expr string) string {
-	expr = strings.TrimSuffix(expr, ".rawValue")
-	if !constantLike.MatchString(expr) {
-		return ""
-	}
-	parts := strings.Split(expr, ".")
-	last := parts[len(parts)-1]
-	qualified := len(parts) > 1 && unicode.IsUpper(rune(parts[len(parts)-2][0]))
-	if !qualified && !upperSnake.MatchString(last) && !kConstant.MatchString(last) {
-		return ""
-	}
-	values := s.constants[last]
-	if len(values) != 1 {
-		return ""
-	}
-	for v := range values {
-		return v
-	}
-	return ""
-}
-
-var (
-	constantLike = regexp.MustCompile(`^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$`)
-	upperSnake   = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
-	kConstant    = regexp.MustCompile(`^k[A-Z]\w*$`)
-	stringValue  = `@?("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')`
-	assignment   = regexp.MustCompile(`\b(\w+)\s*(?::\s*[\w.?<>]+\s*)?=\s*` + stringValue + `\s*(?:[;,)}\n]|$)`)
-	property     = regexp.MustCompile(`\b(\w+)\s*:\s*` + stringValue + `\s*(?:[,}\n]|$)`)
-)
-
-// appConstants maps each name set to a string literal in the app's code to
-// the values it is set to.
-func appConstants(files []sourceFile) map[string]map[string]bool {
-	out := map[string]map[string]bool{}
-	add := func(name, code, ext string) {
-		value, ok := literal(code, ext)
-		if !ok || value == "" {
-			return
-		}
-		if out[name] == nil {
-			out[name] = map[string]bool{}
-		}
-		out[name][value] = true
-	}
-	for _, f := range files {
-		for _, m := range assignment.FindAllStringSubmatch(f.text, -1) {
-			add(m[1], m[2], f.ext)
-		}
-		if isJS(f.ext) {
-			for _, m := range property.FindAllStringSubmatch(f.text, -1) {
-				add(m[1], m[2], f.ext)
-			}
-		}
-	}
-	return out
-}
-
 func isJS(ext string) bool {
 	return ext == ".js" || ext == ".jsx" || ext == ".ts" || ext == ".tsx"
-}
-
-// family groups the extensions that call each other's functions.
-func family(ext string) string {
-	switch ext {
-	case ".kt", ".java":
-		return "jvm"
-	case ".m", ".mm":
-		return "objc"
-	case ".swift", ".dart", ".cs":
-		return ext
-	}
-	if isJS(ext) {
-		return "js"
-	}
-	return ext
-}
-
-var (
-	declarationKeywords = regexp.MustCompile(`^(?:return|new|throw|else|case|await|yield|in|is|as|if|for|while|switch|catch|using|lock|foreach|synchronized|when|typeof|delete|var|val|let|const)$`)
-	declarations        = map[string]*regexp.Regexp{
-		"jvm":    regexp.MustCompile(`\bfun\s+(?:<[^>]*>\s*)?(?:[\w.]+\.)?(\w+)\s*\(|(?m)^[ \t]*(?:(?:public|private|protected|static|final|synchronized|abstract)\s+)*([\w.<>\[\]?,]+)\s+(\w+)\s*\(`),
-		".swift": regexp.MustCompile(`\bfunc\s+(\w+)\s*(?:<[^>]*>)?\s*\(`),
-		"js":     regexp.MustCompile(`\bfunction\s*\*?\s*(\w+)\s*\(|\b(\w+)\s*[=:]\s*(?:async\s+)?(?:function\s*)?\(|(?m)^[ \t]*(?:(?:static|async|public|private|protected|override)\s+)*(\w+)\s*\([^()]*\)\s*(?::\s*[\w<>\[\]|. ]+)?\s*\{`),
-		// Dart and C#: a return type, then the name.
-		"typed": regexp.MustCompile(`(?m)^[ \t]*(?:(?:public|private|protected|internal|static|final|override|virtual|async|abstract|sealed|external)\s+)*([\w.<>\[\]?,]+)\s+(\w+)\s*\(`),
-		"objc":  regexp.MustCompile(`(?m)^[ \t]*[-+]\s*\([^)]*\)\s*(\w+)\s*:\s*\([^)]*\)\s*(\w+)`),
-	}
-)
-
-// declaration is a function declared in the app's code.
-type declaration struct {
-	name   string
-	nameAt int
-	// objcParam is the first parameter of an Objective-C method.
-	objcParam string
-}
-
-// declarationsIn lists the functions a file declares, in order.
-func declarationsIn(f *sourceFile) []declaration {
-	fam := family(f.ext)
-	re := declarations[fam]
-	if fam == ".dart" || fam == ".cs" {
-		re = declarations["typed"]
-	}
-	if re == nil {
-		return nil
-	}
-	var out []declaration
-	for _, m := range re.FindAllStringSubmatchIndex(f.text, -1) {
-		if fam == "objc" {
-			out = append(out, declaration{name: f.text[m[2]:m[3]], nameAt: m[2], objcParam: f.text[m[4]:m[5]]})
-			continue
-		}
-		// The last group that matched is the name; the one before it, when
-		// it matched, the return type, which return f( has too.
-		last := -1
-		for g := 2; g < len(m); g += 2 {
-			if m[g] >= 0 {
-				last = g
-			}
-		}
-		if last < 0 {
-			continue
-		}
-		name := f.text[m[last]:m[last+1]]
-		if declarationKeywords.MatchString(name) || (last > 2 && m[last-2] >= 0 && declarationKeywords.MatchString(f.text[m[last-2]:m[last-1]])) {
-			continue
-		}
-		out = append(out, declaration{name: name, nameAt: m[last]})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].nameAt < out[j].nameAt })
-	return out
-}
-
-// parameter is one of a function's parameters: the name it has inside the
-// function, and the label a call gives it, if any.
-type parameter struct {
-	name, label string
-	position    int // among the positional parameters, or -1 for a named one
-}
-
-var parameterNoise = regexp.MustCompile(`@\w+|\[[^\]]*\]|\brequired\b|\bfinal\b|\bvararg\b|\bval\b|\bvar\b|\bparams\b|\bconst\b|\bthis\.|[?*&!]`)
-
-// parameters reads a declaration's parameter list.
-func parameters(f *sourceFile, d declaration) []parameter {
-	if d.objcParam != "" {
-		return []parameter{{name: d.objcParam, label: d.name, position: 0}}
-	}
-	open := strings.IndexByte(f.text[d.nameAt:], '(')
-	if open < 0 {
-		return nil
-	}
-	var out []parameter
-	position := 0
-	for _, raw := range splitParams(f.text[d.nameAt+open+1:]) {
-		// Dart's named parameters are in braces, its optional positional
-		// ones in brackets.
-		if f.ext == ".dart" && (strings.HasPrefix(raw, "{") || strings.HasPrefix(raw, "[")) {
-			named := raw[0] == '{'
-			for _, inner := range splitParams(raw[1:]) {
-				p, ok := parameterOf(inner, f.ext)
-				if !ok {
-					continue
-				}
-				if named {
-					p.label, p.position = p.name, -1
-				} else {
-					p.position = position
-					position++
-				}
-				out = append(out, p)
-			}
-			continue
-		}
-		p, ok := parameterOf(raw, f.ext)
-		if !ok {
-			continue
-		}
-		p.position = position
-		position++
-		out = append(out, p)
-	}
-	return out
-}
-
-// parameterOf reads one parameter: name: Type in Kotlin, Swift and
-// TypeScript, Type name elsewhere.
-func parameterOf(raw, ext string) (parameter, bool) {
-	if i := strings.IndexByte(raw, '='); i >= 0 {
-		raw = raw[:i]
-	}
-	raw = parameterNoise.ReplaceAllString(raw, " ")
-	var p parameter
-	words := strings.Fields(raw)
-	if i := strings.IndexByte(raw, ':'); i >= 0 && (ext == ".kt" || ext == ".swift" || isJS(ext)) {
-		words = strings.Fields(raw[:i])
-		if len(words) > 1 && ext == ".swift" && words[0] != "_" {
-			p.label = words[0]
-		} else if len(words) == 1 && ext == ".swift" {
-			p.label = words[0]
-		}
-	}
-	if len(words) == 0 {
-		return p, false
-	}
-	p.name = words[len(words)-1]
-	return p, identifier.MatchString(p.name)
-}
-
-// splitParams splits a parameter list, from just past its opening
-// parenthesis, at the commas outside brackets and type arguments.
-func splitParams(text string) []string {
-	var out []string
-	depth, start := 0, 0
-	for i := 0; i < len(text) && i < 2000; i++ {
-		switch text[i] {
-		case '"', '\'', '`':
-			i = endOfString(text, i) - 1
-		case '(', '[', '{', '<':
-			depth++
-		case ')', ']', '}', '>':
-			if depth == 0 {
-				if part := strings.TrimSpace(text[start:i]); part != "" {
-					out = append(out, part)
-				}
-				return out
-			}
-			depth--
-		case ',':
-			if depth == 0 {
-				out = append(out, strings.TrimSpace(text[start:i]))
-				start = i + 1
-			}
-		}
-	}
-	return out
-}
-
-// wrapperOf works out whether the code at a call that gives an SDK a name,
-// a bare identifier, is a parameter of the function the call is in: then
-// that function is the app's way of sending to the SDK, and its callers
-// give the names.
-func (s *analyticsScan) wrapperOf(f *sourceFile, sdk *analyticsSDK, at int, ident string, inside sighting) (wrapper, bool) {
-	var enclosing *declaration
-	decls := s.declarationsOf(f)
-	for i := range decls {
-		if decls[i].nameAt < at {
-			enclosing = &decls[i]
-		}
-	}
-	if enclosing == nil {
-		return wrapper{}, false
-	}
-	for _, p := range parameters(f, *enclosing) {
-		if p.name == ident {
-			return wrapper{sdk: sdk, kind: inside.kind, name: enclosing.name, family: family(f.ext), param: p.position, label: p.label,
-				file: f.rel, line: lineAt(f.text, enclosing.nameAt), container: containerOf(f.text, enclosing.nameAt), inside: inside}, true
-		}
-	}
-	return wrapper{}, false
-}
-
-var containers = regexp.MustCompile(`\b(?:class|object|struct|enum|extension|interface|mixin)\s+(\w+)|@implementation\s+(\w+)|\b(?:const|let|var)\s+(\w+)\s*=\s*\{`)
-
-// containerOf names the class, object or JavaScript object literal a
-// function is declared in, or "" for a function of its own.
-func containerOf(text string, at int) string {
-	name := ""
-	for _, m := range containers.FindAllStringSubmatchIndex(text[:at], -1) {
-		// Only one still open where the function is declared.
-		between := text[m[0]:at]
-		if strings.HasPrefix(between, "@implementation") {
-			if strings.Contains(between, "@end") {
-				continue
-			}
-		} else if strings.Count(between, "{")-strings.Count(between, "}") <= 0 {
-			continue
-		}
-		for g := 2; g < len(m); g += 2 {
-			if m[g] >= 0 {
-				name = text[m[g]:m[g+1]]
-			}
-		}
-	}
-	return name
-}
-
-var (
-	tenjinReceiverBefore = regexp.MustCompile(`(?i)tenjin\w*(?:\s*\(\s*\))?\s*[!?]*\s*\.\s*$`)
-	receiverBefore       = regexp.MustCompile(`\s*[!?]?\s*\.\s*$`)
-	chainWord            = regexp.MustCompile(`[A-Za-z_$][\w$]*`)
-)
-
-// receiverOf returns the expression a call at offset at is made on, such
-// as AnalyticsService.shared, or "" for a call on nothing.
-func receiverOf(text string, at int) string {
-	loc := receiverBefore.FindStringIndex(text[max(0, at-8):at])
-	if loc == nil {
-		return ""
-	}
-	end := max(0, at-8) + loc[0]
-	start, depth := end, 0
-	for start > 0 && end-start < 200 {
-		c := text[start-1]
-		switch {
-		case c == ')' || c == ']':
-			depth++
-		case (c == '(' || c == '[') && depth > 0:
-			depth--
-		case depth > 0, c == '.' || c == '?' || c == '!' || c == '_' || c == '$' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z':
-		default:
-			return text[start:end]
-		}
-		start--
-	}
-	return text[start:end]
-}
-
-// containerNames are the names a file reaches a wrapper's class or object
-// by: the class itself, a variable of that type or made from it, or a
-// JavaScript import of the module that declares it.
-func (w *wrapper) containerNames(f *sourceFile) map[string]bool {
-	names := map[string]bool{w.container: true}
-	t := regexp.QuoteMeta(w.container)
-	module := regexp.QuoteMeta(strings.TrimSuffix(path.Base(w.file), path.Ext(w.file)))
-	for _, n := range strings.Fields(strings.Join([]string{
-		aliasNames(`\b(\w+)\s*:\s*`+t+`\b`, f.text),
-		aliasNames(`\b`+t+`\b[?!]?[ \t]+(\w+)\s*[=;,)]`, f.text),
-		aliasNames(`\b`+t+`\s*\*\s*(\w+)`, f.text),
-		aliasNames(`\b(\w+)\s*=\s*(?:new\s+)?`+t+`\b`, f.text),
-		aliasNames(`import\s+(?:\*\s+as\s+)?(\w+)\s+from\s+['"][^'"]*\b`+module+`['"]`, f.text),
-	}, " ")) {
-		names[n] = true
-	}
-	return names
-}
-
-// callsWrapper reports whether a call in a file, made on recv, is to the
-// wrapper: on its class or object, on a name the file has for them, or, in
-// the file that declares it, on nothing or on itself. A function of its own
-// is called on nothing.
-func (w *wrapper) callsWrapper(f *sourceFile, recv string, names map[string]bool) bool {
-	same := f.rel == w.file
-	if recv == "" {
-		return same || w.container == ""
-	}
-	if w.container == "" {
-		return false
-	}
-	for _, word := range chainWord.FindAllString(recv, -1) {
-		if names[word] || (same && (word == "this" || word == "self")) {
-			return true
-		}
-	}
-	return false
-}
-
-// followWrappers finds the calls to the app's own functions that hand a
-// name or an ID to an SDK, and reads what each call gives. A wrapper nobody
-// calls is reported as the call inside it.
-func (s *analyticsScan) followWrappers() {
-	seen := map[string]bool{}
-	for i := range s.wrappers {
-		w := &s.wrappers[i]
-		// The same SDK called twice inside one wrapper is one wrapper.
-		id := fmt.Sprint(w.sdk.name, w.kind, w.file, w.line, w.param, w.label)
-		if seen[id] {
-			continue
-		}
-		seen[id] = true
-		for j := range s.files {
-			f := &s.files[j]
-			if family(f.ext) != w.family || !strings.Contains(f.text, w.name) {
-				continue
-			}
-			s.callersIn(f, w)
-		}
-		if w.callers == 0 {
-			s.sightings = append(s.sightings, w.inside)
-		}
-	}
-}
-
-// declarationsOf is declarationsIn, read once per file.
-func (s *analyticsScan) declarationsOf(f *sourceFile) []declaration {
-	if decls, ok := s.declared[f.rel]; ok {
-		return decls
-	}
-	decls := declarationsIn(f)
-	s.declared[f.rel] = decls
-	return decls
-}
-
-// callersIn reads the calls to a wrapper in one file.
-func (s *analyticsScan) callersIn(f *sourceFile, w *wrapper) {
-	declared := map[int]bool{}
-	for _, d := range s.declarationsOf(f) {
-		declared[d.nameAt] = true
-	}
-	names := w.containerNames(f)
-	name := regexp.QuoteMeta(w.name)
-	if w.family == "objc" {
-		re := regexp.MustCompile(`\[\s*([^\[\]\s]+|\[[^\[\]]*\])\s+(` + name + `)\s*:`)
-		for _, m := range re.FindAllStringSubmatchIndex(f.text, -1) {
-			if s.sdkCalls[spot(f.rel, m[4])] || !w.callsWrapper(f, f.text[m[2]:m[3]], names) {
-				continue
-			}
-			if args := splitArgs(f.text, m[1], true); len(args) > 0 {
-				s.addFromWrapper(f, w, args[0])
-			}
-		}
-		return
-	}
-	re := regexp.MustCompile(`(?:^|[^\w$])(` + name + `)\s*\(`)
-	for _, m := range re.FindAllStringSubmatchIndex(f.text, -1) {
-		if declared[m[2]] || s.sdkCalls[spot(f.rel, m[2])] || tenjinReceiverBefore.MatchString(f.text[max(0, m[2]-60):m[2]]) {
-			continue
-		}
-		if !w.callsWrapper(f, receiverOf(f.text, m[2]), names) {
-			continue
-		}
-		args := splitArgs(f.text, m[1], false)
-		if arg, ok := pick(f.text, args, w); ok {
-			s.addFromWrapper(f, w, arg)
-		}
-	}
-}
-
-// pick returns the argument a call to a wrapper gives its parameter.
-func pick(text string, args []span, w *wrapper) (span, bool) {
-	if w.label != "" {
-		label := regexp.MustCompile(`^\s*` + regexp.QuoteMeta(w.label) + `\s*:`)
-		for _, a := range args {
-			if label.MatchString(text[a.start:a.end]) {
-				return a, true
-			}
-		}
-		return span{}, false
-	}
-	position := 0
-	for _, a := range args {
-		if argLabel.MatchString(strings.TrimSpace(text[a.start:a.end])) && w.family != "jvm" && w.family != "js" {
-			continue
-		}
-		if position == w.param {
-			return a, true
-		}
-		position++
-	}
-	return span{}, false
-}
-
-// addFromWrapper records what a call to a wrapper gives it. A call that
-// gives nothing, such as null, is not one of the wrapper's uses: when all of
-// them are such, the call inside it is reported.
-func (s *analyticsScan) addFromWrapper(f *sourceFile, w *wrapper, a span) {
-	before := len(s.sightings)
-	s.add(f, w.sdk, w.kind, a.start, f.text[a.start:a.end], w.name+" ("+w.file+":"+strconv.Itoa(w.line)+")")
-	if len(s.sightings) > before {
-		w.callers++
-	}
 }
 
 // result merges the sightings: one entry per SDK and name, token or
@@ -1227,12 +1025,6 @@ func (s *analyticsScan) result() Analytics {
 	return out
 }
 
-func spot(file string, offset int) string { return file + ":" + strconv.Itoa(offset) }
-
-func lineAt(text string, offset int) int {
-	return strings.Count(text[:offset], "\n") + 1
-}
-
 func contains(values []string, v string) bool {
 	for _, candidate := range values {
 		if candidate == v {
@@ -1240,69 +1032,4 @@ func contains(values []string, v string) bool {
 		}
 	}
 	return false
-}
-
-// firebaseConveniences are the Firebase methods that send one of its
-// recommended events, such as logLevelUp for level_up.
-func firebaseConveniences() map[string]string {
-	out := map[string]string{}
-	for _, event := range []string{"AddPaymentInfo", "AddShippingInfo", "AddToCart", "AddToWishlist", "AdImpression", "AppOpen", "BeginCheckout",
-		"CampaignDetails", "EarnVirtualCurrency", "GenerateLead", "JoinGroup", "LevelEnd", "LevelStart", "LevelUp", "Login", "PostScore", "Purchase",
-		"Refund", "RemoveFromCart", "ScreenView", "Search", "SelectContent", "SelectItem", "SelectPromotion", "Share", "SignUp",
-		"SpendVirtualCurrency", "TutorialBegin", "TutorialComplete", "UnlockAchievement", "ViewCart", "ViewItem", "ViewItemList",
-		"ViewPromotion", "ViewSearchResults"} {
-		out["log"+event] = snake(event)
-	}
-	return out
-}
-
-var (
-	firebaseAndroidConstant = regexp.MustCompile(`^(?:FirebaseAnalytics\s*\.\s*)?Event\s*\.\s*([A-Z][A-Z0-9_]*)$`)
-	firebaseAppleConstant   = regexp.MustCompile(`^(?:AnalyticsEvent|kFIREvent)([A-Z]\w*)$`)
-	firebaseUnityConstant   = regexp.MustCompile(`^FirebaseAnalytics\s*\.\s*Event([A-Z]\w*)$`)
-	appsFlyerConstantRe     = regexp.MustCompile(`^AFInAppEventType\s*\.\s*([A-Z][A-Z0-9_]*)$`)
-	appsFlyerAppleConstant  = regexp.MustCompile(`^AFEvent([A-Z]\w*)$`)
-)
-
-// firebaseConstant is the name a constant of Firebase's stands for:
-// FirebaseAnalytics.Event.LEVEL_UP, AnalyticsEventLevelUp and
-// FirebaseAnalytics.EventLevelUp are all level_up.
-func firebaseConstant(expr, ext string) string {
-	switch {
-	case (ext == ".kt" || ext == ".java") && firebaseAndroidConstant.MatchString(expr):
-		return strings.ToLower(firebaseAndroidConstant.FindStringSubmatch(expr)[1])
-	case (ext == ".swift" || ext == ".m" || ext == ".mm") && firebaseAppleConstant.MatchString(expr):
-		return snake(firebaseAppleConstant.FindStringSubmatch(expr)[1])
-	case ext == ".cs" && firebaseUnityConstant.MatchString(expr):
-		return snake(firebaseUnityConstant.FindStringSubmatch(expr)[1])
-	}
-	return ""
-}
-
-// appsFlyerConstant is the name a constant of AppsFlyer's stands for:
-// AFInAppEventType.LEVEL_ACHIEVED and AFEventLevelAchieved are both
-// af_level_achieved.
-func appsFlyerConstant(expr, ext string) string {
-	switch {
-	case (ext == ".kt" || ext == ".java") && appsFlyerConstantRe.MatchString(expr):
-		return "af_" + strings.ToLower(appsFlyerConstantRe.FindStringSubmatch(expr)[1])
-	case (ext == ".swift" || ext == ".m" || ext == ".mm") && appsFlyerAppleConstant.MatchString(expr):
-		return "af_" + snake(appsFlyerAppleConstant.FindStringSubmatch(expr)[1])
-	}
-	return ""
-}
-
-// snake turns LevelUp into level_up.
-func snake(s string) string {
-	var b strings.Builder
-	for i, r := range s {
-		if unicode.IsUpper(r) && i > 0 {
-			prev := rune(s[i-1])
-			if unicode.IsLower(prev) || unicode.IsDigit(prev) {
-				b.WriteByte('_')
-			}
-		}
-		b.WriteRune(unicode.ToLower(r))
-	}
-	return b.String()
 }

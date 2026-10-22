@@ -9,6 +9,14 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/testproject"
 )
 
+// analyze detects the project and reads its analytics.
+func analyze(t *testing.T, files testproject.Files) *project.Project {
+	t.Helper()
+	p := detect(t, files)
+	p.ReadAnalytics()
+	return p
+}
+
 // events lists what detection found, one line each: SDK, then the name,
 // token or expression, then where, and through what.
 func events(p *project.Project) string {
@@ -53,7 +61,7 @@ func wantLines(t *testing.T, what, got string, want ...string) {
 
 func TestAnalyticsOnAndroid(t *testing.T) {
 	const dir = "app/src/main/java/com/example/sample/"
-	p := detect(t, testproject.AndroidNative().With(testproject.Files{
+	p := analyze(t, testproject.AndroidNative().With(testproject.Files{
 		dir + "Game.kt": `package com.example.sample
 
 import android.content.Context
@@ -151,7 +159,7 @@ class GameTest {
 }
 
 func TestAnalyticsOnIOS(t *testing.T) {
-	p := detect(t, testproject.IOSNative().With(testproject.Files{
+	p := analyze(t, testproject.IOSNative().With(testproject.Files{
 		"Sample/Events.swift": `import FirebaseAnalytics
 import Mixpanel
 import AppsFlyerLib
@@ -219,7 +227,7 @@ func testIt() { Analytics.logEvent("in_a_test", parameters: nil) }
 }
 
 func TestAnalyticsOnFlutter(t *testing.T) {
-	p := detect(t, testproject.Flutter().With(testproject.Files{
+	p := analyze(t, testproject.Flutter().With(testproject.Files{
 		"lib/analytics.dart": `import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:gameanalytics_sdk/gameanalytics.dart';
 
@@ -270,7 +278,7 @@ void main() { FirebaseAnalytics.instance.logEvent(name: 'in_a_test'); }
 }
 
 func TestAnalyticsOnReactNative(t *testing.T) {
-	p := detect(t, testproject.Files{
+	p := analyze(t, testproject.Files{
 		"package.json":             `{"dependencies": {"react-native": "0.79.2", "react-native-tenjin": "^1.7.0"}}`,
 		"android/app/build.gradle": "apply plugin: \"com.android.application\"\nandroid { defaultConfig { applicationId \"com.example.rn\" } }\n",
 		"src/analytics.ts": `import analytics from '@react-native-firebase/analytics';
@@ -318,7 +326,7 @@ analytics().logEvent('in_a_test');
 }
 
 func TestAnalyticsOnCapacitor(t *testing.T) {
-	p := detect(t, testproject.Files{
+	p := analyze(t, testproject.Files{
 		"package.json":             `{"dependencies": {"@capacitor/core": "^8.0.0"}}`,
 		"capacitor.config.ts":      `const config = { appId: 'com.example.cap', appName: 'Cap' };`,
 		"android/app/build.gradle": "apply plugin: 'com.android.application'\nandroid { defaultConfig { applicationId \"com.example.cap\" } }\n",
@@ -335,7 +343,7 @@ export async function start(session: Session) {
 }
 
 func TestAnalyticsOnUnity(t *testing.T) {
-	p := detect(t, testproject.Unity().With(testproject.Files{
+	p := analyze(t, testproject.Unity().With(testproject.Files{
 		"Assets/Scripts/Analytics.cs": `using System.Collections.Generic;
 using Firebase.Analytics;
 using GameAnalyticsSDK;
@@ -376,7 +384,7 @@ public class Example { void Go() { GameAnalytics.NewDesignEvent("vendor_example"
 // names, counted only when the call is to that function: on its class, on
 // a variable of that class, or, for a function of its own, on nothing.
 func TestAnalyticsThroughTheAppsOwnFunctions(t *testing.T) {
-	p := detect(t, testproject.IOSNative().With(testproject.Files{
+	p := analyze(t, testproject.IOSNative().With(testproject.Files{
 		"Sample/AnalyticsService.swift": `import FirebaseAnalytics
 
 final class AnalyticsService {
@@ -428,7 +436,7 @@ final class AnalyticsService {
 	// is to report.
 	wantLines(t, "user IDs", userIDs(p), "Firebase Analytics id @Sample/AnalyticsService.swift:11")
 
-	p = detect(t, testproject.Files{
+	p = analyze(t, testproject.Files{
 		"package.json":             `{"dependencies": {"react-native": "0.79.2"}}`,
 		"android/app/build.gradle": "apply plugin: \"com.android.application\"\nandroid { defaultConfig { applicationId \"com.example.rn\" } }\n",
 		"src/analytics.ts": `import analytics from '@react-native-firebase/analytics';
@@ -462,7 +470,7 @@ export function Screen() {
 }
 
 func TestNoAnalytics(t *testing.T) {
-	p := detect(t, testproject.AndroidNative())
+	p := analyze(t, testproject.AndroidNative())
 	if len(p.Analytics.Events) != 0 || len(p.Analytics.UserIDs) != 0 || p.Analytics.Events == nil || p.Analytics.UserIDs == nil {
 		t.Errorf("analytics = %+v", p.Analytics)
 	}

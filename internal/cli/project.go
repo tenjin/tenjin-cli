@@ -41,6 +41,7 @@ It only reads files. It works offline and without signing in.`,
 			if err != nil {
 				return err
 			}
+			p.ReadAnalytics()
 			if format == render.JSON {
 				return render.WriteJSON(cmd.OutOrStdout(), p)
 			}
