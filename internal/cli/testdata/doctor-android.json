@@ -79,6 +79,10 @@
         "suggested": false
       }
     ],
+    "analytics": {
+      "events": [],
+      "user_ids": []
+    },
     "notes": []
   },
   "findings": [

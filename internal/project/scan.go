@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -88,6 +89,27 @@ func SourceFiles(root, rel string, exts ...string) []string {
 		}
 	})
 	return files
+}
+
+// TestSource reports whether a file is test code, which says nothing about
+// what the app does: Android's test source sets, Xcode test targets, and
+// the usual JavaScript and Dart test folders and files.
+func TestSource(rel string) bool {
+	for _, part := range strings.Split(path.Dir(rel), "/") {
+		switch {
+		case part == "test", part == "tests", part == "__tests__", part == "integration_test",
+			strings.HasPrefix(part, "androidTest"), strings.HasPrefix(part, "test") && len(part) > 4 && part[4] >= 'A' && part[4] <= 'Z',
+			strings.HasSuffix(part, "Tests"), strings.HasSuffix(part, "UITests"):
+			return true
+		}
+	}
+	base := path.Base(rel)
+	for _, suffix := range []string{".test.ts", ".test.tsx", ".test.js", ".test.jsx", ".spec.ts", ".spec.tsx", ".spec.js", ".spec.jsx", "_test.dart", "Tests.swift", "Test.kt", "Test.java"} {
+		if strings.HasSuffix(base, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func dedupe(values []string) []string {

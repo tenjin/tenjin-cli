@@ -1,9 +1,10 @@
 package verify
 
 import (
-	"path"
 	"regexp"
 	"strings"
+
+	"github.com/tenjin/tenjin-cli/internal/project"
 )
 
 // Each SDK's calls are recognised on its own receiver: TenjinSDK on native
@@ -92,23 +93,4 @@ func normalizeUnity(text string) string {
 	return rewrite(text, aliases(unityAlias, text), "Tenjin")
 }
 
-// testSource reports whether a file is test code, which says nothing about
-// what the app does: Android's test source sets, Xcode test targets, and
-// the usual JavaScript and Dart test folders and files.
-func testSource(rel string) bool {
-	for _, part := range strings.Split(path.Dir(rel), "/") {
-		switch {
-		case part == "test", part == "tests", part == "__tests__", part == "integration_test",
-			strings.HasPrefix(part, "androidTest"), strings.HasPrefix(part, "test") && len(part) > 4 && part[4] >= 'A' && part[4] <= 'Z',
-			strings.HasSuffix(part, "Tests"), strings.HasSuffix(part, "UITests"):
-			return true
-		}
-	}
-	base := path.Base(rel)
-	for _, suffix := range []string{".test.ts", ".test.tsx", ".test.js", ".test.jsx", ".spec.ts", ".spec.tsx", ".spec.js", ".spec.jsx", "_test.dart", "Tests.swift", "Test.kt", "Test.java"} {
-		if strings.HasSuffix(base, suffix) {
-			return true
-		}
-	}
-	return false
-}
+func testSource(rel string) bool { return project.TestSource(rel) }

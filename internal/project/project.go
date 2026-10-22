@@ -59,6 +59,8 @@ type Project struct {
 	// Features are the parts of the SDK an integration can include, each
 	// suggested or not from what the project already does.
 	Features []Feature `json:"features"`
+	// Analytics is what the app already sends to other analytics SDKs.
+	Analytics Analytics `json:"analytics"`
 	// LibraryCode are the folders of local libraries the app gets the SDK
 	// through (a pod or a package by path), relative to the root and
 	// possibly above it: their calls are the app's.
@@ -242,7 +244,8 @@ func Detect(dir string) (*Project, error) {
 		return nil, fmt.Errorf("%s is not a directory", dir)
 	}
 
-	p := &Project{Root: root, Framework: Unknown, Targets: []Target{}, Tenjin: []Integration{}, AdSDKs: []AdSDK{}, Features: []Feature{}, Notes: []string{}}
+	p := &Project{Root: root, Framework: Unknown, Targets: []Target{}, Tenjin: []Integration{}, AdSDKs: []AdSDK{}, Features: []Feature{},
+		Analytics: Analytics{Events: []AnalyticsEvent{}, UserIDs: []AnalyticsUserID{}}, Notes: []string{}}
 	d := &detector{root: root, p: p}
 	lib := d.library()
 	matched := d.detect()
