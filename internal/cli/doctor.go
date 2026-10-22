@@ -348,6 +348,7 @@ func (s *setup) askToFix(installed []agent.Agent) (*agent.Agent, error) {
 		s.say("%s is installed and can make the changes:", a.Name)
 		s.say("  - it works in this project only, under your own %s account;", a.Name)
 		s.say("  - %s;", a.Limits())
+		s.say("  - it %s;", agentCost("your "+a.Name+" account"))
 		s.say("  - it is never given an SDK key, and doctor checks its work afterwards.")
 		ok, err := s.env.confirm(s.out, fmt.Sprintf("Fix them with %s?", a.Name), false)
 		if err != nil || !ok {
@@ -361,6 +362,7 @@ func (s *setup) askToFix(installed []agent.Agent) (*agent.Agent, error) {
 		s.say("  %d) %s: %s", i+1, s.style.Bold(a.Name), a.Limits())
 		options[i] = fmt.Sprintf("%s (%d)", a.Name, i+1)
 	}
+	s.say("Either %s.", agentCost("your own account"))
 	answer, err := s.env.ask(s.out, fmt.Sprintf("Fix them with %s, or neither? [n]", strings.Join(options, ", ")))
 	if err != nil {
 		return nil, err

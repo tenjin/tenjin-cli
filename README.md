@@ -257,7 +257,7 @@ At the "Add the SDK" step, `setup` looks for Claude Code and Codex, and asks:
 Integrate the Tenjin SDK using Claude Code? [Y/n]
 ```
 
-On yes, it starts the agent in your project, under your own account, with the open findings as its task. Each agent is confined as tightly as it allows:
+On yes, it starts the agent in your project, under your own account, with the open findings as its task. The run uses tokens from that account and edits your files, so commit or stash your work first. Each agent is confined as tightly as it allows:
 
 | Agent | Confined to | Checks its work with |
 | --- | --- | --- |

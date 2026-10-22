@@ -668,12 +668,19 @@ func (s *setup) chooseAgent() (*agent.Agent, error) {
 	s.say("\n%s is installed on this machine and can do the integration for you:", a.Name)
 	s.say("  - it works in this project only, under your own %s account;", a.Name)
 	s.say("  - %s;", a.Limits())
+	s.say("  - it %s;", agentCost("your "+a.Name+" account"))
 	s.say("  - the next step checks its work.")
 	ok, err := s.env.confirm(s.out, fmt.Sprintf("\nIntegrate the Tenjin SDK using %s?", a.Name), true)
 	if err != nil || !ok {
 		return nil, err
 	}
 	return a, nil
+}
+
+// agentCost says, before an agent is offered, what a run costs and what it
+// changes. account names whose usage it spends.
+func agentCost(account string) string {
+	return fmt.Sprintf("uses tokens from %s and edits files in this project: commit or stash your work first, so you can review its changes and undo them", account)
 }
 
 // pickAgent asks which of several installed agents should do the work.
@@ -688,7 +695,7 @@ func (s *setup) pickAgent(installed []agent.Agent) (*agent.Agent, error) {
 	for i, a := range installed {
 		s.say("  %d) %s: %s", i+1, s.style.Bold(a.Name), a.Limits())
 	}
-	s.say("The next step checks the work, whichever you pick.")
+	s.say("Either %s. The next step checks the work, whichever you pick.", agentCost("your own account"))
 
 	options := make([]string, len(installed))
 	for i, a := range installed {

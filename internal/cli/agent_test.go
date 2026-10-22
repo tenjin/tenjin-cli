@@ -159,6 +159,7 @@ func TestSetupIntegratesUsingTheAgent(t *testing.T) {
 		"not fully set up in this project yet. 1 thing would stop events reaching Tenjin.",
 		"Claude Code is installed on this machine and can do the integration for you",
 		"under your own Claude Code account",
+		"it uses tokens from your Claude Code account and edits files in this project: commit or stash your work first, so you can review its changes and undo them;",
 		"Integrate the Tenjin SDK using Claude Code? [Y/n]",
 		"· edit app/src/main/AndroidManifest.xml",
 		"· run tenjin doctor --json .",
@@ -519,6 +520,7 @@ func TestSetupAsksWhichAgentWhenThereAreTwo(t *testing.T) {
 				"Claude Code and Codex are installed on this machine",
 				"1) Claude Code: it may edit files and run 'tenjin doctor'",
 				"2) Codex: it runs in Codex's sandbox",
+				"Either uses tokens from your own account and edits files in this project: commit or stash your work first",
 				"Integrate the Tenjin SDK using Claude Code (1), Codex (2), or neither (n)? [1]",
 				tc.want,
 			} {
@@ -529,12 +531,12 @@ func TestSetupAsksWhichAgentWhenThereAreTwo(t *testing.T) {
 		})
 	}
 
-	// The flag skips the question, and works without a terminal.
+	// The flag skips the question, and its note, and works without a terminal.
 	h, dir := brokenAndroid(t)
 	h.installAgent()
 	h.installCodex()
 	code, stdout, _ := h.run("setup", dir, "--agent", "codex")
-	if code != 0 || !strings.Contains(stdout, "Codex is working") || strings.Contains(stdout, "installed on this machine") {
+	if code != 0 || !strings.Contains(stdout, "Codex is working") || strings.Contains(stdout, "installed on this machine") || strings.Contains(stdout, "uses tokens") {
 		t.Errorf("--agent codex: exit = %d\n%s", code, stdout)
 	}
 }
@@ -599,7 +601,8 @@ func TestDoctorOffersToFix(t *testing.T) {
 	agent := h.installAgent()
 
 	code, stdout, _ := h.typing("").run("doctor", dir, "--offline")
-	if code != 9 || agent.runs() != "" || !strings.Contains(stdout, "Fix them with Claude Code? [y/N]") {
+	if code != 9 || agent.runs() != "" || !strings.Contains(stdout, "Fix them with Claude Code? [y/N]") ||
+		!strings.Contains(stdout, "it uses tokens from your Claude Code account and edits files in this project: commit or stash your work first") {
 		t.Fatalf("Enter: exit = %d, runs = %q\n%s", code, agent.runs(), stdout)
 	}
 
