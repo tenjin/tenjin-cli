@@ -90,19 +90,7 @@ func (m *Manager) Status() (Status, error) {
 // reads the address a browser on another machine ended on (see
 // oauth.LoginOptions).
 func (m *Manager) Login(ctx context.Context, open func(url string) error, pasted func() (string, error)) (*Credentials, string, error) {
-	c, err := m.Store.Load(m.Environment)
-	if err != nil {
-		return nil, "", err
-	}
-	if c == nil {
-		c = &Credentials{Environment: m.Environment}
-	}
-	// A session an earlier build signed in may name a client it registered
-	// for itself; a new sign-in is always the CLI's own client, and the
-	// earlier client's grant is revoked once the new one is saved.
-	previousClient, previousRefresh := c.ClientID, c.RefreshToken
-	c.ClientID = oauth.ClientID
-	tokens, err := m.Authority.Login(ctx, oauth.LoginOptions{ClientID: c.ClientID, Open: open, Pasted: pasted})
+	tokens, err := m.Authority.Login(ctx, oauth.LoginOptions{ClientID: oauth.ClientID, Open: open, Pasted: pasted})
 	if err != nil {
 		return nil, "", clierr.Wrap(clierr.NotSignedIn, err, "sign-in failed: %v", err)
 	}
@@ -110,17 +98,41 @@ func (m *Manager) Login(ctx context.Context, open func(url string) error, pasted
 	if err != nil {
 		return nil, "", clierr.Wrap(clierr.NotSignedIn, err, "sign-in failed: %v", err)
 	}
+	c := &Credentials{Environment: m.Environment, ClientID: oauth.ClientID}
 	c.apply(tokens, identity)
+	// Under the refresh lock, so that the session replaced is the current
+	// one: another tenjin may have refreshed it while the browser was open.
+	unlock, err := m.lock(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	defer unlock()
+	previous, err := m.Store.Load(m.Environment)
+	if err != nil {
+		return nil, "", err
+	}
 	location, err := m.Store.Save(c)
 	if err != nil {
 		return nil, "", err
 	}
-	// Not for an earlier session of the CLI's own client: its revocation
-	// would end this new session too.
-	if previousRefresh != "" && previousClient != "" && previousClient != oauth.ClientID {
-		_ = m.Authority.Revoke(ctx, previousClient, previousRefresh)
+	if outlived(previous, c) {
+		_ = m.Authority.Revoke(ctx, previous.ClientID, previous.RefreshToken)
 	}
 	return c, location, nil
+}
+
+// outlived reports whether the previous session's grant stays open on the
+// server once c replaces it, with nothing here able to end it: a grant of a
+// client an earlier build registered for itself, or one for another user or
+// organization. A session of the CLI's own client for the same user and
+// organization is not revoked: the server would end the new session with it.
+func outlived(previous, c *Credentials) bool {
+	if !previous.SignedIn() || previous.ClientID == "" {
+		return false
+	}
+	differs := func(before, now string) bool { return before != "" && now != "" && before != now }
+	return previous.ClientID != c.ClientID ||
+		differs(previous.OrganizationID, c.OrganizationID) || differs(previous.UserID, c.UserID)
 }
 
 func (c *Credentials) apply(tokens oauth.Tokens, identity oauth.Identity) {

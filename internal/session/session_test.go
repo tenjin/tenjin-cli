@@ -343,6 +343,71 @@ func (a *lockCheck) Revoke(ctx context.Context, client, token string) error {
 	return a.signingIn.Revoke(ctx, client, token)
 }
 
+// Signing in over another session revokes that session's grant when it
+// would stay open otherwise: an earlier client's, or one for another user or
+// organization. The same user and organization's session of the CLI's own
+// client is left alone, since revoking it would end the new one too.
+func TestSigningInOverAnotherSession(t *testing.T) {
+	for _, tc := range []struct {
+		name            string
+		client          string
+		user, org       string
+		newUser, newOrg string
+		revoked         bool
+	}{
+		{"same user and organization", oauth.ClientID, "user-1", "org-1", "user-1", "org-1", false},
+		{"another organization", oauth.ClientID, "user-1", "org-1", "user-1", "org-2", true},
+		{"another user", oauth.ClientID, "user-1", "org-1", "user-2", "org-1", true},
+		{"an earlier client", "client-1", "user-1", "org-1", "user-1", "org-1", true},
+		{"a session that does not say whose it is", oauth.ClientID, "", "", "user-2", "org-2", false},
+		{"an answer that does not say whose it is", oauth.ClientID, "user-1", "org-1", "", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := &MemoryStore{}
+			if _, err := store.Save(&Credentials{Environment: "production", ClientID: tc.client, RefreshToken: "refresh-old", JWT: "old",
+				UserID: tc.user, OrganizationID: tc.org}); err != nil {
+				t.Fatal(err)
+			}
+			auth := &signingIn{identity: oauth.Identity{UserID: tc.newUser, OrganizationID: tc.newOrg}}
+			m := &Manager{Environment: "production", Store: store, Authority: auth}
+			if _, _, err := m.Login(context.Background(), nil, nil); err != nil {
+				t.Fatal(err)
+			}
+			want := []string(nil)
+			if tc.revoked {
+				want = []string{tc.client + " refresh-old"}
+			}
+			if strings.Join(auth.revocations, ",") != strings.Join(want, ",") {
+				t.Errorf("revocations = %q, want %q", auth.revocations, want)
+			}
+			if c, _ := store.Load("production"); c.RefreshToken != "refresh-new" || c.ClientID != oauth.ClientID || c.OrganizationID != tc.newOrg {
+				t.Errorf("stored %+v", c)
+			}
+		})
+	}
+}
+
+// A refresh by another tenjin while the browser was open rotates the
+// previous session's refresh token: the one revoked is the one it left.
+func TestSigningInRevokesThePreviousSessionAsItIsNow(t *testing.T) {
+	memory := &MemoryStore{}
+	if _, err := memory.Save(&Credentials{Environment: "production", ClientID: oauth.ClientID, RefreshToken: "refresh-0", OrganizationID: "org-1"}); err != nil {
+		t.Fatal(err)
+	}
+	auth := &signingIn{identity: oauth.Identity{OrganizationID: "org-2"}}
+	auth.onLogin = func() {
+		_, _ = memory.Save(&Credentials{Environment: "production", ClientID: oauth.ClientID, RefreshToken: "refresh-1", OrganizationID: "org-1"})
+	}
+	store := &lockedAfter{Store: memory}
+	m := &Manager{Environment: "production", Store: store, Authority: &lockCheck{signingIn: auth, store: store, t: t}}
+	if _, _, err := m.Login(context.Background(), nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(auth.revocations) != 1 || auth.revocations[0] != oauth.ClientID+" refresh-1" {
+		t.Errorf("revocations = %q, want the refresh token the refresh left", auth.revocations)
+	}
+}
+
 // A grant refused while another tenjin had already moved the sign-in on
 // does not erase what that one saved.
 func TestARevokedGrantDoesNotEraseANewerSignIn(t *testing.T) {
