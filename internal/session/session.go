@@ -307,6 +307,13 @@ type Signout struct {
 // error with WasSignedIn set means the session was forgotten here but its
 // revocation was not confirmed.
 func (m *Manager) Logout(ctx context.Context) (Signout, error) {
+	// Under the refresh lock, so that the refresh token revoked is the
+	// current one, not one another tenjin is about to spend.
+	unlock, err := m.lock(ctx)
+	if err != nil {
+		return Signout{}, err
+	}
+	defer unlock()
 	c, err := m.Store.Load(m.Environment)
 	if err != nil || !c.SignedIn() {
 		return Signout{}, err

@@ -260,6 +260,89 @@ func TestAFailedExchangeKeepsTheNewRefreshToken(t *testing.T) {
 	}
 }
 
+// signingIn is an authorization server whose sign-in issues refresh-new for
+// identity, and that records each revocation as "client token".
+type signingIn struct {
+	identity    oauth.Identity
+	onLogin     func()
+	revocations []string
+}
+
+func (a *signingIn) Login(context.Context, oauth.LoginOptions) (oauth.Tokens, error) {
+	if a.onLogin != nil {
+		a.onLogin()
+	}
+	return oauth.Tokens{AccessToken: "access-new", RefreshToken: "refresh-new"}, nil
+}
+func (a *signingIn) Refresh(context.Context, string, string) (oauth.Tokens, error) {
+	return oauth.Tokens{}, oauth.ErrGrantInvalid
+}
+func (a *signingIn) Exchange(context.Context, string) (oauth.Identity, error) {
+	identity := a.identity
+	identity.JWT, identity.Expiry = "jwt-new", time.Now().Add(2*time.Hour)
+	return identity, nil
+}
+func (a *signingIn) Revoke(_ context.Context, client, token string) error {
+	a.revocations = append(a.revocations, client+" "+token)
+	return nil
+}
+
+// lockedAfter is a store whose lock is held by another tenjin until it has
+// run held: what that tenjin does is done by the time Lock returns.
+type lockedAfter struct {
+	Store
+	held   func()
+	locked bool
+}
+
+func (s *lockedAfter) Lock(context.Context, string) (func(), error) {
+	if s.held != nil {
+		s.held()
+		s.held = nil
+	}
+	s.locked = true
+	return func() { s.locked = false }, nil
+}
+
+// Logout waits for a refresh in progress and revokes the refresh token it
+// left, not the one it spent: that one is dead, and the new one would stay
+// open with nothing on this machine holding it.
+func TestLogoutRevokesTheRefreshTokenARefreshLeft(t *testing.T) {
+	memory := &MemoryStore{}
+	signedIn(t, memory, "refresh-0", "old", time.Now().Add(-time.Hour))
+	auth := &signingIn{}
+	store := &lockedAfter{Store: memory, held: func() { signedIn(t, memory, "refresh-1", "theirs", time.Now().Add(time.Hour)) }}
+	m := &Manager{Environment: "production", Store: store, Authority: &lockCheck{signingIn: auth, store: store, t: t}}
+
+	out, err := m.Logout(context.Background())
+	if err != nil || !out.WasSignedIn {
+		t.Fatalf("Logout = %+v, %v", out, err)
+	}
+	if len(auth.revocations) != 1 || auth.revocations[0] != "client refresh-1" {
+		t.Errorf("revocations = %q, want the refresh token the refresh left", auth.revocations)
+	}
+	if c, _ := memory.Load("production"); c.SignedIn() {
+		t.Errorf("still signed in: %+v", c)
+	}
+	if store.locked {
+		t.Error("the lock was not let go")
+	}
+}
+
+// lockCheck fails the test when a revocation is made without the lock.
+type lockCheck struct {
+	*signingIn
+	store *lockedAfter
+	t     *testing.T
+}
+
+func (a *lockCheck) Revoke(ctx context.Context, client, token string) error {
+	if !a.store.locked {
+		a.t.Error("revoked without the refresh lock")
+	}
+	return a.signingIn.Revoke(ctx, client, token)
+}
+
 // A grant refused while another tenjin had already moved the sign-in on
 // does not erase what that one saved.
 func TestARevokedGrantDoesNotEraseANewerSignIn(t *testing.T) {
