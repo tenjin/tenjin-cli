@@ -746,3 +746,31 @@ func TestShapesFromRealProjects(t *testing.T) {
 	lazy := strings.Replace(android[activity], `val tenjin = TenjinSDK.getInstance(this, "`+testproject.Key+`")`, `val tenjin by lazy { TenjinSDK.getInstance(this, "`+testproject.Key+`") }`, 1)
 	expect(t, run(t, android.With(testproject.Files{activity: lazy}), verify.Options{}), "sdk.connect", project.Android, verify.Pass)
 }
+
+// A Flutter, React Native or Capacitor app can only turn the iOS SDK's logs
+// on in its native code, and that must stay out of release builds too.
+func TestDebugLogsInAWrappersNativeCode(t *testing.T) {
+	const delegate = "ios/Runner/AppDelegate.swift"
+	app := func(body string) string {
+		return "import Flutter\nimport TenjinSDK\n\n@main\nclass AppDelegate: FlutterAppDelegate {\n    override func application() -> Bool {\n" + body + "        return true\n    }\n}\n"
+	}
+	for _, c := range []struct {
+		name, body string
+		severity   verify.Severity
+		line       int
+	}{
+		{"in release builds too", "        TenjinSDK.debugLogs()\n", verify.Warning, 7},
+		{"debug only", "        #if DEBUG\n        TenjinSDK.debugLogs()\n        #endif\n", verify.Pass, 8},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := run(t, testproject.Flutter().With(testproject.Files{delegate: app(c.body)}), verify.Options{})
+			if f := find(r, "ios.debug_logs", project.IOS); f == nil || f.Severity != c.severity || f.File != delegate || f.Line != c.line {
+				t.Fatalf("ios.debug_logs = %+v", f)
+			}
+		})
+	}
+	// The Dart code cannot turn them on, so their absence is not a finding.
+	if r := run(t, testproject.Flutter().With(testproject.Files{delegate: app("")}), verify.Options{}); find(r, "ios.debug_logs", project.IOS) != nil {
+		t.Errorf("ios.debug_logs = %+v", find(r, "ios.debug_logs", project.IOS))
+	}
+}

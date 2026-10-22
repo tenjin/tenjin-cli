@@ -34,6 +34,10 @@ var unitySpec = frameworkSpec{
 	initFix:     `In the first scene's Start(), call Tenjin.getInstance("<SDK_KEY>"), choosing the key with #if UNITY_IOS and #elif UNITY_ANDROID; or drag the TenjinObject prefab into the first scene and set its SDK Key.`,
 	connectFix:  "Call Connect() on the instance in Start(), and again in OnApplicationPause when pauseStatus is false.",
 	attCall:     regexp.MustCompile(`RequestTrackingAuthorizationWithCompletionHandler|RequestAuthorizationTracking`),
+	// On iOS only: the package's Android DebugLogs() does nothing.
+	debugLogsCall: regexp.MustCompile(`\bTenjin\.(?:getInstance\w*\((?:[^()]|\([^()]*\))*\)\s*\.)?DebugLogs\(`),
+	debugLogsName: "DebugLogs()",
+	debugOnlyFix:  "Call it in development builds only: inside #if DEVELOPMENT_BUILD … #endif, or under if (Debug.isDebugBuild).",
 	// The package's own scripts call getInstance and Connect themselves.
 	skip: []string{"Assets/Tenjin/"},
 }
@@ -46,10 +50,13 @@ const (
 )
 
 var (
-	componentKey   = regexp.MustCompile(`(?m)^\s*sdkKey:[ \t]*(\S*)[ \t]*$`)
-	overriddenKey  = regexp.MustCompile(`propertyPath: sdkKey\s+value:[ \t]*(\S*)`)
-	minifyRelease  = regexp.MustCompile(`(?m)^\s*AndroidMinify(?:Release|Debug): 1\s*$`)
-	unityStoreType = regexp.MustCompile(`SetAppStoreType\(`)
+	componentKey  = regexp.MustCompile(`(?m)^\s*sdkKey:[ \t]*(\S*)[ \t]*$`)
+	overriddenKey = regexp.MustCompile(`propertyPath: sdkKey\s+value:[ \t]*(\S*)`)
+	minifyRelease = regexp.MustCompile(`(?m)^\s*AndroidMinify(?:Release|Debug): 1\s*$`)
+	// The component's Debug Logs box, ticked on it or as a prefab override.
+	componentDebugLogs  = regexp.MustCompile(`(?m)^\s*debugLogs:[ \t]*1[ \t]*$`)
+	overriddenDebugLogs = regexp.MustCompile(`(?m)propertyPath: debugLogs\s+value:[ \t]*1[ \t]*$`)
+	unityStoreType      = regexp.MustCompile(`SetAppStoreType\(`)
 )
 
 func (r *runner) checkUnity() {
@@ -78,6 +85,7 @@ func (r *runner) checkUnity() {
 			Fix:    "To use your own wording, set it in a [PostProcessBuild] script whose callbackOrder is above 1, so that it runs after Tenjin's.",
 		})
 		r.checkUnitySKAN()
+		r.checkUnityDebugLogs(spec, src)
 		if usesComponent {
 			r.pass("ios.att_request", project.IOS, "The TenjinObject component asks for tracking permission before it connects", "", 0)
 		} else {
@@ -161,8 +169,62 @@ func (r *runner) findTenjinObject(src *source) bool {
 				src.keys = append(src.keys, keyLiteral{Value: text[m[2]:m[3]], File: rel, Line: lineAt(text, m[0])})
 			}
 		}
+		src.componentDebugLogs = append(src.componentDebugLogs, componentDebugTicks(rel, text)...)
 	}
 	return found
+}
+
+// componentDebugTicks finds the TenjinObject components in a scene or
+// prefab whose Debug Logs box is ticked: on the component, in the YAML
+// document of its script, or as an override of the prefab's.
+func componentDebugTicks(rel, text string) []call {
+	var ticks []call
+	start := 0
+	for start < len(text) {
+		end := strings.Index(text[start+1:], "\n--- ")
+		if end < 0 {
+			end = len(text)
+		} else {
+			end += start + 1
+		}
+		doc := text[start:end]
+		var re *regexp.Regexp
+		switch {
+		case strings.Contains(doc, tenjinObjectScript):
+			re = componentDebugLogs
+		case strings.Contains(doc, tenjinObjectPrefab):
+			re = overriddenDebugLogs
+		}
+		if re != nil {
+			for _, loc := range re.FindAllStringIndex(doc, -1) {
+				at := start + loc[0]
+				if text[at] == '\n' {
+					at++
+				}
+				ticks = append(ticks, call{File: rel, Line: lineAt(text, at), Text: text})
+			}
+		}
+		start = end
+	}
+	return ticks
+}
+
+// checkUnityDebugLogs reports the SDK's logs turned on in release builds:
+// by DebugLogs() in code, or by the TenjinObject component, whose box
+// applies to every build. They show on iOS only.
+func (r *runner) checkUnityDebugLogs(spec frameworkSpec, src source) {
+	if len(src.componentDebugLogs) > 0 {
+		c := src.componentDebugLogs[0]
+		r.add(Finding{
+			ID: "ios.debug_logs", Severity: Warning, Platform: project.IOS,
+			Title:  "The TenjinObject component has Debug Logs ticked, so release builds log too",
+			Detail: "The box applies to every build. It logs every request and response body, device identifiers included, on the devices of the app's users.",
+			File:   c.File, Line: c.Line,
+			Fix: "Untick Debug Logs on the TenjinObject in " + c.File + " before building a release, or leave it off and call DebugLogs() in code inside #if DEVELOPMENT_BUILD … #endif.",
+		})
+		return
+	}
+	r.checkDebugLogs(spec, src)
 }
 
 // checkUnityResume reports when nothing connects again after the app comes

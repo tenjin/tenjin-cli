@@ -42,9 +42,13 @@ type frameworkSpec struct {
 	// has no ATT API of its own.
 	attCall *regexp.Regexp
 	// debugLogsCall matches the call that turns the SDK's request logs on,
-	// which a launch check reads; debugLogsFix says how to add it.
+	// which a launch check reads, and debugLogsName names it. debugLogsFix
+	// says how to add it, where a launch check needs it; debugOnlyFix, how
+	// to keep it out of release builds.
 	debugLogsCall *regexp.Regexp
+	debugLogsName string
 	debugLogsFix  string
+	debugOnlyFix  string
 	attPackages   []string
 	// skip lists folders inside the source folders that are the SDK's own
 	// code, and so say nothing about the app's use of it.
@@ -116,6 +120,8 @@ var nativeSpecs = map[project.Platform]frameworkSpec{
 		connectFix:     "Call TenjinSDK.connect() on every launch, after the user has answered the tracking prompt.",
 		attCall:        regexp.MustCompile(`requestTrackingAuthorization`),
 		debugLogsCall:  regexp.MustCompile(`TenjinSDK\.debugLogs\(|\[TenjinSDK debugLogs\]`),
+		debugLogsName:  "TenjinSDK.debugLogs()",
+		debugOnlyFix:   "Put the call inside #if DEBUG … #endif (Swift) or #ifdef DEBUG … #endif (Objective-C).",
 		debugLogsFix:   "Before TenjinSDK.getInstance, add TenjinSDK.debugLogs() inside #if DEBUG … #endif (Swift), or [TenjinSDK debugLogs] inside #ifdef DEBUG … #endif (Objective-C), so that debug builds log what Tenjin answered and release builds stay quiet.",
 	},
 }
@@ -187,6 +193,9 @@ type source struct {
 	connects   []call
 	att        []call
 	debugLogs  []call
+	// componentDebugLogs are Unity TenjinObject components with Debug Logs
+	// ticked.
+	componentDebugLogs []call
 	// keys are the SDK keys written as string literals, in order of first
 	// appearance, each with where it was found.
 	keys []keyLiteral

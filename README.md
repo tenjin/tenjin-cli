@@ -233,7 +233,7 @@ tenjin doctor --logs logcat.txt   # a saved log; - reads standard input
 
 Launch a debug build first. `doctor` reports what Tenjin answered to the SDK, why a request was refused, whether the build that ran has the application ID the project declares, and whether Tenjin has processed the install. Other apps on the device with the Tenjin SDK log the same way; their requests are left out. `--serial` picks a device when several are connected.
 
-On iOS, the SDK logs its requests only when the build calls `TenjinSDK.debugLogs()`; `doctor` checks that debug builds do and release builds don't. Tenjin accepts a simulator's requests but leaves its installs out of attribution by design: the SDK marks them, and Android emulators it recognises too. A physical device is what confirms the install.
+On iOS, the SDK logs its requests only when the build calls `TenjinSDK.debugLogs()`; `doctor` checks that debug builds do and release builds don't. It also warns when release builds would log: from Unity's `DebugLogs()` outside a development build or the TenjinObject's Debug Logs box, and from a native call in a Flutter, React Native or Capacitor app's `ios/` folder. The Android SDK has no such switch. Tenjin accepts a simulator's requests but leaves its installs out of attribution by design: the SDK marks them, and Android emulators it recognises too. A physical device is what confirms the install.
 
 ### Builds and SDK keys
 

@@ -79,13 +79,18 @@ func (r *runner) checkIOS(spec frameworkSpec, t *project.Target, src source) {
 	}
 
 	r.checkATTRequest(spec, src)
-	r.checkDebugLogs(spec, src)
+	if spec.debugLogsCall != nil {
+		r.checkDebugLogs(spec, src)
+	} else {
+		r.checkNativeDebugLogs(t)
+	}
 }
 
 // checkDebugLogs looks for the call that turns the SDK's request logs on.
 // Without it the iOS SDK logs nothing about its requests, so a launch cannot
 // be checked from the device; with it outside a debug-only block, every
 // request body, device identifiers included, is logged on customers' phones.
+// A spec with no debugLogsFix says nothing when the call is absent.
 func (r *runner) checkDebugLogs(spec frameworkSpec, src source) {
 	if spec.debugLogsCall == nil {
 		return
@@ -94,16 +99,19 @@ func (r *runner) checkDebugLogs(spec frameworkSpec, src source) {
 		if !debugOnly(c) {
 			r.add(Finding{
 				ID: "ios.debug_logs", Severity: Warning, Platform: project.IOS,
-				Title:  "TenjinSDK.debugLogs() is on in release builds",
+				Title:  spec.debugLogsName + " is on in release builds",
 				Detail: "It logs every request and response body, device identifiers included, on the devices of the app's users.",
 				File:   c.File, Line: c.Line,
-				Fix: "Put the call inside #if DEBUG … #endif (Swift) or #ifdef DEBUG … #endif (Objective-C).",
+				Fix: spec.debugOnlyFix,
 			})
 			return
 		}
 	}
 	if len(src.debugLogs) > 0 {
 		r.pass("ios.debug_logs", project.IOS, "Debug builds turn on the SDK's logs", src.debugLogs[0].File, src.debugLogs[0].Line)
+		return
+	}
+	if spec.debugLogsFix == "" {
 		return
 	}
 	r.add(Finding{
@@ -114,16 +122,34 @@ func (r *runner) checkDebugLogs(spec frameworkSpec, src source) {
 	})
 }
 
-// debugOnly reports whether a call sits inside a conditional block on DEBUG.
+// checkNativeDebugLogs looks for the iOS SDK's debugLogs call in the native
+// code of a Flutter, React Native or Capacitor app, where it can only be
+// added by hand: the framework's code has no such call.
+func (r *runner) checkNativeDebugLogs(t *project.Target) {
+	if t.IOS == nil || t.IOS.Xcodeproj == "" {
+		return
+	}
+	native := nativeSpecs[project.IOS]
+	native.debugLogsFix = ""
+	r.checkDebugLogs(native, r.scanSource(native, native.sourceDirs(t)))
+}
+
+// debugOnly reports whether a call runs in debug builds only: inside a
+// conditional block on DEBUG, or Unity's DEVELOPMENT_BUILD or UNITY_EDITOR,
+// or under an if on Unity's Debug.isDebugBuild on the line itself or just
+// before it.
 func debugOnly(c call) bool {
+	lines := strings.Split(c.Text, "\n")
 	var open []bool
-	for i, line := range strings.Split(c.Text, "\n") {
+	for i, line := range lines {
 		if i+1 >= c.Line {
 			break
 		}
 		switch t := strings.TrimSpace(line); {
 		case strings.HasPrefix(t, "#if"):
-			open = append(open, strings.Contains(t, "DEBUG") && !strings.Contains(t, "!"))
+			open = append(open, debugCondition(t))
+		case strings.HasPrefix(t, "#elif") && len(open) > 0:
+			open[len(open)-1] = debugCondition(t)
 		case strings.HasPrefix(t, "#endif") && len(open) > 0:
 			open = open[:len(open)-1]
 		case strings.HasPrefix(t, "#else") && len(open) > 0:
@@ -135,7 +161,41 @@ func debugOnly(c call) bool {
 			return true
 		}
 	}
+	if c.Line < 1 || c.Line > len(lines) {
+		return false
+	}
+	if runtimeDebug(lines[c.Line-1]) {
+		return true
+	}
+	for i := c.Line - 2; i >= 0 && i >= c.Line-3; i-- {
+		switch t := strings.TrimSpace(lines[i]); {
+		case t == "" || t == "{":
+			continue
+		case strings.HasPrefix(t, "if") && !strings.HasSuffix(t, ";"):
+			return runtimeDebug(t)
+		}
+		break
+	}
 	return false
+}
+
+// debugCondition reports whether a preprocessor condition holds in debug
+// builds only.
+func debugCondition(directive string) bool {
+	if strings.Contains(directive, "!") {
+		return false
+	}
+	for _, symbol := range []string{"DEBUG", "DEVELOPMENT_BUILD", "UNITY_EDITOR"} {
+		if strings.Contains(directive, symbol) {
+			return true
+		}
+	}
+	return false
+}
+
+// runtimeDebug reports whether a line tests Unity's Debug.isDebugBuild.
+func runtimeDebug(line string) bool {
+	return strings.Contains(line, "Debug.isDebugBuild") && !strings.Contains(line, "!Debug.isDebugBuild")
 }
 
 // skanFix says where the SKAdNetwork endpoint goes. A project whose
