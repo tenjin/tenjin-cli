@@ -459,6 +459,7 @@ func TestTheAppsTextCannotRewriteTheTask(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	p.ReadAnalytics()
 	check("setup", task(t, hostileAnalytics(), defaultAnalytics(p, analyticsFlags{})))
 
 	h := newHarness(t)
