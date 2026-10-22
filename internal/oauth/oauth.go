@@ -246,9 +246,9 @@ func (c *Client) token(ctx context.Context, endpoint string, form url.Values) (T
 	if status == http.StatusOK && json.Unmarshal(body, &t) == nil && t.AccessToken != "" {
 		return Tokens{AccessToken: t.AccessToken, RefreshToken: t.RefreshToken}, nil
 	}
-	if status == http.StatusOK {
-		// A success's body holds tokens; it is never shown.
-		return Tokens{}, errors.New("the token request answered HTTP 200 without a token")
+	if success(status) {
+		// A success's body can hold tokens; it is never shown.
+		return Tokens{}, fmt.Errorf("the token request answered HTTP %d without a token", status)
 	}
 	if status == http.StatusBadRequest || status == http.StatusUnauthorized {
 		return Tokens{}, fmt.Errorf("%w: %s", ErrGrantInvalid, describe(body))
@@ -278,9 +278,9 @@ func (c *Client) Exchange(ctx context.Context, accessToken string) (Identity, er
 		OrganizationName string          `json:"organization_name"`
 		ExpiresIn        json.RawMessage `json:"expires_in"`
 	}
-	if status == http.StatusOK && (json.Unmarshal(body, &ex) != nil || ex.AccessToken == "") {
-		// A success's body holds the token; it is never shown.
-		return Identity{}, errors.New("the token exchange answered HTTP 200 without a token")
+	if success(status) && (status != http.StatusOK || json.Unmarshal(body, &ex) != nil || ex.AccessToken == "") {
+		// A success's body can hold the token; it is never shown.
+		return Identity{}, fmt.Errorf("the token exchange answered HTTP %d without a token", status)
 	}
 	if status != http.StatusOK {
 		if status == http.StatusBadRequest || status == http.StatusUnauthorized {
@@ -375,6 +375,10 @@ func expiresIn(raw json.RawMessage) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return time.Now().Add(time.Duration(seconds * float64(time.Second))), true
+}
+
+func success(status int) bool {
+	return status >= 200 && status < 300
 }
 
 func describe(body []byte) string {
