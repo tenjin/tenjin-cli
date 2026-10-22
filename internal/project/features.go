@@ -44,16 +44,16 @@ const (
 	FeatureUserID        = "user_id"
 )
 
-var featureNames = []struct{ id, name string }{
-	{FeatureOpens, "App opens and attribution"},
-	{FeaturePurchases, "In-app purchases"},
-	{FeatureSubscriptions, "Subscriptions"},
-	{FeatureAdRevenue, "Ad revenue (ILRD)"},
-	{FeatureConsent, "Consent (GDPR)"},
-	{FeatureDeepLinks, "Deep links"},
-	{FeatureSKAN, "SKAdNetwork conversion values"},
-	{FeatureCustomEvents, "Custom events"},
-	{FeatureUserID, "Customer user ID"},
+var featureNames = []struct{ id, name, about string }{
+	{FeatureOpens, "App opens and attribution", "installs and opens, by campaign"},
+	{FeaturePurchases, "In-app purchases", "the app sells items: revenue per campaign"},
+	{FeatureSubscriptions, "Subscriptions", "the app sells subscriptions: their revenue"},
+	{FeatureAdRevenue, "Ad revenue (ILRD)", "the app shows ads: ad revenue per user"},
+	{FeatureConsent, "Consent (GDPR)", "the app asks for consent: Tenjin follows it"},
+	{FeatureDeepLinks, "Deep links", "an ad opens a screen of the app, even on install"},
+	{FeatureSKAN, "SKAdNetwork conversion values", "iOS: in-app actions in Apple's SKAN postbacks"},
+	{FeatureCustomEvents, "Custom events", "your own events, such as level_complete"},
+	{FeatureUserID, "Customer user ID", "your user IDs on Tenjin's data, to join with yours"},
 }
 
 // FeatureIDs lists every feature ID, in order.
@@ -63,6 +63,17 @@ func FeatureIDs() []string {
 		out[i] = f.id
 	}
 	return out
+}
+
+// FeatureAbout says, for people choosing, what a feature is for: when an app
+// needs it, and what it gives.
+func FeatureAbout(id string) string {
+	for _, f := range featureNames {
+		if f.id == id {
+			return f.about
+		}
+	}
+	return ""
 }
 
 // FeatureName is how a feature is called for people.

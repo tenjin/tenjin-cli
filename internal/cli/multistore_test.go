@@ -253,8 +253,10 @@ func TestSetupAsksWhichFeatures(t *testing.T) {
 	code, stdout, _ := h.typing("", "q").run("setup", dir)
 	lacks(t, stdout,
 		"Tenjin features for this integration",
-		"App opens and attribution  always included",
-		"2) In-app purchases  (Google Play Billing in app/build.gradle.kts)",
+		"1) App opens and attribution  installs and opens, by campaign (always included)",
+		"2) In-app purchases           the app sells items: revenue per campaign",
+		"suggested: Google Play Billing in app/build.gradle.kts",
+		"Not sure? Keep app opens",
 		"Press Enter when the",
 		"Integrating: App opens and attribution, In-app purchases.",
 		"In-app purchases: chosen for the integration, but not sent to Tenjin",

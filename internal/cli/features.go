@@ -78,7 +78,7 @@ func (s *setup) chooseFeatures(p *project.Project) error {
 	for _, id := range suggestedFeatures(p) {
 		chosen[id] = true
 	}
-	s.say("\nTenjin features for this integration (%s = included):", s.style.Green("✓"))
+	s.say("\nTenjin features for this integration (%s = included). Each one is code in the\napp, which your coding agent or you add, and the checks look for. Not sure?\nKeep app opens: running setup again adds the rest.\n", s.style.Green("✓"))
 	s.listFeatures(p, chosen)
 	if !s.env.interactive {
 		s.features = inOrder(p, chosen)
@@ -104,25 +104,30 @@ func (s *setup) chooseFeatures(p *project.Project) error {
 	}
 }
 
-// listFeatures prints the project's features, the chosen ones ticked.
+// listFeatures prints the project's features, the chosen ones ticked, each
+// with what it is for and, when the project suggests it, why.
 func (s *setup) listFeatures(p *project.Project, chosen map[string]bool) {
+	width := 0
+	for i, f := range p.Features {
+		width = max(width, len(fmt.Sprintf("%d) %s", i+1, f.Name)))
+	}
 	for i, f := range p.Features {
 		mark := " "
 		if chosen[f.ID] || f.Required {
 			mark = s.style.Green("✓")
 		}
-		line := fmt.Sprintf("  %s %d) %s", mark, i+1, f.Name)
-		switch {
-		case f.Required:
-			line += s.style.Dim("  always included")
-		case len(f.Evidence) > 0:
+		about := project.FeatureAbout(f.ID)
+		if f.Required {
+			about += " (always included)"
+		}
+		s.say("  %s %-*s  %s", mark, width, fmt.Sprintf("%d) %s", i+1, f.Name), s.style.Dim(about))
+		if len(f.Evidence) > 0 && !f.Required {
 			var why []string
 			for _, e := range f.Evidence {
 				why = append(why, render.Clean(e.What+" in "+e.File))
 			}
-			line += s.style.Dim("  (" + strings.Join(why, "; ") + ")")
+			s.say("    %*s  %s", width, "", s.style.Dim("suggested: "+strings.Join(why, "; ")))
 		}
-		s.say("%s", line)
 	}
 }
 
