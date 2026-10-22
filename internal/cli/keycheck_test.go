@@ -117,7 +117,7 @@ func TestAKeyWithSpacesIsNeverPrintedWhole(t *testing.T) {
 				t.Fatal(err)
 			}
 			report := verify.Run(context.Background(), p, verify.Options{})
-			prompt := integrationPrompt(p, report, map[string]bool{}, nil, "tenjin doctor --json")
+			prompt := integrationPrompt(p, report, map[string]bool{}, nil, analyticsChoice{}, "tenjin doctor --json")
 			if !strings.Contains(prompt, "has spaces in it") {
 				t.Errorf("the task lacks the finding:\n%s", prompt)
 			}

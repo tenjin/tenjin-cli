@@ -25,7 +25,10 @@ func newProjectDetectCmd(opts *options) *cobra.Command {
 		Short: "Report the framework, platforms, bundle IDs and any existing Tenjin SDK",
 		Long: `Report what kind of mobile project a directory holds: its framework, the
 platforms it builds for, each platform's bundle ID, and whether the Tenjin SDK
-is already a dependency.
+is already a dependency. It also lists what the app already sends to other
+analytics SDKs (Firebase, Amplitude, Mixpanel, AppsFlyer, Adjust,
+GameAnalytics, Facebook, Flurry): the events, by name where the code shows
+one, and the value it gives as the user's ID, each with its file and line.
 
 It only reads files. It works offline and without signing in.`,
 		Args: maxArgs(1),
@@ -149,6 +152,18 @@ func writeProject(w io.Writer, p *project.Project) error {
 	}
 	if len(suggestions) > 0 {
 		b.WriteString("\n" + style.Heading("Suggested features") + "\n" + strings.Join(suggestions, "\n") + "\n")
+	}
+
+	// What custom events and a customer user ID could be taken from.
+	if lines := analyticsSummary(p); len(lines) > 0 {
+		b.WriteString("\n" + style.Heading("Analytics in the app") + "\n")
+		width := 0
+		for _, line := range lines {
+			width = max(width, len(line[0]))
+		}
+		for _, line := range lines {
+			fmt.Fprintf(&b, "  %s  %s\n", style.Bold(fmt.Sprintf("%-*s", width, line[0])), line[1])
+		}
 	}
 
 	if lines := buildShape(p); len(lines) > 0 {

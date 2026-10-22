@@ -38,13 +38,17 @@ func newSetupCmd(opts *options, env *environment) *cobra.Command {
 		agentFlag string
 		builds    []string
 		features  []string
+		analytics analyticsFlags
 	)
 	cmd := &cobra.Command{
 		Use:   "setup [path]",
 		Short: "Set up Tenjin in this project, step by step",
 		Long: `Walk through setting up Tenjin in a project:
 
-  1. work out what the project is, and which builds it ships
+  1. work out what the project is, which builds it ships, and which
+     features to integrate; for custom events and the customer user ID,
+     which events and which value, offering what the app already gives its
+     other analytics SDKs
   2. sign in
   3. find or create the Tenjin app for each build
   4. get each app's SDK key: fetched from Tenjin where it serves keys, or
@@ -74,7 +78,10 @@ Each step is also a command of its own (project detect, login, apps ensure,
 doctor) for scripts and agents.
 
 Without a terminal, setup runs once and asks nothing: it creates apps only
-with --yes and starts an agent only with --agent.`,
+with --yes and starts an agent only with --agent. --events and --user-id
+answer the questions about custom events and the customer user ID; without
+them, setup takes what the app gives its other analytics SDKs, and where
+there is nothing, the agent proposes and adds none.`,
 		Args: maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, err := opts.format(cmd)
@@ -88,12 +95,15 @@ with --yes and starts an agent only with --agent.`,
 			if agentFlag != "" && agentFlag != "none" && !contains(agent.IDs(), agentFlag) {
 				return clierr.New(clierr.Usage, "unknown agent %q (use %s, or none)", agentFlag, strings.Join(agent.IDs(), ", "))
 			}
+			if err := analytics.read(cmd); err != nil {
+				return err
+			}
 			given, err := givenKeys(sdkKeys, env.getenv)
 			if err != nil {
 				return err
 			}
 			s := &setup{cmd: cmd, env: env, args: args, yes: yes, offline: offline, serial: serial, given: given, agentFlag: agentFlag,
-				chosen: builds, wantFeatures: features, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
+				chosen: builds, wantFeatures: features, analyticsFlags: analytics, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
 				appIDs: map[string]string{}, keyURLs: map[string]string{},
 				keys: map[string]verify.GivenKey{}, inProject: map[string]bool{}}
 			_, _ = io.WriteString(s.out, render.Banner(s.out, tagline))
@@ -107,6 +117,7 @@ with --yes and starts an agent only with --agent.`,
 	cmd.Flags().StringVar(&serial, "serial", "", serialUsage)
 	addBuildFlag(cmd, &builds)
 	addFeaturesFlag(cmd, &features, "integrate")
+	addAnalyticsFlags(cmd, &analytics)
 	cmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
 		// An empty --features means app opens only, not "not given".
 		if cmd.Flags().Changed("features") && features == nil {
@@ -156,6 +167,10 @@ type setup struct {
 	// the ones settled in step 1, app opens first.
 	wantFeatures []string
 	features     []string
+	// analyticsFlags are --events and --user-id, and analytics the custom
+	// events and the customer user ID settled with the features.
+	analyticsFlags analyticsFlags
+	analytics      analyticsChoice
 	// appIDs and keyURLs are, for each build ID, its Tenjin app and the
 	// dashboard page showing that app's SDK keys.
 	appIDs  map[string]string
@@ -220,7 +235,13 @@ func (s *setup) run() error {
 	if s.features, err = chosenFeatures(p, s.wantFeatures); err != nil {
 		return err
 	}
+	if err := s.analyticsFlags.conflicts(s.features); err != nil {
+		return err
+	}
 	if err := s.chooseFeatures(p); err != nil {
+		return err
+	}
+	if err := s.settleAnalytics(p); err != nil {
 		return err
 	}
 
@@ -729,6 +750,9 @@ func (s *setup) manualGuide(report *verify.Report) {
 	}
 	if len(s.features) > 1 {
 		s.say("%s", render.Indent("Also integrate the features chosen in step 1: "+featureList(s.features[1:])+". Each has its own section in the guide.", 2, width))
+		for _, line := range s.analyticsGuide() {
+			s.say("%s", render.Indent(render.Clean(line), 2, width))
+		}
 	}
 	// The guide this version checks against, offline, before the public
 	// repository it comes from.
@@ -766,7 +790,7 @@ func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
 	if exe, err := s.env.executable(); err == nil {
 		toolDir = filepath.Dir(exe)
 	}
-	task := agent.Task{Dir: p.Root, Prompt: integrationPrompt(p, report, s.inProject, s.features, s.helper.DoctorCommand()), ToolDir: toolDir}
+	task := agent.Task{Dir: p.Root, Prompt: integrationPrompt(p, report, s.inProject, s.features, s.analytics, s.helper.DoctorCommand()), ToolDir: toolDir}
 
 	s.say("\n%s is working on the integration. This can take a few minutes.", s.helper.Name)
 	before := project.Fingerprint(p.Root)
@@ -972,8 +996,10 @@ func agentWork(report *verify.Report) []verify.Finding {
 
 // integrationPrompt is the task given to the coding agent: the doctor's open
 // findings, each with its fix, and the rules for the work. The agent is
-// never given an SDK key: it writes a placeholder, which the CLI fills.
-func integrationPrompt(p *project.Project, report *verify.Report, inProject map[string]bool, features []string, doctor string) string {
+// never given an SDK key: it writes a placeholder, which the CLI fills. It
+// is given the custom events and the customer user ID chosen, and is told
+// to propose, never invent, those that were not.
+func integrationPrompt(p *project.Project, report *verify.Report, inProject map[string]bool, features []string, analytics analyticsChoice, doctor string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "You are adding the Tenjin SDK to the %s project in the current directory.\n\n", frameworkNames[p.Framework])
 
@@ -1012,18 +1038,33 @@ func integrationPrompt(p *project.Project, report *verify.Report, inProject map[
 				}
 				fmt.Fprintf(&b, ": the project has %s; send it to Tenjin where that code runs", strings.Join(where, ", "))
 			}
+			if task := analyticsTask(p, id, analytics); task != "" {
+				b.WriteString(": " + task)
+			}
 			b.WriteString("\n")
 		}
 		b.WriteString("Integrate these and no others. Each has its own section in the guide below.\n")
 	}
+	proposals := analytics.proposals(features)
 	if name, err := guideFor(p); err == nil {
 		fmt.Fprintf(&b, "\nThe integration guide for this project, matched to the checks: run `tenjin sdk guide %s`. Read it before you change anything.\n", name)
 	} else if p.Framework == project.Native {
 		b.WriteString("\nThe integration guides, matched to the checks: run `tenjin sdk guide android` and `tenjin sdk guide ios`. Read them before you change anything.\n")
 	}
-	b.WriteString("\n`tenjin doctor` checked the project and found the items below. Resolve every one. Each names the file it concerns and the fix.\n\n")
-	n := 0
+	// A feature to propose, not add, is not one of the items to resolve.
+	var items []verify.Finding
 	for _, f := range agentWork(report) {
+		if !containsString(proposals, strings.TrimPrefix(f.ID, "feature.")) {
+			items = append(items, f)
+		}
+	}
+	if len(items) == 0 {
+		b.WriteString("\n`tenjin doctor` checked the project and found nothing else to change.\n")
+	} else {
+		b.WriteString("\n`tenjin doctor` checked the project and found the items below. Resolve every one. Each names the file it concerns and the fix.\n\n")
+	}
+	n := 0
+	for _, f := range items {
 		n++
 		fmt.Fprintf(&b, "%d. [%s] %s", n, f.Severity, f.Title)
 		if f.File != "" {
@@ -1042,15 +1083,29 @@ func integrationPrompt(p *project.Project, report *verify.Report, inProject map[
 		}
 	}
 
+	expected := `findings whose id starts with "key." and the "sdk.key.unfilled" findings for the placeholders, which are expected`
+	summary := "at most six short lines"
+	if len(proposals) > 0 {
+		var ids []string
+		for _, id := range proposals {
+			ids = append(ids, `"feature.`+id+`"`)
+		}
+		expected = `findings whose id starts with "key.", the "sdk.key.unfilled" findings for the placeholders, and ` + strings.Join(ids, " and ") + `, for what you only propose; all are expected`
+		summary = "at most six short lines, then your proposals"
+	}
+	defaults := "pick a sensible default and list it at the end"
+	if containsString(features, project.FeatureCustomEvents) || containsString(features, project.FeatureUserID) {
+		defaults += ". Custom events and the customer user ID are not such choices: use only what the features above name"
+	}
 	b.WriteString(`
 Rules:
 - Work only inside this directory. Do not commit, do not run the app, do not install or download anything, and run no command that changes anything other than the project's files.
 - You are not given the SDK keys, on purpose. Never look for, ask for or write a real key. Where a key belongs, write its placeholder as above; in a project with two platforms, choose between the placeholders at runtime.
 - Make the smallest change that resolves each item, in the style the project already uses.
 - A Tenjin app is one bundle ID on one platform, and an Android build for another store is an app of its own. Each app has its own SDK key, so two builds never share a placeholder.
-- Where a fix needs a choice only the developer can make, such as the wording of the tracking prompt, pick a sensible default and list it at the end.
-- When you think you are done, run ` + "`" + doctor + "`" + ` and read its findings. Repeat until none has severity "error" or "warning", apart from findings whose id starts with "key." and the "sdk.key.unfilled" findings for the placeholders, which are expected.
-- Finish with a summary of at most six short lines, in plain text without Markdown: what you changed, and anything left for the developer. Do not tell them to write the SDK key or to run tenjin setup for it: this run of the Tenjin CLI writes the keys as soon as you finish.
+- Where a fix needs a choice only the developer can make, such as the wording of the tracking prompt, ` + defaults + `.
+- When you think you are done, run ` + "`" + doctor + "`" + ` and read its findings. Repeat until none has severity "error" or "warning", apart from ` + expected + `.
+- Finish with a summary of ` + summary + `, in plain text without Markdown: what you changed, and anything left for the developer. Do not tell them to write the SDK key or to run tenjin setup for it: this run of the Tenjin CLI writes the keys as soon as you finish.
 `)
 	return b.String()
 }

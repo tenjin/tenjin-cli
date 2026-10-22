@@ -124,7 +124,7 @@ For app developers, in the app's project.
 | Command | What it does |
 | --- | --- |
 | `tenjin setup [path]` | The guided path, from sign-in to a launch Tenjin has processed |
-| `tenjin project detect [path]` | Framework, platforms, bundle IDs, where the app starts, ad SDKs, any Tenjin SDK already declared |
+| `tenjin project detect [path]` | Framework, platforms, bundle IDs, where the app starts, ad SDKs, any Tenjin SDK already declared, and the events and user ID the app gives other analytics SDKs |
 | `tenjin doctor [path]` | Check the integration on disk, and each SDK key against Tenjin |
 | `tenjin doctor --device` | Also read a connected device: what the SDK sent and what Tenjin answered |
 | `tenjin project set-keys [path]` | Write SDK keys where a coding agent left placeholders. Run it yourself: it does not run inside a coding agent, which would then read the keys |
@@ -200,6 +200,8 @@ tenjin campaigns create --app <app-id> --name "Summer UA" --channel <channel-id>
 ### The steps of setup
 
 1. **Your project.** What `project detect` reports, and which Tenjin features to integrate. App opens are always included. Purchases, subscriptions, ad revenue, consent, deep links, SKAdNetwork conversion values, custom events and the customer user ID are offered, and the ones the project shows a reason for are suggested. Move through the list with the arrow keys, tick or untick with space, and press Enter. `--features` chooses without asking.
+
+   Only you know which events matter and which value identifies a user, so for those two features `setup` asks, and shows what the app already gives its other analytics SDKs (Firebase Analytics, Amplitude, Mixpanel, AppsFlyer, GameAnalytics, Facebook App Events, Flurry; Adjust's event tokens too, which are not names): Enter takes those. `--events <name,name>` and `--user-id <value>` answer without asking; the value can be code, such as `user.id`, or words, such as "the account ID from the login response". Without a terminal and without the flags, `setup` takes what the app sends already. Where nothing was named or found, your coding agent proposes events or a user ID in its report and adds none: it is never left to invent them.
 2. **Sign in**, through the browser, if there is no session.
 3. **Tenjin apps.** Finds the app for each build, or creates it after asking (`--yes` to skip the question).
 4. **SDK keys.** Fetches each app's key from Tenjin, or says where to copy it in the dashboard, and checks it at once, so a wrong key, or the other platform's, is caught before a build.
@@ -220,7 +222,7 @@ tenjin campaigns create --app <app-id> --name "Summer UA" --channel <channel-id>
 
 Every problem comes with a fix that names the file, the line and the version. The key check sends one request to Tenjin and no event; `--offline` skips it, along with the once-a-day lookup of the newest SDK releases. `--strict` also fails on warnings.
 
-`doctor` does not edit the project itself. At a terminal, when Claude Code or Codex is installed and there is something to fix in code, it offers to have your agent fix it (no by default), then checks again. `--agent claude` or `--agent codex` fixes without asking; `--agent none` never offers. The agent works under the same limits as in `setup`, never sees an SDK key, and leaves a key already in the project as it is. Where it writes a placeholder for a key, `doctor` writes the key given with `--sdk-key` (or the environment) in its place once Tenjin accepts it for that build; a key given without a build only for a platform with one build, and none with `--offline`.
+`doctor` does not edit the project itself. At a terminal, when Claude Code or Codex is installed and there is something to fix in code, it offers to have your agent fix it (no by default), then checks again. `--agent claude` or `--agent codex` fixes without asking; `--agent none` never offers. The agent works under the same limits as in `setup`, never sees an SDK key, and leaves a key already in the project as it is. Where it writes a placeholder for a key, `doctor` writes the key given with `--sdk-key` (or the environment) in its place once Tenjin accepts it for that build; a key given without a build only for a platform with one build, and none with `--offline`. `--events` and `--user-id` work as in `setup`, and choose their features when `--features` is not given.
 
 ### Verifying a launch
 

@@ -26,15 +26,16 @@ import (
 
 func newDoctorCmd(opts *options, env *environment) *cobra.Command {
 	var (
-		sdkKeys  []string
-		offline  bool
-		strict   bool
-		device   bool
-		serial   string
-		logs     string
-		builds   []string
-		features []string
-		fixWith  string
+		sdkKeys   []string
+		offline   bool
+		strict    bool
+		device    bool
+		serial    string
+		logs      string
+		builds    []string
+		features  []string
+		fixWith   string
+		analytics analyticsFlags
 	)
 	cmd := &cobra.Command{
 		Use:   "doctor [path]",
@@ -57,7 +58,10 @@ same limits as in 'tenjin setup', is never given an SDK key, and leaves any
 key already in the project as it is. Where it writes a placeholder for a key
 instead, doctor writes the key given with --sdk-key (or the environment) in
 its place, once Tenjin accepts that key for that build; with --offline it
-writes none.
+writes none. --events and --user-id tell the agent which custom events to
+send and which value identifies a user (they choose those features); without
+them it takes what the app gives its other analytics SDKs, and proposes,
+without adding, where there is nothing.
 
 With --device, doctor also reads what the app's last launch sent and what
 Tenjin answered to each request, then asks Tenjin whether the device's
@@ -92,6 +96,9 @@ otherwise. With --strict, warnings count too.`,
 						WithHint("Run 'tenjin doctor --agent %s' without --json, or read 'tenjin doctor --json' and make the fixes it names.", fixWith)
 				}
 			}
+			if err := analytics.read(cmd); err != nil {
+				return err
+			}
 			p, err := loadProject(args)
 			if err != nil {
 				return err
@@ -124,6 +131,20 @@ otherwise. With --strict, warnings count too.`,
 			if err != nil {
 				return err
 			}
+			if err := analytics.conflicts(chosen); err != nil {
+				return err
+			}
+			// The agent integrates the features chosen, or else the ones the
+			// project suggests. --events and --user-id choose their own
+			// features when --features is not given.
+			integrate := chosen
+			if implied := analytics.implied(); chosen == nil && len(implied) > 0 {
+				chosen = inOrder(p, featureSet(append([]string{project.FeatureOpens}, implied...)))
+				integrate = inOrder(p, featureSet(append(suggestedFeatures(p), implied...)))
+			}
+			if integrate == nil {
+				integrate = suggestedFeatures(p)
+			}
 			vopts := verify.Options{Given: given, Features: chosen}
 			var tenjin *track.Client
 			if !offline {
@@ -155,10 +176,7 @@ otherwise. With --strict, warnings count too.`,
 			// The fixer writes no key of its own accord: keys are settled
 			// after the agent, by writeGivenKeys.
 			fixer := &setup{cmd: cmd, env: env, args: args, agentFlag: fixWith, offline: offline, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
-				given: given, features: chosen, inProject: map[string]bool{}, keys: map[string]verify.GivenKey{}}
-			if fixer.features == nil {
-				fixer.features = suggestedFeatures(p)
-			}
+				given: given, features: integrate, analytics: defaultAnalytics(p, analytics), inProject: map[string]bool{}, keys: map[string]verify.GivenKey{}}
 			fixed, offered, err := fixer.offerFix(p, report)
 			if err != nil {
 				return err
@@ -198,6 +216,7 @@ otherwise. With --strict, warnings count too.`,
 	cmd.Flags().StringVar(&logs, "logs", "", "also read a saved device log (logcat or iOS simulator), or - for standard input")
 	addBuildFlag(cmd, &builds)
 	addFeaturesFlag(cmd, &features, "check")
+	addAnalyticsFlags(cmd, &analytics)
 	return cmd
 }
 
