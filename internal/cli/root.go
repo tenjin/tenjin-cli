@@ -75,7 +75,10 @@ type environment struct {
 	// arrow keys, and returns what puts it back. Nil where there is no such
 	// terminal (TERM=dumb, or a console without escape codes) and in tests:
 	// choices are then typed a line at a time.
-	rawInput    func() (restore func(), err error)
+	rawInput func() (restore func(), err error)
+	// screenSize is the size of the terminal a writer writes to; nil asks
+	// the terminal. Tests set it.
+	screenSize  func(io.Writer) (width, height int)
 	openBrowser func(url string) error
 	// loginTimeout bounds the wait for the browser; zero means the default.
 	loginTimeout time.Duration
@@ -505,7 +508,7 @@ terminal, so scripts and coding agents can drive them.`,
 	root.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "show each request to Tenjin, and each program run, on stderr")
 	root.PersistentPreRun = func(cmd *cobra.Command, _ []string) {
 		if opts.verbose {
-			env.verbose = cmd.ErrOrStderr()
+			env.verbose = &heldLog{w: cmd.ErrOrStderr()}
 		}
 		env.startUpdateCheck(cmd, opts.json || opts.output == string(render.JSON))
 	}

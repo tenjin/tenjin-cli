@@ -2,10 +2,12 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"unicode/utf8"
 
 	"golang.org/x/term"
@@ -51,7 +53,9 @@ const pickerHint = "↑/↓ move · space ticks · a all · n none · Enter acce
 // ends; space or x ticks or unticks the item under it; a digit from 1 to 9
 // does the same to that item (further items are reached with the arrows);
 // a ticks all, n unticks all but the fixed ones; Enter accepts and Ctrl-C
-// stops. It is pure state, so tests drive it with keys and read its lines.
+// stops. Esc does nothing: it is where the arrow keys' sequences start, and
+// stopping and taking the choice as it stands would both be guesses. It is
+// pure state, so tests drive it with keys and read its lines.
 type picker struct {
 	items  []pickItem
 	cursor int
@@ -122,12 +126,14 @@ func (p *picker) ticked() []int {
 }
 
 // frame is how the list is drawn: live, with the cursor, the hint and any
-// note, or final, as it was chosen. width truncates each line (0 does not);
-// without details, the second lines are left out, for a short terminal.
+// note, or final, as it was chosen. width truncates each line (0 does not).
+// height, for a live list, is the most lines it may take (0 is no limit):
+// past it the second lines go, and then the items far from the cursor, with
+// a line saying how many are above and below.
 type frame struct {
-	final     bool
-	width     int
-	noDetails bool
+	final  bool
+	width  int
+	height int
 }
 
 func (p *picker) lines(style render.Styler, f frame) []string {
@@ -137,8 +143,8 @@ func (p *picker) lines(style render.Styler, f frame) []string {
 		labels[i] = fmt.Sprintf("%d) %s", i+1, it.label)
 		width = max(width, utf8.RuneCountInString(labels[i]))
 	}
-	var out []string
-	for i, it := range p.items {
+	item := func(i int, details bool) []string {
+		it := p.items[i]
 		lead, label := "  ", fmt.Sprintf("%-*s", width, labels[i])
 		if !f.final && i == p.cursor {
 			lead, label = style.Accent(">")+" ", style.Bold(label)
@@ -147,17 +153,48 @@ func (p *picker) lines(style render.Styler, f frame) []string {
 		if it.ticked || it.fixed != "" {
 			mark = style.Green("✓")
 		}
-		out = append(out, lead+mark+" "+label+"  "+style.Dim(it.about))
-		if it.detail != "" && !f.noDetails {
+		out := []string{lead + mark + " " + label + "  " + style.Dim(it.about)}
+		if it.detail != "" && details {
 			out = append(out, "    "+strings.Repeat(" ", width)+"  "+style.Dim(it.detail))
 		}
+		return out
 	}
+	var footer []string
 	if !f.final {
-		out = append(out, "  "+style.Dim(pickerHint))
+		footer = append(footer, "  "+style.Dim(pickerHint))
 		if p.note != "" {
-			out = append(out, "  "+style.Yellow(p.note))
+			footer = append(footer, "  "+style.Yellow(p.note))
 		}
 	}
+
+	n := len(p.items)
+	details, first, last := true, 0, n
+	if !f.final && f.height > 0 {
+		total := len(footer)
+		for i := range p.items {
+			total += len(item(i, true))
+		}
+		if total > f.height {
+			details, total = false, len(footer)+n
+		}
+		if total > f.height {
+			// One line each for "more above" and "more below".
+			shown := max(1, f.height-len(footer)-2)
+			first = min(max(0, p.cursor-shown/2), n-shown)
+			last = first + shown
+		}
+	}
+	var out []string
+	if first > 0 {
+		out = append(out, "  "+style.Dim(fmt.Sprintf("↑ %d more", first)))
+	}
+	for i := first; i < last; i++ {
+		out = append(out, item(i, details)...)
+	}
+	if last < n {
+		out = append(out, "  "+style.Dim(fmt.Sprintf("↓ %d more", n-last)))
+	}
+	out = append(out, footer...)
 	for i := range out {
 		out[i] = render.Truncate(out[i], f.width)
 	}
@@ -167,13 +204,28 @@ func (p *picker) lines(style render.Styler, f frame) []string {
 // canPick reports whether a choice can be made with the arrow keys.
 func (e *environment) canPick() bool { return e.interactive && e.rawInput != nil }
 
+// minPickHeight is the fewest rows a terminal needs for a picker: one item
+// between the lines for more above and below, the hint, a note, and the
+// line the cursor rests on.
+const minPickHeight = 6
+
 // pick runs a picker at the terminal until Enter accepts the choice, and
-// leaves the list on screen as chosen. Ctrl-C stops it, as everywhere.
-// ok is false when the terminal could not be put in raw mode, for the
-// question to be asked a line at a time instead.
+// leaves the list on screen as chosen. Ctrl-C stops it, as everywhere, and
+// Ctrl-D ends the input, as it does a line. ok is false when the terminal
+// could not be put in raw mode, or is too short, for the question to be
+// asked a line at a time instead.
 func (e *environment) pick(w io.Writer, style render.Styler, p *picker) (ok bool, err error) {
 	if !e.canPick() {
 		return false, nil
+	}
+	if _, height := e.size(w); height > 0 && height < minPickHeight {
+		return false, nil
+	}
+	// In raw mode a line feed does not return the carriage, so a --verbose
+	// line written meanwhile would break the list; it waits until the
+	// terminal is back as it was.
+	if log, ok := e.verbose.(*heldLog); ok {
+		defer log.hold()()
 	}
 	restore, err := e.rawInput()
 	if err != nil {
@@ -185,13 +237,14 @@ func (e *environment) pick(w io.Writer, style render.Styler, p *picker) (ok bool
 
 	drawn := 0
 	draw := func() {
-		width, height := screenSize(w)
-		f := frame{final: p.done, width: width - 1}
-		lines := p.lines(style, f)
-		if height > 0 && len(lines) >= height {
-			f.noDetails = true
-			lines = p.lines(style, f)
+		// The live list fits the screen, so that it can be drawn again in
+		// place; the final one is drawn once, whole, and may wrap.
+		f := frame{final: p.done}
+		if !p.done {
+			width, height := e.size(w)
+			f.width, f.height = width-1, height-1
 		}
+		lines := p.lines(style, f)
 		var b strings.Builder
 		if drawn > 0 {
 			b.WriteString(render.LinesUp(drawn))
@@ -219,7 +272,46 @@ func (e *environment) pick(w io.Writer, style render.Styler, p *picker) (ok bool
 	return true, nil
 }
 
-// screenSize is the size of the terminal w writes to, or zeros.
+// heldLog is the --verbose log. While held, its lines wait, and are written
+// once it is released.
+type heldLog struct {
+	mu   sync.Mutex
+	w    io.Writer
+	held bool
+	kept bytes.Buffer
+}
+
+func (l *heldLog) Write(b []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.held {
+		return l.kept.Write(b)
+	}
+	return l.w.Write(b)
+}
+
+// hold keeps the lines written from now on, and returns what writes them.
+func (l *heldLog) hold() (release func()) {
+	l.mu.Lock()
+	l.held = true
+	l.mu.Unlock()
+	return func() {
+		l.mu.Lock()
+		defer l.mu.Unlock()
+		l.held = false
+		_, _ = l.w.Write(l.kept.Bytes())
+		l.kept.Reset()
+	}
+}
+
+// size is the size of the terminal w writes to, or zeros.
+func (e *environment) size(w io.Writer) (width, height int) {
+	if e.screenSize != nil {
+		return e.screenSize(w)
+	}
+	return screenSize(w)
+}
+
 func screenSize(w io.Writer) (width, height int) {
 	f, ok := w.(*os.File)
 	if !ok {
@@ -263,7 +355,18 @@ func readKey(r *bufio.Reader) (key, error) {
 	switch c {
 	case 3:
 		return key{kind: keyInterrupt}, nil
-	case '\r', '\n':
+	case 4:
+		return key{}, io.EOF
+	case '\r':
+		// A terminal that sends CR LF for Enter sends both at once; the LF
+		// must not answer the next question.
+		if r.Buffered() > 0 {
+			if next, _ := r.ReadByte(); next != '\n' {
+				_ = r.UnreadByte()
+			}
+		}
+		return key{kind: keyEnter}, nil
+	case '\n':
 		return key{kind: keyEnter}, nil
 	case 0x1b:
 		if r.Buffered() == 0 {
