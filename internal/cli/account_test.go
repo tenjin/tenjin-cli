@@ -166,6 +166,22 @@ func TestLogoutWithAnAPIToken(t *testing.T) {
 	}
 }
 
+// With only TENJIN_API_TOKEN, there is no session to end, and logout says
+// that commands still use the token rather than that nobody is signed in.
+func TestLogoutWithOnlyAnAPIToken(t *testing.T) {
+	h := newHarness(t)
+	h.vars["TENJIN_API_TOKEN"] = "dashboard-token"
+	code, stdout, stderr := h.run("logout")
+	if code != 0 || stdout != "No saved session to sign out of.\n" || stderr != "TENJIN_API_TOKEN is still set, and commands keep using it.\n" {
+		t.Errorf("exit = %d\nstdout = %q\nstderr = %q", code, stdout, stderr)
+	}
+	code, stdout, stderr = h.run("logout", "--json")
+	var out map[string]bool
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil || code != 0 || out["signed_out"] || out["access_ended"] || !out["api_token_set"] || stderr != "" {
+		t.Errorf("--json: exit = %d\nstdout = %q\nstderr = %q", code, stdout, stderr)
+	}
+}
+
 func TestLoginNoBrowserPrintsTheURL(t *testing.T) {
 	h := newHarness(t)
 	h.env.loginTimeout = 200 * time.Millisecond

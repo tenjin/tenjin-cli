@@ -106,9 +106,15 @@ signing out also signs out the others still open, on any machine.`,
 				return err
 			}
 			if format == render.JSON {
-				return render.WriteJSON(cmd.OutOrStdout(), map[string]bool{"signed_out": out.WasSignedIn, "access_ended": out.AccessEnded})
+				return render.WriteJSON(cmd.OutOrStdout(), map[string]bool{
+					"signed_out": out.WasSignedIn, "access_ended": out.AccessEnded,
+					// Commands keep using it, signed out or not.
+					"api_token_set": manager.APIToken != "",
+				})
 			}
 			switch {
+			case !out.WasSignedIn && manager.APIToken != "":
+				_, err = fmt.Fprintln(cmd.OutOrStdout(), "No saved session to sign out of.")
 			case !out.WasSignedIn:
 				_, err = fmt.Fprintln(cmd.OutOrStdout(), "Not signed in.")
 			case out.AccessEnded:
@@ -118,7 +124,7 @@ signing out also signs out the others still open, on any machine.`,
 					"Signed out on this machine.\nThe session's API token expires within two hours. To end it now, remove the connection at %s\n",
 					env.endpoints.AccessTokensURL())
 			}
-			if err == nil && out.WasSignedIn && manager.APIToken != "" {
+			if err == nil && manager.APIToken != "" {
 				_, err = fmt.Fprintln(cmd.ErrOrStderr(), "TENJIN_API_TOKEN is still set, and commands keep using it.")
 			}
 			return err
