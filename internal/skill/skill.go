@@ -295,20 +295,15 @@ func Apply(c Change) error {
 		if err := os.Remove(c.Path); err != nil {
 			return err
 		}
-		// The skill's own folder goes with it, and so do .claude/skills and
-		// .claude when nothing else is left in them, as after an install made
-		// them. os.Remove refuses a folder that is not empty, which keeps
-		// anything else they hold.
+		// The skill's own folder goes with it when nothing else is in it
+		// (os.Remove refuses a folder that is not empty), and when it is a
+		// folder, not a link someone made to one. The folders above it, such
+		// as .claude, may have been there before the install, empty or not,
+		// or be a link to a dotfiles folder, so they stay.
 		if filepath.Base(c.Path) == "SKILL.md" {
 			dir := filepath.Dir(c.Path)
-			for _, name := range []string{"", "skills", ".claude"} {
-				if name != "" && filepath.Base(dir) != name {
-					break
-				}
-				if os.Remove(dir) != nil {
-					break
-				}
-				dir = filepath.Dir(dir)
+			if info, err := os.Lstat(dir); err == nil && info.IsDir() {
+				_ = os.Remove(dir)
 			}
 		}
 		return nil

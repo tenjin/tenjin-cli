@@ -109,34 +109,52 @@ func TestClaudeSkillInstallAndRemove(t *testing.T) {
 	}
 }
 
-// Folders an install made go when removal leaves them empty; a .claude that
-// holds anything else stays, with what it holds.
-func TestRemovalLeavesNoEmptyFolders(t *testing.T) {
+// Removal takes the skill's own folder only. The folders above it may have
+// been there, empty, before the install, so they stay; and ~/.claude may be
+// a link to a dotfiles folder, holding Claude Code's settings.
+func TestRemovalTakesOnlyTheSkillsFolder(t *testing.T) {
 	claude := target(t, "claude")
 	dir := t.TempDir()
 	loc := Location{ProjectDir: dir}
+	if err := os.MkdirAll(filepath.Join(dir, ".claude", "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	install(t, claude, loc)
 	remove(t, claude, loc)
-	if _, err := os.Stat(filepath.Join(dir, ".claude")); !errors.Is(err, os.ErrNotExist) {
-		t.Error("an empty .claude was left behind")
+	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", Name)); !errors.Is(err, os.ErrNotExist) {
+		t.Error("the skill's folder was left behind")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills")); err != nil {
+		t.Error("an empty .claude/skills that was there before was removed")
 	}
 
-	dir = t.TempDir()
-	loc = Location{ProjectDir: dir}
-	settings := filepath.Join(dir, ".claude", "settings.json")
-	if err := os.MkdirAll(filepath.Dir(settings), 0o755); err != nil {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need privileges on Windows")
+	}
+	home, dotfiles := t.TempDir(), t.TempDir()
+	if err := os.Symlink(dotfiles, filepath.Join(home, ".claude")); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(settings, []byte("{}"), 0o644); err != nil {
+	global := Location{ProjectDir: dir, Home: home, Global: true}
+	install(t, claude, global)
+	remove(t, claude, global)
+	if info, err := os.Lstat(filepath.Join(home, ".claude")); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the linked ~/.claude was removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dotfiles, "skills")); err != nil {
+		t.Error("the dotfiles folder lost its skills folder")
+	}
+
+	// A skill folder that is itself a link is left as it is.
+	linked := t.TempDir()
+	skills := filepath.Join(home, ".claude", "skills")
+	if err := os.Symlink(linked, filepath.Join(skills, Name)); err != nil {
 		t.Fatal(err)
 	}
-	install(t, claude, loc)
-	remove(t, claude, loc)
-	if _, err := os.Stat(settings); err != nil {
-		t.Error(".claude's own files went with the skill")
-	}
-	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills")); !errors.Is(err, os.ErrNotExist) {
-		t.Error("an empty .claude/skills was left behind")
+	install(t, claude, global)
+	remove(t, claude, global)
+	if info, err := os.Lstat(filepath.Join(skills, Name)); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("the linked skill folder was removed: %v", err)
 	}
 }
 
