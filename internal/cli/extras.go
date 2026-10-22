@@ -276,6 +276,12 @@ skan).`,
 			if err != nil {
 				return err
 			}
+			switch strings.ToLower(report) {
+			case "", catalog.UserAcquisition, catalog.AdMonetization, catalog.SKAN:
+			default:
+				return clierr.New(clierr.Usage, "--report is user_acquisition, ad_monetization or skan, not %q", report).
+					WithHint("user_acquisition is 'tenjin reports spend', ad_monetization 'tenjin reports ad-revenue', skan 'tenjin reports skadnetwork' and 'tenjin reports skan'.")
+			}
 			metrics := catalog.SearchMetrics(strings.Join(args, " "), category, report)
 			if format == render.JSON {
 				return render.WriteJSON(cmd.OutOrStdout(), metrics)

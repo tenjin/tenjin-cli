@@ -122,6 +122,9 @@ func TestMetricsAndMacros(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &metrics); err != nil || code != 0 || len(metrics) == 0 || metrics[0]["report"] != "skan" {
 		t.Errorf("metrics --json: exit = %d, err = %v", code, err)
 	}
+	if code, stdout, stderr := h.run("reports", "metrics", "--report", "spend"); code != 2 || stdout != "" || !strings.Contains(stderr, "user_acquisition, ad_monetization or skan") {
+		t.Errorf("--report spend: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
 	if code, stdout, _ := h.run("apps", "s2s-callbacks", "macros", "country"); code != 0 || !strings.Contains(stdout, "{{country}}") {
 		t.Errorf("macros: exit = %d, stdout:\n%s", code, stdout)
 	}
