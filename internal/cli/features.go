@@ -79,6 +79,13 @@ func (s *setup) chooseFeatures(p *project.Project) error {
 	for _, id := range suggestedFeatures(p) {
 		chosen[id] = true
 	}
+	// --events and --user-id choose their features; at a terminal they
+	// start ticked, and stay unless the developer unticks them.
+	if s.env.interactive {
+		for _, id := range s.analyticsFlags.implied() {
+			chosen[id] = true
+		}
+	}
 	s.say("\nTenjin features for this integration (%s = included). Each one is code in the\napp, which your coding agent or you add, and the checks look for. Not sure?\nKeep app opens: running setup again adds the rest.\n", s.style.Green("✓"))
 	choice := &picker{items: featureItems(p, chosen)}
 	picked, err := s.env.pick(s.out, s.style, choice)

@@ -61,7 +61,8 @@ its place, once Tenjin accepts that key for that build; with --offline it
 writes none. --events and --user-id tell the agent which custom events to
 send and which value identifies a user (they choose those features); without
 them it takes what the app gives its other analytics SDKs, and proposes,
-without adding, where there is nothing.
+without adding, where there is nothing. doctor says which before the agent
+starts.
 
 With --device, doctor also reads what the app's last launch sent and what
 Tenjin answered to each request, then asks Tenjin whether the device's
@@ -176,7 +177,7 @@ otherwise. With --strict, warnings count too.`,
 			// The fixer writes no key of its own accord: keys are settled
 			// after the agent, by writeGivenKeys.
 			fixer := &setup{cmd: cmd, env: env, args: args, agentFlag: fixWith, offline: offline, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
-				given: given, features: integrate, analytics: defaultAnalytics(p, analytics), inProject: map[string]bool{}, keys: map[string]verify.GivenKey{}}
+				given: given, features: integrate, analyticsFlags: analytics, analytics: defaultAnalytics(p, analytics), inProject: map[string]bool{}, keys: map[string]verify.GivenKey{}}
 			fixed, offered, err := fixer.offerFix(p, report)
 			if err != nil {
 				return err
@@ -201,7 +202,7 @@ otherwise. With --strict, warnings count too.`,
 				}
 			}
 			status := reportStatus(report.Summary, strict)
-			if status != nil && !offered && len(doctorWork(report)) > 0 {
+			if status != nil && !offered && len(fixer.agentItems(doctorWork(report))) > 0 {
 				return clierr.From(status).WithHint("Run 'tenjin setup' to fix these step by step, or 'tenjin doctor --agent claude' (or codex) to have your coding agent fix them.")
 			}
 			return status
@@ -238,7 +239,7 @@ func doctorWork(report *verify.Report) []verify.Finding {
 // doctor is first a check. fixed says the agent ran; offered, that the
 // developer was asked or chose with --agent.
 func (s *setup) offerFix(p *project.Project, report *verify.Report) (fixed, offered bool, err error) {
-	work := doctorWork(report)
+	work := s.agentItems(doctorWork(report))
 	if len(work) == 0 || s.agentFlag == "none" || agent.InsideAgent(s.env.getenv) {
 		return false, s.agentFlag == "none", nil
 	}
@@ -254,10 +255,12 @@ func (s *setup) offerFix(p *project.Project, report *verify.Report) (fixed, offe
 		if helper == nil {
 			return false, true, clierr.New(clierr.NotFound, "--agent %s was given, but it is not installed on this machine", s.agentFlag)
 		}
+		s.sayAgentAnalytics(p, true)
 	case !s.env.interactive || len(installed) == 0:
 		return false, false, nil
 	default:
 		s.say("\n%s above can be fixed in the project's code.", plural(len(work), "finding"))
+		s.sayAgentAnalytics(p, false)
 		helper, err = s.askToFix(installed)
 		if err != nil || helper == nil {
 			return false, true, err
