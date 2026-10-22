@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -288,13 +289,9 @@ func (c *Client) Exchange(ctx context.Context, accessToken string) (Identity, er
 		}
 		return Identity{}, fmt.Errorf("token exchange failed (HTTP %d): %s", status, describe(body))
 	}
-	// The answer says how long the token lasts; an older server only says
-	// it inside the token.
-	expiry, ok := expiresIn(ex.ExpiresIn)
-	if !ok {
-		if expiry, err = jwtExpiry(ex.AccessToken); err != nil {
-			return Identity{}, err
-		}
+	expiry, err := tokenExpiry(ex.ExpiresIn, ex.AccessToken, time.Now())
+	if err != nil {
+		return Identity{}, err
 	}
 	return Identity{
 		JWT:              ex.AccessToken,
@@ -365,22 +362,43 @@ func jwtExpiry(jwt string) (time.Time, error) {
 	return time.Unix(claims.Exp, 0), nil
 }
 
-// describe turns an OAuth error body into one line.
+// maxExpiresIn is the longest expires_in believed. An API token lasts hours;
+// a value past this is an error on the server's side, not a lifetime.
+const maxExpiresIn = 30 * 24 * time.Hour
+
+// tokenExpiry is when the exchanged token ends: as the answer's expires_in
+// says, but never after the token's own expiry. An older server only says it
+// inside the token.
+func tokenExpiry(raw json.RawMessage, jwt string, now time.Time) (time.Time, error) {
+	own, ownErr := jwtExpiry(jwt)
+	expiry, ok := expiresIn(raw, now)
+	switch {
+	case ok && ownErr == nil && own.Before(expiry):
+		return own, nil
+	case ok:
+		return expiry, nil
+	default:
+		return own, ownErr
+	}
+}
+
 // expiresIn reads an expires_in, a number of seconds or a string holding
-// one, as the time it ends. ok is false when there is none to read.
-func expiresIn(raw json.RawMessage) (time.Time, bool) {
+// one, as the time it ends. ok is false when there is none to read, or it is
+// not a number of seconds a token could last.
+func expiresIn(raw json.RawMessage, now time.Time) (time.Time, bool) {
 	text := strings.Trim(strings.TrimSpace(string(raw)), `"`)
 	seconds, err := strconv.ParseFloat(text, 64)
-	if err != nil || seconds <= 0 {
+	if err != nil || math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds <= 0 || seconds > maxExpiresIn.Seconds() {
 		return time.Time{}, false
 	}
-	return time.Now().Add(time.Duration(seconds * float64(time.Second))), true
+	return now.Add(time.Duration(seconds * float64(time.Second))), true
 }
 
 func success(status int) bool {
 	return status >= 200 && status < 300
 }
 
+// describe turns an OAuth error body into one line.
 func describe(body []byte) string {
 	var e struct {
 		Error       string `json:"error"`
