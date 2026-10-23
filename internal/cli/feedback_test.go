@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -112,4 +115,39 @@ func TestWhatIsOpenSaysWhichBuild(t *testing.T) {
 		"The next step settles the other SDK keys.",
 	)
 	lacks(t, between(stdout, "Fix the items marked", "Still open"), "✗ Android, play (Google Play): The SDK key …PLAY is disabled")
+}
+
+// doctor's pointer to the upgrade names the project it checked, ready to
+// paste into a shell.
+func TestDoctorsUpgradeHintNamesTheProject(t *testing.T) {
+	written := oldAndroid(t)
+	dir := filepath.Join(filepath.Dir(written), "My App")
+	if err := os.Rename(written, dir); err != nil {
+		t.Fatal(err)
+	}
+	h := newHarness(t)
+	_, stdout, _ := h.run("doctor", dir, "--offline")
+	lacks(t, stdout, "with your coding agent or by hand: tenjin sdk upgrade "+shellArg(dir, runtime.GOOS)+"\n")
+	if !strings.Contains(shellArg(dir, runtime.GOOS), `My App`) || shellArg(dir, runtime.GOOS) == dir {
+		t.Errorf("the path is not quoted: %s", shellArg(dir, runtime.GOOS))
+	}
+
+	// In the project itself, the command needs no path.
+	t.Chdir(dir)
+	_, stdout, _ = h.run("doctor", "--offline")
+	lacks(t, stdout, "with your coding agent or by hand: tenjin sdk upgrade\n")
+
+	for _, c := range []struct{ arg, goos, want string }{
+		{"app", "linux", "app"},
+		{"../my-app/v1.2", "darwin", "../my-app/v1.2"},
+		{"My App", "darwin", "'My App'"},
+		{"Bob's $HOME", "linux", `'Bob'\''s $HOME'`},
+		{"-app", "linux", "./-app"},
+		{`C:\Users\me\app`, "windows", `C:\Users\me\app`},
+		{`C:\Users\me\My App`, "windows", `"C:\Users\me\My App"`},
+	} {
+		if got := shellArg(c.arg, c.goos); got != c.want {
+			t.Errorf("shellArg(%q, %s) = %s, want %s", c.arg, c.goos, got, c.want)
+		}
+	}
 }

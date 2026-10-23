@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -203,7 +204,12 @@ otherwise. With --strict, warnings count too.`,
 				}
 			}
 			if !fixed && hasFinding(report, "sdk.version") && !agent.InsideAgent(env.getenv) {
-				fixer.say("\nTo upgrade the Tenjin SDK, with your coding agent or by hand: %s", fixer.style.Accent("tenjin sdk upgrade"))
+				upgrade := "tenjin sdk upgrade"
+				// A path that cannot be shown as it is cannot be copied either.
+				if len(args) == 1 && args[0] != "" && args[0] != "." && render.Clean(args[0]) == args[0] {
+					upgrade += " " + shellArg(args[0], runtime.GOOS)
+				}
+				fixer.say("\nTo upgrade the Tenjin SDK, with your coding agent or by hand: %s", fixer.style.Accent(upgrade))
 			}
 			status := reportStatus(report.Summary, strict)
 			if status != nil && !offered && len(fixer.agentItems(doctorWork(report))) > 0 {
@@ -610,6 +616,30 @@ func reportStatus(s verify.Summary, strict bool) error {
 		return clierr.New(clierr.ChecksFailed, "%s (--strict)", plural(s.Warnings, "warning"))
 	}
 	return nil
+}
+
+// shellArg is an argument as it is typed in a shell on goos: as it is when
+// nothing in it is special, in double quotes on Windows (where a path holds
+// no double quote), in single quotes elsewhere. A path that starts with a
+// dash is made relative, so that it is not read as a flag.
+func shellArg(s, goos string) string {
+	if strings.HasPrefix(s, "-") {
+		s = "./" + s
+	}
+	plain := "-_./:@+=,"
+	if goos == "windows" {
+		plain += `\`
+	}
+	isPlain := func(r rune) bool {
+		return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune(plain, r)
+	}
+	if s != "" && !strings.ContainsFunc(s, func(r rune) bool { return !isPlain(r) }) {
+		return s
+	}
+	if goos == "windows" {
+		return `"` + s + `"`
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func plural(n int, noun string) string {
