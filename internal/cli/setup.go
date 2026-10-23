@@ -628,7 +628,7 @@ func (s *setup) integrate(p *project.Project) error {
 			s.sayUnnamed()
 		}
 		if keysOpen(report) {
-			s.say("What is left is the SDK keys, which the next step settles.")
+			s.keysLeft(report)
 		}
 		return nil
 	}
@@ -667,11 +667,76 @@ func (s *setup) listOpen(report *verify.Report) {
 		for _, f := range forPeople(report).Findings {
 			if f.Severity == severity {
 				f.Detail, f.Fix = "", ""
+				f.Title = openLabel(report.Project, f) + f.Title
 				writeFinding(&b, s.style, f, width)
 			}
 		}
 	}
 	_, _ = io.WriteString(s.out, b.String())
+}
+
+// openLabel is what a one-line finding starts with to say which platform,
+// and which of several builds, it is about, as doctor's sections do: "" in
+// a project with one platform and one build. The checks name the build in
+// most of their titles already ("the amazon build"); those are not told twice.
+func openLabel(p *project.Project, f verify.Finding) string {
+	t := p.Target(f.Platform)
+	if t == nil {
+		return ""
+	}
+	if f.Build != "" && t.SeveralBuilds() {
+		for _, b := range t.Builds {
+			if b.ID == f.Build && !strings.Contains(f.Title, "the "+firstNonEmpty(b.Name(), "main")+" build") {
+				return buildTitle(t, b) + ": "
+			}
+		}
+	}
+	if len(p.Targets) > 1 {
+		return platformNames[f.Platform] + ": "
+	}
+	return ""
+}
+
+// keysLeft says what settles the SDK keys still open after step 5. A key
+// written in the project that Tenjin refuses is the developer's to replace:
+// setup writes a key only over its placeholder.
+func (s *setup) keysLeft(report *verify.Report) {
+	var where []string
+	refused, other := false, false
+	for _, f := range forPeople(report).Findings {
+		if f.Severity != verify.Error && f.Severity != verify.Warning {
+			continue
+		}
+		switch {
+		case f.ID == "key.rejected" || f.ID == "key.no_app" || f.ID == "key.disabled":
+			refused = true
+			if f.File != "" {
+				at := f.File
+				if f.Line > 0 {
+					at = fmt.Sprintf("%s:%d", f.File, f.Line)
+				}
+				if !containsString(where, at) {
+					where = append(where, at)
+				}
+			}
+		case strings.HasPrefix(f.ID, "key.") || f.ID == "sdk.key.unfilled":
+			other = true
+		}
+	}
+	switch {
+	case !refused:
+		s.say("What is left is the SDK keys, which the next step settles.")
+		return
+	case len(where) == 1:
+		s.say("Tenjin refuses the SDK key written in %s, and setup writes keys only over its own placeholders: replace it there with the app's own key, from its page in the Tenjin dashboard. The next step checks it again.", where[0])
+	case len(where) > 1:
+		s.say("Tenjin refuses the SDK keys written in %s, and setup writes keys only over its own placeholders: replace each there with its app's own key, from its page in the Tenjin dashboard. The next step checks them again.", strings.Join(where[:len(where)-1], ", ")+" and "+where[len(where)-1])
+	default:
+		s.say("Tenjin refuses the SDK keys written in the project, and setup writes keys only over its own placeholders: replace each with its app's own key, from its page in the Tenjin dashboard. The next step checks them again.")
+	}
+	if other {
+		s.say("The next step settles the other SDK keys.")
+	}
 }
 
 // chooseAgent decides whether a coding agent does the job. It returns nil
@@ -1009,6 +1074,7 @@ func (s *setup) check() error {
 // writeOpen lists what is still open after a round of fixes: each error
 // and warning on one line, then the counts.
 func (s *setup) writeOpen(report *verify.Report) {
+	p := report.Project
 	report = forPeople(report)
 	s.say("")
 	for _, f := range report.Findings {
@@ -1028,7 +1094,7 @@ func (s *setup) writeOpen(report *verify.Report) {
 				where += s.style.Dim(fmt.Sprintf(":%d", f.Line))
 			}
 		}
-		s.say("  %s %s%s", mark, f.Title, where)
+		s.say("  %s %s%s%s", mark, openLabel(p, f), f.Title, where)
 	}
 	s.say("\nStill open: %s", outstanding(report.Summary))
 }
