@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/zalando/go-keyring"
@@ -254,7 +255,22 @@ func writePrivate(path string, content []byte) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	return replaceFile(tmp.Name(), path)
+}
+
+// replaceFile moves from over to. On Windows a file another process has
+// open cannot be replaced, and another tenjin reading the session holds it
+// only for a moment, so the move is tried again for about a second.
+func replaceFile(from, to string) error {
+	err := os.Rename(from, to)
+	if runtime.GOOS != "windows" {
+		return err
+	}
+	for wait := 5 * time.Millisecond; err != nil && wait <= 640*time.Millisecond; wait *= 2 {
+		time.Sleep(wait)
+		err = os.Rename(from, to)
+	}
+	return err
 }
 
 // MemoryStore keeps credentials for the life of the process. Tests use it.
