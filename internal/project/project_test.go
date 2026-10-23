@@ -391,6 +391,28 @@ struct NotesApp: App {
 	}
 }
 
+// A Swift package pinned to a branch has no version of its own in
+// Package.resolved; another package's is not taken for it.
+func TestASwiftPackageOnABranchHasNoVersion(t *testing.T) {
+	pbx := testproject.PBXProj(testproject.PBXTarget{Name: "Sample", ProductType: "com.apple.product-type.application", BundleID: "com.example.sample", InfoPlist: "Sample/Info.plist"})
+	pbx = strings.Replace(pbx, "\tobjects = {\n", "\tobjects = {\n\t\tAAAA /* XCRemoteSwiftPackageReference \"tenjin-ios-spm\" */ = {\n\t\t\tisa = XCRemoteSwiftPackageReference;\n\t\t\trepositoryURL = \"https://github.com/tenjin/tenjin-ios-spm\";\n\t\t};\n", 1)
+	for name, resolved := range map[string]string{
+		"version 2": `{"pins": [{"identity": "tenjin-ios-spm", "kind": "remoteSourceControl", "location": "https://github.com/tenjin/tenjin-ios-spm", "state": {"branch": "main", "revision": "0123abcd"}}, {"identity": "other", "location": "https://github.com/example/other", "state": {"revision": "4567ef", "version": "5.2.0"}}], "version": 2}`,
+		"version 1": `{"object": {"pins": [{"package": "TenjinSDK", "repositoryURL": "https://github.com/tenjin/tenjin-ios-spm", "state": {"branch": "main", "revision": "0123abcd", "version": null}}, {"package": "Other", "repositoryURL": "https://github.com/example/other", "state": {"branch": null, "revision": "4567ef", "version": "5.2.0"}}]}, "version": 1}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := detect(t, testproject.Files{
+				"Sample.xcodeproj/project.pbxproj":                                           pbx,
+				"Sample.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved": resolved,
+				"Sample/Info.plist": testproject.InfoPlist,
+			})
+			if len(p.Tenjin) != 1 || p.Tenjin[0].Version != "" {
+				t.Errorf("tenjin = %+v", p.Tenjin)
+			}
+		})
+	}
+}
+
 func TestIOSEntryPointAndTrackingPrompt(t *testing.T) {
 	p := detect(t, testproject.IOSNative())
 	ios := p.Target(project.IOS).IOS

@@ -27,7 +27,7 @@ var (
 	podLockTenjin      = regexp.MustCompile(`(?m)^\s*-\s+TenjinSDK\s+\(([^)]+)\)`)
 	spmTenjin          = regexp.MustCompile(`github\.com/tenjin/(tenjin-ios-spm|tenjin-ios-sdk)`)
 	linkedTenjin       = regexp.MustCompile(`(libTenjinSDK\w*\.a|TenjinSDK\.xcframework|TenjinSDK\.framework) in (?:Frameworks|Embed Frameworks)`)
-	resolvedTenjinVers = regexp.MustCompile(`(?s)tenjin-ios-(?:spm|sdk).*?"version"\s*:\s*"([^"]+)"`)
+	resolvedTenjinVers = regexp.MustCompile(`tenjin-ios-(?:spm|sdk)[^{}]*\{[^{}]*?"version"\s*:\s*"([^"]+)"`) // within Tenjin's own pin
 )
 
 // native detects a plain Android and/or iOS project.
