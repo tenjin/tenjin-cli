@@ -158,7 +158,7 @@ func TestSetupIntegratesUsingTheAgent(t *testing.T) {
 		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
 	}
 	for _, want := range []string{
-		"not fully set up in this project yet. 1 thing would stop events reaching Tenjin.",
+		"not fully set up in this project yet. 1 thing would stop events reaching Tenjin:\n  ✗ ",
 		"Claude Code is installed on this machine and can do the integration for you",
 		"under your own Claude Code account",
 		"it uses tokens from your Claude Code account and edits files in this project: commit or stash your work first, so you can review its changes and undo them;",
@@ -178,7 +178,7 @@ func TestSetupIntegratesUsingTheAgent(t *testing.T) {
 	if strings.Contains(stdout, "KEYFORTHEAGENT1234567890ABCDEFGH") {
 		t.Error("the whole SDK key was printed")
 	}
-	if strings.Contains(stdout, "INTERNET permission is missing") {
+	if after := stdout[strings.Index(stdout, "Claude Code reports:"):]; strings.Contains(after, "INTERNET permission is missing") {
 		t.Errorf("the check after the agent still reports the fault:\n%s", stdout)
 	}
 

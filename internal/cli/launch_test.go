@@ -41,6 +41,11 @@ func TestSetupEndsWhenTenjinProcessesTheInstall(t *testing.T) {
 	if strings.Count(stdout, "Tenjin accepts the SDK key") != 1 {
 		t.Errorf("the project checks were repeated:\n%s", stdout)
 	}
+	// The device's identifiers are said once, where registering it is.
+	if strings.Contains(stdout, "for registering it as a test device") || strings.Count(stdout, "test device") != 2 ||
+		!strings.Contains(stdout, "register this device (Advertising ID ") {
+		t.Errorf("the test device is not said once, with its identifiers:\n%s", stdout)
+	}
 }
 
 // Tenjin can take a moment to process an install it accepted; setup waits for

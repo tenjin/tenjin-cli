@@ -30,9 +30,12 @@ type Endpoints struct {
 	Docs string
 }
 
+// ProductionName names the environment of Tenjin's own services.
+const ProductionName = "production"
+
 // production is where Tenjin's services live.
 var production = Endpoints{
-	Name:     "production",
+	Name:     ProductionName,
 	Issuer:   "https://dashboard.tenjin.com",
 	API:      "https://api.tenjin.com/v2",
 	Track:    "https://track.tenjin.com",

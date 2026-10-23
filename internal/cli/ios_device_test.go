@@ -187,6 +187,9 @@ func TestSetupChecksALaunchOnAnIPhone(t *testing.T) {
 		t.Fatalf("exit = %d\n%s", code, stdout)
 	}
 	lacks(t, stdout, "✓ Tenjin received this device's install and processed it. The integration works end to end.")
+	if strings.Contains(stdout, "for registering it as a test device") || !strings.Contains(stdout, "register this device (IDFV ") {
+		t.Errorf("the test device is not said once, with its identifiers:\n%s", stdout)
+	}
 }
 
 // On a simulator, an accepted install is not processed by design: say so,

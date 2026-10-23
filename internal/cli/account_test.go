@@ -424,7 +424,7 @@ func TestSetupWithOnlyRecommendationsLeft(t *testing.T) {
 	dir := testproject.Write(t, base.With(testproject.Files{build: strings.Replace(base[build], "android-sdk:2.0.0", "android-sdk:1.24.0", 1)}))
 
 	code, stdout, stderr := h.run("setup", dir, "--agent", "none")
-	if code != 0 || !strings.Contains(stdout, "The Tenjin SDK is set up in this project. 1 change is recommended.") || strings.Contains(stdout, "not fully set up") {
+	if code != 0 || !strings.Contains(stdout, "The Tenjin SDK is set up in this project. 1 change is recommended:\n  ! The Tenjin SDK is at 1.24.0; the current release is 2.0.0") || strings.Contains(stdout, "not fully set up") {
 		t.Errorf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
 	}
 }

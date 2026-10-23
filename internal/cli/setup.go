@@ -311,7 +311,7 @@ func (s *setup) signIn() error {
 			return err
 		}
 	}
-	return writeStatus(s.out, status)
+	return writeStatus(s.out, status, false)
 }
 
 // chooseBuilds asks which builds ship, when a target has several and none
@@ -444,7 +444,7 @@ func (s *setup) apps(p *project.Project) error {
 // for one of several builds its store, or its variants where two builds
 // share a store.
 func appName(p *project.Project, t *project.Target, b project.Build) string {
-	base := filepath.Base(p.Root)
+	base := firstNonEmpty(project.AppName(p, t.Platform), filepath.Base(p.Root))
 	platform := platformNames[t.Platform]
 	if !t.SeveralBuilds() {
 		return fmt.Sprintf("%s (%s)", base, platform)
@@ -618,10 +618,11 @@ func (s *setup) integrate(p *project.Project) error {
 		return nil
 	}
 	if report.Summary.Errors == 0 {
-		s.say("The Tenjin SDK is set up in this project. %s", outstanding(report.Summary))
+		s.say("The Tenjin SDK is set up in this project. %s", strings.TrimSuffix(outstanding(report.Summary), ".")+":")
 	} else {
-		s.say("The Tenjin SDK is not fully set up in this project yet. %s", outstanding(report.Summary))
+		s.say("The Tenjin SDK is not fully set up in this project yet. %s", strings.TrimSuffix(outstanding(report.Summary), ".")+":")
 	}
+	s.listOpen(report)
 	if work := agentWork(report); len(s.agentItems(work)) == 0 {
 		if len(work) > 0 {
 			s.sayUnnamed()
@@ -655,6 +656,22 @@ func (s *setup) agentJob() agentJob {
 		return integrationJob
 	}
 	return s.job
+}
+
+// listOpen names each error and warning on a line of its own, the worst
+// first, with the file it is about: the counts alone say nothing of what.
+func (s *setup) listOpen(report *verify.Report) {
+	var b strings.Builder
+	width := render.TextWidth(s.out)
+	for _, severity := range []verify.Severity{verify.Error, verify.Warning} {
+		for _, f := range forPeople(report).Findings {
+			if f.Severity == severity {
+				f.Detail, f.Fix = "", ""
+				writeFinding(&b, s.style, f, width)
+			}
+		}
+	}
+	_, _ = io.WriteString(s.out, b.String())
 }
 
 // chooseAgent decides whether a coding agent does the job. It returns nil

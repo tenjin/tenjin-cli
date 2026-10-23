@@ -204,9 +204,9 @@ tenjin campaigns create --app <app-id> --name "Summer UA" --channel <channel-id>
 
    Only you know which events matter and which value identifies a user, so for those two features `setup` asks, and shows what the app already gives its other analytics SDKs (Firebase Analytics, Amplitude, Mixpanel, AppsFlyer, GameAnalytics, Facebook App Events, Flurry; Adjust's event tokens too, which are not names): Enter takes those. `--events <name,name>` and `--user-id <value>` answer without asking, and choose their features (at a terminal, they start ticked); the value can be code, such as `user.id`, or words, such as "the account ID from the login response". Without a terminal and without the flags, `setup` takes what the app sends already. Where nothing was named or found, none are added: a coding agent doing the rest of the integration proposes events or a user ID in its report, and is never left to invent them. None is started only to propose.
 2. **Sign in**, through the browser, if there is no session.
-3. **Tenjin apps.** Finds the app for each build, or creates it after asking (`--yes` to skip the question).
+3. **Tenjin apps.** Finds the app for each build, or creates it after asking (`--yes` to skip the question), named after the project as its own files name it (Gradle's `rootProject.name`, the Xcode project, `pubspec.yaml`, `app.json`, the Capacitor `appName`, Unity's product name) and the platform.
 4. **SDK keys.** Fetches each app's key from Tenjin, or says where to copy it in the dashboard, and checks it at once, so a wrong key, or the other platform's, is caught before a build.
-5. **Add the SDK**, with your coding agent or by hand: `setup` lists what is left to add and where.
+5. **Add the SDK**, with your coding agent or by hand: `setup` lists each problem left, with its file, then offers the agent or says what to add and where.
 6. **Check.** Runs `doctor`, and again after each change, until it is clean.
 7. **Verify a launch.** Asks you to launch a debug build, reads the device's log, and ends when Tenjin has processed the install. Without `adb` or Xcode, it says how to check later.
 

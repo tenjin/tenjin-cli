@@ -125,7 +125,7 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		switch {
 		case installProcessed(report):
 			s.say("\n%s Tenjin received this device's install and processed it. The integration works end to end.", s.style.Green("✓"))
-			s.testDevicePages()
+			s.testDevicePages(report)
 			return nil
 		case connectAccepted(report) && (from == fromSimulator || deviceFinding(report, "device.simulator") != nil):
 			physical := "an iPhone connected by cable"
@@ -133,11 +133,11 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 				physical = "a physical Android device"
 			}
 			s.say("\nTenjin accepted the app's request. That is as far as a simulator or emulator goes: the SDK marks its installs, and Tenjin leaves them out of attribution by design. To see an install processed, run a debug build on %s, then %s.", physical, s.style.Accent("tenjin doctor --device"))
-			s.testDevicePages()
+			s.testDevicePages(report)
 			return nil
 		case connectAccepted(report):
 			s.say("\nTenjin accepted the app's request, and has not processed the install yet. Run %s again in a minute.", s.style.Accent("tenjin doctor --device"))
-			s.testDevicePages()
+			s.testDevicePages(report)
 			return nil
 		}
 		if f := deviceFinding(report, "device.connect"); f != nil && f.Severity == verify.Error {
@@ -192,23 +192,32 @@ func deviceFinding(r *verify.Report, id string) *verify.Finding {
 	return nil
 }
 
+// writeDeviceFindings prints what the launch showed. The device's
+// identifiers are left to testDevicePages, which says what they are for.
 func (s *setup) writeDeviceFindings(r *verify.Report) {
 	r = forPeople(r)
 	var b strings.Builder
 	for _, f := range r.Findings {
-		writeFinding(&b, s.style, f, render.TextWidth(s.out))
+		if f.ID != "device.identifiers" {
+			writeFinding(&b, s.style, f, render.TextWidth(s.out))
+		}
 	}
 	_, _ = io.WriteString(s.out, b.String())
 }
 
 // testDevicePages says where to watch the events that come after the
-// install, which only the dashboard shows. It says so once per run.
-func (s *setup) testDevicePages() {
+// install, which only the dashboard shows, with the identifiers that
+// register this device. It says so once per run.
+func (s *setup) testDevicePages(r *verify.Report) {
 	if s.pagesShown {
 		return
 	}
 	s.pagesShown = true
-	s.say("To watch purchases and custom events arrive as well, register the device as a test device, then open the Live Event Tool:")
+	device := "the device"
+	if f := deviceFinding(forPeople(r), "device.identifiers"); f != nil && f.Detail != "" {
+		device = "this device (" + strings.TrimSuffix(f.Detail, ".") + ")"
+	}
+	s.say("To watch purchases and custom events arrive as well, register %s as a test device, then open the Live Event Tool:", device)
 	s.say("  %s", s.env.endpoints.TestDevicesURL())
 	s.say("  %s", s.env.endpoints.LiveEventsURL())
 	s.say("A new test device can take a while to become active, and its events are left out of reports.")

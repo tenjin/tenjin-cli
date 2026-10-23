@@ -3,11 +3,11 @@ package cli
 import (
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/tenjin/tenjin-cli/internal/clierr"
+	"github.com/tenjin/tenjin-cli/internal/config"
 	"github.com/tenjin/tenjin-cli/internal/render"
 	"github.com/tenjin/tenjin-cli/internal/session"
 )
@@ -44,8 +44,8 @@ in the dashboard.`,
 			if format == render.JSON {
 				return render.WriteJSON(cmd.OutOrStdout(), status)
 			}
-			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Signed in to %s (%s). The session is saved in %s.\n",
-				oneLine(status.OrganizationName), status.Environment, location)
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Signed in to %s%s. The session is saved in %s.\n",
+				oneLine(status.OrganizationName), environmentNote(status.Environment), location)
 			return err
 		},
 	}
@@ -151,7 +151,7 @@ credential comes from. Exits 3 when not signed in.`,
 			if format == render.JSON {
 				err = render.WriteJSON(cmd.OutOrStdout(), status)
 			} else {
-				err = writeStatus(cmd.OutOrStdout(), status)
+				err = writeStatus(cmd.OutOrStdout(), status, true)
 			}
 			if err != nil {
 				return err
@@ -165,18 +165,31 @@ credential comes from. Exits 3 when not signed in.`,
 	}
 }
 
-func writeStatus(w io.Writer, s session.Status) error {
+// writeStatus says who is signed in. With more, it also says how long the
+// sign-in lasts: the short-lived token under it is the CLI's business, and
+// --json shows its expiry.
+func writeStatus(w io.Writer, s session.Status, more bool) error {
+	where := environmentNote(s.Environment)
 	if !s.SignedIn {
-		_, err := fmt.Fprintf(w, "Not signed in (%s).\n", s.Environment)
+		_, err := fmt.Fprintf(w, "Not signed in%s.\n", where)
 		return err
 	}
 	if s.Source == session.SourceAPIToken {
-		_, err := fmt.Fprintf(w, "Using the access token in TENJIN_API_TOKEN (%s).\n", s.Environment)
+		_, err := fmt.Fprintf(w, "Using the access token in TENJIN_API_TOKEN%s.\n", where)
 		return err
 	}
-	_, err := fmt.Fprintf(w, "Signed in to %s (%s).\n", oneLine(s.OrganizationName), s.Environment)
-	if err == nil && s.TokenExpiry != nil {
-		_, err = fmt.Fprintf(w, "API token renews automatically; the current one expires %s.\n", s.TokenExpiry.Local().Format(time.RFC1123))
+	_, err := fmt.Fprintf(w, "Signed in to %s%s.\n", oneLine(s.OrganizationName), where)
+	if err == nil && more {
+		_, err = fmt.Fprintln(w, "The session renews itself as you use the Tenjin CLI, until 'tenjin logout'.")
 	}
 	return err
+}
+
+// environmentNote names an environment other than Tenjin's own services, as
+// " (name)", for a sign-in to a test copy; production goes unsaid.
+func environmentNote(environment string) string {
+	if environment == "" || environment == config.ProductionName {
+		return ""
+	}
+	return " (" + environment + ")"
 }
