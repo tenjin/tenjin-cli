@@ -207,16 +207,20 @@ func (s *setup) writeDeviceFindings(r *verify.Report) {
 
 // testDevicePages says where to watch the events that come after the
 // install, which only the dashboard shows, with the identifiers that
-// register this device. It says so once per run.
+// register this device. The pages are named once per run; each device's
+// identifiers are said.
 func (s *setup) testDevicePages(r *verify.Report) {
-	if s.pagesShown {
-		return
-	}
-	s.pagesShown = true
 	device := "the device"
 	if f := deviceFinding(forPeople(r), "device.identifiers"); f != nil && f.Detail != "" {
 		device = "this device (" + strings.TrimSuffix(f.Detail, ".") + ")"
+	} else if s.pagesShown {
+		return
 	}
+	if s.pagesShown {
+		s.say("To watch its events as well, register %s as a test device on the same page.", device)
+		return
+	}
+	s.pagesShown = true
 	s.say("To watch purchases and custom events arrive as well, register %s as a test device, then open the Live Event Tool:", device)
 	s.say("  %s", s.env.endpoints.TestDevicesURL())
 	s.say("  %s", s.env.endpoints.LiveEventsURL())

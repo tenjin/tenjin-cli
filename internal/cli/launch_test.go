@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -181,5 +182,48 @@ func TestSetupOfflineUsesTheKeyInTheProject(t *testing.T) {
 	_, stdout, _ := h.typing("", "s").run("setup", dir, "--offline")
 	if !strings.Contains(stdout, "the project holds a key, not checked (--offline)") || strings.Contains(stdout, "Paste the") {
 		t.Errorf("stdout:\n%s", stdout)
+	}
+}
+
+// connectBoth puts an Android device and a booted iOS simulator side by
+// side, each answering with its own log.
+func (h *harness) connectBoth(androidLog, iosLog string) {
+	h.connectDevice(androidLog)
+	adbPath, adbRun := h.env.lookPath, h.env.run
+	h.bootSimulator(iosLog)
+	xcrunPath, xcrunRun := h.env.lookPath, h.env.run
+	h.env.lookPath = func(name string) (string, error) {
+		if name == "xcrun" {
+			return xcrunPath(name)
+		}
+		return adbPath(name)
+	}
+	h.env.run = func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if name == "/usr/bin/xcrun" {
+			return xcrunRun(ctx, name, args...)
+		}
+		return adbRun(ctx, name, args...)
+	}
+}
+
+// A launch on each platform names each device's identifiers, and the
+// dashboard's pages once.
+func TestSetupNamesEachDeviceItReads(t *testing.T) {
+	h := newHarness(t)
+	h.fake.addApp("Sample", "com.example.sample", "android")
+	h.fake.addApp("Sample", "com.example.sample", "ios")
+	h.signIn()
+	h.fake.installs[capturedInstall] = "Organic"
+	h.connectBoth(readCapturedLog(t), readCapturedIOSLog(t))
+	dir := testproject.Write(t, testproject.Flutter())
+
+	code, stdout, stderr := h.typing("", "", "", "").run("setup", dir)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	lacks(t, stdout, "register this device (Advertising ID ",
+		"To watch its events as well, register this device (IDFV AAAABBBB-CCCC-DDDD-EEEE-000000000002) as a test device on the same page.")
+	if n := strings.Count(stdout, "/dashboard/debug_app_users"); n != 1 {
+		t.Errorf("the test device pages are named %d times:\n%s", n, stdout)
 	}
 }
