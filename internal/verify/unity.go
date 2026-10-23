@@ -51,12 +51,12 @@ const (
 )
 
 var (
-	componentKey  = regexp.MustCompile(`(?m)^\s*sdkKey:[ \t]*(\S*)[ \t]*$`)
+	componentKey  = regexp.MustCompile(`(?m)^[ \t]*sdkKey:[ \t]*(\S*)[ \t\r]*$`)
 	overriddenKey = regexp.MustCompile(`propertyPath: sdkKey\s+value:[ \t]*(\S*)`)
 	minifyRelease = regexp.MustCompile(`(?m)^\s*AndroidMinify(?:Release|Debug): 1\s*$`)
 	// The component's Debug Logs box, ticked on it or as a prefab override.
-	componentDebugLogs  = regexp.MustCompile(`(?m)^\s*debugLogs:[ \t]*1[ \t]*$`)
-	overriddenDebugLogs = regexp.MustCompile(`(?m)propertyPath: debugLogs\s+value:[ \t]*1[ \t]*$`)
+	componentDebugLogs  = regexp.MustCompile(`(?m)^[ \t]*debugLogs:[ \t]*1[ \t\r]*$`)
+	overriddenDebugLogs = regexp.MustCompile(`(?m)propertyPath: debugLogs\s+value:[ \t]*1[ \t\r]*$`)
 	unityStoreType      = regexp.MustCompile(`SetAppStoreType\(`)
 )
 
@@ -199,9 +199,6 @@ func componentDebugTicks(rel, text string) []call {
 		if re != nil {
 			for _, loc := range re.FindAllStringIndex(doc, -1) {
 				at := start + loc[0]
-				if text[at] == '\n' {
-					at++
-				}
 				ticks = append(ticks, call{File: rel, Line: lineAt(text, at), At: at, Text: text})
 			}
 		}

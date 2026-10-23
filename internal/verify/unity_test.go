@@ -302,6 +302,8 @@ PrefabInstance:
 	}{
 		"ticked on the component": {component("1"), 10},
 		"ticked as an override":   {override, 11},
+		"ticked, with CRLF lines": {strings.ReplaceAll(component("1"), "\n", "\r\n"), 10},
+		"overridden, with CRLF":   {strings.ReplaceAll(override, "\n", "\r\n"), 11},
 	} {
 		t.Run(name, func(t *testing.T) {
 			files := testproject.Unity().Without(unityScript).With(testproject.Files{scene: c.scene})
@@ -315,5 +317,10 @@ PrefabInstance:
 	files := testproject.Unity().Without(unityScript).With(testproject.Files{scene: component("0")})
 	if r := run(t, files, verify.Options{}); has(r, "ios.debug_logs") {
 		t.Errorf("reported: %+v", find(r, "ios.debug_logs", project.IOS))
+	}
+	// A scene saved with CRLF line ends keeps its key readable.
+	files = testproject.Unity().Without(unityScript).With(testproject.Files{scene: strings.ReplaceAll(component("0"), "\n", "\r\n")})
+	if f := expect(t, run(t, files, verify.Options{Keys: acceptAll{}}), "key.valid", project.IOS, verify.Pass); f.File != scene || f.Line != 9 {
+		t.Errorf("key found at %s:%d", f.File, f.Line)
 	}
 }
