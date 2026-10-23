@@ -34,8 +34,9 @@ var unitySpec = frameworkSpec{
 	initFix:     `In the first scene's Start(), call Tenjin.getInstance("<SDK_KEY>"), choosing the key with #if UNITY_IOS and #elif UNITY_ANDROID; or drag the TenjinObject prefab into the first scene and set its SDK Key.`,
 	connectFix:  "Call Connect() on the instance in Start(), and again in OnApplicationPause when pauseStatus is false.",
 	attCall:     regexp.MustCompile(`RequestTrackingAuthorizationWithCompletionHandler|RequestAuthorizationTracking`),
-	// On iOS only: the package's Android DebugLogs() does nothing.
-	debugLogsCall: regexp.MustCompile(`\bTenjin\.(?:getInstance\w*\((?:[^()]|\([^()]*\))*\)\s*\.)?DebugLogs\(`),
+	// On iOS only: the package's Android DebugLogs() does nothing. On an
+	// instance, chained on getInstance, or on the component's instance.
+	debugLogsCall: regexp.MustCompile(`(?:\bTenjin\.(?:getInstance\w*\((?:[^()]|\([^()]*\))*\)\s*\.)?|\bGetTenjinInstance\(\s*\)\s*\.)DebugLogs\(`),
 	debugLogsName: "DebugLogs()",
 	debugOnlyFix:  "Call it in development builds only: inside #if DEVELOPMENT_BUILD … #endif, or under if (Debug.isDebugBuild).",
 	// The package's own scripts call getInstance and Connect themselves.
@@ -201,7 +202,7 @@ func componentDebugTicks(rel, text string) []call {
 				if text[at] == '\n' {
 					at++
 				}
-				ticks = append(ticks, call{File: rel, Line: lineAt(text, at), Text: text})
+				ticks = append(ticks, call{File: rel, Line: lineAt(text, at), At: at, Text: text})
 			}
 		}
 		start = end

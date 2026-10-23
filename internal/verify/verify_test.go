@@ -506,6 +506,60 @@ func TestIOSDebugLogs(t *testing.T) {
 	}
 }
 
+// A call's build is read from what its #if means, not from the names in it,
+// and a condition that cannot be read is said to be unread, never passed.
+func TestIOSDebugLogsConditions(t *testing.T) {
+	base := testproject.IOSNative()
+	const delegate = "Sample/AppDelegate.swift"
+	guarded := "        #if DEBUG\n        TenjinSDK.debugLogs()\n        #endif\n"
+	objc := func(directive, alternative string) string {
+		body := "#import <TenjinSDK/TenjinSDK.h>\n\nvoid SampleLogs(void) {\n" + directive + "\n    NSLog(@\"first\");\n"
+		if alternative != "" {
+			body += alternative + "\n"
+		}
+		return body + "    [TenjinSDK debugLogs];\n#endif\n}\n"
+	}
+	for _, c := range []struct {
+		name, swift, objc string
+		severity          verify.Severity
+	}{
+		{"Objective-C, not debug", "", objc("#ifndef DEBUG", ""), verify.Warning},
+		{"Objective-C, NDEBUG", "", objc("#ifdef NDEBUG", ""), verify.Warning},
+		{"Objective-C, a symbol that only starts with DEBUG", "", objc("#if DEBUG_MENU_DISABLED", ""), verify.Warning},
+		{"Objective-C, debug", "", objc("#ifdef DEBUG", ""), verify.Pass},
+		{"Objective-C, debug and not QA", "", objc("#if defined(DEBUG) && !defined(QA)", ""), verify.Pass},
+		{"Objective-C, the else of not debug", "", objc("#if !defined(DEBUG)", "#else"), verify.Pass},
+		{"Objective-C, the elif after debug", "", objc("#ifdef DEBUG", "#elif defined(STAGING)"), verify.Warning},
+		{"Objective-C, a comparison", "", objc("#if DEBUG == 0", ""), verify.Info},
+		// Xcode does not define NDEBUG in release builds by default.
+		{"Objective-C, not NDEBUG", "", objc("#ifndef NDEBUG", ""), verify.Info},
+		{"Swift, debug and not QA", "        #if DEBUG && !QA\n        TenjinSDK.debugLogs()\n        #endif\n", "", verify.Pass},
+		{"Swift, the else of not debug", "        #if !DEBUG\n        print(\"release\")\n        #else\n        TenjinSDK.debugLogs()\n        #endif\n", "", verify.Pass},
+		{"Swift, debug on iOS", "        #if os(iOS)\n        #if DEBUG\n        TenjinSDK.debugLogs()\n        #endif\n        #endif\n", "", verify.Pass},
+		{"Swift, debug or a platform", "        #if DEBUG || os(iOS)\n        TenjinSDK.debugLogs()\n        #endif\n", "", verify.Warning},
+		{"Swift, in a string", "        print(\"TenjinSDK.debugLogs() is off\")\n", "", verify.Info},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			files := base.With(testproject.Files{delegate: strings.Replace(base[delegate], guarded, c.swift, 1)})
+			if c.objc != "" {
+				files = files.With(testproject.Files{"Sample/SampleLogs.m": c.objc})
+			}
+			f := find(run(t, files, verify.Options{}), "ios.debug_logs", project.IOS)
+			if f == nil || f.Severity != c.severity {
+				t.Fatalf("ios.debug_logs = %+v", f)
+			}
+			switch {
+			case c.objc != "" && (f.File != "Sample/SampleLogs.m" || f.Line != strings.Count(c.objc, "\n")-2):
+				t.Errorf("found at %s:%d", f.File, f.Line)
+			case c.objc != "" && c.severity == verify.Info && (!strings.Contains(f.Title, "could not be told") || !strings.Contains(f.Fix, "#ifdef DEBUG")):
+				t.Errorf("finding = %+v", f)
+			case c.objc == "" && c.severity == verify.Info && !strings.Contains(f.Title, "do not turn on"):
+				t.Errorf("finding = %+v", f)
+			}
+		})
+	}
+}
+
 // From 2.0.0 the Android SDK's AAR carries its keep rules, so shrinking needs
 // none in the app.
 func TestTheAndroidSDKBringsItsOwnKeepRules(t *testing.T) {

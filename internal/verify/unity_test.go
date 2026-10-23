@@ -213,6 +213,23 @@ func TestUnityDebugLogs(t *testing.T) {
 		{"on a debug build, one line", "        if (Debug.isDebugBuild) instance.DebugLogs();\n", verify.Pass},
 		{"on a debug build, in a block", "        if (Debug.isDebugBuild)\n        {\n            instance.DebugLogs();\n        }\n", verify.Pass},
 		{"on a release build", "        if (!Debug.isDebugBuild) instance.DebugLogs();\n", verify.Warning},
+		{"in the editor or on iOS", "#if UNITY_EDITOR || UNITY_IOS\n        instance.DebugLogs();\n#endif\n", verify.Warning},
+		{"development builds outside the editor", "#if !UNITY_EDITOR && DEVELOPMENT_BUILD\n        instance.DebugLogs();\n#endif\n", verify.Pass},
+		{"development builds on iOS", "#if UNITY_IOS\n#if DEVELOPMENT_BUILD\n        instance.DebugLogs();\n#endif\n#endif\n", verify.Pass},
+		{"in the else of a release block", "#if !DEVELOPMENT_BUILD\n        Debug.Log(\"release\");\n#else\n        instance.DebugLogs();\n#endif\n", verify.Pass},
+		{"compared with false", "#if DEVELOPMENT_BUILD == false\n        instance.DebugLogs();\n#endif\n", verify.Warning},
+		{"after an early return", "        if (!Debug.isDebugBuild) return;\n        instance.DebugLogs();\n", verify.Pass},
+		{"after an early return in a block", "        if (!UnityEngine.Debug.isDebugBuild)\n        {\n            return;\n        }\n        instance.DebugLogs();\n", verify.Pass},
+		{"in a block, after another statement", "        if (Debug.isDebugBuild) {\n            Debug.Log(\"dev\");\n            instance.DebugLogs();\n        }\n", verify.Pass},
+		{"in a block on its own line, after another statement", "        if (Debug.isDebugBuild)\n        {\n            Debug.Log(\"dev\");\n            instance.DebugLogs();\n        }\n", verify.Pass},
+		{"in the else of a release test", "        if (!Debug.isDebugBuild) { Debug.Log(\"release\"); }\n        else { instance.DebugLogs(); }\n", verify.Pass},
+		{"after a closed debug block", "        if (Debug.isDebugBuild) { Debug.Log(\"dev\"); }\n        instance.DebugLogs();\n", verify.Warning},
+		{"on a test that is false in debug builds", "        if (Debug.isDebugBuild == false) instance.DebugLogs();\n", verify.Warning},
+		{"on a negated full name", "        if (!UnityEngine.Debug.isDebugBuild) instance.DebugLogs();\n", verify.Warning},
+		{"on a debug build or a flag", "        if (Debug.isDebugBuild || PlayerPrefs.HasKey(\"logs\")) instance.DebugLogs();\n", verify.Warning},
+		{"on a debug build and a setting", "        if (Debug.isDebugBuild && PlayerPrefs.GetInt(\"logs\") > 0) instance.DebugLogs();\n", verify.Pass},
+		{"on an unreadable test", "        if (Debug.isDebugBuild ^ verbose) instance.DebugLogs();\n", verify.Info},
+		{"on the component's instance", "        TenjinObject.Instance.GetTenjinInstance().DebugLogs();\n", verify.Warning},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			script := strings.Replace(base[unityScript], before, before+c.add, 1)
@@ -227,9 +244,18 @@ func TestUnityDebugLogs(t *testing.T) {
 		})
 	}
 	// Without the call there is nothing to say: Unity's launch check does
-	// not depend on it the way a native iOS app's does.
-	if r := run(t, base, verify.Options{}); has(r, "ios.debug_logs") {
-		t.Error("ios.debug_logs reported for a project that never calls DebugLogs()")
+	// not depend on it the way a native iOS app's does. A call that is not
+	// compiled for iOS, where Android's DebugLogs() only prints a line, or
+	// that is only written in a string, is none.
+	for name, add := range map[string]string{
+		"never":       "",
+		"on Android":  "#if UNITY_ANDROID\n        instance.DebugLogs();\n#endif\n",
+		"in a string": "        Debug.Log(\"call Tenjin.DebugLogs() in development builds\");\n",
+	} {
+		script := strings.Replace(base[unityScript], before, before+add, 1)
+		if r := run(t, base.With(testproject.Files{unityScript: script}), verify.Options{}); has(r, "ios.debug_logs") {
+			t.Errorf("%s: ios.debug_logs = %+v", name, find(r, "ios.debug_logs", project.IOS))
+		}
 	}
 }
 

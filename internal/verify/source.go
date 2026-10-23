@@ -181,6 +181,8 @@ var wrapperSpecs = map[project.Framework]frameworkSpec{
 type call struct {
 	File string
 	Line int
+	// At is the call's offset in Text.
+	At int
 	// Text is the source file's whole content, for checks that look at what
 	// surrounds the call.
 	Text string
@@ -236,24 +238,26 @@ func (r *runner) scanSource(spec frameworkSpec, dirs []string) source {
 				text = spec.normalize(text)
 			}
 			for _, loc := range spec.initCall.FindAllStringIndex(text, -1) {
-				src.inits = append(src.inits, call{File: rel, Line: lineAt(text, loc[0]), Text: text})
+				src.inits = append(src.inits, call{File: rel, Line: lineAt(text, loc[0]), At: loc[0], Text: text})
 			}
 			if spec.deprecatedInit != nil {
 				for _, loc := range spec.deprecatedInit.FindAllStringIndex(text, -1) {
-					src.deprecated = append(src.deprecated, call{File: rel, Line: lineAt(text, loc[0]), Text: text})
+					src.deprecated = append(src.deprecated, call{File: rel, Line: lineAt(text, loc[0]), At: loc[0], Text: text})
 				}
 			}
 			for _, loc := range spec.connectCall.FindAllStringIndex(text, -1) {
-				src.connects = append(src.connects, call{File: rel, Line: lineAt(text, loc[0]), Text: text})
+				src.connects = append(src.connects, call{File: rel, Line: lineAt(text, loc[0]), At: loc[0], Text: text})
 			}
 			if spec.attCall != nil {
 				for _, loc := range spec.attCall.FindAllStringIndex(text, -1) {
-					src.att = append(src.att, call{File: rel, Line: lineAt(text, loc[0]), Text: text})
+					src.att = append(src.att, call{File: rel, Line: lineAt(text, loc[0]), At: loc[0], Text: text})
 				}
 			}
 			if spec.debugLogsCall != nil {
-				for _, loc := range spec.debugLogsCall.FindAllStringIndex(text, -1) {
-					src.debugLogs = append(src.debugLogs, call{File: rel, Line: lineAt(text, loc[0]), Text: text})
+				// Not inside a string: Debug.Log("call DebugLogs()") is no call.
+				code := project.BlankStrings(text, filepath.Ext(rel))
+				for _, loc := range spec.debugLogsCall.FindAllStringIndex(code, -1) {
+					src.debugLogs = append(src.debugLogs, call{File: rel, Line: lineAt(text, loc[0]), At: loc[0], Text: text})
 				}
 			}
 			for _, m := range spec.keyLiteral.FindAllStringSubmatchIndex(text, -1) {

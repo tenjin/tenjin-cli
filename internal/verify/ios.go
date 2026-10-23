@@ -95,8 +95,10 @@ func (r *runner) checkDebugLogs(spec frameworkSpec, src source) {
 	if spec.debugLogsCall == nil {
 		return
 	}
+	var debug, unread []call
 	for _, c := range src.debugLogs {
-		if !debugOnly(c) {
+		switch scopeOf(c, project.IOS) {
+		case everyBuild:
 			r.add(Finding{
 				ID: "ios.debug_logs", Severity: Warning, Platform: project.IOS,
 				Title:  spec.debugLogsName + " is on in release builds",
@@ -105,10 +107,25 @@ func (r *runner) checkDebugLogs(spec frameworkSpec, src source) {
 				Fix: spec.debugOnlyFix,
 			})
 			return
+		case debugBuilds:
+			debug = append(debug, c)
+		case unknownScope:
+			unread = append(unread, c)
 		}
 	}
-	if len(src.debugLogs) > 0 {
-		r.pass("ios.debug_logs", project.IOS, "Debug builds turn on the SDK's logs", src.debugLogs[0].File, src.debugLogs[0].Line)
+	if len(unread) > 0 {
+		c := unread[0]
+		r.add(Finding{
+			ID: "ios.debug_logs", Severity: Info, Platform: project.IOS,
+			Title:  "Whether release builds run " + spec.debugLogsName + " could not be told",
+			Detail: "A condition around the call could not be read. If release builds run it, it logs every request and response body, device identifiers included, on the devices of the app's users.",
+			File:   c.File, Line: c.Line,
+			Fix: spec.debugOnlyFix,
+		})
+		return
+	}
+	if len(debug) > 0 {
+		r.pass("ios.debug_logs", project.IOS, "Debug builds turn on the SDK's logs", debug[0].File, debug[0].Line)
 		return
 	}
 	if spec.debugLogsFix == "" {
@@ -132,70 +149,6 @@ func (r *runner) checkNativeDebugLogs(t *project.Target) {
 	native := nativeSpecs[project.IOS]
 	native.debugLogsFix = ""
 	r.checkDebugLogs(native, r.scanSource(native, native.sourceDirs(t)))
-}
-
-// debugOnly reports whether a call runs in debug builds only: inside a
-// conditional block on DEBUG, or Unity's DEVELOPMENT_BUILD or UNITY_EDITOR,
-// or under an if on Unity's Debug.isDebugBuild on the line itself or just
-// before it.
-func debugOnly(c call) bool {
-	lines := strings.Split(c.Text, "\n")
-	var open []bool
-	for i, line := range lines {
-		if i+1 >= c.Line {
-			break
-		}
-		switch t := strings.TrimSpace(line); {
-		case strings.HasPrefix(t, "#if"):
-			open = append(open, debugCondition(t))
-		case strings.HasPrefix(t, "#elif") && len(open) > 0:
-			open[len(open)-1] = debugCondition(t)
-		case strings.HasPrefix(t, "#endif") && len(open) > 0:
-			open = open[:len(open)-1]
-		case strings.HasPrefix(t, "#else") && len(open) > 0:
-			open[len(open)-1] = false
-		}
-	}
-	for _, debug := range open {
-		if debug {
-			return true
-		}
-	}
-	if c.Line < 1 || c.Line > len(lines) {
-		return false
-	}
-	if runtimeDebug(lines[c.Line-1]) {
-		return true
-	}
-	for i := c.Line - 2; i >= 0 && i >= c.Line-3; i-- {
-		switch t := strings.TrimSpace(lines[i]); {
-		case t == "" || t == "{":
-			continue
-		case strings.HasPrefix(t, "if") && !strings.HasSuffix(t, ";"):
-			return runtimeDebug(t)
-		}
-		break
-	}
-	return false
-}
-
-// debugCondition reports whether a preprocessor condition holds in debug
-// builds only.
-func debugCondition(directive string) bool {
-	if strings.Contains(directive, "!") {
-		return false
-	}
-	for _, symbol := range []string{"DEBUG", "DEVELOPMENT_BUILD", "UNITY_EDITOR"} {
-		if strings.Contains(directive, symbol) {
-			return true
-		}
-	}
-	return false
-}
-
-// runtimeDebug reports whether a line tests Unity's Debug.isDebugBuild.
-func runtimeDebug(line string) bool {
-	return strings.Contains(line, "Debug.isDebugBuild") && !strings.Contains(line, "!Debug.isDebugBuild")
 }
 
 // skanFix says where the SKAdNetwork endpoint goes. A project whose
