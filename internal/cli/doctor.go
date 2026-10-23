@@ -276,11 +276,19 @@ func (s *setup) offerFix(p *project.Project, report *verify.Report) (fixed, offe
 		if helper == nil {
 			return false, true, clierr.New(clierr.NotFound, "--agent %s was given, but it is not installed on this machine", s.agentFlag)
 		}
+		if s.refuseAgent(helper) {
+			return false, true, nil
+		}
 		s.sayAgentAnalytics(p, true)
 	case !s.env.interactive || len(installed) == 0:
 		return false, false, nil
 	default:
 		s.say("\n%s above can be fixed in the project's code.", plural(len(work), "finding"))
+		// An agent this run must not start is not offered; with none left,
+		// the reason said is the answer.
+		if installed = s.offerable(installed); len(installed) == 0 {
+			return false, true, nil
+		}
 		s.sayAgentAnalytics(p, false)
 		helper, err = s.askToFix(installed)
 		if err != nil || helper == nil {
@@ -288,14 +296,9 @@ func (s *setup) offerFix(p *project.Project, report *verify.Report) (fixed, offe
 		}
 	}
 	s.helper = helper
-	if s.refuseAgent() {
-		return false, true, nil
-	}
 	s.inProject = keysInProject(s.cmd.Context(), p, s.given)
-	if err := s.runAgent(p, report); err != nil {
-		return false, true, err
-	}
-	return true, true, nil
+	ran, err := s.runAgent(p, report)
+	return ran, true, err
 }
 
 // keysInProject are the builds whose SDK key is written in the project,
@@ -372,7 +375,7 @@ func (s *setup) askToFix(installed []agent.Agent) (*agent.Agent, error) {
 		s.say("%s is installed and can make the changes:", a.Name)
 		s.say("  - it works in this project only, under your own %s account;", a.Name)
 		s.say("  - %s;", a.Limits())
-		s.say("  - it %s;", agentCost("your "+a.Name+" account"))
+		s.say("  - it %s;", agentCost("that account"))
 		s.say("  - it is never given an SDK key, and doctor checks its work afterwards.")
 		ok, err := s.env.confirm(s.out, fmt.Sprintf("Fix them with %s?", a.Name), false)
 		if err != nil || !ok {

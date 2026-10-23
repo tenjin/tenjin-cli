@@ -192,6 +192,8 @@ type setup struct {
 	// what it is offered for; the zero job is the integration.
 	helper *agent.Agent
 	job    agentJob
+	// refused are the agents this run must not start, by ID, once said.
+	refused map[string]bool
 	// pagesShown is set once the dashboard's test-device pages are named.
 	pagesShown bool
 }
@@ -671,14 +673,29 @@ func (s *setup) integrate(p *project.Project) error {
 		return nil
 	}
 	s.helper = helper
-	return s.runAgent(p, report)
+	ran, err := s.runAgent(p, report)
+	if err != nil {
+		return err
+	}
+	if !ran {
+		s.manualGuide(report)
+	}
+	return nil
 }
 
 // agentJob is what a coding agent is offered for: work, as in "can do the
-// integration for you", and ask, the question's verb.
-type agentJob struct{ work, ask string }
+// integration for you"; ask, the question's verb; checked, how its work is
+// checked; byHand, what to do when no agent does it; and keysLater, how to
+// give the SDK keys to a run started again without them.
+type agentJob struct{ work, ask, checked, byHand, keysLater string }
 
-var integrationJob = agentJob{work: "the integration", ask: "Integrate the Tenjin SDK"}
+var integrationJob = agentJob{
+	work:      "the integration",
+	ask:       "Integrate the Tenjin SDK",
+	checked:   "the next step checks its work",
+	byHand:    "Make the changes yourself; 'tenjin sdk guide' prints the integration guide.",
+	keysLater: ", and give the SDK keys at tenjin setup's prompt or with 'tenjin project set-keys'",
+}
 
 func (s *setup) agentJob() agentJob {
 	if s.job.work == "" {
@@ -784,12 +801,18 @@ func (s *setup) chooseAgent() (*agent.Agent, error) {
 	if s.agentFlag != "" {
 		for i := range installed {
 			if installed[i].ID == s.agentFlag {
+				if s.refuseAgent(&installed[i]) {
+					return nil, nil
+				}
 				return &installed[i], nil
 			}
 		}
 		return nil, clierr.New(clierr.NotFound, "--agent %s was given, but it is not installed on this machine", s.agentFlag)
 	}
 	if !s.env.interactive || len(installed) == 0 {
+		return nil, nil
+	}
+	if installed = s.offerable(installed); len(installed) == 0 {
 		return nil, nil
 	}
 	if len(installed) > 1 {
@@ -800,8 +823,8 @@ func (s *setup) chooseAgent() (*agent.Agent, error) {
 	s.say("\n%s is installed on this machine and can do %s for you:", a.Name, s.agentJob().work)
 	s.say("  - it works in this project only, under your own %s account;", a.Name)
 	s.say("  - %s;", a.Limits())
-	s.say("  - it %s;", agentCost("your "+a.Name+" account"))
-	s.say("  - the next step checks its work.")
+	s.say("  - it %s;", agentCost("that account"))
+	s.say("  - %s.", s.agentJob().checked)
 	ok, err := s.env.confirm(s.out, fmt.Sprintf("\n%s using %s?", s.agentJob().ask, a.Name), true)
 	if err != nil || !ok {
 		return nil, err
@@ -827,7 +850,8 @@ func (s *setup) pickAgent(installed []agent.Agent) (*agent.Agent, error) {
 	for i, a := range installed {
 		s.say("  %d) %s: %s", i+1, s.style.Bold(a.Name), a.Limits())
 	}
-	s.say("Either %s. The next step checks the work, whichever you pick.", agentCost("your own account"))
+	checked := s.agentJob().checked
+	s.say("Either %s. %s, whichever you pick.", agentCost("your own account"), strings.ToUpper(checked[:1])+checked[1:])
 
 	options := make([]string, len(installed))
 	for i, a := range installed {
@@ -912,24 +936,25 @@ func (s *setup) manualGuide(report *verify.Report) {
 // runAgent hands the open findings to the coding agent and reports what it
 // did. A failure here is not fatal: the check that follows is what decides
 // whether the integration works. Only Ctrl-C stops setup here.
-func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
+func (s *setup) runAgent(p *project.Project, report *verify.Report) (bool, error) {
 	return s.runAgentOn(p, integrationPrompt(p, report, s.inProject, s.features, s.analytics, s.helper.DoctorCommand()), "is working on the integration", true)
 }
 
-// runAgentOn starts the coding agent on a task and reports what it did.
-// working follows the agent's name while it works. With keys, the keys this
-// run wrote are taken out of the project while it works and written again
-// after it.
-func (s *setup) runAgentOn(p *project.Project, prompt, working string, keys bool) error {
-	if s.refuseAgent() {
-		return nil
+// runAgentOn starts the coding agent on a task and reports what it did, and
+// whether it was started. working follows the agent's name while it works.
+// With keys, the keys this run wrote are taken out of the project while it
+// works and written again after it.
+func (s *setup) runAgentOn(p *project.Project, prompt, working string, keys bool) (bool, error) {
+	if s.refuseAgent(s.helper) {
+		s.helper = nil
+		return false, nil
 	}
 	// Keys this run wrote go back to their placeholders while the agent
 	// works, and are written again when it is done.
 	if len(s.filled) > 0 {
 		if err := keyfill.Unfill(p.Root, s.filled, s.filledKeys); err != nil {
 			s.say("%s Could not take the SDK keys out of the project before %s starts, so it was not started: %s", s.style.Yellow("!"), s.helper.Name, render.Clean(err.Error()))
-			return nil
+			return false, nil
 		}
 		s.filled = nil
 	}
@@ -983,7 +1008,7 @@ func (s *setup) runAgentOn(p *project.Project, prompt, working string, keys bool
 			s.say("%s %s", s.style.Yellow("!"), render.Clean(err.Error()))
 		}
 	}
-	return s.env.interrupted()
+	return true, s.env.interrupted()
 }
 
 // fillKeys writes the SDK keys setup knows where the project has
@@ -1073,14 +1098,16 @@ func (s *setup) check() error {
 
 		question := "\nFix the items marked ✗, then press Enter to check again (q to stop)."
 		// The agent can be called in at any round, also after a no in step
-		// 5, whenever one is installed and there is code to change.
+		// 5, whenever one this run may start is installed and there is code
+		// to change.
+		work := len(s.agentItems(agentWork(report))) > 0
 		available := s.helper
-		if available == nil && s.agentFlag != "none" && !agent.InsideAgent(s.env.getenv) {
-			if installed := agent.Find(s.env.lookPath); len(installed) > 0 {
+		if work && available == nil && s.agentFlag != "none" && !agent.InsideAgent(s.env.getenv) {
+			if installed := s.offerable(agent.Find(s.env.lookPath)); len(installed) > 0 {
 				available = &installed[0]
 			}
 		}
-		canAgent := available != nil && len(s.agentItems(agentWork(report))) > 0
+		canAgent := available != nil && work
 		if canAgent {
 			question = fmt.Sprintf("\nPress Enter to check again, a to have %s fix them, or q to stop.", available.Name)
 		}
@@ -1093,7 +1120,7 @@ func (s *setup) check() error {
 			return status
 		case strings.EqualFold(answer, "a") && canAgent:
 			s.helper = available
-			if err := s.runAgent(p, report); err != nil {
+			if _, err := s.runAgent(p, report); err != nil {
 				return err
 			}
 		}

@@ -14,7 +14,12 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/verify"
 )
 
-var upgradeJob = agentJob{work: "the upgrade", ask: "Upgrade the Tenjin SDK"}
+var upgradeJob = agentJob{
+	work:    "the upgrade",
+	ask:     "Upgrade the Tenjin SDK",
+	checked: "the Tenjin CLI checks its work afterwards",
+	byHand:  "Make the changes yourself, as listed below.",
+}
 
 func newSDKUpgradeCmd(opts *options, env *environment) *cobra.Command {
 	var (
@@ -35,10 +40,15 @@ The Tenjin CLI does not edit the project itself. Where the declaration must
 change, or a new major version may need changes to the app's code, it offers
 to have your coding agent (Claude Code or Codex) make them, told exactly
 which, then checks the project again; --agent picks one without asking, and
---agent none prints the changes to make by hand. Inside a coding agent,
-nothing is started: the agent at work makes the changes, and --json gives it
-the plan. Installing the new version (the package manager's update) is yours
-to run afterwards.`,
+--agent none prints the changes to make by hand. Codex is neither offered
+nor started where it could read your Tenjin sign-in, kept in a file, or an
+SDK key or token in this run's environment; the changes are then printed
+instead. Inside a
+coding agent, nothing is started: the agent at work makes the changes, and
+--json gives it the plan. A dependency on a folder, a Git repository or a
+branch, and an SDK copied into the project, are listed with how to upgrade
+them by hand. Installing the new version (the package manager's update) is
+yours to run afterwards.`,
 		Example: `  tenjin sdk upgrade
   tenjin sdk upgrade path/to/app --agent claude
   tenjin sdk upgrade --json`,
@@ -77,7 +87,7 @@ to run afterwards.`,
 				return render.WriteJSON(cmd.OutOrStdout(), plan)
 			}
 			s := &setup{cmd: cmd, env: env, args: args, agentFlag: fixWith, offline: offline, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
-				job: upgradeJob, inProject: map[string]bool{}, keys: map[string]verify.GivenKey{}}
+				given: keysInEnvironment(p, env.getenv), job: upgradeJob, inProject: map[string]bool{}, keys: map[string]verify.GivenKey{}}
 			return s.upgrade(p, plan, live)
 		},
 	}
@@ -86,8 +96,21 @@ to run afterwards.`,
 	return cmd
 }
 
+// keysInEnvironment are the SDK keys this run was given in its environment,
+// which decide whether an agent that reads outside the project may start.
+func keysInEnvironment(p *project.Project, getenv func(string) string) verify.GivenKeys {
+	given, _ := givenKeys(nil, getenv)
+	for _, b := range p.Builds() {
+		if key := getenv(verify.KeyVariable(b.ID)); !b.Main() && key != "" {
+			given.ByBuild[b.ID] = verify.GivenKey{Value: key, Source: verify.KeyVariable(b.ID)}
+		}
+	}
+	return given
+}
+
 // upgrade shows the plan, has the agent make the changes the files need, and
-// says what installs the new versions.
+// says what installs the new versions. An agent that is not started leaves
+// the changes to the developer.
 func (s *setup) upgrade(p *project.Project, plan verify.UpgradePlan, live map[string]string) error {
 	s.writePlan(p, plan)
 	var work []verify.Upgrade
@@ -104,16 +127,19 @@ func (s *setup) upgrade(p *project.Project, plan verify.UpgradePlan, live map[st
 	if err != nil {
 		return err
 	}
-	if helper == nil {
-		s.byHand(work)
-		s.sayThen(plan.Upgrades)
-		return nil
+	if helper != nil {
+		s.helper = helper
+		ran, err := s.runAgentOn(p, upgradePrompt(p, work, helper.DoctorCommand()), "is upgrading the Tenjin SDK", false)
+		if err != nil {
+			return err
+		}
+		if ran {
+			return s.upgradeChecked(p, work, live)
+		}
 	}
-	s.helper = helper
-	if err := s.runAgentOn(p, upgradePrompt(p, work, helper.DoctorCommand()), "is upgrading the Tenjin SDK", false); err != nil {
-		return err
-	}
-	return s.upgradeChecked(p, work, live)
+	s.byHand(work)
+	s.sayThen(plan.Upgrades)
+	return nil
 }
 
 // writePlan says, per SDK, what the upgrade takes.
@@ -135,6 +161,10 @@ func (s *setup) writePlan(p *project.Project, plan verify.UpgradePlan) {
 		}
 	}
 	for _, u := range plan.Current {
+		if u.Ahead() {
+			s.say("  %s %s %s is newer than %s, the newest release this version of the Tenjin CLI knows", s.style.Green("✓"), u.Package, render.Clean(u.Current), u.Target)
+			continue
+		}
 		s.say("  %s %s %s is the newest release", s.style.Green("✓"), u.Package, render.Clean(u.Current))
 	}
 	for _, n := range plan.Unchecked {
@@ -181,7 +211,7 @@ func (s *setup) sayThen(upgrades []verify.Upgrade) {
 	}
 	s.say("\n%s", s.style.Bold("Then, to install it:"))
 	for _, t := range then {
-		s.say("  %s", t)
+		s.say("  %s", render.Clean(t))
 	}
 }
 

@@ -92,7 +92,7 @@ func TestSDKUpgradeWithTheAgent(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Claude Code is installed on this machine and can do the upgrade for you",
-		"it uses tokens from your Claude Code account and edits files in this project",
+		"it uses tokens from that account and edits files in this project",
 		"Upgrade the Tenjin SDK using Claude Code? [Y/n]",
 		"Claude Code is upgrading the Tenjin SDK.",
 		"1 file changed:\n  " + gradleFile,
@@ -149,6 +149,92 @@ func TestSDKUpgradeInsideAnAgent(t *testing.T) {
 	code, stdout, _ := h.typing("").run("sdk", "upgrade", oldAndroid(t))
 	if code != 0 || agent.runs() != "" || !strings.Contains(stdout, "To upgrade it yourself:") {
 		t.Errorf("exit = %d, runs = %q\n%s", code, agent.runs(), stdout)
+	}
+}
+
+// The offer says once whose account pays, and that this command, which has
+// no next step, checks the work itself.
+func TestSDKUpgradeOfferWording(t *testing.T) {
+	h := newHarness(t)
+	h.installAgent()
+	_, stdout, _ := h.typing("n").run("sdk", "upgrade", oldAndroid(t))
+	if !strings.Contains(stdout, "  - the Tenjin CLI checks its work afterwards.\n") || strings.Contains(stdout, "next step") ||
+		strings.Count(stdout, "your own") != 1 || !strings.Contains(stdout, "To upgrade it yourself:") {
+		t.Errorf("one agent:\n%s", stdout)
+	}
+	h.installCodex()
+	_, stdout, _ = h.typing("n").run("sdk", "upgrade", oldAndroid(t))
+	if !strings.Contains(stdout, "The Tenjin CLI checks its work afterwards, whichever you pick.") || strings.Contains(stdout, "next step") {
+		t.Errorf("two agents:\n%s", stdout)
+	}
+}
+
+// Codex reads outside the project, so a key in the environment keeps it
+// from starting, as in setup and doctor. The upgrade is then the
+// developer's to make, which is not a failure.
+func TestSDKUpgradeDoesNotStartCodexWithAKeyGiven(t *testing.T) {
+	for _, name := range []string{"TENJIN_SDK_KEY", "TENJIN_SDK_KEY_ANDROID", "TENJIN_API_TOKEN"} {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t)
+			codex := h.installCodex()
+			h.vars[name] = goodKey
+			code, stdout, stderr := h.run("sdk", "upgrade", oldAndroid(t), "--agent", "codex")
+			if codex.read("args") != "" {
+				t.Fatal("Codex was started")
+			}
+			for _, want := range []string{
+				"Codex was not started: its sandbox can read outside this project, including what this run of tenjin was given",
+				"Run it again without them to let Codex work. Make the changes yourself, as listed below.",
+				"To upgrade it yourself:\n  1. In " + gradleFile + ", change the declared version from 1.24.0 to 2.0.0.",
+				"Then, to install it:",
+			} {
+				if !strings.Contains(stdout, want) {
+					t.Errorf("stdout lacks %q:\n%s", want, stdout)
+				}
+			}
+			if code != 0 || strings.Contains(stdout, "Checking again") || strings.Contains(stdout, "sdk guide") || strings.Contains(stdout, "set-keys") || strings.Contains(stdout+stderr, goodKey) {
+				t.Errorf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+			}
+		})
+	}
+}
+
+// An agent that would be refused is not offered at all.
+func TestSDKUpgradeDoesNotOfferAnAgentItWouldRefuse(t *testing.T) {
+	h := newHarness(t)
+	codex := h.installCodex()
+	h.env.store = filedStore{h.store, "/home/me/.config/tenjin/credentials-production.json"}
+	code, stdout, _ := h.typing("").run("sdk", "upgrade", oldAndroid(t))
+	if code != 0 || codex.read("args") != "" || strings.Count(stdout, "Codex is installed, but is not offered: its sandbox can read files outside this project") != 1 ||
+		strings.Contains(stdout, "using Codex?") || strings.Contains(stdout, "uses tokens") || !strings.Contains(stdout, "To upgrade it yourself:") {
+		t.Errorf("exit = %d\n%s", code, stdout)
+	}
+}
+
+// A project ahead of the newest release this version knows is not said to
+// be at the newest release.
+func TestSDKUpgradeOfAnSDKNewerThanTheCLIKnows(t *testing.T) {
+	base := testproject.AndroidNative()
+	dir := testproject.Write(t, base.With(testproject.Files{gradleFile: strings.Replace(base[gradleFile], "android-sdk:2.0.0", "android-sdk:2.1.0", 1)}))
+	code, stdout, _ := newHarness(t).run("sdk", "upgrade", dir, "--offline")
+	if code != 0 || !strings.Contains(stdout, "✓ com.tenjin:android-sdk 2.1.0 is newer than 2.0.0, the newest release this version of the Tenjin CLI knows") || strings.Contains(stdout, "is the newest release") {
+		t.Errorf("exit = %d\n%s", code, stdout)
+	}
+}
+
+// What installs the new version names the Podfile's folder, which comes
+// from the project: it reaches the terminal without control characters.
+func TestSDKUpgradeCleansTheInstallCommand(t *testing.T) {
+	files := testproject.Files{}
+	for name, content := range testproject.IOSNative() {
+		files["ios\x1b]0;owned\x07/"+name] = content
+	}
+	const podfile = "ios\x1b]0;owned\x07/Podfile"
+	files[podfile] = strings.Replace(files[podfile], "pod 'TenjinSDK'", "pod 'TenjinSDK', '~> 1.19'", 1)
+	files["ios\x1b]0;owned\x07/Podfile.lock"] = strings.ReplaceAll(files["ios\x1b]0;owned\x07/Podfile.lock"], "1.20.0", "1.19.1")
+	code, stdout, _ := newHarness(t).run("sdk", "upgrade", testproject.Write(t, files), "--offline")
+	if code != 0 || !strings.Contains(stdout, "In ios]0;owned, run pod update TenjinSDK.") || strings.ContainsAny(stdout, "\x1b\x07") {
+		t.Errorf("exit = %d\n%q", code, stdout)
 	}
 }
 

@@ -161,7 +161,7 @@ func TestSetupIntegratesUsingTheAgent(t *testing.T) {
 		"not fully set up in this project yet. 1 thing would stop events reaching Tenjin:\n  ✗ ",
 		"Claude Code is installed on this machine and can do the integration for you",
 		"under your own Claude Code account",
-		"it uses tokens from your Claude Code account and edits files in this project: commit or stash your work first, so you can review its changes and undo them;",
+		"it uses tokens from that account and edits files in this project: commit or stash your work first, so you can review its changes and undo them;",
 		"Integrate the Tenjin SDK using Claude Code? [Y/n]",
 		"· edit app/src/main/AndroidManifest.xml",
 		"· run tenjin doctor --json .",
@@ -503,6 +503,37 @@ func TestCodexIsNotStartedWithAKeyOrTokenGiven(t *testing.T) {
 	}
 }
 
+// An agent that would be refused is not offered, in setup's steps 5 and 6
+// or by doctor; why is said once, and another agent is offered alone.
+func TestAnAgentThatWouldBeRefusedIsNotOffered(t *testing.T) {
+	const file = "/home/me/.config/tenjin/credentials-production.json"
+	const notOffered = "Codex is installed, but is not offered: its sandbox can read files outside this project, and this machine keeps your Tenjin sign-in in a file (" + file + ")"
+	h, dir := brokenAndroid(t)
+	codex := h.installCodex()
+	h.env.store = filedStore{h.store, file}
+
+	code, stdout, _ := h.typing("", "", "q").run("setup", dir)
+	if codex.read("args") != "" || code != 9 || strings.Count(stdout, notOffered) != 1 || !strings.Contains(stdout, "The full guide:") ||
+		strings.Contains(stdout, "using Codex?") || strings.Contains(stdout, "a to have Codex fix them") || strings.Contains(stdout, "uses tokens") {
+		t.Errorf("setup: exit = %d\n%s", code, stdout)
+	}
+
+	code, stdout, stderr := h.typing("").run("doctor", dir, "--offline")
+	if codex.read("args") != "" || code != 9 || strings.Count(stdout, notOffered) != 1 || strings.Contains(stdout, "Fix them with Codex") || strings.Contains(stderr, "(or codex)") {
+		t.Errorf("doctor: exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+
+	agent := h.installAgent()
+	code, stdout, _ = h.typing("n").run("doctor", dir, "--offline")
+	if agent.runs() != "" || code != 9 || !strings.Contains(stdout, notOffered) || !strings.Contains(stdout, "Fix them with Claude Code? [y/N]") || strings.Contains(stdout, "Codex (2)") {
+		t.Errorf("doctor with Claude Code too: exit = %d\n%s", code, stdout)
+	}
+	_, stdout, _ = h.typing("", "n", "q").run("setup", dir)
+	if !strings.Contains(stdout, notOffered) || !strings.Contains(stdout, "Integrate the Tenjin SDK using Claude Code? [Y/n]") || strings.Contains(stdout, "Codex (2)") {
+		t.Errorf("setup with Claude Code too:\n%s", stdout)
+	}
+}
+
 func TestSetupAsksWhichAgentWhenThereAreTwo(t *testing.T) {
 	answers := []struct{ typed, want string }{
 		{"", "Claude Code is working"}, // Enter takes the first
@@ -604,7 +635,7 @@ func TestDoctorOffersToFix(t *testing.T) {
 
 	code, stdout, _ := h.typing("").run("doctor", dir, "--offline")
 	if code != 9 || agent.runs() != "" || !strings.Contains(stdout, "Fix them with Claude Code? [y/N]") ||
-		!strings.Contains(stdout, "it uses tokens from your Claude Code account and edits files in this project: commit or stash your work first") {
+		!strings.Contains(stdout, "it uses tokens from that account and edits files in this project: commit or stash your work first") {
 		t.Fatalf("Enter: exit = %d, runs = %q\n%s", code, agent.runs(), stdout)
 	}
 
