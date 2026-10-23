@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/tenjin/tenjin-cli/internal/testproject"
+	"github.com/tenjin/tenjin-cli/internal/verify"
 )
 
 // The sign-in says who, and names the environment only when it is not
@@ -149,5 +150,45 @@ func TestDoctorsUpgradeHintNamesTheProject(t *testing.T) {
 		if got := shellArg(c.arg, c.goos); got != c.want {
 			t.Errorf("shellArg(%q, %s) = %s, want %s", c.arg, c.goos, got, c.want)
 		}
+	}
+}
+
+// A key written in the code that Tenjin refuses stays what the app sends:
+// step 4 says where it is when it finds the right one, and a skip does not
+// talk of a placeholder.
+func TestStepFourSaysWhereARefusedKeyIs(t *testing.T) {
+	const wrong = "WRONGKEYWRONGKEYWRONGKEY1234"
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	base := testproject.AndroidNative()
+	files := base.With(testproject.Files{activity: strings.Replace(base[activity], testproject.Key, wrong, 1)})
+
+	h := newHarness(t)
+	app := h.fake.addApp("Sample", "com.example.sample", "android")
+	h.signIn()
+	h.fake.keyAnswers[wrong] = "unauthorized"
+	h.fake.serveKeys(app.ID, testproject.Key)
+	_, stdout, _ := h.typing("", "q").run("setup", testproject.Write(t, files), "--agent", "none")
+	if !strings.Contains(stdout, "The project holds another key for this app, at "+activity+":") || !strings.Contains(stdout, "replace it there with this one (…"+testproject.Key[len(testproject.Key)-4:]+")") {
+		t.Errorf("fetched:\n%s", stdout)
+	}
+
+	h = newHarness(t)
+	h.fake.addApp("Sample", "com.example.sample", "android")
+	h.signIn()
+	h.fake.keyAnswers[wrong] = "unauthorized"
+	_, stdout, _ = h.typing("", "", "q").run("setup", testproject.Write(t, files), "--agent", "none")
+	if !strings.Contains(stdout, "Skipped. The key written at "+activity+":") || strings.Contains(stdout, "The placeholder stays") {
+		t.Errorf("skipped:\n%s", stdout)
+	}
+}
+
+// A key step 4 found after Tenjin refused the one passed in is the one the
+// checks use.
+func TestAFoundKeyWinsOverARefusedGivenOne(t *testing.T) {
+	const wrong = "WRONGKEYWRONGKEYWRONGKEY1234"
+	given := verify.GivenKeys{ByBuild: map[string]verify.GivenKey{"android": {Value: wrong, Source: "--sdk-key"}}}
+	s := &setup{given: given, keys: map[string]verify.GivenKey{"android": {Value: testproject.Key, Source: "the key you pasted"}}}
+	if got := s.givenForChecks().ByBuild["android"].Value; got != testproject.Key {
+		t.Errorf("checks use %q", maskKey(got))
 	}
 }

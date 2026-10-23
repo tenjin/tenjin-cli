@@ -507,11 +507,26 @@ func (s *setup) buildKey(t *project.Target, b project.Build, report *verify.Repo
 		s.inProject[b.ID] = true
 		return nil
 	}
+	// A key written in the project that Tenjin refuses stays what the app
+	// sends: setup writes keys only over its own placeholders.
+	written := ""
+	if f := refusedInProject(report, t, b); f != nil {
+		written = render.Clean(f.File)
+		if f.Line > 0 {
+			written = fmt.Sprintf("%s:%d", written, f.Line)
+		}
+	}
+	found := func(key string) {
+		if written != "" {
+			s.say("    %s The project holds another key for this app, at %s, which Tenjin refuses, and setup writes keys only over its own placeholders: replace it there with this one (%s).", s.style.Yellow("!"), written, maskKey(key))
+		}
+	}
 	if given, ok := s.given.For(b.ID); ok {
 		verdict := checkGivenKey(s.cmd.Context(), s.keyCheck(), given.Value, b, s.keyURLs[b.ID] != "")
 		s.asker().verdict(label+", key "+maskKey(given.Value)+" from "+given.Source, verdict)
 		if verdict.ok {
 			s.keys[b.ID] = given
+			found(given.Value)
 			return nil
 		}
 		// Refused: the right key is still to be found, as if none was given.
@@ -521,6 +536,7 @@ func (s *setup) buildKey(t *project.Target, b project.Build, report *verify.Repo
 		if fetched != nil {
 			s.asker().verdict(fetchedLabel(label, fetched), fetched.verdict)
 			s.keys[b.ID] = verify.GivenKey{Value: fetched.key.Value, Source: "Tenjin"}
+			found(fetched.key.Value)
 			return nil
 		}
 		if note != "" {
@@ -529,6 +545,7 @@ func (s *setup) buildKey(t *project.Target, b project.Build, report *verify.Repo
 	}
 
 	asker := s.asker()
+	asker.written = written
 	asker.instructions(label, b, s.keyURLs[b.ID])
 	if !s.env.interactive {
 		s.say("    Then pass it with --sdk-key %s=<key>.", render.Clean(b.ID))
@@ -540,6 +557,18 @@ func (s *setup) buildKey(t *project.Target, b project.Build, report *verify.Repo
 	}
 	if key != "" {
 		s.keys[b.ID] = verify.GivenKey{Value: key, Source: "the key you pasted"}
+		found(key)
+	}
+	return nil
+}
+
+// refusedInProject returns the finding for a build's key written in the
+// project when Tenjin refuses it, or nil.
+func refusedInProject(report *verify.Report, t *project.Target, b project.Build) *verify.Finding {
+	for _, id := range []string{"key.rejected", "key.no_app", "key.disabled"} {
+		if f := findingFor(report, id, t, b); f != nil && f.File != "" {
+			return f
+		}
 	}
 	return nil
 }
@@ -589,10 +618,10 @@ func (s *setup) givenForChecks() verify.GivenKeys {
 	for id, key := range s.given.ByBuild {
 		given.ByBuild[id] = key
 	}
+	// A key step 4 settled is either the one given, accepted, or the one
+	// found after Tenjin refused the one given.
 	for id, key := range s.keys {
-		if _, ok := given.ByBuild[id]; !ok {
-			given.ByBuild[id] = key
-		}
+		given.ByBuild[id] = key
 	}
 	return given
 }

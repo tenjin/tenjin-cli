@@ -240,6 +240,9 @@ type keyAsker struct {
 	ctx   context.Context
 	// check asks Tenjin about a key; nil when offline.
 	check verify.KeyChecker
+	// written is where the project holds a key Tenjin refuses for the
+	// build, which no skip changes.
+	written string
 }
 
 func (k keyAsker) say(format string, a ...any) {
@@ -266,7 +269,11 @@ func (k keyAsker) ask(label string, b project.Build, appKnown bool) (string, err
 		}
 		key := cleanKey(answer)
 		if key == "" {
-			k.say("    Skipped. The placeholder stays where the key belongs, and the checks will say so.")
+			if k.written != "" {
+				k.say("    Skipped. The key written at %s stays, and Tenjin refuses it: replace it there with the app's own key.", k.written)
+			} else {
+				k.say("    Skipped. The placeholder stays where the key belongs, and the checks will say so.")
+			}
 			return "", nil
 		}
 		// Something that cannot be a key is not sent to Tenjin.
