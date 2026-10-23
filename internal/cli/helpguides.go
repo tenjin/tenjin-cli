@@ -36,7 +36,11 @@ The same, step by step:
   tenjin doctor --device                   after launching a debug build: what Tenjin answered
 
 doctor offers to have your coding agent fix what it finds; --agent claude does
-it without asking. To teach an agent you already use the whole CLI:
+it without asking. When the SDK is behind, the upgrade is planned the same way:
+
+  tenjin sdk upgrade                       the newest release, what it changes, and who makes the change
+
+To teach an agent you already use the whole CLI:
 
   tenjin agent install
 

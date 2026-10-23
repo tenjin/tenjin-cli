@@ -752,6 +752,9 @@ func stripRubyComments(s string) string {
 	return rubyComment.ReplaceAllString(s, "")
 }
 
+// StripRubyComments removes the comments of a Podfile or a podspec.
+func StripRubyComments(s string) string { return stripRubyComments(s) }
+
 func firstNonEmpty(values ...string) string {
 	for _, v := range values {
 		if v != "" {

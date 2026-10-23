@@ -34,7 +34,9 @@ if [ -n "$FAKE_AGENT_FAIL" ]; then
   echo "agent crashed" >&2
   exit 1
 fi
-if [ "$n" -ge "${FAKE_AGENT_FIX_ON_RUN:-1}" ]; then
+if [ -n "$FAKE_AGENT_DO" ]; then
+  sh -c "$FAKE_AGENT_DO"
+elif [ "$n" -ge "${FAKE_AGENT_FIX_ON_RUN:-1}" ]; then
   cp "$FAKE_AGENT_DIR/fixed-manifest.xml" app/src/main/AndroidManifest.xml
   if [ -n "$FAKE_AGENT_PLACEHOLDER" ]; then
     sed -i.bak 's/YOUR_SDK_KEY/__TENJIN_ANDROID_SDK_KEY__/' app/src/main/java/com/example/sample/MainActivity.kt

@@ -520,7 +520,7 @@ terminal, so scripts and coding agents can drive them.`,
 		title    string
 		commands []*cobra.Command
 	}{
-		{"Integrate the Tenjin SDK (app developers):", []*cobra.Command{newSetupCmd(opts, env), newProjectCmd(opts, env), newDoctorCmd(opts, env), newSDKCmd(opts), newAgentCmd(opts, env)}},
+		{"Integrate the Tenjin SDK (app developers):", []*cobra.Command{newSetupCmd(opts, env), newProjectCmd(opts, env), newDoctorCmd(opts, env), newSDKCmd(opts, env), newAgentCmd(opts, env)}},
 		{"Your Tenjin data:", []*cobra.Command{newAppsCmd(opts, env), newCampaignsCmd(opts, env), newChannelsCmd(opts, env), newAdAccountsCmd(opts, env), newSKAdNetworksCmd(opts, env), newReportsCmd(opts, env), newSavedReportsCmd(opts, env), newSiteIDsCmd(opts, env)}},
 		{"Your account:", []*cobra.Command{newLoginCmd(opts, env), newLogoutCmd(opts, env), newAuthCmd(opts, env)}},
 	}

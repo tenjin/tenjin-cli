@@ -129,6 +129,7 @@ For app developers, in the app's project.
 | `tenjin doctor --device` | Also read a connected device: what the SDK sent and what Tenjin answered |
 | `tenjin project set-keys [path]` | Write SDK keys where a coding agent left placeholders. Run it yourself: it does not run inside a coding agent, which would then read the keys |
 | `tenjin sdk guide [platform]` | The SDK integration guide, as tested with this version; works offline |
+| `tenjin sdk upgrade [path]` | Plan the upgrade to the SDK's newest release, with what a new major version changes, and have your coding agent make the changes the files need |
 | `tenjin agent install [path]` | Teach your coding agent to use this CLI |
 
 Two of setup's steps are under [Your Tenjin data](#your-tenjin-data): `tenjin apps ensure` finds or creates the app, and `tenjin apps keys list` reads its SDK keys.

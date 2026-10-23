@@ -109,6 +109,16 @@ When several devices or simulators are running, pass `--serial` with the adb ser
 
 On iOS, `doctor --device` reads an iPhone connected by cable, launching the installed debug build itself, or a running simulator. Tenjin leaves a simulator's installs out of attribution by design (the SDK marks its requests with `device_info=true`), so `device.processed` from an iPhone is what confirms an iOS integration; from a simulator, `device.simulator` says so: report that `device.connect` passed, and that an iPhone is needed to see the install processed.
 
+## Upgrading the SDK
+
+When `doctor` reports `sdk.version`, or the developer asks for the newest SDK, read the plan:
+
+```sh
+tenjin sdk upgrade --json
+```
+
+Each item of `upgrades` names the `file` the SDK is declared in, the version `declared` there and the one in use (`current`), and the `target`. Where `edit` is true, change that declaration to allow the target, in the form it has (a pinned version stays pinned, a range starts at the target); where it is false, leave it. Where `major` is true, `changes` says what the new major version changes for the app's code, and `code_changes` whether code that uses what changed must move: look for such code and change it as said, and nothing else. Do not run the package manager or a build: tell the developer to run `then`, which installs the new version. `current` lists the SDKs already at their newest release, and `unchecked` those whose upgrade cannot be planned, with the reason. Then run `tenjin doctor --json`: its `sdk.version` finding can stay until the developer has run `then`.
+
 ## Reading the account's data
 
 Outside an integration, the CLI also reads the signed-in organization's data, one API read per command: `tenjin campaigns list`, `tenjin channels list`, `tenjin ad-accounts list`, `tenjin apps events list --app <id>`, `tenjin apps callbacks list --app <id>`, `tenjin reports spend --from <date> --to <date>` (and `ad-revenue`, `skadnetwork`, `skan`), `tenjin saved-reports run <id>`. With `--json` each prints the API's answer as it is; lists are one page unless `--all` is given, and reports are every row. The same groups have commands that change the account (`create`, `update`, `delete`): run one only when the person asked for that change, show them the command first, and use `--dry-run` to show the request and body it would send.

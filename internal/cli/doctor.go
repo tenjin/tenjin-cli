@@ -202,6 +202,9 @@ otherwise. With --strict, warnings count too.`,
 					return err
 				}
 			}
+			if !fixed && hasFinding(report, "sdk.version") && !agent.InsideAgent(env.getenv) {
+				fixer.say("\nTo upgrade the Tenjin SDK, with your coding agent or by hand: %s", fixer.style.Accent("tenjin sdk upgrade"))
+			}
 			status := reportStatus(report.Summary, strict)
 			if status != nil && !offered && len(fixer.agentItems(doctorWork(report))) > 0 {
 				return clierr.From(status).WithHint("Run 'tenjin setup' to fix these step by step, or 'tenjin doctor --agent claude' (or codex) to have your coding agent fix them.")
@@ -220,6 +223,17 @@ otherwise. With --strict, warnings count too.`,
 	addFeaturesFlag(cmd, &features, "check")
 	addAnalyticsFlags(cmd, &analytics)
 	return cmd
+}
+
+// hasFinding reports whether the report holds a finding with this ID that is
+// not a pass.
+func hasFinding(report *verify.Report, id string) bool {
+	for _, f := range report.Findings {
+		if f.ID == id && f.Severity != verify.Pass {
+			return true
+		}
+	}
+	return false
 }
 
 // doctorWork is what a coding agent can fix of a doctor's report: what setup

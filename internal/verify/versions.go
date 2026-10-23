@@ -71,13 +71,40 @@ func (r *runner) checkVersion(i project.Integration, platform project.Platform) 
 	if latest == "" || !olderThan(i.Version, latest) {
 		return
 	}
-	r.add(Finding{
+	f := Finding{
 		ID: "sdk.version", Severity: Warning, Platform: platform,
 		Title:  "The Tenjin SDK is at " + i.Version + "; the current release is " + latest,
 		Detail: "Later releases carry fixes for attribution and for store policy changes.",
 		File:   i.Source,
 		Fix:    "Update " + i.Package + " to " + latest + ".",
-	})
+	}
+	if changes, code := majorChangesBetween(i.Package, i.Version, latest); changes != "" {
+		f.Detail = latest + " is a new major version. " + changes
+		if code {
+			f.Fix = "Update " + i.Package + " to " + latest + ", and change the app's code as said above where it uses what changed."
+		}
+	}
+	r.add(f)
+}
+
+// majorChangesBetween says what the major versions after declared, up to
+// latest, change for the app's code, and whether its code may need changes.
+func majorChangesBetween(pkg, declared, latest string) (string, bool) {
+	prefix, _ := packageOf(pkg)
+	have, ok := parseVersion(baseVersion(declared))
+	want, okLatest := parseVersion(latest)
+	if !ok || !okLatest {
+		return "", false
+	}
+	var texts []string
+	code := false
+	for m := have[0] + 1; m <= want[0]; m++ {
+		if c, ok := majorChanges[prefix][m]; ok {
+			texts = append(texts, c.text)
+			code = code || c.code
+		}
+	}
+	return strings.Join(texts, " "), code
 }
 
 // olderThan reports whether a declared version is certainly older than

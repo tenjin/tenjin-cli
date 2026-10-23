@@ -188,8 +188,10 @@ type setup struct {
 	// inProject marks the builds whose key is already written in the
 	// project and accepted by Tenjin.
 	inProject map[string]bool
-	// helper is the coding agent the user agreed to use, if any.
+	// helper is the coding agent the user agreed to use, if any, and job
+	// what it is offered for; the zero job is the integration.
 	helper *agent.Agent
+	job    agentJob
 	// pagesShown is set once the dashboard's test-device pages are named.
 	pagesShown bool
 }
@@ -642,8 +644,21 @@ func (s *setup) integrate(p *project.Project) error {
 	return s.runAgent(p, report)
 }
 
-// chooseAgent decides whether a coding agent does the integration. It
-// returns nil when the developer will do it by hand.
+// agentJob is what a coding agent is offered for: work, as in "can do the
+// integration for you", and ask, the question's verb.
+type agentJob struct{ work, ask string }
+
+var integrationJob = agentJob{work: "the integration", ask: "Integrate the Tenjin SDK"}
+
+func (s *setup) agentJob() agentJob {
+	if s.job.work == "" {
+		return integrationJob
+	}
+	return s.job
+}
+
+// chooseAgent decides whether a coding agent does the job. It returns nil
+// when the developer will do it by hand.
 func (s *setup) chooseAgent() (*agent.Agent, error) {
 	if s.agentFlag == "none" {
 		return nil, nil
@@ -671,12 +686,12 @@ func (s *setup) chooseAgent() (*agent.Agent, error) {
 	}
 
 	a := &installed[0]
-	s.say("\n%s is installed on this machine and can do the integration for you:", a.Name)
+	s.say("\n%s is installed on this machine and can do %s for you:", a.Name, s.agentJob().work)
 	s.say("  - it works in this project only, under your own %s account;", a.Name)
 	s.say("  - %s;", a.Limits())
 	s.say("  - it %s;", agentCost("your "+a.Name+" account"))
 	s.say("  - the next step checks its work.")
-	ok, err := s.env.confirm(s.out, fmt.Sprintf("\nIntegrate the Tenjin SDK using %s?", a.Name), true)
+	ok, err := s.env.confirm(s.out, fmt.Sprintf("\n%s using %s?", s.agentJob().ask, a.Name), true)
 	if err != nil || !ok {
 		return nil, err
 	}
@@ -696,8 +711,8 @@ func (s *setup) pickAgent(installed []agent.Agent) (*agent.Agent, error) {
 	for i, a := range installed {
 		names[i] = a.Name
 	}
-	s.say("\n%s are installed on this machine. Either can do the integration for you, in this project only and under your own account:",
-		strings.Join(names, " and "))
+	s.say("\n%s are installed on this machine. Either can do %s for you, in this project only and under your own account:",
+		strings.Join(names, " and "), s.agentJob().work)
 	for i, a := range installed {
 		s.say("  %d) %s: %s", i+1, s.style.Bold(a.Name), a.Limits())
 	}
@@ -707,7 +722,7 @@ func (s *setup) pickAgent(installed []agent.Agent) (*agent.Agent, error) {
 	for i, a := range installed {
 		options[i] = fmt.Sprintf("%s (%d)", a.Name, i+1)
 	}
-	answer, err := s.env.ask(s.out, fmt.Sprintf("\nIntegrate the Tenjin SDK using %s, or neither (n)? [1]", strings.Join(options, ", ")))
+	answer, err := s.env.ask(s.out, fmt.Sprintf("\n%s using %s, or neither (n)? [1]", s.agentJob().ask, strings.Join(options, ", ")))
 	if err != nil {
 		return nil, err
 	}
@@ -787,6 +802,14 @@ func (s *setup) manualGuide(report *verify.Report) {
 // did. A failure here is not fatal: the check that follows is what decides
 // whether the integration works. Only Ctrl-C stops setup here.
 func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
+	return s.runAgentOn(p, integrationPrompt(p, report, s.inProject, s.features, s.analytics, s.helper.DoctorCommand()), "is working on the integration", true)
+}
+
+// runAgentOn starts the coding agent on a task and reports what it did.
+// working follows the agent's name while it works. With keys, the keys this
+// run wrote are taken out of the project while it works and written again
+// after it.
+func (s *setup) runAgentOn(p *project.Project, prompt, working string, keys bool) error {
 	if s.refuseAgent() {
 		return nil
 	}
@@ -803,9 +826,9 @@ func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
 	if exe, err := s.env.executable(); err == nil {
 		toolDir = filepath.Dir(exe)
 	}
-	task := agent.Task{Dir: p.Root, Prompt: integrationPrompt(p, report, s.inProject, s.features, s.analytics, s.helper.DoctorCommand()), ToolDir: toolDir}
+	task := agent.Task{Dir: p.Root, Prompt: prompt, ToolDir: toolDir}
 
-	s.say("\n%s is working on the integration. This can take a few minutes.", s.helper.Name)
+	s.say("\n%s %s. This can take a few minutes.", s.helper.Name, working)
 	before := project.Fingerprint(p.Root)
 	// The agent is never given a key, but it can come across one already in
 	// the project; anything shaped like a key is masked, in its progress
@@ -844,8 +867,10 @@ func (s *setup) runAgent(p *project.Project, report *verify.Report) error {
 	// The agent left placeholders where the keys go; the keys go in now,
 	// also after Ctrl-C, so a stopped run does not leave the project without
 	// the keys it had.
-	if err := s.fillKeys(p, false); err != nil {
-		s.say("%s %s", s.style.Yellow("!"), render.Clean(err.Error()))
+	if keys {
+		if err := s.fillKeys(p, false); err != nil {
+			s.say("%s %s", s.style.Yellow("!"), render.Clean(err.Error()))
+		}
 	}
 	return s.env.interrupted()
 }

@@ -514,3 +514,42 @@ class Ads : MaxAdRevenueListener {
 		t.Logf("%s:\n%s", f, raw)
 	}
 }
+
+// The upgrade across the Android SDK's major version, made by the real
+// Claude Code: the declaration moves to 2.0.0, and an app that uses nothing
+// the new version changed keeps its code as it was.
+//
+//	make build && go test -tags realagent -run RealClaudeCodeUpgrade -v ./internal/cli
+func TestSDKUpgradeWithTheRealClaudeCodeUpgrade(t *testing.T) {
+	bin, err := filepath.Abs("../../bin/tenjin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(bin); err != nil {
+		t.Skip("run `make build` first: the agent needs the tenjin binary to run the doctor")
+	}
+	for _, name := range []string{"CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"} {
+		if value, ok := os.LookupEnv(name); ok {
+			_ = os.Unsetenv(name)
+			t.Cleanup(func() { _ = os.Setenv(name, value) })
+		}
+	}
+	h := newHarness(t)
+	isolate(t, h)
+	h.env.lookPath = exec.LookPath
+	h.env.executable = func() (string, error) { return bin, nil }
+	dir := oldAndroid(t)
+	before := project.Fingerprint(dir)
+
+	code, stdout, stderr := h.run("sdk", "upgrade", dir, "--agent", "claude", "--offline")
+	t.Logf("exit %d\n%s\n%s", code, stdout, stderr)
+	if code != 0 {
+		t.Fatalf("sdk upgrade with Claude Code ended with exit %d", code)
+	}
+	if !strings.Contains(stdout, "✓ "+gradleFile+" allows com.tenjin:android-sdk 2.0.0") {
+		t.Error("the declaration was not moved to 2.0.0")
+	}
+	if changed := project.Changed(before, project.Fingerprint(dir)); len(changed) != 1 || changed[0] != gradleFile {
+		t.Errorf("changed = %q, want only %s", changed, gradleFile)
+	}
+}

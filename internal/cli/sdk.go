@@ -16,8 +16,8 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/verify"
 )
 
-func newSDKCmd(opts *options) *cobra.Command {
-	return group("sdk", "The Tenjin SDK's integration guide", newSDKGuideCmd(opts))
+func newSDKCmd(opts *options, env *environment) *cobra.Command {
+	return group("sdk", "The Tenjin SDK's integration guide, and its upgrade", newSDKGuideCmd(opts), newSDKUpgradeCmd(opts, env))
 }
 
 // sdkGuide is what `sdk guide --json` reports.
