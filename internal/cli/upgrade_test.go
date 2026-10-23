@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -225,6 +226,9 @@ func TestSDKUpgradeOfAnSDKNewerThanTheCLIKnows(t *testing.T) {
 // What installs the new version names the Podfile's folder, which comes
 // from the project: it reaches the terminal without control characters.
 func TestSDKUpgradeCleansTheInstallCommand(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not allow control characters in a folder's name")
+	}
 	files := testproject.Files{}
 	for name, content := range testproject.IOSNative() {
 		files["ios\x1b]0;owned\x07/"+name] = content
