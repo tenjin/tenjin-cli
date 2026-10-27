@@ -379,6 +379,15 @@ func TestReadIOSSimulator(t *testing.T) {
 		t.Errorf("read with %q", read)
 	}
 
+	// A UDID typed in lower case is the same simulator.
+	run, calls = fake([]byte(`{"devices":{"com.apple.CoreSimulator.SimRuntime.iOS-18-5":[{"udid":"9F1C2A3B-0000-0000-0000-00000000ABCD","name":"iPhone 16","state":"Booted"}]}}`))
+	if _, err := ReadIOSSimulator(context.Background(), run, "xcrun", "9f1c2a3b-0000-0000-0000-00000000abcd"); err != nil {
+		t.Fatalf("lower case UDID: %v", err)
+	}
+	if read := strings.Join((*calls)[1], " "); !strings.Contains(read, "spawn 9F1C2A3B-0000-0000-0000-00000000ABCD log") {
+		t.Errorf("read with %q", read)
+	}
+
 	for _, c := range []struct {
 		name, udid, reason string
 		list               []byte

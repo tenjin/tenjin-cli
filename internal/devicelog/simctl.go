@@ -62,11 +62,13 @@ func ReadIOSSimulatorSince(ctx context.Context, run Runner, xcrun, udid string, 
 		}
 	case udid == "":
 		udid = booted[0].UDID
-	case !hasSimulator(booted, udid):
+	case simulatorUDID(booted, udid) == "":
 		return nil, &Unavailable{
 			Reason: "No running iOS simulator has the UDID " + udid,
 			Fix:    "Running: " + names() + ".",
 		}
+	default:
+		udid = simulatorUDID(booted, udid)
 	}
 
 	window := []string{"--last", iosLogWindow}
@@ -107,11 +109,13 @@ func bootedSimulators(out []byte) ([]Simulator, error) {
 	return booted, nil
 }
 
-func hasSimulator(booted []Simulator, udid string) bool {
+// simulatorUDID is the booted simulator's UDID as simctl writes it, matched
+// in any case, or "".
+func simulatorUDID(booted []Simulator, udid string) string {
 	for _, s := range booted {
-		if s.UDID == udid {
-			return true
+		if strings.EqualFold(s.UDID, udid) {
+			return s.UDID
 		}
 	}
-	return false
+	return ""
 }
