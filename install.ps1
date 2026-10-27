@@ -129,7 +129,15 @@
 		if (($env:Path -split ';') -notcontains $dir) { $env:Path = "$env:Path;$dir" }
 
 		Write-Host "Installed $(& $target version) in $dir"
-		Write-Host 'Start with: tenjin setup'
+		# An older copy in a folder of its own, such as one TENJIN_INSTALL_DIR
+		# named before, may come first on PATH and run instead of this one.
+		$found = Get-Command tenjin -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+		if ($found -and -not [string]::Equals($found.Source, $target, [StringComparison]::OrdinalIgnoreCase)) {
+			Write-Host "Another copy of the Tenjin CLI is at $($found.Source), and runs instead of this one. Remove it, or install over it with TENJIN_INSTALL_DIR set to its folder."
+			Write-Host "Start with: $target setup"
+		} else {
+			Write-Host 'Start with: tenjin setup'
+		}
 	} finally {
 		Remove-Item -Path $tmp -Recurse -Force -ErrorAction SilentlyContinue
 	}
