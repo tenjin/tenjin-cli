@@ -88,6 +88,16 @@ func TestSetKeysInScenesAndLinks(t *testing.T) {
 	if raw, _ := os.ReadFile(outside); strings.Contains(string(raw), goodKey) {
 		t.Error("the key was written through the link")
 	}
+
+	// A file name can carry escape codes; they never reach the terminal.
+	named := filepath.Join(filepath.Dir(link), "a\x1b]0;title\x07.kt")
+	if err := os.Symlink(outside, named); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, stderr = h.run("project", "set-keys", dir, "--offline", "--sdk-key", "android="+goodKey)
+	if code != 9 || strings.ContainsAny(stdout+stderr, "\x1b\x07") || !strings.Contains(stdout, "a]0;title.kt") {
+		t.Errorf("exit = %d, stderr = %q\n%q", code, stderr, stdout)
+	}
 }
 
 // A real key with a stray space inside its quotes is not a placeholder, and

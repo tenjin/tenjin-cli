@@ -533,20 +533,21 @@ func writeFilled(w io.Writer, style render.Styler, p *project.Project, spots []k
 		_, _ = fmt.Fprintf(w, "No SDK key placeholders in %s.\n", render.Clean(p.Root))
 		return
 	}
+	// Names and paths come from the project, which may hold escape codes.
 	for _, s := range r.Filled {
-		_, _ = fmt.Fprintf(w, "%s Wrote %s at %s:%d\n", style.Green("✓"), keyNoun(p, s), render.Clean(s.File), s.Line)
+		_, _ = fmt.Fprintf(w, "%s Wrote %s at %s:%d\n", style.Green("✓"), render.Clean(keyNoun(p, s)), render.Clean(s.File), s.Line)
 	}
 	for _, id := range r.Missing {
-		_, _ = fmt.Fprintf(w, "%s The placeholder of %s is left: no key was given for it.\n", style.Yellow("!"), titleOf(p, id))
+		_, _ = fmt.Fprintf(w, "%s The placeholder of %s is left: no key was given for it.\n", style.Yellow("!"), render.Clean(titleOf(p, id)))
 	}
 	for _, id := range r.Refused {
-		_, _ = fmt.Fprintf(w, "%s The placeholder of %s is left: Tenjin refused the key.\n", style.Red("✗"), titleOf(p, id))
+		_, _ = fmt.Fprintf(w, "%s The placeholder of %s is left: Tenjin refused the key.\n", style.Red("✗"), render.Clean(titleOf(p, id)))
 	}
 	for _, ph := range r.Unknown {
 		_, _ = fmt.Fprintf(w, "%s %s names no build of this project, so nothing was written for it. tenjin project detect lists the builds.\n", style.Red("✗"), render.Clean(ph))
 	}
 	for _, s := range r.Blocked {
-		_, _ = fmt.Fprintf(w, "%s %s at %s:%d is left: %s. Write the key there yourself.\n", style.Red("✗"), s.Placeholder, s.File, s.Line, s.Blocked)
+		_, _ = fmt.Fprintf(w, "%s %s at %s:%d is left: %s. Write the key there yourself.\n", style.Red("✗"), render.Clean(s.Placeholder), render.Clean(s.File), s.Line, render.Clean(s.Blocked))
 	}
 }
 
