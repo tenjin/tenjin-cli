@@ -77,7 +77,9 @@ var lookingAround = regexp.MustCompile(`^(?:cat|sed -n|nl|head|tail|ls|find|rg|g
 // the turn has ended, well or badly. An error event alone is not the end:
 // Codex sends one when it reconnects, and carries on.
 func readCodexEvents(r io.Reader, dir string, progress func(Action)) (result Result, finished bool, err error) {
-	var errorEvent, failure string
+	// lastError is the last error event, and reason the last one that is
+	// not Codex saying it reconnects: that one says why a turn failed.
+	var lastError, reason, failure string
 	failed := false
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 1<<20), 16<<20)
@@ -113,10 +115,11 @@ func readCodexEvents(r io.Reader, dir string, progress func(Action)) (result Res
 		case "turn.failed":
 			finished, failed = true, true
 			// The error event before it usually says more.
-			failure = firstNonEmpty(errorEvent, e.Error.Message, e.Message)
+			failure = firstNonEmpty(reason, e.Error.Message, e.Message, lastError)
 		case "error":
-			if errorEvent == "" {
-				errorEvent = firstNonEmpty(e.Error.Message, e.Message)
+			lastError = firstNonEmpty(e.Error.Message, e.Message)
+			if !strings.HasPrefix(lastError, "Reconnecting") {
+				reason = lastError
 			}
 		}
 	}
@@ -125,8 +128,8 @@ func readCodexEvents(r io.Reader, dir string, progress func(Action)) (result Res
 		return result, finished, scanner.Err()
 	case failed:
 		return result, true, errors.New(codexFailure(failure))
-	case !finished && errorEvent != "":
-		return result, true, errors.New(codexFailure(errorEvent))
+	case !finished && lastError != "":
+		return result, true, errors.New(codexFailure(firstNonEmpty(reason, lastError)))
 	}
 	return result, finished, nil
 }

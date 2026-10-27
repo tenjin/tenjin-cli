@@ -157,6 +157,27 @@ func TestReadCodexEventsReportsAFailure(t *testing.T) {
 	}
 }
 
+// Codex says it reconnects before it fails: the reason is what comes after,
+// whether the turn then fails or the output just ends.
+func TestReadCodexEventsReportsWhyNotThatItReconnected(t *testing.T) {
+	errs := `{"type":"error","message":"Reconnecting... 1/5"}
+{"type":"error","message":"Reconnecting... 5/5"}
+{"type":"error","message":"You've hit your usage limit."}
+`
+	for _, stream := range []string{errs + `{"type":"turn.failed","error":{"message":"You've hit your usage limit."}}` + "\n", errs} {
+		if _, _, err := readCodexEvents(strings.NewReader(stream), "/work", nil); err == nil || err.Error() != "You've hit your usage limit." {
+			t.Errorf("err = %v", err)
+		}
+	}
+	// With only reconnects before it, the turn's own message is the reason.
+	stream := `{"type":"error","message":"Reconnecting... 5/5"}
+{"type":"turn.failed","error":{"message":"stream disconnected"}}
+`
+	if _, _, err := readCodexEvents(strings.NewReader(stream), "/work", nil); err == nil || err.Error() != "stream disconnected" {
+		t.Errorf("err = %v", err)
+	}
+}
+
 func TestFindBothAgentsInTheOrderTheyAreOffered(t *testing.T) {
 	found := Find(func(name string) (string, error) { return "/opt/bin/" + name, nil })
 	if len(found) != 2 || found[0].ID != "claude" || found[1].ID != "codex" {
