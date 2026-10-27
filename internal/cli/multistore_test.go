@@ -350,3 +350,19 @@ func TestABuildLeftOutKeepsItsPlaceholder(t *testing.T) {
 		t.Errorf("exit = %d:\n%s", code, stdout)
 	}
 }
+
+// A placeholder in one build does not make doctor's agent overwrite the
+// working key of another.
+func TestDoctorsAgentKeepsTheOtherStoresKey(t *testing.T) {
+	base := testproject.AndroidMultiStore()
+	build := strings.Replace(base[flavorBuild], testproject.AmazonKey, "__TENJIN_ANDROID_SDK_KEY_AMAZON__", 1)
+	const manifest = "app/src/main/AndroidManifest.xml"
+	withoutInternet := strings.Replace(base[manifest], `    <uses-permission android:name="android.permission.INTERNET" />`+"\n", "", 1)
+	h, dir := multiStore(t, base.With(testproject.Files{flavorBuild: build, manifest: withoutInternet}))
+	agent := h.installAgent()
+	h.run("doctor", dir, "--offline", "--agent", "claude")
+	prompt := agent.read("prompt")
+	if !strings.Contains(prompt, "variants play, bundle ID com.example.sample, Google Play: already in the project: leave it as it is") {
+		t.Errorf("the agent is not told to keep the Play key:\n%s", prompt)
+	}
+}

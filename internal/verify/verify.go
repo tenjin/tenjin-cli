@@ -156,17 +156,27 @@ type runner struct {
 
 // dropUncheckedBesidePlaceholders leaves out "the key was not checked"
 // where a finding already says the key is a placeholder, or has spaces in
-// it: there is no key to check, and that finding says what to do.
+// it: there is no key to check, and that finding says what to do. Only for
+// the builds that finding is about, and never where a real key was found:
+// another build's key must stay in the report.
 func (r *runner) dropUncheckedBesidePlaceholders() {
-	placeholder := map[project.Platform]bool{}
+	var placeholders []Finding
 	for _, f := range r.report.Findings {
 		if f.ID == "sdk.key.placeholder" || f.ID == "sdk.key.unfilled" || f.ID == "sdk.key.whitespace" {
-			placeholder[f.Platform] = true
+			placeholders = append(placeholders, f)
 		}
+	}
+	about := func(u Finding) bool {
+		for _, p := range placeholders {
+			if (p.Platform == "" || p.Platform == u.Platform) && (p.Build == "" || p.Build == u.Build) {
+				return true
+			}
+		}
+		return false
 	}
 	kept := r.report.Findings[:0]
 	for _, f := range r.report.Findings {
-		if f.ID == "key.unchecked" && (placeholder[f.Platform] || placeholder[""]) {
+		if f.ID == "key.unchecked" && f.File == "" && about(f) {
 			continue
 		}
 		kept = append(kept, f)

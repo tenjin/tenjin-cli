@@ -114,3 +114,40 @@ func TestAStoreSetInCode(t *testing.T) {
 		t.Errorf("finding = %+v", f)
 	}
 }
+
+// A placeholder in one build leaves the other builds' keys in the report:
+// doctor reads them there to know which keys an agent must not touch.
+func TestAPlaceholderInOneBuildKeepsTheOthersKeys(t *testing.T) {
+	base := testproject.AndroidMultiStore()
+	const build = "app/build.gradle.kts"
+	r := run(t, base.With(testproject.Files{
+		build: strings.Replace(base[build], testproject.AmazonKey, "__TENJIN_ANDROID_SDK_KEY_AMAZON__", 1),
+	}), verify.Options{Given: verify.GivenKeys{PreferSource: true}})
+	var play bool
+	for _, f := range r.Findings {
+		if f.ID == "key.unchecked" && f.Build == "android" && f.File == build {
+			play = true
+		}
+		if f.ID == "key.unchecked" && f.Build == "android:amazon" {
+			t.Errorf("the Amazon build's placeholder is reported as an unchecked key: %+v", f)
+		}
+	}
+	if !play {
+		t.Errorf("the Play build's key is missing from the report: %s", ids(r))
+	}
+}
+
+// In shared code, a placeholder for one platform does not hide the real
+// key beside it.
+func TestASharedPlaceholderKeepsTheRealKey(t *testing.T) {
+	base := testproject.Flutter()
+	const main = "lib/main.dart"
+	r := run(t, base.With(testproject.Files{
+		main: strings.Replace(base[main], "  TenjinSDK.instance.initialize(sdkKey: '"+testproject.Key+"');",
+			"  if (Platform.isIOS) {\n    TenjinSDK.instance.initialize(sdkKey: '"+testproject.Key+"');\n  } else {\n    TenjinSDK.instance.initialize(sdkKey: 'YOUR_SDK_KEY');\n  }", 1),
+	}), verify.Options{})
+	expect(t, r, "sdk.key.placeholder", "", verify.Error)
+	if f := find(r, "key.unchecked", project.IOS); f == nil || f.File != main {
+		t.Errorf("the iOS key is missing from the report: %s", ids(r))
+	}
+}
