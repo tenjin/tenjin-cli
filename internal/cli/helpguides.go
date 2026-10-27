@@ -39,10 +39,14 @@ The same, step by step:
       unity)
   tenjin doctor --offline
       what is missing, each with a file, a line and a fix
-  tenjin doctor
-      the same, and each SDK key checked with Tenjin
+  tenjin login
+      sign in, for the steps that need your Tenjin account
+  tenjin apps ensure --bundle-id <bundle-id> --platform android
+      find the build's Tenjin app, or create it (one per bundle ID and store)
   tenjin project set-keys
       write the SDK keys where placeholders were left for them
+  tenjin doctor
+      the same checks, and each SDK key checked with Tenjin
   tenjin doctor --device
       after launching a debug build: what Tenjin answered
 
