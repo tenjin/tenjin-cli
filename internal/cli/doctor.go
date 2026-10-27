@@ -689,8 +689,8 @@ func writeReport(w io.Writer, report *verify.Report, offline bool) error {
 		if p.Library != nil && section.platform == "" && !section.device {
 			title = "Library"
 		}
-		if t := p.Target(section.platform); t != nil && t.BundleID != "" && !section.device {
-			title += " · " + t.BundleID
+		if t := p.Target(section.platform); t != nil && t.AppBundleID() != "" && !section.device {
+			title += " · " + t.AppBundleID()
 		}
 		fmt.Fprintf(&b, "\n%s\n", style.Heading(title))
 		// What needs doing comes first, the worst of it at the top, and what

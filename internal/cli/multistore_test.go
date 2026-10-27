@@ -400,4 +400,11 @@ func TestSetupFillsTheKeyOfAModulesOnlyFlavor(t *testing.T) {
 	if raw, _ := os.ReadFile(filepath.Join(dir, activity)); !strings.Contains(string(raw), testproject.Key) {
 		t.Errorf("the placeholder was not filled:\n%s", raw)
 	}
+	// What is shown is the bundle ID the build ships with.
+	if _, stdout, _ := h.run("doctor", dir, "--offline"); !strings.Contains(stdout, "Android · com.example.sample.prod") {
+		t.Errorf("doctor:\n%s", stdout)
+	}
+	if _, stdout, _ := h.run("project", "detect", dir); !strings.Contains(stdout, "com.example.sample.prod") {
+		t.Errorf("project detect:\n%s", stdout)
+	}
 }

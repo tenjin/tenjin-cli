@@ -1246,7 +1246,7 @@ func integrationPrompt(p *project.Project, report *verify.Report, inProject map[
 			if len(t.Builds) == 1 && inProject[t.Builds[0].ID] {
 				key = "already in the project: leave it as it is"
 			}
-			fmt.Fprintf(&b, "- %s, bundle ID %s, SDK key: %s\n", t.Platform, taskText(t.BundleID), key)
+			fmt.Fprintf(&b, "- %s, bundle ID %s, SDK key: %s\n", t.Platform, taskText(t.AppBundleID()), key)
 			continue
 		}
 		several = true

@@ -117,7 +117,7 @@ func writeProject(w io.Writer, p *project.Project) error {
 		b.WriteString("\n")
 		rows := make([][]string, 0, len(p.Targets))
 		for _, t := range p.Targets {
-			id := t.BundleID
+			id := t.AppBundleID()
 			if id == "" {
 				id = "(not found)"
 			}

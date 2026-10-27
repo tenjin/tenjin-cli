@@ -93,6 +93,16 @@ func (b Build) Main() bool { return !strings.Contains(b.ID, ":") }
 
 // SeveralBuilds reports whether builds of this target are told apart: it
 // ships more than one, or the one left is not the platform's main build.
+// AppBundleID is the bundle ID the target's app ships with: its only
+// build's, which a flavor or an applicationIdSuffix can make differ from
+// BundleID, the one its build file declares.
+func (t *Target) AppBundleID() string {
+	if len(t.Builds) == 1 {
+		return t.Builds[0].BundleID
+	}
+	return t.BundleID
+}
+
 func (t *Target) SeveralBuilds() bool {
 	return len(t.Builds) > 1 || (len(t.Builds) == 1 && !t.Builds[0].Main())
 }
@@ -311,6 +321,10 @@ func (d *detector) androidBuilds(t *Target, content, flavorsBlock, rest string) 
 		}
 		builds[i].ID = id
 		builds[i].SDKKeyPlaceholder = Placeholder(id)
+	}
+	if builds == nil {
+		// Flavors whose IDs could not be read: not the default build either.
+		return []Build{}
 	}
 	return builds
 }

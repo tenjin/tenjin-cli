@@ -402,3 +402,29 @@ func TestTheSDKVersionThroughCatalogsAndVariables(t *testing.T) {
 		}
 	}
 }
+
+// Flavors whose application IDs are all made at build time give no build,
+// not the default one, which no flavor ships.
+func TestFlavorsWithNoIDThatCanBeReadGiveNoBuild(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	flavors := strings.Replace(base[build], "    buildTypes {", `    flavorDimensions += "client"
+    productFlavors {
+        create("acme") {
+            dimension = "client"
+            applicationId = "com.${clientDomain}.acme"
+        }
+        create("globex") {
+            dimension = "client"
+            applicationId = "com.${clientDomain}.globex"
+        }
+    }
+    buildTypes {`, 1)
+	p := detect(t, base.With(testproject.Files{build: flavors}))
+	if got := buildList(t, p, project.Android); got != "" {
+		t.Errorf("builds:\n%s", got)
+	}
+	if !strings.Contains(strings.Join(p.Notes, "\n"), "Could not read the application IDs of the product flavors") {
+		t.Errorf("notes: %q", p.Notes)
+	}
+}

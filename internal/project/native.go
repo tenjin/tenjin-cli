@@ -251,6 +251,8 @@ func (d *detector) androidTarget(rel string) (Target, bool) {
 		d.note("This Android module ships %d builds that are separate apps in Tenjin, each with its own SDK key: %s.", len(target.Builds), strings.Join(list, "; "))
 	}
 	switch {
+	case info.Flavors && len(target.Builds) == 0 && Resolved(target.BundleID):
+		d.note("Could not read the application IDs of the product flavors in %s: they are made when the app builds. Create each flavor's Tenjin app with tenjin apps ensure, and pass its key with --sdk-key.", buildFile)
 	case len(unshipped) > 0:
 		d.note("Other Android builds of this app use the application ID %s. Tenjin treats each as a different app from %s, with its own SDK key.",
 			strings.Join(unshipped, ", "), target.BundleID)
