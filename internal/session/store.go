@@ -148,8 +148,9 @@ func (s *systemStore) Load(environment string) (*Credentials, error) {
 		raw, keychainErr = s.keychainGet(environment)
 		if errors.Is(keychainErr, errKeychainTimeout) {
 			// A sign-in may be in there: saying there is none would have
-			// logout leave it unrevoked.
-			return nil, clierr.Wrap(clierr.Internal, keychainErr, "the system keychain did not answer, so the saved sign-in could not be read").
+			// logout leave it unrevoked. No session can be used, so a
+			// script sees the exit status of not being signed in.
+			return nil, clierr.Wrap(clierr.NotSignedIn, keychainErr, "the system keychain did not answer, so the saved sign-in could not be read").
 				WithHint("Unlock the keychain and run this again: a locked keyring can wait on a password prompt nobody sees, as over SSH. Or set TENJIN_API_TOKEN to a token from the Tenjin dashboard.")
 		}
 		if keychainErr != nil {

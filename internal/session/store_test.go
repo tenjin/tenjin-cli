@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/zalando/go-keyring"
+
+	"github.com/tenjin/tenjin-cli/internal/clierr"
 )
 
 func creds() *Credentials {
@@ -144,6 +146,10 @@ func TestLogoutWhenTheKeychainDoesNotAnswer(t *testing.T) {
 	}
 	if _, err := m.Status(); !KeychainTimedOut(err) {
 		t.Errorf("status: %v", err)
+	}
+	// Scripts see it as not being signed in, the hint saying what to do.
+	if e := clierr.From(err); e.Kind != clierr.NotSignedIn || !strings.Contains(e.Hint, "Unlock the keychain") {
+		t.Errorf("kind = %s, hint = %q", e.Kind, e.Hint)
 	}
 }
 
