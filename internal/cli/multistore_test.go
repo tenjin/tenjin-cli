@@ -408,3 +408,41 @@ func TestSetupFillsTheKeyOfAModulesOnlyFlavor(t *testing.T) {
 		t.Errorf("project detect:\n%s", stdout)
 	}
 }
+
+// In a module with several builds, none of them the main one, the
+// platform's own placeholder names no build: one key cannot serve two apps.
+func TestThePlatformsPlaceholderNamesNoBuildOfSeveral(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	gradle := strings.Replace(base[build], "    buildTypes {", `    flavorDimensions += "tier"
+    productFlavors {
+        create("full") {
+            dimension = "tier"
+            applicationId = "com.example.sample.full"
+        }
+        create("lite") {
+            dimension = "tier"
+            applicationId = "com.example.sample.lite"
+        }
+    }
+    buildTypes {`, 1)
+	dir := testproject.Write(t, base.With(testproject.Files{
+		build:    gradle,
+		activity: strings.Replace(base[activity], testproject.Key, "__TENJIN_ANDROID_SDK_KEY__", 1),
+	}))
+	h := newHarness(t)
+
+	_, stdout, _ := h.run("doctor", dir, "--offline")
+	if !strings.Contains(stdout, "The placeholder __TENJIN_ANDROID_SDK_KEY__ names no build of this project") ||
+		!strings.Contains(stdout, "__TENJIN_ANDROID_SDK_KEY_FULL__ (android:full), __TENJIN_ANDROID_SDK_KEY_LITE__ (android:lite)") {
+		t.Errorf("doctor:\n%s", stdout)
+	}
+	code, _, stderr := h.run("project", "set-keys", dir, "--offline", "--sdk-key", "android="+testproject.Key)
+	if code != 2 || !strings.Contains(stderr, "each with its own key") || !strings.Contains(stderr, "android:full, android:lite") {
+		t.Errorf("set-keys android=: exit = %d, stderr = %q", code, stderr)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(dir, activity)); strings.Contains(string(raw), testproject.Key) {
+		t.Errorf("one key was written for two apps:\n%s", raw)
+	}
+}

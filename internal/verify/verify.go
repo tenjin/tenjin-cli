@@ -367,20 +367,24 @@ func (r *runner) checkUnfilledKeys() {
 			Fix: "Run tenjin setup, which asks for the key and writes it in its place. In a script, tenjin project set-keys --sdk-key " + string(spot.Platform) + "=<key> does the same.",
 		}
 		t, b := r.buildFor(spot.Placeholder)
+		unread := b == nil && spot.Placeholder == keyfill.Placeholder(spot.Platform) && r.buildsUnread(spot.Platform)
 		switch {
-		case b == nil && spot.Placeholder == keyfill.Placeholder(spot.Platform):
-			// A platform's main placeholder, in a project whose bundle ID
+		case unread:
+			// A platform's main placeholder, in a project whose builds
 			// could not be read: still the platform's key.
 		case b == nil:
 			f.Title = "The placeholder " + spot.Placeholder + " names no build of this project"
 			f.Detail = "Each build that is its own app in Tenjin has its own placeholder; tenjin project detect lists them. This one matches none, so no key can be written for it."
 			f.Fix = "Replace it with the placeholder of the build it is for."
+			if list := r.placeholdersOf(spot.Platform); list != "" {
+				f.Fix = "Replace it with the placeholder of the build it is for: " + list + "."
+			}
 		case t.SeveralBuilds():
 			f.Build = b.ID
 			f.Title = "The SDK key of " + buildLabel(*b) + " is still the placeholder " + spot.Placeholder
 			f.Fix = "Run tenjin setup, which asks for the key and writes it in its place. In a script, tenjin project set-keys --sdk-key " + b.ID + "=<key> does the same."
 		}
-		if spot.Blocked != "" && (b != nil || spot.Placeholder == keyfill.Placeholder(spot.Platform)) {
+		if spot.Blocked != "" && (b != nil || unread) {
 			f.Detail = "The Tenjin CLI cannot write the key there: " + spot.Blocked + ". Until the key is written in its place, Tenjin refuses the app's events."
 			f.Fix = "Write the key from the app's page in the Tenjin dashboard over the placeholder at " + spot.File + ":" + strconv.Itoa(spot.Line) + " yourself."
 			if strings.HasPrefix(spot.Blocked, "Unity") {
@@ -391,6 +395,26 @@ func (r *runner) checkUnfilledKeys() {
 		}
 		r.add(f)
 	}
+}
+
+// buildsUnread reports whether the platform's builds could not be read,
+// where its main placeholder still stands for its one key.
+func (r *runner) buildsUnread(platform project.Platform) bool {
+	t := r.p.Target(platform)
+	return t == nil || len(t.Builds) == 0
+}
+
+// placeholdersOf lists the platform's builds' placeholders, for a fix.
+func (r *runner) placeholdersOf(platform project.Platform) string {
+	t := r.p.Target(platform)
+	if t == nil {
+		return ""
+	}
+	var list []string
+	for _, b := range t.Builds {
+		list = append(list, b.SDKKeyPlaceholder+" ("+b.ID+")")
+	}
+	return strings.Join(list, ", ")
 }
 
 // buildFor returns the build whose placeholder this is.

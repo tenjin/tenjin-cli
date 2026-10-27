@@ -99,8 +99,12 @@ func resolveGiven(given *verify.GivenKeys, p *project.Project, getenv func(strin
 		switch {
 		case ok:
 			resolved[canonical] = key
+		case !strings.Contains(id, ":") && buildsUnread(p, project.Platform(id)) && p.Target(project.Platform(id)) != nil:
+			resolved[id] = key // a platform's main build, unread
 		case !strings.Contains(id, ":") && p.Target(project.Platform(id)) != nil:
-			resolved[id] = key // a platform's main build, even when unread
+			// Several builds, none of them the main one: a key for each.
+			return clierr.New(clierr.Usage, "--sdk-key %s=…: this project's %s builds are separate apps in Tenjin, each with its own key", id, platformNames[project.Platform(id)]).
+				WithHint("Give one per build: %s.", strings.Join(names, ", "))
 		case !strings.Contains(id, ":"):
 			return clierr.New(clierr.Usage, "--sdk-key %s=…: this project does not build for %s", id, platformNames[project.Platform(id)]).
 				WithHint("Its builds: %s.", strings.Join(names, ", "))
@@ -455,6 +459,13 @@ type placeholderBuild struct {
 	title  string
 }
 
+// buildsUnread reports whether the platform's builds could not be read, so
+// that its main placeholder and an unqualified key stand for its one app.
+func buildsUnread(p *project.Project, platform project.Platform) bool {
+	t := p.Target(platform)
+	return t == nil || len(t.Builds) == 0
+}
+
 // placeholderBuilds returns the builds whose placeholders are in the
 // project, in project order, and the placeholders that name no build.
 func placeholderBuilds(p *project.Project, spots []keyfill.Spot) (found []placeholderBuild, unknown []string) {
@@ -477,9 +488,10 @@ func placeholderBuilds(p *project.Project, spots []keyfill.Spot) (found []placeh
 			continue
 		}
 		matched[s.Placeholder] = true
-		// A platform's main placeholder in a project whose bundle ID could
-		// not be read: its key can still be written.
-		if s.Placeholder == keyfill.Placeholder(s.Platform) {
+		// A platform's main placeholder in a project whose builds could not
+		// be read: its key can still be written. Where they were, it names
+		// none of them.
+		if s.Placeholder == keyfill.Placeholder(s.Platform) && buildsUnread(p, s.Platform) {
 			id := string(s.Platform)
 			b := project.Build{ID: id, TenjinPlatform: id, SDKKeyPlaceholder: s.Placeholder}
 			found = append(found, placeholderBuild{build: b, title: platformNames[s.Platform]})
