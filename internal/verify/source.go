@@ -336,6 +336,14 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 				File:   k.File, Line: k.Line,
 				Fix: "Remove the spaces from the key's string, so that it holds the key alone.",
 			})
+		case strings.TrimSpace(k.Value) == "":
+			r.add(Finding{
+				ID: "sdk.key.placeholder", Severity: Error, Platform: platform,
+				Title:  "The SDK key is empty",
+				Detail: "The SDK is given an empty string where its key belongs.",
+				File:   k.File, Line: k.Line,
+				Fix: "Write " + r.placeholderFor(platform) + " in the empty string. Then 'tenjin setup' (press Enter at its check), or 'tenjin project set-keys' in your own terminal, gets the app's key from Tenjin, checks it, and writes it there.",
+			})
 		case isPlaceholder(k.Value) && !keyfill.IsPlaceholder(k.Value):
 			r.add(Finding{
 				ID: "sdk.key.placeholder", Severity: Error, Platform: platform,

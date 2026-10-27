@@ -880,3 +880,36 @@ func TestAnOldSDKFromAFolderSaysHowToUpgradeIt(t *testing.T) {
 		t.Errorf("fix = %q", f.Fix)
 	}
 }
+
+// With a build per platform, a key given without its build would be checked
+// against every app: the fix names the build.
+func TestAnUncheckedKeyNamesItsBuild(t *testing.T) {
+	base := testproject.Flutter()
+	files := base.With(testproject.Files{"lib/main.dart": strings.Replace(base["lib/main.dart"], "'"+testproject.Key+"'", "Env.tenjinKey", 1)})
+	r := run(t, files, verify.Options{Keys: &fakeKeys{answers: map[string]track.KeyStatus{}}})
+	for _, platform := range []project.Platform{project.Android, project.IOS} {
+		f := expect(t, r, "key.unchecked", platform, verify.Info)
+		if want := "--sdk-key " + string(platform) + "=<key>"; !strings.Contains(f.Fix, want) {
+			t.Errorf("%s: fix = %q, want %q", platform, f.Fix, want)
+		}
+	}
+}
+
+// An empty key is said to be empty.
+func TestAnEmptyKeyIsSaidToBe(t *testing.T) {
+	base := testproject.Flutter()
+	files := base.With(testproject.Files{"lib/main.dart": strings.Replace(base["lib/main.dart"], "'"+testproject.Key+"'", "''", 1)})
+	r := run(t, files, verify.Options{})
+	var found bool
+	for _, f := range r.Findings {
+		if f.ID == "sdk.key.placeholder" {
+			found = true
+			if f.Title != "The SDK key is empty" || strings.Contains(f.Fix, `Replace ""`) {
+				t.Errorf("finding = %+v", f)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no finding for the empty key: %+v", r.Findings)
+	}
+}

@@ -74,6 +74,10 @@ func (r *runner) checkBuildKey(t *project.Target, b project.Build, src source, m
 		f.Title = "The SDK key was not checked" + label
 		f.Detail = "It is not written as a string literal in the source."
 		f.Fix = "To check it against Tenjin, give the key with --sdk-key <key> or TENJIN_SDK_KEY."
+		if r.builds() > 1 {
+			// One key without a build would be checked against every app.
+			f.Fix = "To check it against Tenjin, give the key with --sdk-key " + b.ID + "=<key> or " + KeyVariable(b.ID) + "."
+		}
 		if multi {
 			f.Detail = "No key Tenjin could check for this build was found in the project."
 			f.Fix = "To check it against Tenjin, give the key with --sdk-key " + b.ID + "=<key> or " + KeyVariable(b.ID) + "."
@@ -146,6 +150,15 @@ func buildLabel(b project.Build) string {
 
 // KeyVariable is the environment variable that gives a build's key:
 // TENJIN_SDK_KEY_ANDROID, TENJIN_SDK_KEY_ANDROID_AMAZON_PROD.
+// builds counts the project's builds, each its own app in Tenjin.
+func (r *runner) builds() int {
+	n := 0
+	for _, t := range r.p.Targets {
+		n += len(t.Builds)
+	}
+	return n
+}
+
 func KeyVariable(build string) string {
 	platform, name, _ := strings.Cut(build, ":")
 	v := "TENJIN_SDK_KEY_" + strings.ToUpper(platform)
