@@ -213,3 +213,22 @@ func TestTheUserIDSetAsAKotlinProperty(t *testing.T) {
 		t.Fatalf("a comparison passed: %+v", f)
 	}
 }
+
+// Without the Tenjin SDK as a dependency, a call of the same name is
+// another library's: it sends nothing to Tenjin.
+func TestNoFeatureIsSentWithoutTheSDK(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	files := base.With(testproject.Files{
+		build:    strings.Replace(base[build], `implementation("com.tenjin:android-sdk:2.0.0")`, "", 1),
+		activity: strings.Replace(base[activity], "        tenjin.connect()\n", "        tenjin.connect()\n        tenjin.eventWithName(\"level\")\n", 1),
+	})
+	chosen := verify.Options{Features: []string{project.FeatureCustomEvents}}
+	r := run(t, files, chosen)
+	if featureFinding(t, r, "sdk.dependency") == nil {
+		t.Fatal("the fixture still declares the SDK")
+	}
+	if f := featureFinding(t, r, "feature.custom_events"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("a call passed without the SDK: %+v", f)
+	}
+}

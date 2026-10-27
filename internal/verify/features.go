@@ -184,6 +184,10 @@ func (r *runner) checkFeatures() {
 		chosen[id] = true
 	}
 	code := r.tenjinCode()
+	if len(r.p.Tenjin) == 0 {
+		// Without the SDK, a call of the same name is another library's.
+		code = &tenjinCode{}
+	}
 	for _, f := range r.p.Features {
 		switch f.ID {
 		case project.FeatureOpens:
