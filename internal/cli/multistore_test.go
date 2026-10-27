@@ -366,3 +366,38 @@ func TestDoctorsAgentKeepsTheOtherStoresKey(t *testing.T) {
 		t.Errorf("the agent is not told to keep the Play key:\n%s", prompt)
 	}
 }
+
+// A module whose only flavor has an application ID of its own still has one
+// build, read as a project without flavors is: the agent's placeholder is
+// filled and a key for android counts for it.
+func TestSetupFillsTheKeyOfAModulesOnlyFlavor(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	gradle := strings.Replace(base[build], "    buildTypes {", `    flavorDimensions += "tier"
+    productFlavors {
+        create("prod") {
+            dimension = "tier"
+            applicationId = "com.example.sample.prod"
+        }
+    }
+    buildTypes {`, 1)
+	dir := testproject.Write(t, base.With(testproject.Files{
+		build:    gradle,
+		activity: strings.Replace(base[activity], testproject.Key, "__TENJIN_ANDROID_SDK_KEY__", 1),
+	}))
+	h := newHarness(t)
+	h.signIn()
+	h.fake.addApp("Sample", "com.example.sample.prod", "android")
+
+	code, stdout, stderr := h.run("setup", dir, "--yes", "--agent", "none", "--features", "none", "--sdk-key", "android="+testproject.Key)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	if strings.Contains(stdout, "android:prod") || strings.Contains(stdout, "Android, prod") {
+		t.Errorf("the only build reads as one of several:\n%s", stdout)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(dir, activity)); !strings.Contains(string(raw), testproject.Key) {
+		t.Errorf("the placeholder was not filled:\n%s", raw)
+	}
+}

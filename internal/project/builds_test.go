@@ -373,7 +373,8 @@ func TestAnUnresolvedBundleIDMakesNoFlavorBuild(t *testing.T) {
 		t.Fatal("the fixture's applicationId was not replaced")
 	}
 	p := detect(t, base.With(testproject.Files{build: flavors}))
-	if got := buildList(t, p, project.Android); got != "android:galaxy com.example.galaxy android galaxy __TENJIN_ANDROID_SDK_KEY_GALAXY__" {
+	// The one build left is the module's only build, so it is plain.
+	if got := buildList(t, p, project.Android); got != "android com.example.galaxy android galaxy __TENJIN_ANDROID_SDK_KEY__" {
 		t.Errorf("builds:\n%s", got)
 	}
 }

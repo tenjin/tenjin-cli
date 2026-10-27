@@ -301,11 +301,12 @@ func (d *detector) androidBuilds(t *Target, content, flavorsBlock, rest string) 
 	}
 
 	// The build with the default bundle ID on Google Play keeps the plain
-	// name; the others are named after their first variant.
+	// name; the others are named after their first variant. A module's only
+	// build is plain whatever its ID, as one without flavors is.
 	mainFound := false
 	for i := range builds {
 		id := string(Android) + ":" + builds[i].Variants[0]
-		if !mainFound && builds[i].BundleID == t.BundleID+defaultSuffix && builds[i].TenjinPlatform == "android" {
+		if len(builds) == 1 || !mainFound && builds[i].BundleID == t.BundleID+defaultSuffix && builds[i].TenjinPlatform == "android" {
 			id, mainFound = string(Android), true
 		}
 		builds[i].ID = id
