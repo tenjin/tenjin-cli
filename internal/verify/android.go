@@ -399,6 +399,9 @@ var setAppStore = regexp.MustCompile(`\bsetAppStore\s*\(`)
 // code, or "".
 func (r *runner) storeSetInCode() string {
 	for _, rel := range project.SourceFiles(r.p.Root, ".", ".kt", ".java", ".dart", ".js", ".jsx", ".ts", ".tsx") {
+		if testSource(rel) {
+			continue
+		}
 		raw, err := os.ReadFile(filepath.Join(r.p.Root, filepath.FromSlash(rel)))
 		if err == nil && setAppStore.Match([]byte(blankComments(project.Text(raw)))) {
 			return rel

@@ -111,7 +111,7 @@ func (r *runner) tenjinCode() *tenjinCode {
 	}
 	r.code = &tenjinCode{}
 	for _, rel := range project.SourceFiles(r.p.Root, ".", featureSourceExts...) {
-		if r.p.Framework == project.Unity && project.UnitySDKFile(rel) {
+		if testSource(rel) || r.p.Framework == project.Unity && project.UnitySDKFile(rel) {
 			continue
 		}
 		path := filepath.Join(r.p.Root, filepath.FromSlash(rel))

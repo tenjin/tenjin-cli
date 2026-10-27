@@ -186,3 +186,14 @@ func TestAutoTrackingNeedsPlayBilling(t *testing.T) {
 		t.Errorf("fix = %q", f.Fix)
 	}
 }
+
+// A test that calls the SDK says nothing about the app.
+func TestATestsCallsAreNotTheApps(t *testing.T) {
+	files := testproject.AndroidNative().With(testproject.Files{
+		"app/src/test/java/com/example/sample/IdCheck.kt": "package com.example.sample\nimport com.tenjin.android.TenjinSDK\nclass IdCheck { fun run(tenjin: TenjinSDK) { tenjin.setCustomerUserId(\"u\") } }\n",
+	})
+	chosen := verify.Options{Features: []string{project.FeatureUserID}}
+	if f := featureFinding(t, run(t, files, chosen), "feature.user_id"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("a test's call passed for the app's: %+v", f)
+	}
+}
