@@ -299,7 +299,7 @@ func task(t *testing.T, files testproject.Files, choice analyticsChoice) string 
 	}
 	features := []string{project.FeatureOpens, project.FeatureCustomEvents, project.FeatureUserID}
 	report := verify.Run(context.Background(), p, verify.Options{Features: features})
-	prompt := integrationPrompt(p, report, map[string]bool{}, features, choice, "tenjin doctor --json")
+	prompt := integrationPrompt(p, report, projectKeys{}, features, choice, "tenjin doctor --json")
 	if strings.Contains(prompt, testproject.Key) {
 		t.Errorf("the task holds the SDK key:\n%s", prompt)
 	}

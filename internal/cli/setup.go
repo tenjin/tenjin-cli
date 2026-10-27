@@ -105,7 +105,7 @@ the rest of the work proposes some).`,
 			s := &setup{cmd: cmd, env: env, args: args, yes: yes, offline: offline, serial: serial, given: given, agentFlag: agentFlag,
 				chosen: builds, wantFeatures: features, analyticsFlags: analytics, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
 				appIDs: map[string]string{}, keyURLs: map[string]string{},
-				keys: map[string]verify.GivenKey{}, inProject: map[string]bool{}}
+				keys: map[string]verify.GivenKey{}, inProject: projectKeys{}}
 			_, _ = io.WriteString(s.out, render.Banner(s.out, tagline))
 			return s.run()
 		},
@@ -185,8 +185,8 @@ type setup struct {
 	filled     []keyfill.Spot
 	filledKeys map[string]string
 	// inProject marks the builds whose key is already written in the
-	// project and accepted by Tenjin.
-	inProject map[string]bool
+	// project and accepted by Tenjin, or not checked.
+	inProject projectKeys
 	// helper is the coding agent the user agreed to use, if any, and job
 	// what it is offered for; the zero job is the integration.
 	helper *agent.Agent
@@ -504,15 +504,21 @@ func (s *setup) buildKey(t *project.Target, b project.Build, report *verify.Repo
 	// A key written in the project that Tenjin accepts settles it.
 	if f := accepted(report, t, b); f != nil && f.File != "" {
 		s.say("  %s %s: the project already holds a key Tenjin accepts (%s)", s.style.Green("✓"), label, render.Clean(f.File))
-		s.inProject[b.ID] = true
+		s.inProject[b.ID] = projectKey{held: true}
 		return nil
 	}
 	// Offline, a key in the project is taken as it is; the launch check, or
-	// a run online, tells whether Tenjin accepts it.
+	// a run online, tells whether Tenjin accepts it. One in code every
+	// platform shares, beside a placeholder, may be another platform's: this
+	// build's key is still to be found.
 	if f := findingFor(report, "key.unchecked", t, b); s.offline && f != nil && f.File != "" {
-		s.say("  %s %s: the project holds a key, not checked (--offline) (%s)", s.style.Dim("i"), label, render.Clean(f.File))
-		s.inProject[b.ID] = true
-		return nil
+		in := keyIn(report, t, f)
+		s.inProject[b.ID] = in
+		if in.held {
+			s.say("  %s %s: the project holds a key, not checked (--offline) (%s)", s.style.Dim("i"), label, render.Clean(f.File))
+			return nil
+		}
+		s.say("  %s %s: the key at %s is in code every platform shares, beside a placeholder, so it may be another platform's", s.style.Dim("i"), label, render.Clean(in.shared))
 	}
 	// A key written in the project that Tenjin refuses stays what the app
 	// sends: setup writes keys only over its own placeholders.
@@ -1234,17 +1240,27 @@ func taskLines(text string) string {
 // never given an SDK key: it writes a placeholder, which the CLI fills. It
 // is given the custom events and the customer user ID chosen, and is told
 // to propose, never invent, those that were not.
-func integrationPrompt(p *project.Project, report *verify.Report, inProject map[string]bool, features []string, analytics analyticsChoice, doctor string) string {
+func integrationPrompt(p *project.Project, report *verify.Report, inProject projectKeys, features []string, analytics analyticsChoice, doctor string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "You are adding the Tenjin SDK to the %s project in the current directory.\n\n", frameworkNames[p.Framework])
 
+	// keyTask is what the agent is told about one build's key.
+	keyTask := func(id, write string) string {
+		switch in := inProject[id]; {
+		case in.held:
+			return "already in the project: leave it as it is"
+		case in.shared != "":
+			return "the key written at " + taskText(in.shared) + " is in code every platform shares, so it may be this platform's or another's. If it is this platform's, leave it as it is; otherwise " + write
+		}
+		return write
+	}
 	b.WriteString("Targets:\n")
 	several := false
 	for _, t := range p.Targets {
 		if !t.SeveralBuilds() {
 			key := "write the string " + keyfill.Placeholder(t.Platform) + " exactly, as the key's value, where the key belongs. The Tenjin CLI writes the real key in its place when you finish"
-			if len(t.Builds) == 1 && inProject[t.Builds[0].ID] {
-				key = "already in the project: leave it as it is"
+			if len(t.Builds) == 1 {
+				key = keyTask(t.Builds[0].ID, key)
 			}
 			fmt.Fprintf(&b, "- %s, bundle ID %s, SDK key: %s\n", t.Platform, taskText(t.AppBundleID()), key)
 			continue
@@ -1252,10 +1268,7 @@ func integrationPrompt(p *project.Project, report *verify.Report, inProject map[
 		several = true
 		fmt.Fprintf(&b, "- %s, with %s that are separate apps in Tenjin, each with its own SDK key:\n", t.Platform, plural(len(t.Builds), "build"))
 		for _, build := range t.Builds {
-			key := "write the string " + build.SDKKeyPlaceholder + " exactly, as the key's value, where this build's key belongs"
-			if inProject[build.ID] {
-				key = "already in the project: leave it as it is"
-			}
+			key := keyTask(build.ID, "write the string "+build.SDKKeyPlaceholder+" exactly, as the key's value, where this build's key belongs")
 			fmt.Fprintf(&b, "  - variants %s, bundle ID %s, %s: %s\n", taskText(strings.Join(build.Variants, ", ")), taskText(build.BundleID), project.StoreName(build.TenjinPlatform), key)
 		}
 	}

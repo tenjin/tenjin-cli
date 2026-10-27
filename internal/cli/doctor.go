@@ -177,7 +177,7 @@ otherwise. With --strict, warnings count too.`,
 			// The fixer writes no key of its own accord: keys are settled
 			// after the agent, by writeGivenKeys.
 			fixer := &setup{cmd: cmd, env: env, args: args, agentFlag: fixWith, offline: offline, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
-				given: given, features: integrate, analyticsFlags: analytics, analytics: defaultAnalytics(p, analytics), inProject: map[string]bool{}, keys: map[string]verify.GivenKey{}}
+				given: given, features: integrate, analyticsFlags: analytics, analytics: defaultAnalytics(p, analytics), inProject: projectKeys{}, keys: map[string]verify.GivenKey{}}
 			fixed, offered, err := fixer.offerFix(p, report)
 			if err != nil {
 				return err
@@ -303,19 +303,55 @@ func (s *setup) offerFix(p *project.Project, report *verify.Report) (fixed, offe
 // whether Tenjin accepts it or not. The agent is told to leave those alone:
 // doctor may hold no key to write back over a placeholder. It reads the
 // files only.
-func keysInProject(ctx context.Context, p *project.Project, given verify.GivenKeys) map[string]bool {
+func keysInProject(ctx context.Context, p *project.Project, given verify.GivenKeys) projectKeys {
 	given.PreferSource = true
 	report := verify.Run(ctx, p, verify.Options{Given: given})
-	in := map[string]bool{}
+	in := projectKeys{}
 	for i := range p.Targets {
 		t := &p.Targets[i]
 		for _, b := range t.Builds {
 			if f := findingFor(report, "key.unchecked", t, b); f != nil && f.File != "" {
-				in[b.ID] = true
+				in[b.ID] = keyIn(report, t, f)
 			}
 		}
 	}
 	return in
+}
+
+// projectKeys says, per build, what SDK key the project already holds.
+type projectKeys map[string]projectKey
+
+// projectKey is a key written in the project for a build. shared is where
+// it is when the code it is in serves every platform and also holds a
+// placeholder: whether the key is this build's or another platform's
+// cannot be told from the code.
+type projectKey struct {
+	held   bool
+	shared string
+}
+
+// keyIn describes the key a build's key.unchecked finding f points at.
+func keyIn(report *verify.Report, t *project.Target, f *verify.Finding) projectKey {
+	otherPlatform := false
+	for _, o := range report.Findings {
+		if o.ID == "key.unchecked" && o.Platform != t.Platform && o.File == f.File && o.Line == f.Line {
+			otherPlatform = true
+		}
+	}
+	placeholder := false
+	for _, o := range report.Findings {
+		if (o.ID == "sdk.key.placeholder" || o.ID == "sdk.key.unfilled" || o.ID == "sdk.key.whitespace") && (o.Platform == "" || o.Platform == t.Platform) {
+			placeholder = true
+		}
+	}
+	if !otherPlatform || !placeholder {
+		return projectKey{held: true}
+	}
+	at := f.File
+	if f.Line > 0 {
+		at = fmt.Sprintf("%s:%d", at, f.Line)
+	}
+	return projectKey{shared: at}
 }
 
 // writeGivenKeys writes, over the placeholders an agent left, the keys given

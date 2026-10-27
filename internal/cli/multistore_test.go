@@ -446,3 +446,49 @@ func TestThePlatformsPlaceholderNamesNoBuildOfSeveral(t *testing.T) {
 		t.Errorf("one key was written for two apps:\n%s", raw)
 	}
 }
+
+// A key in code every platform shares, beside a placeholder, may be either
+// platform's: neither build is told its key is already there, and neither
+// is told to write over it.
+func TestAKeyInSharedCodeBesideAPlaceholderIsNeitherPlatformsForSure(t *testing.T) {
+	base := testproject.Flutter()
+	const main = "lib/main.dart"
+	code := strings.Replace(base[main], "  TenjinSDK.instance.initialize(sdkKey: '"+testproject.Key+"');\n", `  if (Platform.isIOS) {
+    TenjinSDK.instance.initialize(sdkKey: '`+testproject.Key+`');
+  } else {
+    TenjinSDK.instance.initialize(sdkKey: 'YOUR_SDK_KEY');
+  }
+`, 1)
+	dir := testproject.Write(t, base.With(testproject.Files{main: code}))
+	h := newHarness(t)
+	agent := h.installAgent()
+	h.run("doctor", dir, "--offline", "--agent", "claude")
+	prompt := agent.read("prompt")
+	if strings.Contains(prompt, "already in the project: leave it as it is") ||
+		!strings.Contains(prompt, "the key written at lib/main.dart:8 is in code every platform shares") ||
+		!strings.Contains(prompt, "otherwise write the string __TENJIN_ANDROID_SDK_KEY__") {
+		t.Errorf("the agent's task:\n%s", prompt)
+	}
+
+	h.signIn()
+	h.fake.addApp("Sample", "com.example.sample", "android")
+	h.fake.addApp("Sample", "com.example.sample", "ios")
+	_, stdout, _ := h.run("setup", dir, "--offline", "--yes", "--agent", "none", "--features", "none")
+	if strings.Contains(stdout, "the project holds a key, not checked") || !strings.Contains(stdout, "so it may be another platform's") {
+		t.Errorf("setup:\n%s", stdout)
+	}
+}
+
+// A key in shared code with no placeholder beside it is the project's key,
+// as before: the agent leaves it alone.
+func TestAKeyInSharedCodeAloneIsLeftAlone(t *testing.T) {
+	base := testproject.Flutter()
+	const manifest = "android/app/src/main/AndroidManifest.xml"
+	dir := testproject.Write(t, base.With(testproject.Files{manifest: strings.Replace(base[manifest], `    <uses-permission android:name="android.permission.INTERNET" />`+"\n", "", 1)}))
+	h := newHarness(t)
+	agent := h.installAgent()
+	h.run("doctor", dir, "--offline", "--agent", "claude")
+	if prompt := agent.read("prompt"); !strings.Contains(prompt, "android, bundle ID com.example.sample, SDK key: already in the project: leave it as it is") {
+		t.Errorf("the agent's task:\n%s", prompt)
+	}
+}

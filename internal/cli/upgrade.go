@@ -85,7 +85,7 @@ hand. You run the package manager's update afterwards.`,
 				return render.WriteJSON(cmd.OutOrStdout(), plan)
 			}
 			s := &setup{cmd: cmd, env: env, args: args, agentFlag: fixWith, offline: offline, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
-				given: keysInEnvironment(p, env.getenv), job: upgradeJob, inProject: map[string]bool{}, keys: map[string]verify.GivenKey{}}
+				given: keysInEnvironment(p, env.getenv), job: upgradeJob, inProject: projectKeys{}, keys: map[string]verify.GivenKey{}}
 			return s.upgrade(p, plan, live)
 		},
 	}
