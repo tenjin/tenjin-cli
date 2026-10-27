@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -121,9 +122,28 @@ func TestAKeychainThatDoesNotAnswerIsPassedOver(t *testing.T) {
 	if n := asked.Load(); n != 0 {
 		t.Errorf("the keychain was asked %d times with the session in the file", n)
 	}
-	// With nothing saved, Load gives up on the keychain and reports nothing.
-	if got, err := store.Load("staging"); got != nil || err != nil {
+	// With nothing in the file, a keychain that does not answer may still
+	// hold a sign-in, so Load says it could not tell rather than "none".
+	if got, err := store.Load("staging"); got != nil || !KeychainTimedOut(err) {
 		t.Errorf("loaded %+v, %v", got, err)
+	}
+}
+
+// Logout through a keychain that does not answer reports that, rather than
+// "not signed in" with the sign-in left unrevoked.
+func TestLogoutWhenTheKeychainDoesNotAnswer(t *testing.T) {
+	store := newStoreIn(t.TempDir())
+	block := make(chan struct{})
+	t.Cleanup(func() { close(block) })
+	store.get = func(string, string) (string, error) { <-block; return "", nil }
+	store.timeout = 10 * time.Millisecond
+	m := &Manager{Environment: "production", Store: store}
+	out, err := m.Logout(context.Background())
+	if out.WasSignedIn || !KeychainTimedOut(err) {
+		t.Errorf("logout = %+v, %v", out, err)
+	}
+	if _, err := m.Status(); !KeychainTimedOut(err) {
+		t.Errorf("status: %v", err)
 	}
 }
 

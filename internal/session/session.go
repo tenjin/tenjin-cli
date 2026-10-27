@@ -113,8 +113,10 @@ func (m *Manager) Login(ctx context.Context, open func(url string) error, pasted
 		return nil, "", err
 	}
 	defer unlock()
+	// A keychain that does not answer hides the previous session, not the
+	// new one, which goes to the file.
 	previous, err := m.Store.Load(m.Environment)
-	if err != nil {
+	if err != nil && !KeychainTimedOut(err) {
 		return nil, "", err
 	}
 	location, err := m.Store.Save(c)

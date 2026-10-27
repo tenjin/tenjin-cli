@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/zalando/go-keyring"
+
+	"github.com/tenjin/tenjin-cli/internal/clierr"
 )
 
 const keyringService = "tenjin-cli"
@@ -144,6 +146,12 @@ func (s *systemStore) Load(environment string) (*Credentials, error) {
 	case errors.Is(err, os.ErrNotExist):
 		var keychainErr error
 		raw, keychainErr = s.keychainGet(environment)
+		if errors.Is(keychainErr, errKeychainTimeout) {
+			// A sign-in may be in there: saying there is none would have
+			// logout leave it unrevoked.
+			return nil, clierr.Wrap(clierr.Internal, keychainErr, "the system keychain did not answer, so the saved sign-in could not be read").
+				WithHint("Unlock the keychain and run this again: a locked keyring can wait on a password prompt nobody sees, as over SSH. Or set TENJIN_API_TOKEN to a token from the Tenjin dashboard.")
+		}
 		if keychainErr != nil {
 			// No entry, or no keychain at all: nothing is stored.
 			return nil, nil
@@ -205,6 +213,12 @@ func (s *systemStore) CredentialsFile(environment string) string {
 }
 
 var errKeychainTimeout = errors.New("the system keychain did not answer")
+
+// KeychainTimedOut reports whether err is the keychain not answering, which
+// leaves unknown whether anyone is signed in.
+func KeychainTimedOut(err error) bool {
+	return errors.Is(err, errKeychainTimeout)
+}
 
 func (s *systemStore) keychainGet(environment string) (string, error) {
 	type result struct {

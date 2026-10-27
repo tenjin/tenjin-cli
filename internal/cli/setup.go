@@ -15,6 +15,7 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/keyfill"
 	"github.com/tenjin/tenjin-cli/internal/project"
 	"github.com/tenjin/tenjin-cli/internal/render"
+	"github.com/tenjin/tenjin-cli/internal/session"
 	"github.com/tenjin/tenjin-cli/internal/verify"
 )
 
@@ -295,7 +296,9 @@ func (s *setup) run() error {
 func (s *setup) signIn() error {
 	manager := s.env.session()
 	status, err := manager.Status()
-	if err != nil {
+	// Where the keychain does not answer, signing in again saves the session
+	// to a file the next commands read first.
+	if err != nil && !(session.KeychainTimedOut(err) && s.env.interactive) {
 		return err
 	}
 	if !status.SignedIn {
@@ -303,7 +306,11 @@ func (s *setup) signIn() error {
 			return clierr.New(clierr.NotSignedIn, "not signed in").
 				WithHint("Run 'tenjin login' first, or set TENJIN_API_TOKEN to a token from the Tenjin dashboard.")
 		}
-		s.say("You are not signed in. New to Tenjin? Create an account first: %s", s.env.endpoints.SignupURL())
+		if err != nil {
+			s.say("The system keychain did not answer. Sign in again, and the session is kept in a file if it still does not.")
+		} else {
+			s.say("You are not signed in. New to Tenjin? Create an account first: %s", s.env.endpoints.SignupURL())
+		}
 		if _, err := s.env.ask(s.out, "Press Enter to sign in through the browser."); err != nil {
 			return err
 		}
