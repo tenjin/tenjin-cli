@@ -41,6 +41,8 @@ type options struct {
 	output  string
 	json    bool
 	verbose bool
+	// data is set when the data commands are on (dataCommandsVar).
+	data bool
 }
 
 // format resolves --output and its --json shorthand.
@@ -56,6 +58,9 @@ func (o *options) format(cmd *cobra.Command) (render.Format, error) {
 		return "", clierr.Wrap(clierr.Usage, err, "%v", err)
 	}
 	if f == render.CSV && cmd.Annotations[csvAnnotation] == "" {
+		if !o.data {
+			return "", clierr.New(clierr.Usage, "-o takes table or json")
+		}
 		return "", clierr.New(clierr.Usage, "-o csv is for the data commands, such as 'tenjin reports spend' or 'tenjin campaigns list'")
 	}
 	return f, nil
@@ -461,24 +466,35 @@ func wantsJSON(args []string) bool {
 	return false
 }
 
+// dataCommandsVar turns on the commands for an account's data (campaigns,
+// reports, callbacks and the rest), which are not released yet. Without it
+// they are not there at all, and the few that setup's steps are made of
+// (apps list, get, create and ensure, apps keys list) work but are left out
+// of the help.
+const dataCommandsVar = "TENJIN_DATA_COMMANDS"
+
+func (e *environment) dataCommands() bool {
+	return e.getenv(dataCommandsVar) == "1"
+}
+
 func newRootCmd(env *environment) *cobra.Command {
-	opts := &options{}
+	opts := &options{data: env.dataCommands()}
+	long := `Integrate the Tenjin SDK into your app, check the integration, and check a
+real launch: start with 'tenjin setup' in the app's project.
+`
+	if opts.data {
+		long += `
+Read and change your Tenjin data: apps, campaigns, channels, callbacks and
+reports. A change asks first, or takes --yes.
+`
+	}
+	long += `
+Every command but setup takes --json and never prompts without a terminal.
+Details: 'tenjin help scripting'.`
 	root := &cobra.Command{
-		Use:   "tenjin",
-		Short: "Integrate the Tenjin SDK, and work with your Tenjin account, from the terminal",
-		Long: `The Tenjin CLI has two sides.
-
-Integrating the Tenjin SDK, for app developers: start with 'tenjin setup'. It
-works out what the project is, finds its Tenjin app and SDK key, checks the
-integration, and checks a real launch.
-
-Your Tenjin data, for anyone with a Tenjin account, UA teams included: apps,
-campaigns, channels, callbacks and reports, from a terminal or a script. Each
-command reads or changes one thing; with --json it prints the API's own
-answer. A change asks first, or needs --yes.
-
-Every command but setup accepts --json and never prompts when stdin is not a
-terminal, so scripts and coding agents can drive them.`,
+		Use:           "tenjin",
+		Short:         tagline,
+		Long:          long,
 		Version:       buildinfo.Get().Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -503,9 +519,13 @@ terminal, so scripts and coding agents can drive them.`,
 
 	// Defined by hand so cobra does not claim -v, which is reserved for --verbose.
 	root.Flags().Bool("version", false, "print the version and exit")
-	root.PersistentFlags().StringVarP(&opts.output, "output", "o", string(render.Table), "output format: table or json, or csv for the data commands")
+	formats := "table or json"
+	if opts.data {
+		formats = "table, json, or csv for the data commands"
+	}
+	root.PersistentFlags().StringVarP(&opts.output, "output", "o", string(render.Table), formats)
 	root.PersistentFlags().BoolVar(&opts.json, "json", false, "shorthand for --output json")
-	root.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "show each request to Tenjin, and each program run, on stderr")
+	root.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "show each request to Tenjin, and each external program run, on stderr")
 	root.PersistentPreRun = func(cmd *cobra.Command, _ []string) {
 		if opts.verbose {
 			env.verbose = &heldLog{w: cmd.ErrOrStderr()}
@@ -516,14 +536,21 @@ terminal, so scripts and coding agents can drive them.`,
 	// Help lists the commands in the order a new user needs them, so cobra
 	// must not sort them by name.
 	cobra.EnableCommandSorting = false
-	groups := []struct {
+	type commandGroup struct {
 		title    string
 		commands []*cobra.Command
-	}{
-		{"Integrate the Tenjin SDK (app developers):", []*cobra.Command{newSetupCmd(opts, env), newProjectCmd(opts, env), newDoctorCmd(opts, env), newSDKCmd(opts, env), newAgentCmd(opts, env)}},
-		{"Your Tenjin data:", []*cobra.Command{newAppsCmd(opts, env), newCampaignsCmd(opts, env), newChannelsCmd(opts, env), newAdAccountsCmd(opts, env), newSKAdNetworksCmd(opts, env), newReportsCmd(opts, env), newSavedReportsCmd(opts, env), newSiteIDsCmd(opts, env)}},
-		{"Your account:", []*cobra.Command{newLoginCmd(opts, env), newLogoutCmd(opts, env), newAuthCmd(opts, env)}},
 	}
+	groups := []commandGroup{
+		{"The Tenjin SDK, in a project:", []*cobra.Command{newSetupCmd(opts, env), newProjectCmd(opts, env), newDoctorCmd(opts, env), newSDKCmd(opts, env), newAgentCmd(opts, env)}},
+	}
+	if opts.data {
+		groups = append(groups, commandGroup{"Your Tenjin data:", []*cobra.Command{newAppsCmd(opts, env), newCampaignsCmd(opts, env), newChannelsCmd(opts, env), newAdAccountsCmd(opts, env), newSKAdNetworksCmd(opts, env), newReportsCmd(opts, env), newSavedReportsCmd(opts, env), newSiteIDsCmd(opts, env)}})
+	} else {
+		apps := newAppsCmd(opts, env)
+		apps.Hidden = true
+		root.AddCommand(apps)
+	}
+	groups = append(groups, commandGroup{"Your account:", []*cobra.Command{newLoginCmd(opts, env), newLogoutCmd(opts, env), newAuthCmd(opts, env)}})
 	for i, g := range groups {
 		id := fmt.Sprint(i)
 		root.AddGroup(&cobra.Group{ID: id, Title: g.title})
@@ -533,7 +560,7 @@ terminal, so scripts and coding agents can drive them.`,
 		}
 	}
 	root.AddCommand(newDocsCmd(opts, env), newVersionCmd(opts))
-	root.AddCommand(newGuideCmds()...)
+	root.AddCommand(newGuideCmds(opts.data)...)
 	root.SetUsageTemplate(rootUsageTemplate)
 	root.SetHelpCommand(newHelpCmd(root))
 	applyCommandHelp(root)

@@ -6,14 +6,9 @@
 [![Release](https://img.shields.io/github/v/release/tenjin/tenjin-cli?sort=semver)](https://github.com/tenjin/tenjin-cli/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Integrate the [Tenjin](https://tenjin.com) SDK, and work with your Tenjin account, from the terminal.
+Integrate the [Tenjin](https://tenjin.com) SDK into your app, from the terminal.
 
-| You are | Start with |
-| --- | --- |
-| An app developer adding the Tenjin SDK to an app | `tenjin setup` in the project: see [Quick start](#quick-start) |
-| Anyone with a Tenjin account, UA teams included, or a script working for them | `tenjin login`, then `tenjin campaigns list` or `tenjin reports spend`: see [Your Tenjin data](#your-tenjin-data) |
-
-For app developers, the Tenjin CLI covers the parts of SDK onboarding that happen on your machine:
+The Tenjin CLI covers the parts of SDK onboarding that happen on your machine:
 
 - **Detect** what your project is: framework, platforms, bundle IDs, the file the app starts in, ad SDKs.
 - **Set up** the Tenjin app for each build, and its SDK key.
@@ -99,7 +94,7 @@ Homebrew installs completions for bash, zsh and fish. Otherwise, `tenjin complet
 
 ## Requirements
 
-- A Tenjin account, for anything that signs in: apps, SDK keys and everything under [Your Tenjin data](#your-tenjin-data). Detecting and checking a project work without one, and so does `docs search`.
+- A Tenjin account, for the Tenjin apps and their SDK keys. Detecting and checking a project work without one, and so does `docs search`.
 - To verify a launch: `adb` for an Android device or emulator, or Xcode for an iPhone or an iOS simulator.
 - Optional: [Claude Code](https://claude.com/claude-code) or [Codex](https://github.com/openai/codex), for `setup` to integrate with.
 
@@ -119,7 +114,7 @@ Homebrew installs completions for bash, zsh and fish. Otherwise, `tenjin complet
 
 #### Integrating the SDK
 
-For app developers, in the app's project.
+In the app's project.
 
 | Command | What it does |
 | --- | --- |
@@ -132,61 +127,15 @@ For app developers, in the app's project.
 | `tenjin sdk upgrade [path]` | Plan the upgrade to the SDK's newest release, with what a new major version changes, and have your coding agent make the changes the files need |
 | `tenjin agent install [path]` | Teach your coding agent to integrate the Tenjin SDK with this CLI |
 
-Two of setup's steps are under [Your Tenjin data](#your-tenjin-data): `tenjin apps ensure` finds or creates the app, and `tenjin apps keys list` reads its SDK keys.
-
-#### Your Tenjin data
-
-For anyone with a Tenjin account, from any directory: none of these reads a project. Each reads one thing from the [Tenjin API](https://tenjin.com/docs/automation-apis/), with its parameters as flags. At a terminal it prints a table; with `--json`, the API's answer as it is, so the API's documentation describes it. Lists show one page of 25: `--page` and `--per-page` (up to 1000) pick another, `--all` reads them all. Reports, and a saved report's data, show every row unless a page is asked for; `apps list` always shows every app. Where every page is read, `--json` prints the first page's document with all the pages' data in its `data` and without its `links`, which named single pages.
+Two of setup's steps are commands of their own, for scripts and agents. None of these reads a project.
 
 | Command | What it does |
 | --- | --- |
-| `tenjin apps list` | The apps in your organization; `--platform` and `--bundle-id` narrow it |
-| `tenjin apps get <id>` | One app, and whether Tenjin is receiving its events |
+| `tenjin apps ensure --bundle-id <id> --platform <platform>` | Find the Tenjin app for a build, or create it. Safe to repeat |
+| `tenjin apps keys list --app <id>` | The app's SDK keys, by their last four characters, and where to copy one from |
+| `tenjin apps list`, `tenjin apps get <id>` | The apps in your organization; one app, and whether Tenjin is receiving its events |
 | `tenjin apps create` | Create an app from `--name`, `--bundle-id` and `--platform`, or from `--store-url` |
-| `tenjin apps ensure --bundle-id <id> --platform <platform>` | Find the app, or create it. Safe to repeat |
-| `tenjin apps keys list --app <id>` | The app's SDK keys, by their last four characters |
-| `tenjin apps events list --app <id>` | The events the app has sent |
-| `tenjin apps callbacks list --app <id>`, `get <id>` | The app's callbacks to marketing channels; `--channel` narrows the list |
-| `tenjin apps s2s-callbacks list --app <id>`, `get <id>` | The app's server-to-server callbacks |
-| `tenjin apps callback-templates list --app <id>`, `get <id>` | The callback templates the app can use |
-| `tenjin apps callback-groups list --app <id> --channel <id>`, `get <id>` | The app's callback groups for one channel |
-| `tenjin apps callback-settings get --app <id> --channel <id>` | The app's callback settings for one channel |
-| `tenjin campaigns list`, `get <id>` | Campaigns and their tracking links; `--app`, `--channel`, `--platform` and `--query` narrow the list. A table leaves out hidden campaigns, as the dashboard does, and says how many; `--json` lists them |
-| `tenjin channels list`, `get <id>` | Marketing channels, by ID |
-| `tenjin channels callback-group-templates <id>` | A channel's callback group templates |
-| `tenjin ad-accounts list`, `get <id>` | The ad network accounts Tenjin reads spend from |
-| `tenjin skadnetworks list`, `get <id>` | SKAdNetwork IDs |
-| `tenjin reports spend --from <date> --to <date>` | User acquisition: spend, installs and what they returned |
-| `tenjin reports ad-revenue --from <date> --to <date>` | Ad revenue, by ad network |
-| `tenjin reports skadnetwork --from <date> --to <date>`, `skan` | SKAdNetwork postbacks, as Tenjin attributes them, or as Apple sends them |
-| `tenjin saved-reports list`, `get <id>`, `run <id>` | Reports saved in the dashboard, and their data |
-| `tenjin reports metrics [words]` | The metrics each report can show, for `--metrics`; `roi_7d` finds `roi_Nd` |
-| `tenjin apps s2s-callbacks macros [words]` | The macros a callback URL can use, such as `{{country}}` |
-| `tenjin apps callback-groups inspect --app <id> --channel <id>` | An app's callback groups for one channel in one view: the channel's group templates, the app's groups with the settings each still lacks, the shared settings, the app's events |
-| `tenjin site-ids list` | Site ID Optimization: the site IDs whose installs are not attributed |
 | `tenjin docs search <words>` | Tenjin's documentation, with links |
-
-Changes are commands too. Each sends only the fields given as flags, asks before it changes anything (deletes default to no), and needs `--yes` when nothing can ask. `--dry-run` sends nothing: it says on stderr the request it would send, its method and address, and prints the request's body on stdout. A change the API needs two requests for, such as a callback created switched off, says so before either is sent.
-
-| Command | What it does |
-| --- | --- |
-| `tenjin apps update <id>`, `delete <id>` | Change an app's name or settings; delete an app |
-| `tenjin campaigns create --app <id> --name <name> --channel <id>` | Create a campaign and its tracking links; `--ad-account` instead of `--channel` |
-| `tenjin campaigns update <id> --attribution-window <seconds>`, `delete <id>` | Change a campaign's attribution window; delete one that has not tracked installs |
-| `tenjin apps callbacks create --app <id> --template <id>`, `update <id>` | Callbacks from a channel's templates; `--param key=value` for its parameters |
-| `tenjin apps s2s-callbacks create --app <id> --url <url> --event <event> --name <name> --action ping`, `update <id>` | Server-to-server callbacks |
-| `tenjin apps callback-groups create --app <id> --channel <id> --template <id>`, `update <id>` | Callback groups; `--setting key=value` for their settings. Where a template allows one group per app and the app has one, `create` changes that group with what it sends; its question says so |
-| `tenjin apps callback-settings update --app <id> --channel <id> --setting <key=value>` | An app's callback settings for one channel |
-| `tenjin saved-reports create --type <type> --name <name> --granularity <g> --group-by <g>`, `update <id>`, `delete <id>` | Saved reports |
-| `tenjin site-ids block <site-id>...`, `reinstate <site-id>...`, `clear` | Block site IDs, everywhere or for one `--app`, `--campaign` or `--channel`; `--replace` makes them the only rules |
-
-Reports take the API's own values, and refuse others before anything is sent: `--granularity`, `--group-by`, and `--app`, `--channel` and `--metrics`, each repeated or comma-separated. `tenjin reports metrics` lists the metric names. For example:
-
-```sh
-tenjin reports spend --from 2026-10-01 --to 2026-10-07 --group-by channel,app --granularity totals-daily
-tenjin campaigns list --app <app-id> --all --json | jq '.data[].attributes.name'
-tenjin campaigns create --app <app-id> --name "Summer UA" --channel <channel-id> --yes
-```
 
 #### Your account
 
@@ -196,7 +145,7 @@ tenjin campaigns create --app <app-id> --name "Summer UA" --channel <channel-id>
 
 `tenjin version` prints the version, commit and build date.
 
-`tenjin <command> --help` describes every flag, with examples. For a task that takes several commands, `tenjin help <guide>` walks through it: `tenjin help integration`, `tenjin help callbacks`, `tenjin help reporting` and `tenjin help scripting`.
+`tenjin <command> --help` describes every flag, with examples. `tenjin help integration` and `tenjin help scripting` walk through the commands, step by step.
 
 ### The steps of setup
 
@@ -287,11 +236,11 @@ For Claude Code, this writes a skill to `.claude/skills/tenjin-cli/` in the proj
 
 Every command except `setup` is built to be driven by a program:
 
-- `--json` (or `-o json`) writes only the result to stdout; everything else goes to stderr. The data commands also take `-o csv`, for a spreadsheet; a text cell that a spreadsheet would run as a formula (it starts with `=`, `+`, `-` or `@`) is written with a leading `'`.
+- `--json` (or `-o json`) writes only the result to stdout; everything else goes to stderr.
 - A command never prompts when stdin is not a terminal. Anything that creates something needs `--yes` or a flag.
 - A failure with `--json` is written to stderr as `{"error": {"code", "message", "hint"}}`.
 - The JSON of `project detect` and `doctor` is stable: fields are added, never renamed or removed.
-- The data commands (campaigns, channels, reports and the others in [Your Tenjin data](#your-tenjin-data)) print the API's answer as it is. The `apps` commands that read or change an app itself (`list`, `get`, `create`, `ensure`, `update`, `delete`) print the CLI's own JSON instead, which leaves out the shared secrets the API returns with an app.
+- The `apps` commands print the CLI's own JSON, which leaves out the shared secrets the API returns with an app.
 - `TENJIN_API_TOKEN`, an access token from the dashboard, signs in without a browser.
 
 | Exit code | Meaning |
@@ -322,7 +271,7 @@ Every command except `setup` is built to be driven by a program:
 | `TENJIN_SDK_KEY_ANDROID`, `TENJIN_SDK_KEY_IOS` | The same, per platform |
 | `TENJIN_SDK_KEY_ANDROID_<VARIANT>` | The same, for another build, such as `TENJIN_SDK_KEY_ANDROID_AMAZON` |
 | `TENJIN_NO_UPDATE_CHECK` | `1` turns off the new-release notice |
-| `TENJIN_DASHBOARD_URL`, `TENJIN_API_URL`, `TENJIN_TRACK_URL`, `TENJIN_RESOURCE_URL`, `TENJIN_SITE_IDS_URL`, `TENJIN_DOCS_URL` | Point at another copy of a Tenjin service. Each must be `https`, except on this machine |
+| `TENJIN_DASHBOARD_URL`, `TENJIN_API_URL`, `TENJIN_TRACK_URL`, `TENJIN_RESOURCE_URL`, `TENJIN_DOCS_URL` | Point at another copy of a Tenjin service. Each must be `https`, except on this machine |
 | `NO_COLOR` | Turn off colour |
 | `CLICOLOR_FORCE` | Keep colour when output is piped, for example into `less -R` |
 
@@ -341,8 +290,8 @@ It holds the time of the last update check and the newest SDK releases it found,
 ## Privacy and security
 
 - **No analytics of its own.** The CLI sends no telemetry. Tenjin's API, like any server, records the requests it gets, with the CLI's version in the User-Agent.
-- **What it contacts:** Tenjin's dashboard, API, tracking service (where the SDK sends) and Site ID Optimization service for the commands you run; Tenjin's documentation site for `docs search`; GitHub, once a day, for the newest release of the CLI; and, once a day for `doctor`, the public registries of the Tenjin SDKs (Maven Central, pub.dev, npm, GitHub). `--offline` keeps `doctor` from contacting Tenjin and the registries.
-- **Credentials and SDK keys are never printed.** Keys are shown by their last four characters, in tables, JSON, `--verbose` and an agent's report. The data commands show what the dashboard shows you, callback URLs and parameters included.
+- **What it contacts:** Tenjin's dashboard, API and tracking service (where the SDK sends) for the commands you run; Tenjin's documentation site for `docs search`; GitHub, once a day, for the newest release of the CLI; and, once a day for `doctor`, the public registries of the Tenjin SDKs (Maven Central, pub.dev, npm, GitHub). `--offline` keeps `doctor` from contacting Tenjin and the registries.
+- **Credentials and SDK keys are never printed.** Keys are shown by their last four characters, in tables, JSON, `--verbose` and an agent's report.
 - **Downloads can be verified.** Each release's archives carry build provenance, signed by GitHub: `gh attestation verify tenjin_<version>_<os>_<arch>.tar.gz --repo tenjin/tenjin-cli --signer-workflow tenjin/tenjin-cli/.github/workflows/release.yaml` shows an archive was built by this repository's release workflow, and names the commit. The install scripts and Homebrew check each archive against the `checksums.txt` of the same release, so they catch a damaged download, not a release replaced as a whole.
 - **It changes your project only to write an SDK key** where a placeholder was left for it. Code changes are yours or your agent's.
 

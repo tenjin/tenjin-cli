@@ -285,7 +285,7 @@ func TestDoctorRefusesAnUnsupportedProject(t *testing.T) {
 // is promised that does not exist yet.
 func TestHelpSeparatesTheIntegrationFromTheData(t *testing.T) {
 	_, stdout, _ := newHarness(t).run("--help")
-	sdk, data, account := strings.Index(stdout, "Integrate the Tenjin SDK (app developers):"), strings.Index(stdout, "Your Tenjin data:"), strings.Index(stdout, "Your account:")
+	sdk, data, account := strings.Index(stdout, "The Tenjin SDK, in a project:"), strings.Index(stdout, "Your Tenjin data:"), strings.Index(stdout, "Your account:")
 	if sdk < 0 || data < sdk || account < data {
 		t.Fatalf("help is not grouped as expected:\n%s", stdout)
 	}
@@ -304,6 +304,41 @@ func TestHelpSeparatesTheIntegrationFromTheData(t *testing.T) {
 		if strings.Contains(stdout, notBuilt) {
 			t.Errorf("help mentions %q, which has no command yet", notBuilt)
 		}
+	}
+}
+
+// Until the data commands are released, the CLI is for the SDK's
+// integration: the data commands are not there, and the app commands setup
+// is made of work without being listed.
+func TestWithoutTheDataCommandsTheCLIIsForTheIntegration(t *testing.T) {
+	h := newHarness(t).withoutData()
+	_, help, _ := h.run("--help")
+	for _, absent := range []string{"Your Tenjin data:", "\n  apps ", "campaigns", "reports", "site-ids", "help callbacks", "help reporting", "csv"} {
+		if strings.Contains(help, absent) {
+			t.Errorf("--help names %q:\n%s", absent, help)
+		}
+	}
+	if !strings.Contains(help, "The Tenjin SDK, in a project:") || !strings.Contains(help, "tenjin help integration") {
+		t.Errorf("--help:\n%s", help)
+	}
+	if _, landing, _ := h.run(); strings.Contains(landing, "campaigns") || !strings.Contains(landing, "for integration or scripting") {
+		t.Errorf("landing:\n%s", landing)
+	}
+	for _, args := range [][]string{{"campaigns", "list"}, {"reports", "spend"}, {"apps", "update", "1"}, {"apps", "callbacks", "list"}, {"help", "callbacks"}} {
+		if code, _, _ := h.run(args...); code != 2 {
+			t.Errorf("%v: exit = %d, want a usage error", args, code)
+		}
+	}
+	if code, _, stderr := h.run("project", "detect", "-o", "csv"); code != 2 || !strings.Contains(stderr, "-o takes table or json") {
+		t.Errorf("-o csv: exit = %d, stderr = %q", code, stderr)
+	}
+	h.signIn()
+	h.fake.addApp("Sample", "com.example.sample", "android")
+	if code, stdout, stderr := h.run("apps", "ensure", "--bundle-id", "com.example.sample", "--platform", "android", "--json"); code != 0 || !strings.Contains(stdout, "com.example.sample") {
+		t.Errorf("apps ensure: exit = %d, stderr = %q", code, stderr)
+	}
+	if code, stdout, _ := h.run("apps", "--help"); code != 0 || !strings.Contains(stdout, "ensure") || strings.Contains(stdout, "callbacks") {
+		t.Errorf("apps --help:\n%s", stdout)
 	}
 }
 

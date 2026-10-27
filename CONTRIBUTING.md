@@ -24,6 +24,8 @@ make release-snapshot   # every release archive and the Homebrew cask, into dist
 
 The Markdown files are linted and their links checked in CI too. To run the lint locally: `npx markdownlint-cli2`.
 
+The commands for an account's data (campaigns, channels, callbacks, reports and the rest) are not released yet: they are there only with `TENJIN_DATA_COMMANDS=1` in the environment, which the tests set. Without it, `tenjin apps list`, `get`, `create`, `ensure` and `apps keys list` work but are left out of the help.
+
 The tests need no Tenjin account and make no network requests: Tenjin's services are faked (`internal/cli/fake_test.go`), and devices are faked through `adb`, `simctl` and `devicectl` stand-ins. Project fixtures come from `internal/testproject`: start from a correct integration and change one thing.
 
 `CLAUDE.md` describes how the code is laid out and the rules it follows. The ones that most often matter in a review:

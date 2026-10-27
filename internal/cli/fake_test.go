@@ -538,9 +538,17 @@ type harness struct {
 	device *fakeDevice
 }
 
+// withoutData turns the data commands off, as they are in a release.
+func (h *harness) withoutData() *harness {
+	delete(h.vars, dataCommandsVar)
+	return h
+}
+
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	h := &harness{t: t, fake: newFakeTenjin(t), store: &session.MemoryStore{}, vars: map[string]string{}}
+	// The data commands are on, so their tests reach them; withoutData turns
+	// them off, as a release has them.
+	h := &harness{t: t, fake: newFakeTenjin(t), store: &session.MemoryStore{}, vars: map[string]string{dataCommandsVar: "1"}}
 	h.env = &environment{
 		getenv:       func(name string) string { return h.vars[name] },
 		endpoints:    h.fake.endpoints(),

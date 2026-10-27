@@ -14,7 +14,11 @@ const guidesTitle = "Guides, step by step:"
 // help topic to cobra: 'tenjin help callbacks' prints it, and 'tenjin --help'
 // lists it. TestTheHelpTextsOnlyNameCommandsThatExist checks every command
 // and flag a guide names, and TestTheGuides that each is listed.
-var helpGuides = []struct{ name, short, text string }{
+var helpGuides = []struct {
+	name, short, text string
+	// data marks a guide to the data commands, there only when they are.
+	data bool
+}{
 	{"integration", "Add the Tenjin SDK to an app, check it, and check a launch", `Add the Tenjin SDK to an app, check it, and check a real launch.
 
 The guided way, in the app's project, from sign-in to an install Tenjin has
@@ -45,7 +49,7 @@ To teach your coding agent these commands:
   tenjin agent install
 
 An agent never gets an SDK key: it writes a placeholder, and setup or set-keys
-fills it.`},
+fills it.`, false},
 
 	{"callbacks", "Send installs and events to an ad network, or to your own server", `Callbacks tell an ad network, or a server of your own, about an app's installs
 and events. There are three kinds:
@@ -94,7 +98,7 @@ To your own server:
 
 A callback cannot be deleted, only switched off (update --active=false), so
 create it switched off and switch it on once it is right. Every change asks
-first; --yes skips the question, and --dry-run sends nothing.`},
+first; --yes skips the question, and --dry-run sends nothing.`, true},
 
 	{"reporting", "Read spend, ad revenue and SKAdNetwork reports", `Read Tenjin's reports from the terminal, as a table, CSV or JSON.
 
@@ -119,21 +123,36 @@ prints Tenjin's own answer:
 Reports saved in the dashboard:
 
   tenjin saved-reports list
-  tenjin saved-reports run <saved-report-id>`},
+  tenjin saved-reports run <saved-report-id>`, true},
 
-	{"scripting", "Drive the CLI from a script, CI or a coding agent", `Every command but setup is built to be driven by a program.
+	{"scripting", "Drive the CLI from a script, CI or a coding agent", scriptingGuide(false), false},
+}
+
+// scriptingGuide is the scripting guide, with the flags of the data
+// commands when they are on.
+func scriptingGuide(data bool) string {
+	var b strings.Builder
+	b.WriteString(`Every command but setup is built to be driven by a program.
 
   --json             only the result on stdout, and errors on stderr as
                      {"error": {"code", "message", "hint"}}
-  -o csv             for the data commands, a table for a spreadsheet
-  --yes              a change without the question; without it and without
-                     a terminal, a change is refused
+`)
+	if data {
+		b.WriteString(`  -o csv             for the data commands, a table for a spreadsheet
+  --yes              a change to your Tenjin account without the question;
+                     without it and without a terminal, it is refused
   --dry-run          a change shown, request and body, and not sent
-  --verbose          each request on stderr, never a credential
+`)
+	} else {
+		b.WriteString(`  --yes              create a Tenjin app without the question; without it
+                     and without a terminal, nothing is created
+`)
+	}
+	b.WriteString(`  --verbose          each request on stderr, never a credential
 
-A command never prompts when stdin is not a terminal. In CI, set
-TENJIN_API_TOKEN to an API token from the Tenjin dashboard instead of
-'tenjin login'.
+A command never prompts when stdin is not a terminal. Signing out asks
+nothing. In CI, set TENJIN_API_TOKEN to an API token from the Tenjin
+dashboard instead of 'tenjin login'.
 
 The exit status says what happened:
 
@@ -155,15 +174,22 @@ For a coding agent (Claude Code, Codex, Cursor and others):
   tenjin agent install       teach it the CLI, in this project
   tenjin agent skill         the same instructions, for any other agent
 
-An agent that can run tenjin acts as you. Prefer
-'tenjin login' to giving it TENJIN_API_TOKEN, so the token is not in its
-environment or its logs; 'tenjin logout' ends that access.`},
+An agent that can run tenjin acts as you. Prefer 'tenjin login' to giving it
+TENJIN_API_TOKEN, so the token is not in its environment or its logs;
+'tenjin logout' ends that access.`)
+	return b.String()
 }
 
 // newGuideCmds returns the guides as help topics.
-func newGuideCmds() []*cobra.Command {
+func newGuideCmds(data bool) []*cobra.Command {
 	cmds := make([]*cobra.Command, 0, len(helpGuides))
 	for _, g := range helpGuides {
+		switch {
+		case g.data && !data:
+			continue
+		case g.name == "scripting":
+			g.text = scriptingGuide(data)
+		}
 		cmds = append(cmds, &cobra.Command{Use: g.name, Short: g.short, Long: g.text})
 	}
 	return cmds
@@ -187,7 +213,7 @@ Available Commands:{{range $cmds}}{{if (or .IsAvailableCommand (eq .Name "help")
 {{.Title}}{{range $cmds}}{{if (and (eq .GroupID $group.ID) (or .IsAvailableCommand (eq .Name "help")))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if not .AllChildCommandsHaveGroup}}
 
-Additional Commands:{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCommand (eq .Name "help")))}}
+Other commands:{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCommand (eq .Name "help")))}}
   {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .HasHelpSubCommands}}
 
 ` + guidesTitle + `{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
@@ -291,8 +317,8 @@ Step by step: 'tenjin help reporting'.`},
 func applyCommandHelp(root *cobra.Command) {
 	for path, h := range commandHelp {
 		cmd, _, err := root.Find(strings.Fields(path))
-		if err != nil || cmd == root {
-			continue // TestTheHelpTextsOnlyNameCommandsThatExist reports it
+		if err != nil || cmd.CommandPath() != "tenjin "+path {
+			continue // not there without the data commands, or a mistake TestTheHelpTextsOnlyNameCommandsThatExist reports
 		}
 		if cmd.Long == "" && h.long != "" {
 			cmd.Long = h.long

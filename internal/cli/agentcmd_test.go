@@ -165,7 +165,8 @@ func TestTheSkillOnlyNamesCommandsThatExist(t *testing.T) {
 	if len(lines) < 8 {
 		t.Fatalf("found only %d commands in the skill; the patterns no longer match it", len(lines))
 	}
-	checkCommandLines(t, lines)
+	// Agents run a release, which has no data commands yet.
+	checkCommandLines(t, newHarness(t).withoutData(), lines)
 }
 
 // codex names the AGENTS.md target, which Codex reads.

@@ -2,6 +2,8 @@
 
 Status: accepted, October 2026. Supersedes the third paragraph of [ADR 0001](0001-language-repository-and-scope.md)'s decision 1, and decision 4's "and the operations built on them".
 
+Update, October 2026: the first releases are for the SDK's integration only. The commands decided here are there only with `TENJIN_DATA_COMMANDS=1`, until they are released.
+
 ## Context
 
 ADR 0001 kept the CLI to the local half of SDK onboarding and left the account's data (apps, campaigns, callbacks, reports) to the dashboard and the MCP server. Read that way, the CLI looked like a tool for SDK engineers only, while people who run user acquisition, and the scripts working for them, wanted the same data from a terminal.

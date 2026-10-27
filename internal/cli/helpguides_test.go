@@ -33,6 +33,9 @@ func commandsIn(text string) []string {
 func TestTheHelpTextsOnlyNameCommandsThatExist(t *testing.T) {
 	var lines []string
 	for _, g := range helpGuides {
+		if g.name == "scripting" {
+			g.text = scriptingGuide(true)
+		}
 		found := commandsIn(g.text)
 		if len(found) < 3 {
 			t.Errorf("guide %s: found only %d commands; the patterns no longer match it", g.name, len(found))
@@ -46,7 +49,13 @@ func TestTheHelpTextsOnlyNameCommandsThatExist(t *testing.T) {
 			t.Errorf("%s: no text", path)
 		}
 	}
-	checkCommandLines(t, lines)
+	checkCommandLines(t, newHarness(t), lines)
+	// Without the data commands, a release's guides are all there is.
+	var release []string
+	for _, c := range newGuideCmds(false) {
+		release = append(release, commandsIn(c.Long)...)
+	}
+	checkCommandLines(t, newHarness(t).withoutData(), release)
 
 	root := newRootCmd(newHarness(t).env)
 	for path := range commandHelp {

@@ -119,11 +119,9 @@ tenjin sdk upgrade --json
 
 Each item of `upgrades` names the `file` the SDK is declared in, the version `declared` there and the one in use (`current`), and the `target`. Where `edit` is true, change that declaration to allow the target, in the form it has (a pinned version stays pinned, a range starts at the target); where it is false, leave it. Where `major` is true, `changes` says what the new major version changes for the app's code, and `code_changes` whether code that uses what changed must move: look for such code and change it as said, and nothing else. Do not run the package manager or a build: tell the developer to run `then`, which installs the new version. `current` lists the SDKs already at their newest release, and `unchecked` those whose upgrade cannot be planned, such as a dependency on a folder, a Git repository or a branch, or an SDK copied into the project: pass on the reason, which says how to upgrade it by hand, and change nothing for it. Then run `tenjin doctor --json`: its `sdk.version` finding can stay until the developer has run `then`.
 
-## Reading the account's data
+## Help
 
-Outside an integration, the CLI also reads the signed-in organization's data, one API read per command: `tenjin campaigns list`, `tenjin channels list`, `tenjin ad-accounts list`, `tenjin apps events list --app <id>`, `tenjin apps callbacks list --app <id>`, `tenjin reports spend --from <date> --to <date>` (and `ad-revenue`, `skadnetwork`, `skan`), `tenjin saved-reports run <id>`. With `--json` each prints the API's answer as it is; lists are one page unless `--all` is given, and reports are every row. The same groups have commands that change the account (`create`, `update`, `delete`): run one only when the person asked for that change, show them the command first, and use `--dry-run` to show the request and body it would send.
-
-For a task that takes several commands, read its guide before starting: `tenjin help callbacks` (callbacks to ad networks and to a server), `tenjin help reporting`, `tenjin help scripting`. Each command's `--help` has examples.
+`tenjin help integration` and `tenjin help scripting` walk through the commands; each command's `--help` has examples.
 
 ## Rules
 
@@ -132,5 +130,6 @@ For a task that takes several commands, read its guide before starting: `tenjin 
 - Never write an access token or a password into the project, and never repeat a whole SDK key in a summary.
 - Make the smallest change that resolves each finding, in the style the project already uses.
 - Never make up a custom event name or a customer user ID. Use the ones the developer named; a `feature.custom_events` or `feature.user_id` warning left because nobody named any is the developer's to settle, not yours.
+- Never set SKAdNetwork conversion values (`updatePostbackConversionValue` and the like) unless the developer chose `skan` and said which values to set: the scheme is theirs to design. Pointing SKAdNetwork postbacks at Tenjin, which `doctor` checks, is not a conversion value and belongs in every iOS integration.
 - Report the code as done when `doctor` is clean, or when `sdk.key.unfilled` is the only error left. Report that Tenjin receives the app's events only when `device.connect` passed; otherwise say the launch was not checked and that `tenjin setup` checks it.
 - Never pass `--yes` to a command that creates something unless the developer agreed to it.

@@ -14,7 +14,7 @@ import (
 )
 
 // tagline goes under the wordmark.
-const tagline = "Integrate the Tenjin SDK, and work with your Tenjin account, from the terminal"
+const tagline = "Integrate the Tenjin SDK into your app, from the terminal"
 
 var (
 	// A command's row: its name, then its summary after at least one space
@@ -108,15 +108,20 @@ func writeLanding(root *cobra.Command) error {
 		title string
 		rows  [][2]string
 	}{
-		{"App developers, in your app's project:", [][2]string{
+		{"In your app's project:", [][2]string{
 			{"tenjin setup", "Set up Tenjin, step by step"},
 			{"tenjin doctor", "Check an integration and explain what is wrong"},
 		}},
-		{"Your Tenjin data:", [][2]string{
+	}
+	if hasCommand(root, "reports") {
+		sections = append(sections, struct {
+			title string
+			rows  [][2]string
+		}{"Your Tenjin data:", [][2]string{
 			{"tenjin login", "Sign in through the browser"},
-			{"tenjin campaigns list", "Your campaigns"},
+			{"tenjin campaigns list", "List your campaigns"},
 			{"tenjin reports spend --from <date> --to <date>", "Spend, installs and what they returned"},
-		}},
+		}})
 	}
 	width := 0
 	for _, s := range sections {
@@ -131,14 +136,9 @@ func writeLanding(root *cobra.Command) error {
 		}
 		b.WriteString("\n")
 	}
-	shown := 0
-	for _, s := range sections {
-		shown += len(s.rows)
-	}
-	fmt.Fprintf(&b, "Those are the greatest hits. %d more commands live behind %s:\n", countCommands(root)-shown, style.Accent("tenjin --help"))
-	b.WriteString("campaigns, callbacks, site IDs, saved reports, your coding agent and friends.\n")
-	fmt.Fprintf(&b, "Step by step: %s, for integration, callbacks, reporting or scripting.\n", style.Accent("tenjin help <guide>"))
-	fmt.Fprintf(&b, "Stuck? %s has read the documentation for you.\n", style.Accent("tenjin docs search <words>"))
+	fmt.Fprintf(&b, "Every command: %s.\n", style.Accent("tenjin --help"))
+	fmt.Fprintf(&b, "Step by step: %s, for %s.\n", style.Accent("tenjin help <guide>"), orList(guideNames(root)))
+	fmt.Fprintf(&b, "Documentation: %s.\n", style.Accent("tenjin docs search <words>"))
 	_, err := io.WriteString(w, b.String())
 	return err
 }
@@ -158,8 +158,8 @@ func newHelpCmd(root *cobra.Command) *cobra.Command {
 	return &cobra.Command{
 		Use:   "help [command | guide]",
 		Short: "Show help for a command, or a guide",
-		Long: `Help about any command: 'tenjin help apps list' is 'tenjin apps list --help'.
-A guide walks through a task step by step: 'tenjin help callbacks'.`,
+		Long: `Help about any command: 'tenjin help doctor' is 'tenjin doctor --help'.
+A guide walks through a task step by step: 'tenjin help integration'.`,
 		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 			cmd, _, err := root.Find(args)
 			if err != nil {
@@ -193,12 +193,8 @@ A guide walks through a task step by step: 'tenjin help callbacks'.`,
 			if s := helpSuggestions(found, name); len(s) > 0 {
 				msg += fmt.Sprintf("; did you mean %q?", s[0])
 			}
-			guides := make([]string, len(helpGuides))
-			for i, g := range helpGuides {
-				guides[i] = g.name
-			}
 			return clierr.New(clierr.Usage, "%s", msg).
-				WithHint("The guides are %s: 'tenjin help <guide>'. 'tenjin --help' lists the commands.", strings.Join(guides, ", "))
+				WithHint("The guides are %s: 'tenjin help <guide>'. 'tenjin --help' lists the commands.", strings.Join(guideNames(root), ", "))
 		},
 	}
 }
@@ -210,12 +206,41 @@ func helpSuggestions(cmd *cobra.Command, name string) []string {
 	if cmd.HasParent() {
 		return out
 	}
-	for _, g := range helpGuides {
-		if strings.HasPrefix(g.name, strings.ToLower(name)) || editDistance(strings.ToLower(name), g.name) <= 2 {
-			out = append(out, g.name)
+	for _, g := range guideNames(cmd) {
+		if strings.HasPrefix(g, strings.ToLower(name)) || editDistance(strings.ToLower(name), g) <= 2 {
+			out = append(out, g)
 		}
 	}
 	return out
+}
+
+// guideNames lists the guides root has: the data commands' only when they
+// are on.
+func guideNames(root *cobra.Command) []string {
+	var names []string
+	for _, c := range root.Commands() {
+		if c.IsAdditionalHelpTopicCommand() {
+			names = append(names, c.Name())
+		}
+	}
+	return names
+}
+
+func hasCommand(root *cobra.Command, name string) bool {
+	for _, c := range root.Commands() {
+		if c.Name() == name {
+			return true
+		}
+	}
+	return false
+}
+
+// orList joins words as prose: "a, b or c".
+func orList(words []string) string {
+	if len(words) < 2 {
+		return strings.Join(words, "")
+	}
+	return strings.Join(words[:len(words)-1], ", ") + " or " + words[len(words)-1]
 }
 
 // editDistance is the Levenshtein distance between a and b.
@@ -237,20 +262,4 @@ func editDistance(a, b string) int {
 		prev = cur
 	}
 	return prev[len(b)]
-}
-
-// countCommands counts the commands that do something, leaving out help
-// and shell completion.
-func countCommands(cmd *cobra.Command) int {
-	n := 0
-	for _, c := range cmd.Commands() {
-		if c.Hidden || c.Name() == "help" || c.Name() == "completion" {
-			continue
-		}
-		if c.Runnable() && !c.HasSubCommands() {
-			n++
-		}
-		n += countCommands(c)
-	}
-	return n
 }

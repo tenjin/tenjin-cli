@@ -19,6 +19,19 @@ import (
 var platforms = []string{"ios", "android", "amazon", "android_other"}
 
 func newAppsCmd(opts *options, env *environment) *cobra.Command {
+	if !opts.data {
+		cmd := group("apps", "Find and create your Tenjin apps, and read their SDK keys",
+			newAppsListCmd(opts, env),
+			newAppsGetCmd(opts, env),
+			newAppsCreateCmd(opts, env),
+			newAppsEnsureCmd(opts, env),
+			group("keys", "An app's SDK keys", newAppsKeysListCmd(opts, env)),
+		)
+		cmd.Long = `Find and create the Tenjin apps your builds send to, and read their SDK
+keys: the commands 'tenjin setup' is made of, for scripts and agents. A
+command about one app takes its ID, from 'tenjin apps list'.`
+		return cmd
+	}
 	sub := appDataCmds(opts, env)
 	writes := appWriteCmds(opts, env)
 	for _, c := range sub {
