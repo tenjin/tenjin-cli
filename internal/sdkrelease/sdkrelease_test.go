@@ -88,4 +88,13 @@ func TestAnswersAreKeptForADay(t *testing.T) {
 	if got := l.Latest(context.Background())["com.tenjin:android-sdk"]; got != "2.0.1" || asked.Load() != 2 {
 		t.Errorf("after a failed check: %q, %d requests", got, asked.Load())
 	}
+	// A check nothing answered is not an answer: the next run asks again.
+	now = now.Add(time.Minute)
+	if l.Latest(context.Background()); asked.Load() != 3 {
+		t.Errorf("a failed check was kept: %d requests", asked.Load())
+	}
+	fail = false
+	if got := l.Latest(context.Background())["com.tenjin:android-sdk"]; got != "2.0.1" || asked.Load() != 4 {
+		t.Errorf("back online: %q, %d requests", got, asked.Load())
+	}
 }

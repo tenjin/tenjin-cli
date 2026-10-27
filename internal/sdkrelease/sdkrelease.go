@@ -63,8 +63,9 @@ func (l *Lookup) Latest(ctx context.Context) map[string]string {
 	}
 	client := &http.Client{Transport: l.Transport}
 	var (
-		mu sync.Mutex
-		wg sync.WaitGroup
+		mu       sync.Mutex
+		wg       sync.WaitGroup
+		answered bool
 	)
 	for prefix, source := range sources {
 		wg.Add(1)
@@ -77,10 +78,15 @@ func (l *Lookup) Latest(ctx context.Context) map[string]string {
 			}
 			mu.Lock()
 			s.Versions[prefix] = version
+			answered = true
 			mu.Unlock()
 		}()
 	}
 	wg.Wait()
+	if !answered {
+		// Offline, or every registry failed: ask again next time.
+		return s.Versions
+	}
 	s.CheckedAt = now()
 	l.save(s)
 	return s.Versions
