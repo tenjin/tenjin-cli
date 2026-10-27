@@ -197,3 +197,19 @@ func TestATestsCallsAreNotTheApps(t *testing.T) {
 		t.Fatalf("a test's call passed for the app's: %+v", f)
 	}
 }
+
+// Kotlin sets the customer user ID as a property, from the Android SDK's
+// getter and setter.
+func TestTheUserIDSetAsAKotlinProperty(t *testing.T) {
+	base := testproject.AndroidNative()
+	files := base.With(testproject.Files{activity: strings.Replace(base[activity], "        tenjin.connect()\n", "        tenjin.connect()\n        tenjin.customerUserId = \"u\"\n", 1)})
+	chosen := verify.Options{Features: []string{project.FeatureUserID}}
+	if f := featureFinding(t, run(t, files, chosen), "feature.user_id"); f == nil || f.Severity != verify.Pass {
+		t.Fatalf("finding = %+v", f)
+	}
+	// A comparison is not a setting.
+	files = base.With(testproject.Files{activity: strings.Replace(base[activity], "        tenjin.connect()\n", "        tenjin.connect()\n        if (tenjin.customerUserId == null) return\n", 1)})
+	if f := featureFinding(t, run(t, files, chosen), "feature.user_id"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("a comparison passed: %+v", f)
+	}
+}

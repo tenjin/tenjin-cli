@@ -14,8 +14,9 @@ import (
 // Distinct names are Tenjin's own and count wherever they appear in a file
 // that mentions Tenjin. Generic names, such as transaction, count only when
 // called on a Tenjin receiver, so that a database's transaction() is not
-// taken for a purchase.
-var featureCalls = map[string]struct{ distinct, generic []string }{
+// taken for a purchase. Properties are Kotlin's names for a getter and
+// setter pair, set on a Tenjin receiver: tenjin.customerUserId = id.
+var featureCalls = map[string]struct{ distinct, generic, property []string }{
 	project.FeaturePurchases: {
 		distinct: []string{"transactionWithReceipt", "transactionWithDataSignature", "transactionAmazon", "transactionWithProductName", "enableAutoPurchaseTracking"},
 		generic:  []string{"transaction", "Transaction"},
@@ -43,7 +44,8 @@ var featureCalls = map[string]struct{ distinct, generic []string }{
 	// Other SDKs (AppsFlyer, for one) have a setCustomerUserId too: it
 	// counts only on a Tenjin receiver.
 	project.FeatureUserID: {
-		generic: []string{"setCustomerUserId", "SetCustomerUserId"},
+		generic:  []string{"setCustomerUserId", "SetCustomerUserId"},
+		property: []string{"customerUserId"},
 	},
 }
 
@@ -136,6 +138,18 @@ func (r *runner) tenjinCode() *tenjinCode {
 	return r.code
 }
 
+// assigns returns where one of the properties is set on a Tenjin receiver,
+// if anywhere.
+func (c *tenjinCode) assigns(properties []string) (file string, line int, ok bool) {
+	for _, f := range c.files {
+		re := regexp.MustCompile(`(?:` + strings.Join(f.receivers, "|") + `)\s*\.\s*(?:` + strings.Join(properties, "|") + `)\s*=[^=]`)
+		if loc := re.FindStringIndex(f.text); loc != nil {
+			return f.rel, lineAt(f.text, loc[0]), true
+		}
+	}
+	return "", 0, false
+}
+
 // find returns where one of the calls is made, if anywhere.
 func (c *tenjinCode) find(distinct, generic []string) (file string, line int, ok bool) {
 	for _, f := range c.files {
@@ -176,7 +190,11 @@ func (r *runner) checkFeatures() {
 			continue
 		}
 		calls := featureCalls[f.ID]
-		if file, line, ok := code.find(calls.distinct, calls.generic); ok {
+		file, line, ok := code.find(calls.distinct, calls.generic)
+		if !ok && len(calls.property) > 0 {
+			file, line, ok = code.assigns(calls.property)
+		}
+		if ok {
 			r.pass("feature."+f.ID, "", featureSent[f.ID], file, line)
 			if f.ID == project.FeaturePurchases || f.ID == project.FeatureSubscriptions {
 				r.checkAutoTracking(code)
