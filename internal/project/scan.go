@@ -68,6 +68,12 @@ func unityExport(dir, name string) bool {
 	return err == nil && info.IsDir()
 }
 
+// appCode reports whether a source file is the app's own code: not a test,
+// and in a Unity project not the Tenjin package's.
+func (d *detector) appCode(rel string) bool {
+	return !TestSource(rel) && (d.p.Framework != Unity || !UnitySDKFile(rel))
+}
+
 // UnitySDKFile reports whether a file of a Unity project is the Tenjin
 // package's own: imported into Assets/Tenjin, embedded in Packages, or its
 // iOS bridge, wherever it was copied.

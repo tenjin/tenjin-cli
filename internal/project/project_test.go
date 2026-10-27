@@ -1,6 +1,7 @@
 package project_test
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -705,4 +706,22 @@ func describe(p *project.Project) string {
 		b.WriteString(" " + d.Package + "@" + d.Version)
 	}
 	return b.String()
+}
+
+// The Tenjin Unity package's own scripts mention the tracking prompt, and
+// a test can ask for it: neither is the app asking.
+func TestTheTrackingPromptIsTheAppsOwn(t *testing.T) {
+	base := testproject.Unity()
+	const script = "Assets/Scripts/TenjinBootstrap.cs"
+	files := base.With(testproject.Files{
+		script:                                   regexp.MustCompile(`(?s)#if UNITY_IOS.*?#else\n(.*?)#endif\n`).ReplaceAllString(base[script], "$1"),
+		"Assets/Tenjin/Scripts/AndroidTenjin.cs": "public class AndroidTenjin : BaseTenjin {\n    public override void RequestTrackingAuthorizationWithCompletionHandler(Action<int> callback) {}\n}\n",
+		"Assets/Tests/PromptTest.cs":             "public class PromptTest { void Run() { Tenjin.getInstance(\"k\").RequestTrackingAuthorizationWithCompletionHandler(null); } }\n",
+	})
+	if strings.Contains(files[script], "RequestTracking") {
+		t.Fatal("the fixture still asks for tracking permission")
+	}
+	if p := detect(t, files); p.TrackingPrompt != nil {
+		t.Errorf("tracking prompt = %+v, but the app has none", p.TrackingPrompt)
+	}
 }

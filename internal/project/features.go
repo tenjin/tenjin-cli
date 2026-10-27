@@ -161,6 +161,9 @@ func (d *detector) findFeatures() {
 		if i >= maxFeatureScanFiles {
 			break
 		}
+		if !d.appCode(rel) {
+			continue
+		}
 		raw, err := os.ReadFile(filepath.Join(d.root, filepath.FromSlash(rel)))
 		if err != nil || len(raw) > 2<<20 {
 			continue

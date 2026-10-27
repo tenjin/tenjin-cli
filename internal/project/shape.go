@@ -209,6 +209,9 @@ func (d *detector) trackingPrompt() {
 			files = files[:maxScannedSources]
 		}
 		for _, f := range files {
+			if !d.appCode(f) {
+				continue
+			}
 			content := blankComments(d.read(f))
 			if loc := trackingRequest.FindStringIndex(content); loc != nil {
 				d.p.TrackingPrompt = &TrackingPrompt{File: f, Line: strings.Count(content[:loc[0]], "\n") + 1}
