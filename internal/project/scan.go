@@ -42,7 +42,7 @@ func (d *detector) walk(rel string, maxDepth int, fn func(path string, entry fs.
 		depth := strings.Count(filepath.ToSlash(fromStart), "/") + 1
 
 		if entry.IsDir() {
-			if skipDirs[entry.Name()] || webCopy(relPath) || d.skip[relPath] {
+			if skipDirs[entry.Name()] || webCopy(relPath) || d.skip[relPath] || d.sources && unityExport(path, entry.Name()) {
 				return filepath.SkipDir
 			}
 			fn(relPath, entry)
@@ -54,6 +54,25 @@ func (d *detector) walk(rel string, maxDepth int, fn func(path string, entry fs.
 		fn(relPath, entry)
 		return nil
 	})
+}
+
+// unityExport reports whether a folder is a project Unity wrote on a build:
+// an Xcode project (beside Unity-iPhone.xcodeproj), or the Unity module of
+// a Gradle one. Each holds copies of the plugins' code, the SDK's bridge
+// included, which call everything the SDK has.
+func unityExport(dir, name string) bool {
+	if name == "unityLibrary" {
+		return true
+	}
+	info, err := os.Stat(filepath.Join(dir, "Unity-iPhone.xcodeproj"))
+	return err == nil && info.IsDir()
+}
+
+// UnitySDKFile reports whether a file of a Unity project is the Tenjin
+// package's own: imported into Assets/Tenjin, embedded in Packages, or its
+// iOS bridge, wherever it was copied.
+func UnitySDKFile(rel string) bool {
+	return strings.HasPrefix(rel, "Assets/Tenjin/") || strings.HasPrefix(rel, "Packages/com.tenjin.sdk/") || path.Base(rel) == "TenjinUnityInterface.mm"
 }
 
 // webCopy reports whether a folder is the copy of a web app's build that
@@ -130,10 +149,10 @@ func isBundle(name string) bool {
 const sourceDepth = 24
 
 // SourceFiles returns the project's source files with one of the given
-// extensions, relative to root and slash-separated. A web build's output is
-// not source.
+// extensions, relative to root and slash-separated. A web build's output,
+// and a project Unity exported, are not source.
 func SourceFiles(root, rel string, exts ...string) []string {
-	d := &detector{root: root, skip: webOutput(root)}
+	d := &detector{root: root, skip: webOutput(root), sources: true}
 	var files []string
 	d.walk(rel, sourceDepth, func(path string, entry fs.DirEntry) {
 		if entry.IsDir() {

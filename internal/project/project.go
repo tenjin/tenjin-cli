@@ -326,6 +326,8 @@ type detector struct {
 	wrapped     map[string]bool
 	// skip are folders, relative to the root, that a walk does not enter.
 	skip map[string]bool
+	// sources makes a walk leave out what Unity exports into a project.
+	sources bool
 }
 
 // insideWrapper reports whether rel, a directory below the root, is inside a

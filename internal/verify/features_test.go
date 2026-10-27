@@ -72,6 +72,28 @@ func TestCapacitorsWebCopyIsNotSource(t *testing.T) {
 	}
 }
 
+// The SDK's own code, and the Xcode and Gradle projects Unity exports into
+// the project, call every method of the SDK: none of it is the app's.
+func TestUnityExportsAndTheSDKsOwnCodeAreNotTheApps(t *testing.T) {
+	const bridge = "#import \"TenjinSDK.h\"\nvoid iosTenjinSendEvent(const char* name) {\n    [TenjinSDK sendEventWithName:[NSString stringWithUTF8String:name]];\n}\n"
+	files := testproject.Unity().With(testproject.Files{
+		"Builds/iOS/Unity-iPhone.xcodeproj/project.pbxproj":                       "// !$*UTF8*$!\n",
+		"Builds/iOS/Libraries/com.tenjin.sdk/Plugins/iOS/TenjinUnityInterface.mm": bridge,
+		"Builds/Android/unityLibrary/src/main/java/com/example/TenjinBridge.java": "import com.tenjin.android.TenjinSDK;\nclass TenjinBridge { void send(TenjinSDK tenjin, String name) { tenjin.eventWithName(name); } }\n",
+		"Packages/com.tenjin.sdk/Runtime/IosTenjin.cs":                            "public class IosTenjin : BaseTenjin {\n    public override void SendEvent(string eventName) { Tenjin.SendEvent(eventName); }\n}\n",
+		"Assets/Tenjin/Scripts/AndroidTenjin.cs":                                  "public class AndroidTenjin : BaseTenjin {\n    public override void SendEvent(string eventName) { Tenjin.SendEvent(eventName); }\n}\n",
+		"Assets/Plugins/iOS/TenjinUnityInterface.mm":                              bridge,
+	})
+	chosen := verify.Options{Features: []string{project.FeatureCustomEvents}}
+	if f := featureFinding(t, run(t, files, chosen), "feature.custom_events"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("the SDK's own calls passed for the app's: %+v", f)
+	}
+	files["Assets/Scripts/Events.cs"] = "public class Events {\n    void Level() { BaseTenjin instance = Tenjin.getInstance(\"" + testproject.Key + "\"); instance.SendEvent(\"level\"); }\n}\n"
+	if f := featureFinding(t, run(t, files, chosen), "feature.custom_events"); f == nil || f.Severity != verify.Pass || f.File != "Assets/Scripts/Events.cs" {
+		t.Fatalf("finding = %+v", f)
+	}
+}
+
 // A generic name counts only on a Tenjin receiver.
 func TestAPurchaseIsATenjinCall(t *testing.T) {
 	chosen := verify.Options{Features: []string{project.FeaturePurchases}}
