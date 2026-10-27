@@ -32,9 +32,11 @@ const (
 	playBillingVersion   = "9.0.0"
 )
 
-// LatestVersion is the newest release of a Tenjin SDK package this CLI was
-// built with, or "" for a package it does not know.
-func LatestVersion(pkg string) string { return latestVersion(pkg, nil) }
+// LatestVersion is the newest release of a Tenjin SDK package, as the
+// checks given live (Options.Latest) take it: the one this CLI was built
+// with, or a newer one of the same major version from live. "" for a
+// package it does not know.
+func LatestVersion(pkg string, live map[string]string) string { return latestVersion(pkg, live) }
 
 // latestVersion is the newest release of a package: the one this CLI was
 // built with, or a newer one of the same major version from live.

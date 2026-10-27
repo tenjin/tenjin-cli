@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -35,5 +36,28 @@ func TestDoctorNamesTheNewestRelease(t *testing.T) {
 	_, stdout, _ = h.run("doctor", dir, "--offline")
 	if !strings.Contains(stdout, "the current release is 2.0.0") || asked != 1 {
 		t.Errorf("asked %d times; stdout:\n%s", asked, stdout)
+	}
+}
+
+// The guide names the release doctor checks against, so an agent that
+// follows it is not then told its SDK is out of date.
+func TestTheGuideNamesTheReleaseDoctorChecks(t *testing.T) {
+	h := newHarness(t)
+	failing := true
+	h.env.sdkReleases = &sdkrelease.Lookup{
+		State: filepath.Join(t.TempDir(), "sdk-releases.json"),
+		Sources: map[string]sdkrelease.Source{"com.tenjin:android-sdk": func(context.Context, *http.Client) (string, error) {
+			if failing {
+				return "", errors.New("offline")
+			}
+			return "2.0.3", nil
+		}},
+	}
+	if _, stdout, _ := h.run("sdk", "guide", "android"); !strings.Contains(stdout, "use **2.0.0**") {
+		t.Errorf("no registry answered:\n%.400s", stdout)
+	}
+	failing = false
+	if _, stdout, _ := h.run("sdk", "guide", "android"); !strings.Contains(stdout, "use **2.0.3**") {
+		t.Errorf("with a newer release:\n%.400s", stdout)
 	}
 }

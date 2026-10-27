@@ -17,7 +17,7 @@ import (
 )
 
 func newSDKCmd(opts *options, env *environment) *cobra.Command {
-	return group("sdk", "Print the SDK integration guide, or plan an SDK upgrade", newSDKGuideCmd(opts), newSDKUpgradeCmd(opts, env))
+	return group("sdk", "Print the SDK integration guide, or plan an SDK upgrade", newSDKGuideCmd(opts, env), newSDKUpgradeCmd(opts, env))
 }
 
 // sdkGuide is what `sdk guide --json` reports.
@@ -33,7 +33,7 @@ type sdkGuide struct {
 	Content  string `json:"content"`
 }
 
-func newSDKGuideCmd(opts *options) *cobra.Command {
+func newSDKGuideCmd(opts *options, env *environment) *cobra.Command {
 	var path string
 	cmd := &cobra.Command{
 		Use:   "guide [" + strings.Join(guides.Names(), "|") + "]",
@@ -77,7 +77,7 @@ taken as that project.`,
 					WithHint("Guides: %s.", strings.Join(guides.Names(), ", "))
 			}
 			result := sdkGuide{
-				Name: g.Name, Package: g.Package, SDKVersion: verify.LatestVersion(g.Package),
+				Name: g.Name, Package: g.Package, SDKVersion: verify.LatestVersion(g.Package, env.latestSDKs(cmd.Context())),
 				Revision: guides.Revision(), Source: "https://github.com/tenjin/sdk-llm-guides/blob/" + guides.Revision() + "/guides",
 				Content: g.Content,
 			}
