@@ -19,8 +19,13 @@ import (
 	"time"
 )
 
-// checkEvery is how long the answers are kept.
-const checkEvery = 24 * time.Hour
+// checkEvery is how long the answers are kept, and retryEvery how long a
+// check nothing answered is: behind a firewall that drops the requests,
+// every run would otherwise wait for them again.
+const (
+	checkEvery = 24 * time.Hour
+	retryEvery = time.Hour
+)
 
 // Source finds the newest release of one SDK.
 type Source func(ctx context.Context, client *http.Client) (string, error)
@@ -39,6 +44,7 @@ type Lookup struct {
 
 type state struct {
 	CheckedAt time.Time         `json:"checked_at"`
+	FailedAt  time.Time         `json:"failed_at,omitzero"`
 	Versions  map[string]string `json:"versions"`
 }
 
@@ -54,7 +60,7 @@ func (l *Lookup) Latest(ctx context.Context) map[string]string {
 	if s.Versions == nil {
 		s.Versions = map[string]string{}
 	}
-	if now().Sub(s.CheckedAt) < checkEvery && !s.CheckedAt.After(now()) {
+	if fresh(s.CheckedAt, checkEvery, now()) || fresh(s.FailedAt, retryEvery, now()) {
 		return s.Versions
 	}
 	sources := l.Sources
@@ -83,13 +89,24 @@ func (l *Lookup) Latest(ctx context.Context) map[string]string {
 		}()
 	}
 	wg.Wait()
-	if !answered {
-		// Offline, or every registry failed: ask again next time.
+	switch {
+	case answered:
+		s.CheckedAt, s.FailedAt = now(), time.Time{}
+	case ctx.Err() != nil:
+		// Stopped, not failed.
 		return s.Versions
+	default:
+		// Offline, or every registry failed: the last answers stand, and
+		// the registries are asked again in an hour.
+		s.FailedAt = now()
 	}
-	s.CheckedAt = now()
 	l.save(s)
 	return s.Versions
+}
+
+// fresh reports whether a time is less than d before now, and not after it.
+func fresh(at time.Time, d time.Duration, now time.Time) bool {
+	return now.Sub(at) < d && !at.After(now)
 }
 
 func (l *Lookup) load() state {

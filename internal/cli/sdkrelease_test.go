@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tenjin/tenjin-cli/internal/sdkrelease"
 	"github.com/tenjin/tenjin-cli/internal/testproject"
@@ -44,8 +45,10 @@ func TestDoctorNamesTheNewestRelease(t *testing.T) {
 func TestTheGuideNamesTheReleaseDoctorChecks(t *testing.T) {
 	h := newHarness(t)
 	failing := true
+	now := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
 	h.env.sdkReleases = &sdkrelease.Lookup{
 		State: filepath.Join(t.TempDir(), "sdk-releases.json"),
+		Now:   func() time.Time { return now },
 		Sources: map[string]sdkrelease.Source{"com.tenjin:android-sdk": func(context.Context, *http.Client) (string, error) {
 			if failing {
 				return "", errors.New("offline")
@@ -56,7 +59,8 @@ func TestTheGuideNamesTheReleaseDoctorChecks(t *testing.T) {
 	if _, stdout, _ := h.run("sdk", "guide", "android"); !strings.Contains(stdout, "use **2.0.0**") {
 		t.Errorf("no registry answered:\n%.400s", stdout)
 	}
-	failing = false
+	// A failed check is asked again after an hour.
+	failing, now = false, now.Add(2*time.Hour)
 	if _, stdout, _ := h.run("sdk", "guide", "android"); !strings.Contains(stdout, "use **2.0.3**") {
 		t.Errorf("with a newer release:\n%.400s", stdout)
 	}
