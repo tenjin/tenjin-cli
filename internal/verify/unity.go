@@ -333,7 +333,7 @@ func (r *runner) checkUnitySKAN() {
 			return nil
 		}
 		raw, err := os.ReadFile(p)
-		if code := blankComments(string(raw)); err == nil && strings.Contains(code, plistSKAN) && strings.Contains(code, "tenjin-skan.com") {
+		if code := blankComments(project.Text(raw)); err == nil && strings.Contains(code, plistSKAN) && strings.Contains(code, "tenjin-skan.com") {
 			rel, _ := filepath.Rel(r.p.Root, p)
 			setter = filepath.ToSlash(rel)
 		}

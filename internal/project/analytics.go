@@ -589,7 +589,7 @@ func minified(src string) bool {
 func decodeSource(raw []byte) string {
 	switch {
 	case bytes.HasPrefix(raw, []byte{0xEF, 0xBB, 0xBF}):
-		return string(raw[3:])
+		return Text(raw[3:])
 	case len(raw) >= 2 && (raw[0] == 0xFF && raw[1] == 0xFE || raw[0] == 0xFE && raw[1] == 0xFF):
 		little := raw[0] == 0xFF
 		units := make([]uint16, (len(raw)-2)/2)
@@ -600,9 +600,9 @@ func decodeSource(raw []byte) string {
 			}
 			units[i] = uint16(lo) | uint16(hi)<<8
 		}
-		return string(utf16.Decode(units))
+		return Text([]byte(string(utf16.Decode(units))))
 	}
-	return string(raw)
+	return Text(raw)
 }
 
 // spot is a place in a file: its index and an offset.

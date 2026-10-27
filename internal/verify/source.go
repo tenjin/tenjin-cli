@@ -229,7 +229,7 @@ func (r *runner) scanSource(spec frameworkSpec, dirs []string) source {
 			if err != nil {
 				continue
 			}
-			text := blankComments(string(raw))
+			text := blankComments(project.Text(raw))
 			// Cheap filter: most files never mention the SDK.
 			if !strings.Contains(text, "Tenjin") {
 				continue

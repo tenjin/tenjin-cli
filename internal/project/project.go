@@ -394,7 +394,13 @@ func (d *detector) read(rel string) string {
 	if err != nil {
 		return ""
 	}
-	return string(b)
+	return Text(b)
+}
+
+// Text is a file's content with Windows line endings read as plain ones,
+// which every pattern that reads lines expects. Line numbers stay the same.
+func Text(raw []byte) string {
+	return strings.ReplaceAll(string(raw), "\r\n", "\n")
 }
 
 // suggestSubprojects helps when the command was run too high, as in a

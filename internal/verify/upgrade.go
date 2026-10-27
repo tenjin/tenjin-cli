@@ -592,14 +592,14 @@ func lockedVersion(dir, below, pkg string) string {
 	name := regexp.QuoteMeta(pkg)
 	if raw, err := os.ReadFile(filepath.Join(dir, "yarn.lock")); err == nil {
 		entry := regexp.MustCompile(`(?m)^"?` + name + `@[^\n]*:\n(?:[ \t]+[^\n]*\n)*?[ \t]+version:?[ \t]+"?([^"\s]+)"?`)
-		if m := entry.FindSubmatch(raw); m != nil {
-			return string(m[1])
+		if m := entry.FindStringSubmatch(project.Text(raw)); m != nil {
+			return m[1]
 		}
 	}
 	if raw, err := os.ReadFile(filepath.Join(dir, "pnpm-lock.yaml")); err == nil {
 		entry := regexp.MustCompile(`(?m)^[ \t]+'?/?` + name + `@([0-9][^:(\s']*)`)
-		if m := entry.FindSubmatch(raw); m != nil {
-			return string(m[1])
+		if m := entry.FindStringSubmatch(project.Text(raw)); m != nil {
+			return m[1]
 		}
 	}
 	return ""
@@ -659,7 +659,7 @@ func readProjectFile(root, rel string) string {
 	if err != nil {
 		return ""
 	}
-	return string(raw)
+	return project.Text(raw)
 }
 
 // baseVersion is the version a range starts at: 1.7.0 for ^1.7.0 or ~> 1.7.0.

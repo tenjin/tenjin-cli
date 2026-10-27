@@ -165,7 +165,7 @@ func (d *detector) findFeatures() {
 		if err != nil || len(raw) > 2<<20 {
 			continue
 		}
-		text := blankComments(string(raw))
+		text := blankComments(Text(raw))
 		for _, s := range codeSignals {
 			if s.pattern.MatchString(text) {
 				add(s.feature, s.what, rel)

@@ -332,7 +332,7 @@ func (r *runner) readRel(rel string) string {
 	if err != nil {
 		return ""
 	}
-	return string(raw)
+	return project.Text(raw)
 }
 
 // storeFlavors are flavor names that say a build is for a store other than
@@ -400,7 +400,7 @@ var setAppStore = regexp.MustCompile(`\bsetAppStore\s*\(`)
 func (r *runner) storeSetInCode() string {
 	for _, rel := range project.SourceFiles(r.p.Root, ".", ".kt", ".java", ".dart", ".js", ".jsx", ".ts", ".tsx") {
 		raw, err := os.ReadFile(filepath.Join(r.p.Root, filepath.FromSlash(rel)))
-		if err == nil && setAppStore.Match([]byte(blankComments(string(raw)))) {
+		if err == nil && setAppStore.Match([]byte(blankComments(project.Text(raw)))) {
 			return rel
 		}
 	}

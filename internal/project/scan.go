@@ -82,7 +82,7 @@ func webOutput(root string) map[string]bool {
 		if err != nil {
 			return ""
 		}
-		return string(b)
+		return Text(b)
 	}
 	pkg := read("package.json")
 	if pkg == "" {

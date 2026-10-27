@@ -71,6 +71,25 @@ func ids(r *verify.Report) string {
 	return strings.Join(out, " ")
 }
 
+// Windows line endings change nothing the checks find.
+func TestWindowsLineEndings(t *testing.T) {
+	for name, files := range map[string]testproject.Files{
+		"android": testproject.AndroidNative(), "stores": testproject.AndroidMultiStore(),
+		"ios": testproject.IOSNative(), "flutter": testproject.Flutter(), "unity": testproject.Unity(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			crlf := testproject.Files{}
+			for path, content := range files {
+				crlf[path] = strings.ReplaceAll(content, "\n", "\r\n")
+			}
+			want, got := ids(run(t, files, verify.Options{})), ids(run(t, crlf, verify.Options{}))
+			if got != want {
+				t.Errorf("with CRLF: %s\nwith LF:   %s", got, want)
+			}
+		})
+	}
+}
+
 func TestCorrectIntegrationsPassClean(t *testing.T) {
 	cases := map[string]testproject.Files{
 		"android": testproject.AndroidNative(),

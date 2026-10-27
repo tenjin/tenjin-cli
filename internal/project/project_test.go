@@ -668,3 +668,41 @@ func TestMonorepoSuggestsProjectsTwoLevelsDown(t *testing.T) {
 		t.Errorf("notes = %q", p.Notes)
 	}
 }
+
+// A project saved with Windows line endings, as Unity projects on Windows
+// often are, is read as the same project.
+func TestWindowsLineEndings(t *testing.T) {
+	for name, files := range map[string]testproject.Files{
+		"android": testproject.AndroidNative(), "stores": testproject.AndroidMultiStore(),
+		"ios": testproject.IOSNative(), "flutter": testproject.Flutter(), "unity": testproject.Unity(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			want, got := describe(detect(t, files)), describe(detect(t, withCRLF(files)))
+			if got != want {
+				t.Errorf("with CRLF:\n%s\nwith LF:\n%s", got, want)
+			}
+		})
+	}
+}
+
+func withCRLF(files testproject.Files) testproject.Files {
+	out := testproject.Files{}
+	for name, content := range files {
+		out[name] = strings.ReplaceAll(content, "\n", "\r\n")
+	}
+	return out
+}
+
+func describe(p *project.Project) string {
+	var b strings.Builder
+	b.WriteString(string(p.Framework))
+	for _, t := range p.Targets {
+		for _, build := range t.Builds {
+			b.WriteString(" " + build.ID + "=" + build.BundleID + "/" + build.TenjinPlatform)
+		}
+	}
+	for _, d := range p.Tenjin {
+		b.WriteString(" " + d.Package + "@" + d.Version)
+	}
+	return b.String()
+}

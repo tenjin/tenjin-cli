@@ -360,8 +360,8 @@ func (r *runner) configuredKeys() []keyLiteral {
 		}
 		// A key in a comment is not one the app sends, but a comment that
 		// names Tenjin still says whose the key beside it is.
-		lines := strings.Split(string(raw), "\n")
-		code := strings.Split(withoutComments(rel, string(raw)), "\n")
+		lines := strings.Split(project.Text(raw), "\n")
+		code := strings.Split(withoutComments(rel, project.Text(raw)), "\n")
 		for i := range lines {
 			named := false
 			for j := max(0, i-nearTenjin); j <= i; j++ {

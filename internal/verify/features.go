@@ -119,7 +119,7 @@ func (r *runner) tenjinCode() *tenjinCode {
 		if err != nil || !strings.Contains(strings.ToLower(string(raw)), "tenjin") {
 			continue
 		}
-		text := blankComments(string(raw))
+		text := blankComments(project.Text(raw))
 		receivers := []string{`TenjinSDK\s*\.\s*instance`, "TenjinSDK", "Tenjin", "instance", "tenjin", "tenjinSDK", `getInstance\([^()]*(?:\([^()]*\)[^()]*)*\)`}
 		for _, m := range tenjinReceiverVar.FindAllStringSubmatch(text, -1) {
 			for _, name := range m[1:] {
