@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -60,6 +61,24 @@ func (f *agentFlags) location(env *environment, args []string) (skill.Location, 
 
 // targets resolves --agent, or detects the agents present when it is absent.
 func (f *agentFlags) targets(env *environment, loc skill.Location) ([]skill.Target, error) {
+	if len(f.agents) > 0 {
+		return f.named()
+	}
+	var targets []skill.Target
+	for _, t := range skill.Detect(loc.ProjectDir, env.lookPath) {
+		if !f.global || t.Global {
+			targets = append(targets, t)
+		}
+	}
+	if len(targets) == 0 {
+		return nil, clierr.New(clierr.NotFound, "no coding agent was found on this machine or in this project").
+			WithHint("Name one with --agent: %s.", targetList())
+	}
+	return targets, nil
+}
+
+// named resolves --agent, by ID or by the agent's program name.
+func (f *agentFlags) named() ([]skill.Target, error) {
 	var targets []skill.Target
 	for _, id := range f.agents {
 		t, ok := skill.FindTarget(id)
@@ -70,18 +89,6 @@ func (f *agentFlags) targets(env *environment, loc skill.Location) ([]skill.Targ
 			return nil, clierr.New(clierr.Usage, "%s is set up per project; it cannot be used with --global", t.Name)
 		}
 		targets = append(targets, t)
-	}
-	if len(f.agents) > 0 {
-		return targets, nil
-	}
-	for _, t := range skill.Detect(loc.ProjectDir, env.lookPath) {
-		if !f.global || t.Global {
-			targets = append(targets, t)
-		}
-	}
-	if len(targets) == 0 {
-		return nil, clierr.New(clierr.NotFound, "no coding agent was found on this machine or in this project").
-			WithHint("Name one with --agent: %s.", targetList())
 	}
 	return targets, nil
 }
@@ -266,9 +273,13 @@ func newAgentStatusCmd(opts *options, env *environment) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			named, err := flags.named()
+			if err != nil {
+				return err
+			}
 			rows := []agentStatus{}
 			for _, t := range skill.Targets {
-				if (len(flags.agents) > 0 && !contains(flags.agents, t.ID)) || (flags.global && !t.Global) {
+				if (len(named) > 0 && !slices.ContainsFunc(named, func(n skill.Target) bool { return n.ID == t.ID })) || (flags.global && !t.Global) {
 					continue
 				}
 				state, path, err := skill.Check(t, loc)

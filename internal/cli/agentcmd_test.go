@@ -120,6 +120,13 @@ func TestAgentStatusAndUninstall(t *testing.T) {
 	if got := states(); got != "claude=installed agents-md=installed" {
 		t.Errorf("after install: %q", got)
 	}
+	// --agent takes the program's name as install does, and refuses a typo.
+	if code, stdout, stderr := h.run("agent", "status", dir, "--agent", "codex", "--json"); code != 0 || !strings.Contains(stdout, `"agent": "agents-md"`) || !strings.Contains(stdout, `"installed"`) {
+		t.Errorf("--agent codex: exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	if code, _, stderr := h.run("agent", "status", dir, "--agent", "claud"); code != 2 || !strings.Contains(stderr, `unknown agent "claud"`) {
+		t.Errorf("--agent claud: exit = %d, stderr = %q", code, stderr)
+	}
 
 	// Uninstall needs no --agent and no agent on the machine: it removes
 	// whatever was written.
