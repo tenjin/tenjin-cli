@@ -99,6 +99,27 @@ func TestLoginNeverPrintsACredential(t *testing.T) {
 	}
 }
 
+// With TENJIN_API_TOKEN set, login still reports the session it saved, and
+// says the token is what other commands use.
+func TestLoginWithAnAPITokenSet(t *testing.T) {
+	for _, token := range []string{"dashboard-token", "has a space"} {
+		h := newHarness(t)
+		h.vars["TENJIN_API_TOKEN"] = token
+		code, stdout, stderr := h.run("login")
+		if code != 0 || !strings.Contains(stdout, "Signed in to Acme Games") || !strings.Contains(stderr, "TENJIN_API_TOKEN is set") {
+			t.Errorf("%q: exit = %d, stdout = %q, stderr = %q", token, code, stdout, stderr)
+		}
+		code, stdout, _ = h.run("login", "--json")
+		var status session.Status
+		if err := json.Unmarshal([]byte(stdout), &status); err != nil || code != 0 {
+			t.Fatalf("%q --json: exit = %d, err = %v", token, code, err)
+		}
+		if status.Source != session.SourceLogin || status.OrganizationName != "Acme Games" {
+			t.Errorf("%q --json: %+v", token, status)
+		}
+	}
+}
+
 // A session an earlier build signed in with a client it registered for
 // itself keeps working with that client, and its logout says what is true of
 // it: the API token lasts until it expires.

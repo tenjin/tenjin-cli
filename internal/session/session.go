@@ -74,6 +74,12 @@ func (m *Manager) Status() (Status, error) {
 	if err != nil {
 		return s, err
 	}
+	return m.StatusOf(c), nil
+}
+
+// StatusOf describes a saved session, whatever TENJIN_API_TOKEN holds.
+func (m *Manager) StatusOf(c *Credentials) Status {
+	s := Status{Source: SourceNone, Environment: m.Environment}
 	if c.SignedIn() {
 		s.SignedIn, s.Source = true, SourceLogin
 		s.OrganizationID, s.OrganizationName, s.UserID = c.OrganizationID, c.OrganizationName, c.UserID
@@ -82,7 +88,7 @@ func (m *Manager) Status() (Status, error) {
 			s.TokenExpiry = &expiry
 		}
 	}
-	return s, nil
+	return s
 }
 
 // Login signs the user in through the browser and stores the result. It

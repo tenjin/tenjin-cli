@@ -46,6 +46,9 @@ in the dashboard.`,
 			}
 			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Signed in to %s%s. The session is saved in %s.\n",
 				oneLine(status.OrganizationName), environmentNote(status.Environment), location)
+			if env.session().APIToken != "" {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "TENJIN_API_TOKEN is set, and other commands use it rather than this session until it is unset.")
+			}
 			return err
 		},
 	}
@@ -74,12 +77,11 @@ func login(cmd *cobra.Command, env *environment, noBrowser bool) (session.Status
 		_ = env.openBrowser(url)
 		return nil
 	}
-	_, location, err := manager.Login(cmd.Context(), open, pasted)
+	c, location, err := manager.Login(cmd.Context(), open, pasted)
 	if err != nil {
 		return session.Status{}, "", err
 	}
-	status, err := manager.Status()
-	return status, location, err
+	return manager.StatusOf(c), location, nil
 }
 
 func newLogoutCmd(opts *options, env *environment) *cobra.Command {
