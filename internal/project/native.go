@@ -68,6 +68,8 @@ func (d *detector) unityExport() bool {
 	}
 	d.p.Framework = UnityExport
 	d.p.Supported = false
+	// First, ahead of what reading the export notes.
+	d.note("This is a build exported from Unity, not the Unity project. Changes made here are overwritten by the next export; run this in the Unity project instead.")
 	if android {
 		if t, ok := d.androidTarget("."); ok {
 			d.p.Targets = append(d.p.Targets, t)
@@ -78,7 +80,6 @@ func (d *detector) unityExport() bool {
 			d.p.Targets = append(d.p.Targets, t)
 		}
 	}
-	d.note("This is a build exported from Unity, not the Unity project. Changes made here are overwritten by the next export; run this in the Unity project instead.")
 	return true
 }
 
@@ -190,7 +191,7 @@ func (d *detector) androidTarget(rel string) (Target, bool) {
 		}
 	}
 	if modules := countModules(buildFiles, d); modules > 1 {
-		d.note("Found %d Android application modules; using %s.", modules, path.Dir(buildFile))
+		d.note("Found %d Android application modules; using %s. To check another, pass its folder instead.", modules, path.Dir(buildFile))
 	}
 
 	content := stripComments(d.read(buildFile))

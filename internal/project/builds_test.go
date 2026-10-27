@@ -324,6 +324,9 @@ func TestTheModuleWithTenjinIsChosen(t *testing.T) {
 	if got := p.Target(project.Android).Android.ModuleDir; got != "mobile" {
 		t.Errorf("module = %q", got)
 	}
+	if !strings.Contains(strings.Join(p.Notes, "\n"), "To check another, pass its folder instead.") {
+		t.Errorf("notes = %q", p.Notes)
+	}
 }
 
 // A Tenjin Swift package declared by a local package the app links is the

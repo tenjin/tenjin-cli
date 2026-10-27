@@ -305,7 +305,9 @@ func TestUncheckedFrameworkSaysSo(t *testing.T) {
 		"Config/DefaultEngine.ini": "[/Script/AndroidRuntimeSettings.AndroidRuntimeSettings]\nPackageName=com.example.unreal\n",
 		"Source/Game/Game.cpp":     "",
 	}, verify.Options{})
-	expect(t, r, "framework.unchecked", "", verify.Info)
+	if f := expect(t, r, "framework.unchecked", "", verify.Info); !strings.Contains(f.Title, "Unreal Engine projects") {
+		t.Errorf("title = %q", f.Title)
+	}
 	if r.Summary.Errors != 0 {
 		t.Errorf("errors = %d", r.Summary.Errors)
 	}

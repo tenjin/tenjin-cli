@@ -263,7 +263,7 @@ func (r *runner) run() {
 		r.add(Finding{
 			ID:       "framework.unchecked",
 			Severity: Info,
-			Title:    "Integration checks for " + string(r.p.Framework) + " projects are not available yet",
+			Title:    "Integration checks for " + frameworkTitle(r.p.Framework) + " projects are not available yet",
 			Detail:   "The project was detected, but this version only checks native Android, native iOS, Flutter, React Native, Capacitor and Unity projects.",
 		})
 		return
@@ -434,4 +434,13 @@ func platformName(p project.Platform) string {
 		return "iOS"
 	}
 	return "Android"
+}
+
+// frameworkTitle names a framework the checks do not cover yet, as people
+// write it.
+func frameworkTitle(f project.Framework) string {
+	if f == project.Unreal {
+		return "Unreal Engine"
+	}
+	return string(f)
 }

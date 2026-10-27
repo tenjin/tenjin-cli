@@ -588,6 +588,10 @@ func TestExportedUnityBuild(t *testing.T) {
 		if p.Framework != project.UnityExport || p.Supported || bundleID(p, project.IOS) != "com.example.game" {
 			t.Errorf("framework = %q, supported = %v, targets = %+v", p.Framework, p.Supported, p.Targets)
 		}
+		// What matters most comes first: the error shows the notes in order.
+		if len(p.Notes) == 0 || !strings.Contains(p.Notes[0], "exported from Unity") {
+			t.Errorf("notes = %q", p.Notes)
+		}
 	})
 }
 
