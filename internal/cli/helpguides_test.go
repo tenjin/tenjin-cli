@@ -105,8 +105,8 @@ func TestHelpRefusesWhatItCannotAnswer(t *testing.T) {
 		{[]string{"help", "reprting"}, `did you mean "reporting"?`},
 		{[]string{"help", "apps", "callbakcs"}, `did you mean "callbacks"?`},
 		{[]string{"help", "nothing-like-it"}, "integration, callbacks, reporting, scripting"},
-		{[]string{"help", "callbacks", "--json"}, "no JSON"},
-		{[]string{"help", "-o", "csv"}, "no JSON"},
+		{[]string{"help", "callbacks", "--json"}, "no --json or -o form"},
+		{[]string{"help", "-o", "csv"}, "no --json or -o form"},
 		{[]string{"apps", "--json"}, "tenjin apps on its own prints no result"},
 	} {
 		code, stdout, stderr := h.run(tc.args...)

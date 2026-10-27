@@ -54,6 +54,9 @@ func (o *options) format(cmd *cobra.Command) (render.Format, error) {
 		return render.JSON, nil
 	}
 	f, err := render.ParseFormat(o.output)
+	if err != nil && !o.data {
+		return "", clierr.New(clierr.Usage, "unknown output format %q: -o takes table or json", o.output)
+	}
 	if err != nil {
 		return "", clierr.Wrap(clierr.Usage, err, "%v", err)
 	}
@@ -521,11 +524,11 @@ Details: 'tenjin help scripting'.`
 	root.Flags().Bool("version", false, "print the version and exit")
 	formats := "table or json"
 	if opts.data {
-		formats = "table, json, or csv for the data commands"
+		formats = "table, json, or csv (for the data commands)"
 	}
 	root.PersistentFlags().StringVarP(&opts.output, "output", "o", string(render.Table), formats)
 	root.PersistentFlags().BoolVar(&opts.json, "json", false, "shorthand for --output json")
-	root.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "show each request to Tenjin, and each external program run, on stderr")
+	root.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "show each request, and each program it runs, on stderr")
 	root.PersistentPreRun = func(cmd *cobra.Command, _ []string) {
 		if opts.verbose {
 			env.verbose = &heldLog{w: cmd.ErrOrStderr()}
@@ -569,9 +572,21 @@ Details: 'tenjin help scripting'.`
 
 func unknownCommand(cmd *cobra.Command, name string) error {
 	if suggestions := cmd.SuggestionsFor(name); len(suggestions) > 0 {
-		return clierr.New(clierr.Usage, "unknown command %q for %q; did you mean %q?", name, cmd.CommandPath(), suggestions[0])
+		return clierr.New(clierr.Usage, "unknown command %q for %q; did you mean %q?", name, cmd.CommandPath(), closest(name, suggestions))
 	}
 	return clierr.New(clierr.Usage, "unknown command %q for %q", name, cmd.CommandPath())
+}
+
+// closest is the suggestion nearest to name: cobra lists its suggestions in
+// the commands' order, so "key" would otherwise be offered "get".
+func closest(name string, suggestions []string) string {
+	best := suggestions[0]
+	for _, s := range suggestions[1:] {
+		if editDistance(name, s) < editDistance(name, best) {
+			best = s
+		}
+	}
+	return best
 }
 
 // group builds a command that only holds subcommands. Run with no arguments

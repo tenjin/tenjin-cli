@@ -120,7 +120,7 @@ func writeLanding(root *cobra.Command) error {
 		}{"Your Tenjin data:", [][2]string{
 			{"tenjin login", "Sign in through the browser"},
 			{"tenjin campaigns list", "List your campaigns"},
-			{"tenjin reports spend --from <date> --to <date>", "Spend, installs and what they returned"},
+			{"tenjin reports --help", "Spend, ad revenue and SKAdNetwork reports"},
 		}})
 	}
 	width := 0
@@ -136,8 +136,8 @@ func writeLanding(root *cobra.Command) error {
 		}
 		b.WriteString("\n")
 	}
-	fmt.Fprintf(&b, "Every command: %s.\n", style.Accent("tenjin --help"))
-	fmt.Fprintf(&b, "Step by step: %s, for %s.\n", style.Accent("tenjin help <guide>"), orList(guideNames(root)))
+	fmt.Fprintf(&b, "The commands: %s.\n", style.Accent("tenjin --help"))
+	fmt.Fprintf(&b, "Guides: %s (%s).\n", style.Accent("tenjin help <guide>"), strings.Join(guideNames(root), ", "))
 	fmt.Fprintf(&b, "Documentation: %s.\n", style.Accent("tenjin docs search <words>"))
 	_, err := io.WriteString(w, b.String())
 	return err
@@ -175,7 +175,7 @@ A guide walks through a task step by step: 'tenjin help integration'.`,
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if wantsResult(cmd) {
-				return clierr.New(clierr.Usage, "help is prose for people and has no JSON or CSV form").
+				return clierr.New(clierr.Usage, "help is prose for people and has no --json or -o form").
 					WithHint("Run it without --json or -o.")
 			}
 			found, rest, err := root.Find(args)
@@ -233,14 +233,6 @@ func hasCommand(root *cobra.Command, name string) bool {
 		}
 	}
 	return false
-}
-
-// orList joins words as prose: "a, b or c".
-func orList(words []string) string {
-	if len(words) < 2 {
-		return strings.Join(words, "")
-	}
-	return strings.Join(words[:len(words)-1], ", ") + " or " + words[len(words)-1]
 }
 
 // editDistance is the Levenshtein distance between a and b.

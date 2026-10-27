@@ -22,7 +22,7 @@ func newProjectCmd(opts *options, env *environment) *cobra.Command {
 func newProjectDetectCmd(opts *options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "detect [path]",
-		Short: "Report the framework, platforms, bundle IDs and any existing Tenjin SDK",
+		Short: "Report the framework, platforms, bundle IDs and any Tenjin SDK",
 		Long: `Report what kind of mobile project a directory holds: its framework, the
 platforms it builds for, each platform's bundle ID, and whether the Tenjin SDK
 is already a dependency. It also lists what the app already sends to other

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"github.com/spf13/cobra"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -321,7 +322,7 @@ func TestWithoutTheDataCommandsTheCLIIsForTheIntegration(t *testing.T) {
 	if !strings.Contains(help, "The Tenjin SDK, in a project:") || !strings.Contains(help, "tenjin help integration") {
 		t.Errorf("--help:\n%s", help)
 	}
-	if _, landing, _ := h.run(); strings.Contains(landing, "campaigns") || !strings.Contains(landing, "for integration or scripting") {
+	if _, landing, _ := h.run(); strings.Contains(landing, "campaigns") || !strings.Contains(landing, "(integration, scripting)") {
 		t.Errorf("landing:\n%s", landing)
 	}
 	for _, args := range [][]string{{"campaigns", "list"}, {"reports", "spend"}, {"apps", "update", "1"}, {"apps", "callbacks", "list"}, {"help", "callbacks"}} {
@@ -339,6 +340,35 @@ func TestWithoutTheDataCommandsTheCLIIsForTheIntegration(t *testing.T) {
 	}
 	if code, stdout, _ := h.run("apps", "--help"); code != 0 || !strings.Contains(stdout, "ensure") || strings.Contains(stdout, "callbacks") {
 		t.Errorf("apps --help:\n%s", stdout)
+	}
+}
+
+// Every command a release has, the hidden apps commands included, names
+// only commands and flags a release has, and nothing of the data commands.
+func TestAReleasesHelpNamesNothingItLacks(t *testing.T) {
+	h := newHarness(t).withoutData()
+	root := newRootCmd(h.env)
+	var lines []string
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		text := c.Short + "\n" + c.Long + "\n" + c.Example + "\n" + c.LocalFlags().FlagUsages()
+		lines = append(lines, commandsIn(c.Long)...)
+		lines = append(lines, commandsIn(c.Example)...)
+		for _, data := range []string{"csv", "--all", "data commands", "campaign", "callback", "tenjin reports", "site id"} {
+			if strings.Contains(strings.ToLower(text), data) {
+				t.Errorf("%s: its help mentions %q:\n%s", c.CommandPath(), data, text)
+			}
+		}
+		for _, sub := range c.Commands() {
+			if sub.Name() != "completion" {
+				walk(sub)
+			}
+		}
+	}
+	walk(root)
+	checkCommandLines(t, h, lines)
+	if code, _, stderr := h.run("doctor", "-o", "yaml"); code != 2 || strings.Contains(stderr, "csv") {
+		t.Errorf("-o yaml: exit = %d, stderr = %q", code, stderr)
 	}
 }
 

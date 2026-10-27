@@ -125,9 +125,9 @@ In the app's project.
 | `tenjin project set-keys [path]` | Write SDK keys where a coding agent left placeholders. Run it yourself: it does not run inside a coding agent, which would then read the keys |
 | `tenjin sdk guide [platform]` | The SDK integration guide, as tested with this version; works offline |
 | `tenjin sdk upgrade [path]` | Plan the upgrade to the SDK's newest release, with what a new major version changes, and have your coding agent make the changes the files need |
-| `tenjin agent install [path]` | Teach your coding agent to integrate the Tenjin SDK with this CLI |
+| `tenjin agent install [path]` | Teach your coding agent to integrate Tenjin with this CLI |
 
-Two of setup's steps are commands of their own, for scripts and agents. None of these reads a project.
+The Tenjin apps, their SDK keys and the documentation are commands of their own too, for scripts and agents; setup's steps 3 and 4 use the first two. None of these reads a project.
 
 | Command | What it does |
 | --- | --- |
@@ -157,7 +157,7 @@ Two of setup's steps are commands of their own, for scripts and agents. None of 
 4. **SDK keys.** Fetches each app's key from Tenjin, or says where to copy it in the dashboard, and checks it at once, so a wrong key, or the other platform's, is caught before a build.
 5. **Add the SDK**, with your coding agent or by hand: `setup` lists each problem left, with its file, then offers the agent or says what to add and where.
 6. **Check.** Runs `doctor`, and again after each change, until it is clean.
-7. **Verify a launch.** Asks you to launch a debug build, reads the device's log, and ends when Tenjin has processed the install. Without `adb` or Xcode, it says how to check later.
+7. **Verify a launch.** Asks you to launch a debug build, reads the device's log, and ends when Tenjin has processed the install. On a simulator or emulator it ends when Tenjin has accepted the install, since their installs are left out by design. Without `adb` or Xcode, it says how to check later.
 
 ### Checking a project
 
@@ -271,9 +271,9 @@ Every command except `setup` is built to be driven by a program:
 | `TENJIN_SDK_KEY_ANDROID`, `TENJIN_SDK_KEY_IOS` | The same, per platform |
 | `TENJIN_SDK_KEY_ANDROID_<VARIANT>` | The same, for another build, such as `TENJIN_SDK_KEY_ANDROID_AMAZON` |
 | `TENJIN_NO_UPDATE_CHECK` | `1` turns off the new-release notice |
-| `TENJIN_DASHBOARD_URL`, `TENJIN_API_URL`, `TENJIN_TRACK_URL`, `TENJIN_RESOURCE_URL`, `TENJIN_DOCS_URL` | Point at another copy of a Tenjin service. Each must be `https`, except on this machine |
-| `NO_COLOR` | Turn off colour |
-| `CLICOLOR_FORCE` | Keep colour when output is piped, for example into `less -R` |
+| `TENJIN_DASHBOARD_URL`, `TENJIN_API_URL`, `TENJIN_TRACK_URL`, `TENJIN_RESOURCE_URL`, `TENJIN_SITE_IDS_URL`, `TENJIN_DOCS_URL` | Point at another copy of a Tenjin service. Each must be `https`, except on this machine |
+| `NO_COLOR` | Turn off color |
+| `CLICOLOR_FORCE` | Keep color when output is piped, for example into `less -R` |
 
 ### Files
 

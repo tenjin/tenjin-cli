@@ -25,7 +25,7 @@ func newAppsCmd(opts *options, env *environment) *cobra.Command {
 			newAppsGetCmd(opts, env),
 			newAppsCreateCmd(opts, env),
 			newAppsEnsureCmd(opts, env),
-			group("keys", "An app's SDK keys", newAppsKeysListCmd(opts, env)),
+			group("keys", "Read an app's SDK keys", newAppsKeysListCmd(opts, env)),
 		)
 		cmd.Long = `Find and create the Tenjin apps your builds send to, and read their SDK
 keys: the commands 'tenjin setup' is made of, for scripts and agents. A
@@ -51,7 +51,7 @@ command about one app takes its ID, from 'tenjin apps list'.`
 			newAppsEnsureCmd(opts, env),
 			newAppsUpdateCmd(opts, env),
 			newAppsDeleteCmd(opts, env),
-			group("keys", "An app's SDK keys", newAppsKeysListCmd(opts, env)),
+			group("keys", "Read an app's SDK keys", newAppsKeysListCmd(opts, env)),
 		}, sub...)...,
 	)
 }
@@ -120,7 +120,7 @@ func oneLine(s string) string {
 func newAppsGetCmd(opts *options, env *environment) *cobra.Command {
 	return &cobra.Command{
 		Use:   "get <app-id>",
-		Short: "Show one app, including whether Tenjin is receiving its events",
+		Short: "Show one app, and whether Tenjin is receiving its events",
 		Args:  exactArgs(1, "the app's ID, from 'tenjin apps list'"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, err := opts.format(cmd)
@@ -340,7 +340,7 @@ func newAppsEnsureCmd(opts *options, env *environment) *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "ensure --bundle-id <id> --platform <platform>",
-		Short: "Find the app for a bundle ID and platform, creating it if needed",
+		Short: "Find the app for a bundle ID and platform, or create it",
 		Long: `Find the Tenjin app with this bundle ID and platform, and create it if there
 is none. Running it again returns the same app.
 

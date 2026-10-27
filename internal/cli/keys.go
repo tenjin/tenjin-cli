@@ -338,8 +338,9 @@ Each key comes from, in this order:
 
 It is checked with Tenjin first, against that build's own app, and a key
 Tenjin refuses is not written. The keys are never printed whole. set-keys
-asks nothing: it writes only over its own placeholders. Run it yourself, not
-through a coding agent: once written, a key is in a file the agent reads.`,
+asks for no confirmation: it writes only over its own placeholders. Run it
+yourself, not through a coding agent: once written, a key is in a file the
+agent reads.`,
 		Args: maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, err := opts.format(cmd)

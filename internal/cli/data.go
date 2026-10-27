@@ -509,7 +509,7 @@ func appDataCmds(opts *options, env *environment) []*cobra.Command {
 		f.IntVar(&channel, "channel", 0, "the marketing channel's ID, from 'tenjin channels list' (required)")
 	}
 	return []*cobra.Command{
-		group("events", "The events an app has sent",
+		group("events", "List the events an app has sent",
 			dataCmd(opts, env, dataSpec{
 				use: "list --app <app-id>", short: "List the events an app has sent", paged: true,
 				view: view{noun: "events", columns: []string{"name", "event"}}, flags: appFlag(&app),
@@ -521,7 +521,7 @@ func appDataCmds(opts *options, env *environment) []*cobra.Command {
 				},
 			}),
 		),
-		group("callbacks", "An app's callbacks to marketing channels",
+		group("callbacks", "List and change an app's callbacks to marketing channels",
 			dataCmd(opts, env, dataSpec{
 				use: "list --app <app-id>", short: "List an app's callbacks", paged: true,
 				view:  view{noun: "callbacks", columns: []string{"name", "event", "channel_id", "active"}},
@@ -544,7 +544,7 @@ func appDataCmds(opts *options, env *environment) []*cobra.Command {
 				},
 			}),
 		),
-		group("s2s-callbacks", "An app's server-to-server callbacks",
+		group("s2s-callbacks", "List and change an app's server-to-server callbacks",
 			dataCmd(opts, env, dataSpec{
 				use: "list --app <app-id>", short: "List an app's server-to-server callbacks", paged: true,
 				view: view{noun: "server-to-server callbacks", columns: []string{"name", "event", "http_method", "active"}}, flags: appFlag(&app),
@@ -566,7 +566,7 @@ func appDataCmds(opts *options, env *environment) []*cobra.Command {
 				},
 			}),
 		),
-		group("callback-templates", "The callback templates an app can use",
+		group("callback-templates", "List the callback templates an app can use",
 			dataCmd(opts, env, dataSpec{
 				use: "list --app <app-id>", short: "List the callback templates an app can use", paged: true,
 				view:  view{noun: "callback templates", columns: []string{"name", "event", "channel_id"}},
@@ -589,7 +589,7 @@ func appDataCmds(opts *options, env *environment) []*cobra.Command {
 				},
 			}),
 		),
-		group("callback-groups", "An app's callback groups, per marketing channel",
+		group("callback-groups", "List and change an app's callback groups, per channel",
 			dataCmd(opts, env, dataSpec{
 				use: "list --app <app-id> --channel <channel-id>", short: "List an app's callback groups for one channel", paged: true,
 				view:  view{noun: "callback groups", columns: []string{"name", "event", "active"}},
@@ -619,7 +619,7 @@ func appDataCmds(opts *options, env *environment) []*cobra.Command {
 				},
 			}),
 		),
-		group("callback-settings", "An app's callback settings, per marketing channel",
+		group("callback-settings", "Read and change an app's callback settings, per channel",
 			dataCmd(opts, env, dataSpec{
 				use: "get --app <app-id> --channel <channel-id>", short: "Show an app's callback settings for one channel",
 				flags: func(f *pflag.FlagSet) { appFlag(&app)(f); channelFlag(f, true) },
@@ -672,10 +672,10 @@ refused before a request is sent. --app and --channel take IDs, and with
 	}
 	return group("reports", "Read spend, ad revenue and SKAdNetwork reports",
 		newMetricsCmd(opts),
-		report(tenjinapi.ReportSpend, "User acquisition: spend, installs and what they returned", "daily, weekly, monthly, totals-daily", "app, channel, country, site, campaign, campaign,country, channel,app, channel,app,country, creative"),
-		report(tenjinapi.ReportAdRevenue, "Ad revenue, by ad network", "daily, weekly, monthly, totals-daily", "app, channel, country, channel,app, channel,app,country, ad_placement"),
-		report(tenjinapi.ReportSKAdNetwork, "SKAdNetwork postbacks, as Tenjin attributes them", "daily", "app, channel, campaign, sk_ad_network, sk_campaign, sk_source_app, fidelity_type, conversion_value"),
-		report(tenjinapi.ReportSKAN, "SKAdNetwork postbacks, as Apple sends them", "daily", "app, channel, sk_ad_network, sk_campaign, sk_source_app, fidelity_type, conversion_value"),
+		report(tenjinapi.ReportSpend, "Read user acquisition: spend, installs and what they returned", "daily, weekly, monthly, totals-daily", "app, channel, country, site, campaign, campaign,country, channel,app, channel,app,country, creative"),
+		report(tenjinapi.ReportAdRevenue, "Read ad revenue, by ad network", "daily, weekly, monthly, totals-daily", "app, channel, country, channel,app, channel,app,country, ad_placement"),
+		report(tenjinapi.ReportSKAdNetwork, "Read SKAdNetwork postbacks, as Tenjin attributes them", "daily", "app, channel, campaign, sk_ad_network, sk_campaign, sk_source_app, fidelity_type, conversion_value"),
+		report(tenjinapi.ReportSKAN, "Read SKAdNetwork postbacks, as Apple sends them", "daily", "app, channel, sk_ad_network, sk_campaign, sk_source_app, fidelity_type, conversion_value"),
 	)
 }
 

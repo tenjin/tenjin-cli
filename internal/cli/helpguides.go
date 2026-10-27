@@ -19,7 +19,7 @@ var helpGuides = []struct {
 	// data marks a guide to the data commands, there only when they are.
 	data bool
 }{
-	{"integration", "Add the Tenjin SDK to an app, check it, and check a launch", `Add the Tenjin SDK to an app, check it, and check a real launch.
+	{"integration", "Add the SDK to an app, and check a launch", `Add the Tenjin SDK to an app, check it, and check a real launch.
 
 The guided way, in the app's project, from sign-in to an install Tenjin has
 processed:
@@ -32,17 +32,25 @@ checks them, and asks you to launch a debug build.
 
 The same, step by step:
 
-  tenjin project detect                    what the project is: framework, platforms, bundle IDs
-  tenjin sdk guide android                 the integration guide (also ios, flutter, react-native, capacitor, unity)
-  tenjin doctor --offline                  what is missing, each with a file, a line and a fix
-  tenjin doctor                            the same, and each SDK key checked with Tenjin
-  tenjin project set-keys                  write the SDK keys where placeholders were left for them
-  tenjin doctor --device                   after launching a debug build: what Tenjin answered
+  tenjin project detect
+      what the project is: framework, platforms, bundle IDs
+  tenjin sdk guide android
+      the integration guide (also ios, flutter, react-native, capacitor,
+      unity)
+  tenjin doctor --offline
+      what is missing, each with a file, a line and a fix
+  tenjin doctor
+      the same, and each SDK key checked with Tenjin
+  tenjin project set-keys
+      write the SDK keys where placeholders were left for them
+  tenjin doctor --device
+      after launching a debug build: what Tenjin answered
 
 doctor offers to have your coding agent fix what it finds; --agent claude does
 it without asking. When the SDK is behind, the upgrade is planned the same way:
 
-  tenjin sdk upgrade                       the newest release, what it changes, and who makes the change
+  tenjin sdk upgrade
+      the newest release, what it changes, and who makes the change
 
 To teach your coding agent these commands:
 
@@ -51,7 +59,7 @@ To teach your coding agent these commands:
 An agent never gets an SDK key: it writes a placeholder, and setup or set-keys
 fills it.`, false},
 
-	{"callbacks", "Send installs and events to an ad network, or to your own server", `Callbacks tell an ad network, or a server of your own, about an app's installs
+	{"callbacks", "Send installs and events to ad networks or a server", `Callbacks tell an ad network, or a server of your own, about an app's installs
 and events. There are three kinds:
 
   callbacks          to an ad network, each from one of that network's templates
@@ -139,15 +147,18 @@ func scriptingGuide(data bool) string {
 `)
 	if data {
 		b.WriteString(`  -o csv             for the data commands, a table for a spreadsheet
-  --yes              a change to your Tenjin account without the question;
-                     without it and without a terminal, it is refused
-  --dry-run          a change shown, request and body, and not sent
-`)
-	} else {
-		b.WriteString(`  --yes              create a Tenjin app without the question; without it
-                     and without a terminal, nothing is created
 `)
 	}
+	b.WriteString(`  --yes              a change without the question: an app created, the
+                     agent's instructions written or removed`)
+	if data {
+		b.WriteString(`, or a
+                     change to your Tenjin data`)
+	}
+	b.WriteString(`; without it
+                     and without a terminal, nothing is changed
+  --dry-run          what a change would write or send, and nothing changed
+`)
 	b.WriteString(`  --verbose          each request on stderr, never a credential
 
 A command never prompts when stdin is not a terminal. Signing out asks
@@ -220,10 +231,10 @@ Other commands:{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCommand
   {{rpad (print "tenjin help " .Name) 25}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
 
 Flags:
-{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+{{.LocalFlags.FlagUsagesWrapped 80 | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
 
 Global Flags:
-{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableSubCommands}}
+{{.InheritedFlags.FlagUsagesWrapped 80 | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableSubCommands}}
 
 Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
 `
@@ -236,7 +247,7 @@ var commandHelp = map[string]struct{ long, example string }{
 	"apps": {long: `Your apps, and their keys, events and callbacks. A command about one app
 takes its ID, from 'tenjin apps list'.
 
-Setting up callbacks? 'tenjin help callbacks' walks through it.`},
+'tenjin help callbacks' walks through setting up callbacks.`},
 	"apps callbacks": {long: `Callbacks send an app's installs and events to an ad network. Each one comes
 from one of the network's callback templates, with the parameters that
 template needs: 'tenjin apps callback-templates get' shows them. Several set

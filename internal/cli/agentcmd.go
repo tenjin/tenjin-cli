@@ -19,7 +19,7 @@ import (
 const pluginsURL = "https://github.com/tenjin/agent-plugins"
 
 func newAgentCmd(opts *options, env *environment) *cobra.Command {
-	return group("agent", "Teach your coding agent to integrate the Tenjin SDK with this CLI",
+	return group("agent", "Teach your coding agent to integrate Tenjin with this CLI",
 		newAgentInstallCmd(opts, env),
 		newAgentUninstallCmd(opts, env),
 		newAgentStatusCmd(opts, env),
@@ -262,7 +262,7 @@ func newAgentStatusCmd(opts *options, env *environment) *cobra.Command {
 	var flags agentFlags
 	cmd := &cobra.Command{
 		Use:   "status [path]",
-		Short: "Show where the instructions are installed, and whether they are current",
+		Short: "Show where the instructions are, and whether they are current",
 		Args:  maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, err := opts.format(cmd)
@@ -310,7 +310,7 @@ func newAgentStatusCmd(opts *options, env *environment) *cobra.Command {
 func newAgentSkillCmd(opts *options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "skill",
-		Short: "Print the instructions, for an agent this command cannot install them for",
+		Short: "Print the instructions, for any other agent",
 		Args:  noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			format, err := opts.format(cmd)
