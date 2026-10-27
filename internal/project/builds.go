@@ -251,10 +251,10 @@ func (d *detector) androidBuilds(t *Target, content, flavorsBlock, rest string) 
 		for _, f := range variant {
 			suffix += f.suffix
 		}
-		if appID == "" {
+		bundle := appID + suffix
+		if !Resolved(bundle) {
 			continue
 		}
-		bundle := appID + suffix
 
 		// The store comes from the most specific manifest that declares it,
 		// with placeholders filled from the flavors, then the defaults.

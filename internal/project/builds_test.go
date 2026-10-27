@@ -351,6 +351,33 @@ func TestAnUnresolvedBundleIDMakesNoBuild(t *testing.T) {
 	}
 }
 
+// With product flavors too: a flavor's bundle ID made from an unresolved
+// one is not an app either, and only the flavor that names its own is.
+func TestAnUnresolvedBundleIDMakesNoFlavorBuild(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	flavors := strings.Replace(strings.Replace(base[build], `applicationId = "com.example.sample"`, `applicationId = "com.example.${appSuffix}"`, 1), "    buildTypes {", `    flavorDimensions += "store"
+    productFlavors {
+        create("play") { dimension = "store" }
+        create("amazon") {
+            dimension = "store"
+            applicationIdSuffix = ".amazon"
+        }
+        create("galaxy") {
+            dimension = "store"
+            applicationId = "com.example.galaxy"
+        }
+    }
+    buildTypes {`, 1)
+	if !strings.Contains(flavors, "${appSuffix}") {
+		t.Fatal("the fixture's applicationId was not replaced")
+	}
+	p := detect(t, base.With(testproject.Files{build: flavors}))
+	if got := buildList(t, p, project.Android); got != "android:galaxy com.example.galaxy android galaxy __TENJIN_ANDROID_SDK_KEY_GALAXY__" {
+		t.Errorf("builds:\n%s", got)
+	}
+}
+
 // The SDK version is read through a version catalog's version.ref, and
 // through a variable a build file interpolates.
 func TestTheSDKVersionThroughCatalogsAndVariables(t *testing.T) {
