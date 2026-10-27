@@ -202,6 +202,10 @@ func TestSetupSaysWhatConfirmsASimulatorLaunch(t *testing.T) {
 	dir := testproject.Write(t, testproject.IOSNative())
 	_, stdout, _ := h.typing("", "").run("setup", dir)
 	lacks(t, stdout, "the SDK marks its installs, and Tenjin leaves them out of attribution by design", "run a debug build on an iPhone connected by cable")
+	// A simulator cannot be a test device.
+	if strings.Contains(stdout, "test device") {
+		t.Errorf("a simulator was offered as a test device:\n%s", stdout)
+	}
 }
 
 // A launch on an iPhone that logs nothing from Tenjin says so, and what to

@@ -133,7 +133,6 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 				physical = "a physical Android device"
 			}
 			s.say("\nTenjin accepted the app's request. That is as far as a simulator or emulator goes: the SDK marks its installs, and Tenjin leaves them out of attribution by design. To see an install processed, run a debug build on %s, then %s.", physical, s.style.Accent("tenjin doctor --device"))
-			s.testDevicePages(report)
 			return nil
 		case connectAccepted(report):
 			s.say("\nTenjin accepted the app's request, and has not processed the install yet. Run %s again in a minute.", s.style.Accent("tenjin doctor --device"))
@@ -207,8 +206,9 @@ func (s *setup) writeDeviceFindings(r *verify.Report) {
 
 // testDevicePages says where to watch the events that come after the
 // install, which only the dashboard shows, with the identifiers that
-// register this device. The pages are named once per run; each device's
-// identifiers are said.
+// register this device. It is optional, and said so: the launch check does
+// not need it. The pages are named once per run; each device's identifiers
+// are said. A simulator or emulator cannot be a test device.
 func (s *setup) testDevicePages(r *verify.Report) {
 	device := "the device"
 	if f := deviceFinding(forPeople(r), "device.identifiers"); f != nil && f.Detail != "" {
@@ -217,12 +217,12 @@ func (s *setup) testDevicePages(r *verify.Report) {
 		return
 	}
 	if s.pagesShown {
-		s.say("To watch its events as well, register %s as a test device on the same page.", device)
+		s.say("Optional, to watch its events too: register %s as a test device on the same page.", device)
 		return
 	}
 	s.pagesShown = true
-	s.say("To watch purchases and custom events arrive as well, register %s as a test device, then open the Live Event Tool:", device)
+	s.say("\nOptional, and not needed for the integration: to watch purchases and custom events arrive one by one, register %s as a test device, then open the Live Event Tool:", device)
 	s.say("  %s", s.env.endpoints.TestDevicesURL())
 	s.say("  %s", s.env.endpoints.LiveEventsURL())
-	s.say("A new test device can take a while to become active, and its events are left out of reports.")
+	s.say("A new test device takes a while to become active, and its events are left out of reports.")
 }

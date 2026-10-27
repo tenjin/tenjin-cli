@@ -206,8 +206,8 @@ func (h *harness) connectBoth(androidLog, iosLog string) {
 	}
 }
 
-// A launch on each platform names each device's identifiers, and the
-// dashboard's pages once.
+// A launch on each platform names each real device's identifiers, and the
+// dashboard's pages once; a simulator is not offered as a test device.
 func TestSetupNamesEachDeviceItReads(t *testing.T) {
 	h := newHarness(t)
 	h.fake.addApp("Sample", "com.example.sample", "android")
@@ -221,8 +221,10 @@ func TestSetupNamesEachDeviceItReads(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
 	}
-	lacks(t, stdout, "register this device (Advertising ID ",
-		"To watch its events as well, register this device (IDFV AAAABBBB-CCCC-DDDD-EEEE-000000000002) as a test device on the same page.")
+	lacks(t, stdout, "Optional, and not needed for the integration", "register this device (Advertising ID ")
+	if strings.Contains(stdout, "IDFV AAAABBBB") {
+		t.Errorf("the simulator was offered as a test device:\n%s", stdout)
+	}
 	if n := strings.Count(stdout, "/dashboard/debug_app_users"); n != 1 {
 		t.Errorf("the test device pages are named %d times:\n%s", n, stdout)
 	}
