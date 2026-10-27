@@ -866,3 +866,17 @@ func TestDebugLogsInAWrappersNativeCode(t *testing.T) {
 		t.Errorf("ios.debug_logs = %+v", find(r, "ios.debug_logs", project.IOS))
 	}
 }
+
+// An SDK taken from a folder has no version to update to: the fix says how
+// to upgrade it, as sdk upgrade does.
+func TestAnOldSDKFromAFolderSaysHowToUpgradeIt(t *testing.T) {
+	base := testproject.Flutter()
+	files := base.With(testproject.Files{
+		"pubspec.yaml": strings.Replace(base["pubspec.yaml"], "  tenjin_plugin: ^1.5.0\n", "  tenjin_plugin:\n    path: ../tenjin_plugin\n", 1),
+		"pubspec.lock": strings.Replace(strings.Replace(base["pubspec.lock"], `version: "1.5.0"`, `version: "1.4.0"`, 1), "source: hosted", "source: path", 1),
+	})
+	f := expect(t, run(t, files, verify.Options{}), "sdk.version", "", verify.Warning)
+	if strings.Contains(f.Fix, "Update tenjin_plugin to") || !strings.Contains(f.Fix, "path:") {
+		t.Errorf("fix = %q", f.Fix)
+	}
+}

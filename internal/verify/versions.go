@@ -86,7 +86,29 @@ func (r *runner) checkVersion(i project.Integration, platform project.Platform) 
 			f.Fix = "Update " + i.Package + " to " + latest + ", and change the app's code as said above where it uses what changed."
 		}
 	}
+	// A form of the SDK no version number upgrades is upgraded as sdk
+	// upgrade says.
+	if byHand := upgradeByHand(r.p.Root, i, r.opts.Latest); byHand != "" {
+		f.Fix = byHand
+	}
 	r.add(f)
+}
+
+// upgradeByHand is how to upgrade a form of the SDK a version number does
+// not: a folder, a Git repository, a file copied into the project, or a
+// package another one brings. "" for a declared version.
+func upgradeByHand(root string, i project.Integration, live map[string]string) string {
+	if i.Through != "" {
+		return "It comes with " + i.Through + ", which decides its version: upgrade that package instead."
+	}
+	if reason := byHandOnly(i, live); reason != "" {
+		return reason
+	}
+	prefix, via := packageOf(i.Package)
+	if prefix == "" {
+		return ""
+	}
+	return readDeclaration(root, i, via, prefix, latestVersion(prefix, live)).why
 }
 
 // majorChangesBetween says what the major versions after declared, up to
