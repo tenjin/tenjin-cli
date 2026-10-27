@@ -182,7 +182,7 @@ func TestInspectIntegrationFailsWhenTheAppCannotBeRead(t *testing.T) {
 	h.fake.data = map[string]func(*http.Request) (int, any){
 		app + "/integrations/31/callback_groups":   notFound,
 		app + "/integrations/31/callback_settings": notFound,
-		app + "/events":                            notFound,
+		app + "/events": notFound,
 	}
 	code, stdout, stderr := h.run("apps", "callback-groups", "inspect", "--app", testApp, "--channel", "31", "--json")
 	if code == 0 || stdout != "" || !strings.Contains(stderr, "not_found") {

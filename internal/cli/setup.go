@@ -298,7 +298,7 @@ func (s *setup) signIn() error {
 	status, err := manager.Status()
 	// Where the keychain does not answer, signing in again saves the session
 	// to a file the next commands read first.
-	if err != nil && !(session.KeychainTimedOut(err) && s.env.interactive) {
+	if err != nil && (!session.KeychainTimedOut(err) || !s.env.interactive) {
 		return err
 	}
 	if !status.SignedIn {
