@@ -111,7 +111,8 @@ func majorChangesBetween(pkg, declared, latest string) (string, bool) {
 
 // olderThan reports whether a declared version is certainly older than
 // latest. declared may be exact ("1.16.5", "v1.16.5") or a caret or tilde
-// range ("^1.5.0", "~1.5.0"); anything else is not judged.
+// range ("^1.5.0", "~1.5.0"); anything else is not judged. A prerelease,
+// such as 1.3.0-beta.1, is older than its release.
 func olderThan(declared, latest string) bool {
 	declared = strings.TrimSpace(declared)
 	want, ok := parseVersion(latest)
@@ -130,8 +131,10 @@ func olderThan(declared, latest string) bool {
 	case 'v', '=':
 		declared = declared[1:]
 	}
+	declared, _, _ = strings.Cut(declared, "+")
+	declared, pre, prerelease := strings.Cut(declared, "-")
 	have, ok := parseVersion(declared)
-	if !ok {
+	if !ok || prerelease && pre == "" {
 		return false
 	}
 	for n := 0; n < pinned; n++ {
@@ -139,7 +142,7 @@ func olderThan(declared, latest string) bool {
 			return have[n] < want[n]
 		}
 	}
-	return false
+	return prerelease && pinned == 3
 }
 
 // atLeast reports whether an exact declared version is min or later. A range

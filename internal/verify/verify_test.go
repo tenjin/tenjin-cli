@@ -439,6 +439,8 @@ func TestOutdatedSDKVersionWithRanges(t *testing.T) {
 		{"~1.6.0", true},  // stays on 1.6.x
 		{"1.6.0", true},
 		{"^0.9.0", true},
+		{"1.7.0-beta.1", true}, // a prerelease of the current release
+		{"^1.7.0-beta.1", false},
 		{"file:..", false},
 		{"latest", false},
 	}
