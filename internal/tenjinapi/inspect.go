@@ -33,12 +33,20 @@ func (c *Client) InspectIntegration(ctx context.Context, app string, channel int
 	}
 	out := &Integration{}
 	every := Paging{All: true}
+	// The first failure of each read of the app's own data: when all of
+	// them fail, nothing is known about the app, which must not read as
+	// "nothing configured".
+	var appFailures []error
+	appReads := map[string]bool{"configured_groups": true, "callback_settings": true, "events": true}
 	read := func(name string, get func() (Document, error)) any {
 		doc, err := get()
 		if err != nil {
 			e := clierr.From(err)
 			if e.Kind == clierr.NotSignedIn {
 				panic(signInError{err})
+			}
+			if appReads[name] {
+				appFailures = append(appFailures, err)
 			}
 			out.Warnings = append(out.Warnings, fmt.Sprintf("%s: %s", name, e.Message))
 			return nil
@@ -76,6 +84,9 @@ func (c *Client) InspectIntegration(ctx context.Context, app string, channel int
 	})
 	if err != nil {
 		return nil, err
+	}
+	if len(appFailures) == len(appReads) {
+		return nil, appFailures[0]
 	}
 	return out, nil
 }

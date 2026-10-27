@@ -170,6 +170,32 @@ func TestInspectIntegration(t *testing.T) {
 	}
 }
 
+// When nothing about the app can be read, as for an app that does not
+// exist, inspect fails instead of showing an app with nothing configured.
+func TestInspectIntegrationFailsWhenTheAppCannotBeRead(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	notFound := func(*http.Request) (int, any) {
+		return http.StatusNotFound, map[string]any{"code": 404, "message": "App not found"}
+	}
+	app := "/v2/apps/" + testApp
+	h.fake.data = map[string]func(*http.Request) (int, any){
+		app + "/integrations/31/callback_groups":   notFound,
+		app + "/integrations/31/callback_settings": notFound,
+		app + "/events":                            notFound,
+	}
+	code, stdout, stderr := h.run("apps", "callback-groups", "inspect", "--app", testApp, "--channel", "31", "--json")
+	if code == 0 || stdout != "" || !strings.Contains(stderr, "not_found") {
+		t.Errorf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+
+	// One part failing is a warning, as before.
+	delete(h.fake.data, app+"/events")
+	if code, stdout, stderr := h.run("apps", "callback-groups", "inspect", "--app", testApp, "--channel", "31", "--json"); code != 0 || !strings.Contains(stdout, "warnings") {
+		t.Errorf("one part read: exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+}
+
 // The integration view reads every page of the templates, the groups and
 // the events.
 func TestInspectIntegrationReadsEveryPage(t *testing.T) {
