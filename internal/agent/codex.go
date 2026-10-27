@@ -72,9 +72,13 @@ var shellWrapper = regexp.MustCompile(`^\S*/(?:zsh|bash|sh) -lc (.*)$`)
 // progress, as searches are for Claude Code.
 var lookingAround = regexp.MustCompile(`^(?:cat|sed -n|nl|head|tail|ls|find|rg|grep|wc|pwd|tree|file|stat)\b`)
 
-// readCodexEvents follows Codex's output, one JSON object per line. finished
-// is true once the turn has ended, well or badly.
+// readCodexEvents follows Codex's output, one JSON object per line, to its
+// end: Codex blocks once a pipe nobody reads is full. finished is true once
+// the turn has ended, well or badly. An error event alone is not the end:
+// Codex sends one when it reconnects, and carries on.
 func readCodexEvents(r io.Reader, dir string, progress func(Action)) (result Result, finished bool, err error) {
+	var errorEvent, failure string
+	failed := false
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 1<<20), 16<<20)
 	for scanner.Scan() {
@@ -105,12 +109,26 @@ func readCodexEvents(r io.Reader, dir string, progress func(Action)) (result Res
 				result.Summary = strings.TrimSpace(e.Item.Text)
 			}
 		case "turn.completed":
-			finished = true
-		case "turn.failed", "error":
-			return result, true, errors.New(codexFailure(firstNonEmpty(e.Error.Message, e.Message)))
+			finished, failed = true, false
+		case "turn.failed":
+			finished, failed = true, true
+			// The error event before it usually says more.
+			failure = firstNonEmpty(errorEvent, e.Error.Message, e.Message)
+		case "error":
+			if errorEvent == "" {
+				errorEvent = firstNonEmpty(e.Error.Message, e.Message)
+			}
 		}
 	}
-	return result, finished, scanner.Err()
+	switch {
+	case scanner.Err() != nil:
+		return result, finished, scanner.Err()
+	case failed:
+		return result, true, errors.New(codexFailure(failure))
+	case !finished && errorEvent != "":
+		return result, true, errors.New(codexFailure(errorEvent))
+	}
+	return result, finished, nil
 }
 
 // unwrapShell returns the command Codex was asked to run, without the shell

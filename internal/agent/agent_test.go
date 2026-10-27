@@ -223,3 +223,33 @@ func TestAClaudeCodeWithoutRestrictedModeIsRefused(t *testing.T) {
 		t.Error("the agent was started")
 	}
 }
+
+// tail is output that follows an agent's error, long enough to fill a pipe
+// that nobody reads.
+var tail = strings.Repeat(`{"type":"item.completed","item":{"type":"reasoning","text":"`+strings.Repeat("x", 1000)+`"}}`+"\n", 3000)
+
+func TestReadCodexEventsReadsOnAfterAnError(t *testing.T) {
+	stream := strings.NewReader(`{"type":"thread.started","thread_id":"t1"}
+{"type":"error","message":"Reconnecting... 1/5"}
+` + tail + `{"type":"item.completed","item":{"type":"agent_message","text":"Done."}}
+{"type":"turn.completed","usage":{"input_tokens":1}}
+`)
+	result, finished, err := readCodexEvents(stream, "/work", nil)
+	if err != nil || !finished || result.Summary != "Done." || stream.Len() != 0 {
+		t.Errorf("finished = %v, err = %v, result = %+v, %d bytes unread", finished, err, result, stream.Len())
+	}
+	// An error the turn never recovers from is the failure.
+	stream = strings.NewReader(`{"type":"error","message":"stream disconnected"}` + "\n" + tail)
+	_, finished, err = readCodexEvents(stream, "/work", nil)
+	if !finished || err == nil || err.Error() != "stream disconnected" || stream.Len() != 0 {
+		t.Errorf("finished = %v, err = %v, %d bytes unread", finished, err, stream.Len())
+	}
+}
+
+func TestReadEventsReadsOnAfterAnError(t *testing.T) {
+	stream := strings.NewReader(`{"type":"result","is_error":true,"result":"usage limit reached"}` + "\n" + tail)
+	_, finished, err := readEvents(stream, "/work", nil)
+	if !finished || err == nil || !strings.Contains(err.Error(), "usage limit reached") || stream.Len() != 0 {
+		t.Errorf("finished = %v, err = %v, %d bytes unread", finished, err, stream.Len())
+	}
+}

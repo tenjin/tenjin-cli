@@ -266,9 +266,11 @@ type event struct {
 	} `json:"message"`
 }
 
-// readEvents follows Claude Code's output, one JSON object per line. finished
-// is true once the agent has sent its closing result.
+// readEvents follows Claude Code's output, one JSON object per line, to its
+// end, so the agent never blocks on a full pipe. finished is true once the
+// agent has sent its closing result.
 func readEvents(r io.Reader, dir string, progress func(Action)) (result Result, finished bool, err error) {
+	var failure error
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 1<<20), 16<<20) // a line can carry a whole file
 	for scanner.Scan() {
@@ -288,13 +290,16 @@ func readEvents(r io.Reader, dir string, progress func(Action)) (result Result, 
 			}
 		case "result":
 			result = Result{Summary: strings.TrimSpace(e.Result), Denied: len(e.Denials)}
-			if e.IsError {
-				return result, true, errors.New(firstNonEmpty(result.Summary, "the agent reported an error"))
-			}
 			finished = true
+			if e.IsError {
+				failure = errors.New(firstNonEmpty(result.Summary, "the agent reported an error"))
+			}
 		}
 	}
-	return result, finished, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return result, finished, err
+	}
+	return result, finished, failure
 }
 
 // describe turns a tool call into a line of progress. Searches are left out:
