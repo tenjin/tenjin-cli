@@ -203,9 +203,9 @@ func (r *runner) candidateKeys(t *project.Target, src source, build string, wide
 	// app sends is that value, which a check of the given key says nothing
 	// about.
 	if len(src.inits) > 0 && len(keys) == 0 && len(src.keys) == 0 && !r.placeholderInProject(project.Placeholder(build)) {
-		unsure = "The SDK is initialised with a key that is not written as a string literal, such as a BuildConfig field or a variable, so the key the project holds could not be read. The key checked is " + mask(given.Value) + ", from " + given.Source + "."
+		unsure = "The SDK is initialized with a key that is not written as a string literal, such as a BuildConfig field or a variable, so the key the project holds could not be read. The key checked is " + mask(given.Value) + ", from " + given.Source + "."
 		if given.Source == "" {
-			unsure = "The SDK is initialised with a key that is not written as a string literal, such as a BuildConfig field or a variable, so the key the project holds could not be read."
+			unsure = "The SDK is initialized with a key that is not written as a string literal, such as a BuildConfig field or a variable, so the key the project holds could not be read."
 		}
 	} else {
 		unsure = ""
@@ -391,7 +391,7 @@ func keyFinding(scope Finding, b project.Build, k keyLiteral, result track.KeyCh
 		f.ID = "key.no_app"
 		f.Severity = Error
 		f.Title = "Tenjin has no " + b.TenjinPlatform + " app with the bundle ID " + b.BundleID
-		f.Detail = "The SDK key " + mask(k.Value) + " is recognised, but the organization it belongs to has no app with this bundle ID on this platform, so events from this build are refused. Either the build's bundle ID is not the app's, or the key comes from a different organization than the app."
+		f.Detail = "The SDK key " + mask(k.Value) + " is recognized, but the organization it belongs to has no app with this bundle ID on this platform, so events from this build are refused. Either the build's bundle ID is not the app's, or the key comes from a different organization than the app."
 		f.Fix = "Use the SDK key from this app's own page in the dashboard, or correct the bundle ID: a debug suffix or product flavor makes it a different app. If the app does not exist yet, create it with exactly this bundle ID and platform."
 	case track.KeyRejected:
 		f.ID = "key.rejected"

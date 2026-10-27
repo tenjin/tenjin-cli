@@ -85,10 +85,10 @@ func login(cmd *cobra.Command, env *environment, noBrowser bool) (session.Status
 func newLogoutCmd(opts *options, env *environment) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
-		Short: "Sign out, and end the session's API access",
+		Short: "Sign out, and end the API access of your Tenjin CLI sessions",
 		Long: `Forget the saved session and revoke it, which ends its API access at once.
-Tenjin CLI sessions of one person in one organization share that access, so
-signing out also signs out the others still open, on any machine.`,
+Every Tenjin CLI session of yours in this organization shares that access, so
+signing out here signs them all out, on every machine.`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			format, err := opts.format(cmd)

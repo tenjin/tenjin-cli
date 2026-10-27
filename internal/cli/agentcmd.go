@@ -18,7 +18,7 @@ import (
 const pluginsURL = "https://github.com/tenjin/agent-plugins"
 
 func newAgentCmd(opts *options, env *environment) *cobra.Command {
-	return group("agent", "Teach your coding agent to use this CLI",
+	return group("agent", "Teach your coding agent to integrate the Tenjin SDK with this CLI",
 		newAgentInstallCmd(opts, env),
 		newAgentUninstallCmd(opts, env),
 		newAgentStatusCmd(opts, env),

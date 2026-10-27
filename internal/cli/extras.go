@@ -161,12 +161,12 @@ site ID everywhere unless --app, --campaign or --channel narrows it to one.
 			return writeSiteIDRules(cmd.OutOrStdout(), doc)
 		},
 	}
-	return group("site-ids", "Site ID Optimization: block the sites installs should not be attributed to", list, block, reinstate, clear)
+	return group("site-ids", "Block site IDs so installs from them are not attributed", list, block, reinstate, clear)
 }
 
 func addChangeFlags(cmd *cobra.Command, yes, dryRun *bool) {
 	cmd.Flags().BoolVarP(yes, "yes", "y", false, "do it without asking")
-	cmd.Flags().BoolVar(dryRun, "dry-run", false, "say the request it would send, print its body, and send nothing")
+	cmd.Flags().BoolVar(dryRun, "dry-run", false, "print the request it would send, with its body, and send nothing")
 }
 
 func scope(app, campaign string, byChannel bool, channel uint32) string {
@@ -258,7 +258,7 @@ func newDocsCmd(opts *options, env *environment) *cobra.Command {
 		},
 	}
 	search.Flags().IntVar(&limit, "limit", 20, "how many pages, and how many FAQs, at most (up to 50)")
-	return group("docs", "Tenjin's documentation", search)
+	return group("docs", "Search Tenjin's documentation", search)
 }
 
 func newMetricsCmd(opts *options) *cobra.Command {
@@ -266,7 +266,7 @@ func newMetricsCmd(opts *options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "metrics [words]...",
 		Short: "Find the metrics a report can show, for --metrics",
-		Long: `Lists the metrics the reports can show: their ID (what --metrics takes), name
+		Long: `List the metrics the reports can show: their ID (what --metrics takes), name
 and meaning. Words narrow it, best match first; an N-day name such as roi_7d
 finds its family, roi_Nd. --report keeps one report's: user_acquisition
 (tenjin reports spend), ad_monetization (ad-revenue) or skan (skadnetwork,
@@ -307,7 +307,7 @@ func newMacrosCmd(opts *options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "macros [words]...",
 		Short: "Find the macros a callback URL can use",
-		Long: `Lists the macros Tenjin fills in a callback URL. Write one in double braces:
+		Long: `List the macros Tenjin fills in a callback URL. Write one in double braces:
 country is {{country}}. Words narrow the list, best match first.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, err := opts.format(cmd)
@@ -340,7 +340,7 @@ func newInspectIntegrationCmd(opts *options, env *environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "inspect --app <app-id> --channel <channel-id>",
 		Short: "Show an app's callbacks to one channel, and what each group still needs",
-		Long: `Shows, for one app and one marketing channel: the callback group templates
+		Long: `Show, for one app and one marketing channel: the callback group templates
 the channel offers, with the settings each requires; the app's callback groups,
 with the settings each still lacks and whether it can be activated; the callback
 settings the groups share; and the app's events. Run it before creating or

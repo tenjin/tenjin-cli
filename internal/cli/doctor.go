@@ -42,7 +42,7 @@ func newDoctorCmd(opts *options, env *environment) *cobra.Command {
 		Use:   "doctor [path]",
 		Short: "Check a Tenjin SDK integration and explain what is wrong",
 		Long: `Check the Tenjin SDK integration in a project: that the SDK is a dependency,
-that it is initialised and connected, that the manifest and Info.plist carry
+that it is initialized and connected, that the manifest and Info.plist carry
 what the SDK needs, and that Tenjin accepts the SDK key for each platform's
 bundle ID.
 
@@ -51,19 +51,17 @@ day doctor also asks the SDKs' public registries (Maven Central, pub.dev,
 npm, GitHub) for their newest releases, so its fixes name current versions.
 --offline skips both.
 
-doctor itself does not edit the project. At a terminal, when your coding
-agent (Claude Code or Codex) is installed and there is something to fix in
-code, it offers to have the agent fix it, then checks again; --agent picks
-one without asking, and --agent none never offers. The agent works under the
-same limits as in 'tenjin setup', is never given an SDK key, and leaves any
-key already in the project as it is. Where it writes a placeholder for a key
-instead, doctor writes the key given with --sdk-key (or the environment) in
-its place, once Tenjin accepts that key for that build; with --offline it
-writes none. --events and --user-id tell the agent which custom events to
-send and which value identifies a user (they choose those features); without
-them it takes what the app gives its other analytics SDKs, and proposes,
-without adding, where there is nothing. doctor says which before the agent
-starts.
+doctor does not edit the project. At a terminal, when your coding agent
+(Claude Code or Codex) is installed and there is code to fix, it offers to
+have the agent fix it, then checks again; --agent picks one without asking,
+and --agent none never offers. The agent works under the limits 'tenjin
+setup' describes, is never given an SDK key, and leaves any key already in
+the project as it is. Where it writes a placeholder instead, doctor writes
+the --sdk-key key there once Tenjin accepts it for that build (not with
+--offline). The custom events and the user ID it is told to send come from
+--events and --user-id, or else from what the app gives its other analytics
+SDKs, and where there is nothing, it adds none; doctor says which before the
+agent starts.
 
 With --device, doctor also reads what the app's last launch sent and what
 Tenjin answered to each request, then asks Tenjin whether the device's
@@ -72,9 +70,9 @@ iPhone connected by cable, or a running iOS simulator. On an iPhone, doctor
 launches the installed app itself to read its console, and leaves it
 running. A project that builds for both platforms is read from an Android
 device when one is connected, and from iOS otherwise. On iOS the SDK logs its
-requests only when the build calls TenjinSDK.debugLogs(). Tenjin leaves
-installs from a simulator out of attribution by design (the SDK marks them),
-so an iPhone is the check that confirms one.
+requests only when the build calls TenjinSDK.debugLogs(). Only an iPhone
+confirms that Tenjin processed an install: the SDK marks a simulator's
+installs, and Tenjin leaves them out of attribution by design.
 
 --logs reads a saved log instead, from logcat or from an iOS simulator, or
 standard input with "-".

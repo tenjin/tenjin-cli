@@ -30,7 +30,7 @@ func newAppsCmd(opts *options, env *environment) *cobra.Command {
 			c.AddCommand(newInspectIntegrationCmd(opts, env))
 		}
 	}
-	return group("apps", "Your apps, and their keys, events and callbacks",
+	return group("apps", "List and change apps, and their keys, events and callbacks",
 		append([]*cobra.Command{
 			newAppsListCmd(opts, env),
 			newAppsGetCmd(opts, env),
@@ -227,8 +227,8 @@ func newAppsKeysListCmd(opts *options, env *environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list --app <app-id>",
 		Short: "List an app's SDK keys, and where to copy them from",
-		Long: `Lists the app's SDK keys by name, showing only the last four characters of
-each, and says how to copy one from the dashboard page that shows them for the
+		Long: `List the app's SDK keys by name, showing only the last four characters of
+each, and say how to copy one from the dashboard page that shows them for the
 app. Where Tenjin's API does not serve SDK keys, only the dashboard steps are
 shown.
 

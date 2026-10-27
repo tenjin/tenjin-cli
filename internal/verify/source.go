@@ -282,7 +282,7 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 	if lib := r.publishedLibrary(spec); lib != "" && (len(src.inits) == 0 || len(src.connects) == 0) {
 		r.add(Finding{
 			ID: "sdk.init", Severity: Info, Platform: platform,
-			Title:  "The SDK comes with " + lib + ", whose code is not in the project, so whether it initialises and connects was not checked",
+			Title:  "The SDK comes with " + lib + ", whose code is not in the project, so whether it initializes and connects was not checked",
 			Detail: "If the library calls " + spec.initName + " and " + spec.connectName + " itself, nothing is missing here; if it leaves them to the app, they are.",
 			Fix:    "Check the library's instructions; if the app is to make the calls, " + strings.ToLower(spec.connectFix[:1]) + spec.connectFix[1:],
 		})
@@ -291,17 +291,17 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 	if len(src.inits) == 0 {
 		r.add(Finding{
 			ID: "sdk.init", Severity: Error, Platform: platform,
-			Title:  "The SDK is never initialised",
+			Title:  "The SDK is never initialized",
 			Detail: "No call to " + spec.initName + " was found.",
 			Fix:    spec.initFix,
 		})
 	} else {
-		r.pass("sdk.init", platform, "The SDK is initialised", src.inits[0].File, src.inits[0].Line)
+		r.pass("sdk.init", platform, "The SDK is initialized", src.inits[0].File, src.inits[0].Line)
 	}
 	for _, c := range src.deprecated {
 		r.add(Finding{
 			ID: "sdk.init.deprecated", Severity: Warning, Platform: platform,
-			Title: "A deprecated initialiser is used",
+			Title: "A deprecated initializer is used",
 			File:  c.File, Line: c.Line, Fix: spec.deprecatedFix,
 		})
 	}

@@ -107,7 +107,7 @@
     {
       "id": "sdk.init",
       "severity": "pass",
-      "title": "The SDK is initialised",
+      "title": "The SDK is initialized",
       "file": "Assets/Scripts/TenjinBootstrap.cs",
       "line": 22
     },

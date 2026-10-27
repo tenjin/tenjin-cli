@@ -174,7 +174,7 @@ func connectFinding(c *devicelog.Request, platform project.Platform) (f Finding)
 		f.Fix = "Use the SDK key from this app's page in the Tenjin dashboard. Each app, one per platform and store, has its own key."
 	case c.Code == 404:
 		f.Title = "Tenjin has no " + sent + " app with the bundle ID " + bundle
-		f.Detail = answer + ". The key is recognised, but the build that ran is not an app Tenjin knows."
+		f.Detail = answer + ". The key is recognized, but the build that ran is not an app Tenjin knows."
 		f.Fix = "Create the app in Tenjin with exactly this bundle ID and platform, or run a build that uses the registered one."
 	case c.Message == "invalid device identifier":
 		f.Title = "Tenjin refused the connect request because it carried no device identifier"

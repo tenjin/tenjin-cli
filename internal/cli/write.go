@@ -268,7 +268,7 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 		s.flags(cmd.Flags())
 	}
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "do it without asking")
-	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "say the request it would send, print its body, and send nothing")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the request it would send, with its body, and send nothing")
 	return cmd
 }
 
@@ -642,7 +642,7 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 				long: `Create a callback group from one of the channel's group templates. Where the
 template allows one group per app and the app has one already, Tenjin changes
 that group with what is sent instead of making another: --active=false
-switches it off. The question says which it will be.`,
+switches it off. The confirmation says whether it will create or change.`,
 				fields: groupFields(true), flags: needAppChannel,
 				prepare: func(_ []string, body tenjinapi.Fields, said string) (string, error) {
 					if err := checkAppChannel(); err != nil {

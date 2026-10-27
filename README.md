@@ -130,7 +130,7 @@ For app developers, in the app's project.
 | `tenjin project set-keys [path]` | Write SDK keys where a coding agent left placeholders. Run it yourself: it does not run inside a coding agent, which would then read the keys |
 | `tenjin sdk guide [platform]` | The SDK integration guide, as tested with this version; works offline |
 | `tenjin sdk upgrade [path]` | Plan the upgrade to the SDK's newest release, with what a new major version changes, and have your coding agent make the changes the files need |
-| `tenjin agent install [path]` | Teach your coding agent to use this CLI |
+| `tenjin agent install [path]` | Teach your coding agent to integrate the Tenjin SDK with this CLI |
 
 Two of setup's steps are under [Your Tenjin data](#your-tenjin-data): `tenjin apps ensure` finds or creates the app, and `tenjin apps keys list` reads its SDK keys.
 
@@ -215,7 +215,7 @@ tenjin campaigns create --app <app-id> --name "Summer UA" --channel <channel-id>
 `tenjin doctor` checks native Android, native iOS, Flutter, React Native, Capacitor and Unity projects:
 
 - the SDK dependency, and whether it is an old release;
-- the initialise and connect calls, and the features you chose (purchases, ad revenue per ad network, and so on);
+- the initialize and connect calls, and the features you chose (purchases, ad revenue per ad network, and so on);
 - Android permissions, Play Services libraries and ProGuard rules;
 - the iOS tracking and SKAdNetwork `Info.plist` keys;
 - for Unity, the External Dependency Manager, the `TenjinObject` component and SKAdNetwork postbacks;
@@ -234,7 +234,7 @@ tenjin doctor --logs logcat.txt   # a saved log; - reads standard input
 
 Launch a debug build first. `doctor` reports what Tenjin answered to the SDK, why a request was refused, whether the build that ran has the application ID the project declares, and whether Tenjin has processed the install. Other apps on the device with the Tenjin SDK log the same way; their requests are left out. `--serial` picks a device when several are connected.
 
-On iOS, the SDK logs its requests only when the build calls `TenjinSDK.debugLogs()`; `doctor` checks that debug builds do and release builds don't. It also warns when release builds would log: from Unity's `DebugLogs()` outside a development build or the TenjinObject's Debug Logs box, and from a native call in a Flutter, React Native or Capacitor app's `ios/` folder. The Android SDK has no such switch. Tenjin accepts a simulator's requests but leaves its installs out of attribution by design: the SDK marks them, and Android emulators it recognises too. A physical device is what confirms the install.
+On iOS, the SDK logs its requests only when the build calls `TenjinSDK.debugLogs()`; `doctor` checks that debug builds do and release builds don't. It also warns when release builds would log: from Unity's `DebugLogs()` outside a development build or the TenjinObject's Debug Logs box, and from a native call in a Flutter, React Native or Capacitor app's `ios/` folder. The Android SDK has no such switch. Tenjin accepts a simulator's requests but leaves its installs out of attribution by design: the SDK marks them, and Android emulators it recognizes too. A physical device is what confirms the install.
 
 ### Builds and SDK keys
 

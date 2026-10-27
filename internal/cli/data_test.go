@@ -472,6 +472,13 @@ func TestReportsReadEveryPage(t *testing.T) {
 	if len(h.fake.dataAsked) != 1 || !strings.Contains(stderr, "--page 2") {
 		t.Errorf("--per-page: %d reads, stderr = %q", len(h.fake.dataAsked), stderr)
 	}
+	if !strings.Contains(stderr, "neither --page nor --per-page") {
+		t.Errorf("the hint offers --all, which a report does not take: %q", stderr)
+	}
+	// Every row is the default, so there is no --all to ask for it.
+	if code, _, _ := h.run("reports", "spend", "--from", "2026-10-01", "--to", "2026-10-02", "--all"); code != 2 {
+		t.Errorf("--all on a report: exit = %d", code)
+	}
 	if code, _, _ := h.run("channels", "list", "--per-page", "5000"); code != 2 {
 		t.Errorf("--per-page 5000: exit = %d", code)
 	}

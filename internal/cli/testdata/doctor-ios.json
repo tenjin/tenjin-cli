@@ -105,7 +105,7 @@
       "id": "sdk.init",
       "severity": "pass",
       "platform": "ios",
-      "title": "The SDK is initialised",
+      "title": "The SDK is initialized",
       "file": "Sample/AppDelegate.swift",
       "line": 11
     },

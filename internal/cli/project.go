@@ -16,7 +16,7 @@ import (
 )
 
 func newProjectCmd(opts *options, env *environment) *cobra.Command {
-	return group("project", "Inspect the mobile project in a directory, and write its SDK keys", newProjectDetectCmd(opts), newProjectSetKeysCmd(opts, env))
+	return group("project", "Detect the mobile project in a directory, and write its SDK keys", newProjectDetectCmd(opts), newProjectSetKeysCmd(opts, env))
 }
 
 func newProjectDetectCmd(opts *options) *cobra.Command {

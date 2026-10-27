@@ -122,7 +122,7 @@
     {
       "id": "sdk.init",
       "severity": "pass",
-      "title": "The SDK is initialised",
+      "title": "The SDK is initialized",
       "file": "lib/main.dart",
       "line": 7
     },

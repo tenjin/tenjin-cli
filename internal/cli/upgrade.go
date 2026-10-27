@@ -38,17 +38,15 @@ CLI knows.
 
 The Tenjin CLI does not edit the project itself. Where the declaration must
 change, or a new major version may need changes to the app's code, it offers
-to have your coding agent (Claude Code or Codex) make them, told exactly
-which, then checks the project again; --agent picks one without asking, and
---agent none prints the changes to make by hand. Codex is neither offered
-nor started where it could read your Tenjin sign-in, kept in a file, or an
-SDK key or token in this run's environment; the changes are then printed
-instead. Inside a
-coding agent, nothing is started: the agent at work makes the changes, and
---json gives it the plan. A dependency on a folder, a Git repository or a
-branch, and an SDK copied into the project, are listed with how to upgrade
-them by hand. Installing the new version (the package manager's update) is
-yours to run afterwards.`,
+to have your coding agent (Claude Code or Codex) make them, then checks the
+project again; --agent picks one without asking, and --agent none prints the
+changes to make by hand. Codex is neither offered nor started where it could
+read your Tenjin sign-in, kept in a file, or an SDK key or token in this
+run's environment; the changes are then printed instead. Inside a coding
+agent, nothing is started: the agent at work makes the changes, and --json
+gives it the plan. A dependency on a folder, a Git repository or a branch,
+and an SDK copied into the project, are listed with how to upgrade them by
+hand. You run the package manager's update afterwards.`,
 		Example: `  tenjin sdk upgrade
   tenjin sdk upgrade path/to/app --agent claude
   tenjin sdk upgrade --json`,

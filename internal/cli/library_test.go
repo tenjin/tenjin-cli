@@ -25,7 +25,7 @@ func TestDoctorOnALibrary(t *testing.T) {
 			t.Errorf("stdout lacks %q:\n%s", want, stdout)
 		}
 	}
-	if code != 0 || strings.Contains(stdout, "NSUserTrackingUsageDescription") || strings.Contains(stdout, "never initialised") {
+	if code != 0 || strings.Contains(stdout, "NSUserTrackingUsageDescription") || strings.Contains(stdout, "never initialized") {
 		t.Errorf("exit = %d, app checks ran:\n%s", code, stdout)
 	}
 
@@ -48,7 +48,7 @@ func TestAnAppThroughALibrary(t *testing.T) {
 		delegate:                  "import UIKit\n@main\nclass AppDelegate: UIResponder, UIApplicationDelegate {}\n",
 	})
 	_, stdout, _ := newHarness(t).run("doctor", testproject.Write(t, local), "--offline")
-	for _, want := range []string{"TenjinSDK (CocoaPods, through AdsKit) 1.20.0", "The SDK is initialised  AdsKit/AdsKit/Ads.swift"} {
+	for _, want := range []string{"TenjinSDK (CocoaPods, through AdsKit) 1.20.0", "The SDK is initialized  AdsKit/AdsKit/Ads.swift"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout lacks %q:\n%s", want, stdout)
 		}
@@ -60,7 +60,7 @@ func TestAnAppThroughALibrary(t *testing.T) {
 		delegate:       "import UIKit\n@main\nclass AppDelegate: UIResponder, UIApplicationDelegate {}\n",
 	})
 	_, stdout, _ = newHarness(t).run("doctor", testproject.Write(t, published), "--offline")
-	if !strings.Contains(stdout, "The SDK comes with AdsKit, whose code is not in the project") || strings.Contains(stdout, "never initialised") {
+	if !strings.Contains(stdout, "The SDK comes with AdsKit, whose code is not in the project") || strings.Contains(stdout, "never initialized") {
 		t.Errorf("stdout:\n%s", stdout)
 	}
 }

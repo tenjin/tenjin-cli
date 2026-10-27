@@ -97,7 +97,7 @@
       "id": "sdk.init",
       "severity": "pass",
       "platform": "android",
-      "title": "The SDK is initialised",
+      "title": "The SDK is initialized",
       "file": "app/src/main/java/com/example/sample/MainActivity.kt",
       "line": 9
     },

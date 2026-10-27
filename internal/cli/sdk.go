@@ -17,7 +17,7 @@ import (
 )
 
 func newSDKCmd(opts *options, env *environment) *cobra.Command {
-	return group("sdk", "The Tenjin SDK's integration guide, and its upgrade", newSDKGuideCmd(opts), newSDKUpgradeCmd(opts, env))
+	return group("sdk", "Print the SDK integration guide, or plan an SDK upgrade", newSDKGuideCmd(opts), newSDKUpgradeCmd(opts, env))
 }
 
 // sdkGuide is what `sdk guide --json` reports.

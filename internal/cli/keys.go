@@ -323,19 +323,23 @@ func newProjectSetKeysCmd(opts *options, env *environment) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set-keys [path]",
 		Short: "Write SDK keys where a coding agent left placeholders for them",
-		Long: `A coding agent integrating Tenjin is never given an SDK key. Where a key
-belongs it writes a placeholder instead, one per build that is its own app in
-Tenjin: ` + keyfill.Placeholder(project.Android) + `, ` + keyfill.Placeholder(project.IOS) + `,
-or for another build ` + project.Placeholder("android:amazon") + ` and the like, as
-'tenjin project detect' lists them. This command writes the real keys in their
-place, and changes nothing else in the project.
+		Long: `Write each build's SDK key where a placeholder stands for it
+(` + keyfill.Placeholder(project.Android) + `, ` + keyfill.Placeholder(project.IOS) + `, or
+for another build ` + project.Placeholder("android:amazon") + ` and the like, as
+'tenjin project detect' lists them), and change nothing else in the
+project. A coding agent integrating Tenjin is never given an SDK key, so it
+writes these placeholders instead.
 
-Each key comes from --sdk-key or the environment; failing that, from Tenjin,
-for a developer who is signed in; failing that, at a terminal, it is pasted
-after the CLI says where to copy it from. It is checked with Tenjin first,
-against that build's own app, and a key Tenjin refuses is not written. The
-keys are never printed whole. Run it yourself, not through a coding agent:
-once written, a key is in a file the agent reads.`,
+Each key comes from, in this order:
+
+  1. --sdk-key, or the environment
+  2. Tenjin, when you are signed in
+  3. at a terminal, pasted after the CLI says where to copy it from
+
+It is checked with Tenjin first, against that build's own app, and a key
+Tenjin refuses is not written. The keys are never printed whole. set-keys
+asks nothing: it writes only over its own placeholders. Run it yourself, not
+through a coding agent: once written, a key is in a file the agent reads.`,
 		Args: maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, err := opts.format(cmd)

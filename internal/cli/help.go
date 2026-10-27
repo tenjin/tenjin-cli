@@ -157,7 +157,7 @@ func wantsResult(cmd *cobra.Command) bool {
 func newHelpCmd(root *cobra.Command) *cobra.Command {
 	return &cobra.Command{
 		Use:   "help [command | guide]",
-		Short: "Help about any command, or a guide",
+		Short: "Show help for a command, or a guide",
 		Long: `Help about any command: 'tenjin help apps list' is 'tenjin apps list --help'.
 A guide walks through a task step by step: 'tenjin help callbacks'.`,
 		ValidArgsFunction: func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {

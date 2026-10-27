@@ -42,8 +42,8 @@ type dataSpec struct {
 	use, short, long string
 	args             cobra.PositionalArgs
 	view             view
-	// paged adds --page, --per-page and --all; allPages makes --all the
-	// default, unless a page is asked for.
+	// paged adds --page and --per-page, and --all unless allPages makes
+	// every page the default, when no page is asked for.
 	paged    bool
 	allPages bool
 	flags    func(*pflag.FlagSet)
@@ -88,7 +88,11 @@ func dataCmd(opts *options, env *environment, s dataSpec) *cobra.Command {
 			}
 			page := max(paging.Page, 1)
 			if s.paged && !paging.All && morePages(doc, page) {
-				_, err = fmt.Fprintf(cmd.ErrOrStderr(), "There is more: --page %d for the next page, or --all for every page.\n", page+1)
+				every := "--all for every page"
+				if s.allPages {
+					every = "neither --page nor --per-page for every row"
+				}
+				_, err = fmt.Fprintf(cmd.ErrOrStderr(), "There is more: --page %d for the next page, or %s.\n", page+1, every)
 			}
 			return err
 		},
@@ -96,7 +100,9 @@ func dataCmd(opts *options, env *environment, s dataSpec) *cobra.Command {
 	if s.paged {
 		cmd.Flags().IntVar(&paging.Page, "page", 0, "the page to show (default 1)")
 		cmd.Flags().IntVar(&paging.PerPage, "per-page", 0, "how many to a page, up to 1000 (default 25)")
-		cmd.Flags().BoolVar(&paging.All, "all", false, "every page, as one list")
+		if !s.allPages {
+			cmd.Flags().BoolVar(&paging.All, "all", false, "every page, as one list")
+		}
 	}
 	if s.flags != nil {
 		s.flags(cmd.Flags())
@@ -382,7 +388,7 @@ func requireChannel(channel int) error {
 func newCampaignsCmd(opts *options, env *environment) *cobra.Command {
 	var q tenjinapi.CampaignQuery
 	var channel optionalInt
-	cmd := group("campaigns", "Your campaigns",
+	cmd := group("campaigns", "List and change campaigns",
 		dataCmd(opts, env, dataSpec{
 			use: "list", short: "List campaigns", paged: true,
 			view: view{noun: "campaigns", columns: []string{"name", "platform", "channel_id", "app_id"}, hidden: "hidden"},
@@ -411,7 +417,7 @@ func newCampaignsCmd(opts *options, env *environment) *cobra.Command {
 
 func newChannelsCmd(opts *options, env *environment) *cobra.Command {
 	var query string
-	return group("channels", "Marketing channels: ad networks and other sources",
+	return group("channels", "List marketing channels: ad networks and other sources",
 		dataCmd(opts, env, dataSpec{
 			use: "list", short: "List marketing channels", paged: true,
 			view:  view{noun: "channels", columns: []string{"name", "short_id"}},
@@ -449,7 +455,7 @@ func newChannelsCmd(opts *options, env *environment) *cobra.Command {
 func newAdAccountsCmd(opts *options, env *environment) *cobra.Command {
 	var channel optionalInt
 	var query string
-	return group("ad-accounts", "The ad network accounts Tenjin reads spend from",
+	return group("ad-accounts", "List the ad network accounts Tenjin reads spend from",
 		dataCmd(opts, env, dataSpec{
 			use: "list", short: "List ad accounts", paged: true,
 			view: view{noun: "ad accounts", columns: []string{"name", "channel_id"}},
@@ -472,7 +478,7 @@ func newAdAccountsCmd(opts *options, env *environment) *cobra.Command {
 }
 
 func newSKAdNetworksCmd(opts *options, env *environment) *cobra.Command {
-	return group("skadnetworks", "SKAdNetwork IDs Tenjin knows",
+	return group("skadnetworks", "List the SKAdNetwork IDs Tenjin knows",
 		dataCmd(opts, env, dataSpec{
 			use: "list", short: "List SKAdNetwork IDs", paged: true,
 			view: view{noun: "SKAdNetwork IDs"},
@@ -637,14 +643,14 @@ func newReportsCmd(opts *options, env *environment) *cobra.Command {
 		var apps, channels, metrics []string
 		return dataCmd(opts, env, dataSpec{
 			use: string(name) + " --from <date> --to <date>", short: short, paged: true, allPages: true,
-			long: short + `, for the dates from --from to --to (YYYY-MM-DD), both included.
-Every row is shown: --page and --per-page show one page instead.
+			long: short + `,
+for the dates from --from to --to (YYYY-MM-DD), both included. Every row is
+shown: --page and --per-page show one page instead.
 
-The other flags take the API's own values, and others are refused before
-anything is sent: --granularity is one of ` + granularities + `, and --group-by one
-of ` + groupings + `. --app and --channel take IDs, and with --metrics can
-be repeated or given comma-separated; find metric names with 'tenjin reports
-metrics'. Left out, each is the API's default.`,
+--granularity and --group-by take the API's own values; any other value is
+refused before a request is sent. --app and --channel take IDs, and with
+--metrics can be repeated or given comma-separated; find metric names with
+'tenjin reports metrics'. Left out, each is the API's default.`,
 			view: view{noun: "rows"},
 			flags: func(f *pflag.FlagSet) {
 				f.StringVar(&q.From, "from", "", "the first day, YYYY-MM-DD (required)")
@@ -664,7 +670,7 @@ metrics'. Left out, each is the API's default.`,
 			},
 		})
 	}
-	return group("reports", "Spend, ad revenue and SKAdNetwork reports",
+	return group("reports", "Read spend, ad revenue and SKAdNetwork reports",
 		newMetricsCmd(opts),
 		report(tenjinapi.ReportSpend, "User acquisition: spend, installs and what they returned", "daily, weekly, monthly, totals-daily", "app, channel, country, site, campaign, campaign,country, channel,app, channel,app,country, creative"),
 		report(tenjinapi.ReportAdRevenue, "Ad revenue, by ad network", "daily, weekly, monthly, totals-daily", "app, channel, country, channel,app, channel,app,country, ad_placement"),
@@ -675,7 +681,7 @@ metrics'. Left out, each is the API's default.`,
 
 func newSavedReportsCmd(opts *options, env *environment) *cobra.Command {
 	var reportType string
-	cmd := group("saved-reports", "Reports saved in the dashboard",
+	cmd := group("saved-reports", "Run and change reports saved in the dashboard",
 		dataCmd(opts, env, dataSpec{
 			use: "list", short: "List saved reports", paged: true,
 			view: view{noun: "saved reports", columns: []string{"name", "report_type"}},

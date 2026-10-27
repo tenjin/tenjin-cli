@@ -45,18 +45,16 @@ func newSetupCmd(opts *options, env *environment) *cobra.Command {
 		Short: "Set up Tenjin in this project, step by step",
 		Long: `Walk through setting up Tenjin in a project:
 
-  1. work out what the project is, which builds it ships, and which
-     features to integrate; for custom events and the customer user ID,
-     which events and which value, offering what the app already gives its
-     other analytics SDKs
+  1. work out what the project is, which builds it ships, and which SDK
+     features to integrate
   2. sign in
   3. find or create the Tenjin app for each build
   4. get each app's SDK key: fetched from Tenjin where it serves keys, or
      copied from the dashboard, and checked against Tenjin at once
   5. add the SDK: with your coding agent if you want, or by hand
   6. check the integration, and check again after each change until it is clean
-  7. check a real launch on a device or simulator, until Tenjin has
-     processed the install
+  7. check a real launch on a device, until Tenjin has processed the
+     install (a simulator shows only that Tenjin accepted it)
 
 A Tenjin app is one bundle ID on one platform, and an Android build for
 another store (Amazon, or any other) is an app of its own, so a project can

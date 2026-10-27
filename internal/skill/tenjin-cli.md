@@ -96,7 +96,7 @@ When several devices or simulators are running, pass `--serial` with the adb ser
 | `device.connect` is `error` | Tenjin refused it; the title says why, and the fix follows from it |
 | `device.processed` is `pass` | Tenjin has processed the install and attributed it |
 | `device.processed` is `info` | Tenjin has not processed the install yet; run it again in a minute |
-| `device.simulator` | The launch was on a simulator or an emulator the SDK recognised, whose installs Tenjin leaves out of attribution by design; a physical device confirms the install |
+| `device.simulator` | The launch was on a simulator or an emulator the SDK recognized, whose installs Tenjin leaves out of attribution by design; a physical device confirms the install |
 | `device.lookup` | Tenjin could not be asked about the install; the detail gives Tenjin's answer |
 | `device.processed.unchecked` | The install was not looked up, for the reason in the title (offline, for example) |
 | `device.connect` is `warning` | Only other apps' connects are in the log, or Tenjin gave an unusual answer |

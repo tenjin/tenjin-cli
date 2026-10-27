@@ -40,7 +40,7 @@ it without asking. When the SDK is behind, the upgrade is planned the same way:
 
   tenjin sdk upgrade                       the newest release, what it changes, and who makes the change
 
-To teach an agent you already use the whole CLI:
+To teach your coding agent these commands:
 
   tenjin agent install
 
@@ -155,7 +155,7 @@ For a coding agent (Claude Code, Codex, Cursor and others):
   tenjin agent install       teach it the CLI, in this project
   tenjin agent skill         the same instructions, for any other agent
 
-An agent that can run tenjin acts as you, however you signed in. Prefer
+An agent that can run tenjin acts as you. Prefer
 'tenjin login' to giving it TENJIN_API_TOKEN, so the token is not in its
 environment or its logs; 'tenjin logout' ends that access.`},
 }
