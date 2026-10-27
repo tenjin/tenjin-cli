@@ -126,6 +126,9 @@ func (r *runner) tenjinCode() *tenjinCode {
 		}
 		text := blankComments(project.Text(raw))
 		receivers := []string{`TenjinSDK\s*\.\s*instance`, "TenjinSDK", "Tenjin", "instance", "tenjin", "tenjinSDK", `getInstance\([^()]*(?:\([^()]*\)[^()]*)*\)`}
+		for _, name := range helperAliases(text) {
+			receivers = append(receivers, regexp.QuoteMeta(name))
+		}
 		for _, m := range tenjinReceiverVar.FindAllStringSubmatch(text, -1) {
 			for _, name := range m[1:] {
 				if name != "" {

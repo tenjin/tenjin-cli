@@ -20,6 +20,9 @@ var (
 	// or `val tenjin by lazy { TenjinSDK.getInstance(…) }`, Java
 	// `TenjinSDK tenjin = …`.
 	androidAlias = regexp.MustCompile(`\b(\w+)\s*(?::\s*TenjinSDK\b[?!]?\s*)?=\s*TenjinSDK\.getInstance|\b(\w+)\s*:\s*TenjinSDK\b|\bTenjinSDK[ \t]+(\w+)[ \t]*[=;)]|\b(\w+)\s+by\s+lazy\s*\{\s*TenjinSDK\.getInstance`)
+	// A function of the file's that returns the SDK: Kotlin
+	// `fun sdk(…): TenjinSDK`, Java `TenjinSDK sdk(…)`.
+	androidHelper = regexp.MustCompile(`\bfun\s+(\w+)\s*\([^()]*\)\s*:\s*TenjinSDK\b|\bTenjinSDK[ \t]+(\w+)[ \t]*\(`)
 	// A call chained on getInstance: TenjinSDK.getInstance(…).connect().
 	androidChained = regexp.MustCompile(`TenjinSDK\.getInstance\w*\((?:[^()]|\([^()]*\))*\)\s*\.connect\(`)
 	flutterAlias   = regexp.MustCompile(`\b(\w+)\s*=\s*TenjinSDK\.instance\b`)
@@ -67,7 +70,22 @@ func normalizeAndroid(text string) string {
 		end := strings.LastIndex(chain, ".connect(")
 		return chain[:end] + " TenjinSDK.connect("
 	})
-	return rewrite(text, aliases(androidAlias, text), "TenjinSDK")
+	return rewrite(text, append(aliases(androidAlias, text), helperAliases(text)...), "TenjinSDK")
+}
+
+// helperAliases are the names set from one of the file's own functions that
+// return the SDK: `val sdk = sdk(context)`. One level is followed.
+func helperAliases(text string) []string {
+	helpers := aliases(androidHelper, text)
+	if len(helpers) == 0 {
+		return nil
+	}
+	quoted := make([]string, len(helpers))
+	for i, h := range helpers {
+		quoted[i] = regexp.QuoteMeta(h)
+	}
+	set := regexp.MustCompile(`\b(\w+)\s*(?::\s*TenjinSDK\b[?!]?\s*)?=\s*(?:` + strings.Join(quoted, "|") + `)\s*\(`)
+	return aliases(set, text)
 }
 
 func normalizeFlutter(text string) string {

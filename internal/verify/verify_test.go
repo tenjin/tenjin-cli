@@ -664,6 +664,23 @@ func TestReceiversUnderOtherNames(t *testing.T) {
 	}{
 		{"chained on getInstance", android.With(testproject.Files{activity: chained}), "sdk.connect", verify.Pass},
 		{"another object's connect", android.With(testproject.Files{activity: strings.Replace(android[activity], "tenjin.connect()", "mediaBrowser.connect()", 1)}), "sdk.connect", verify.Error},
+		{"from a function that returns the SDK", android.With(testproject.Files{activity: `package com.example.sample
+
+import android.app.Activity
+import android.content.Context
+import com.tenjin.android.TenjinSDK
+
+class MainActivity : Activity() {
+    override fun onResume() {
+        super.onResume()
+        val sdk = sdk(this)
+        sdk.connect()
+    }
+
+    private fun sdk(context: Context): TenjinSDK =
+        TenjinSDK.getInstance(context, "` + testproject.Key + `")
+}
+`}), "sdk.connect", verify.Pass},
 		{"only in a unit test", android.With(testproject.Files{
 			activity: strings.Replace(android[activity], "tenjin.connect()", "", 1),
 			"app/src/test/java/com/example/sample/TenjinTest.kt": "import com.tenjin.android.TenjinSDK\nfun t() { TenjinSDK.getInstance(null, \"K\").connect() }\n",
