@@ -190,6 +190,7 @@ otherwise. With --strict, warnings count too.`,
 				if p, err = loadProject(args); err != nil {
 					return err
 				}
+				env.noteProject(p)
 				if err := narrowBuilds(p, builds); err != nil {
 					return err
 				}

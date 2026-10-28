@@ -89,12 +89,14 @@ func TestAFailedSendWaitsAnHour(t *testing.T) {
 
 func TestOff(t *testing.T) {
 	for vars, want := range map[string]bool{
-		"":                      false,
-		"DO_NOT_TRACK=1":        true,
-		"TENJIN_NO_TELEMETRY=1": true,
-		"CI=true":               true,
-		"DO_NOT_TRACK=0":        false,
-		"CI=false":              false,
+		"":                               false,
+		"DO_NOT_TRACK=1":                 true,
+		"TENJIN_NO_TELEMETRY=1":          true,
+		"CI=true":                        true,
+		"JENKINS_URL=https://ci.example": true,
+		"TF_BUILD=True":                  true,
+		"DO_NOT_TRACK=0":                 false,
+		"CI=false":                       false,
 	} {
 		env := map[string]string{}
 		if vars != "" {
@@ -104,5 +106,41 @@ func TestOff(t *testing.T) {
 		if got := Off(func(n string) string { return env[n] }); got != want {
 			t.Errorf("%q: Off = %v", vars, got)
 		}
+	}
+}
+
+// An event Amplitude refuses is dropped alone; only a failure to reach it,
+// or its asking to wait, pauses the next ones.
+func TestOnlyAnUnreachableAmplitudePausesSending(t *testing.T) {
+	for status, pauses := range map[int]bool{http.StatusBadRequest: false, http.StatusRequestEntityTooLarge: false, http.StatusTooManyRequests: true, http.StatusBadGateway: true} {
+		srv, got := server(t, status)
+		c := &Client{Key: "k", Endpoint: srv.URL, State: filepath.Join(t.TempDir(), "telemetry.json")}
+		c.Send(context.Background(), Event{})
+		c.Send(context.Background(), Event{})
+		if sent := len(*got); (sent == 1) != pauses {
+			t.Errorf("%d: sent %d events", status, sent)
+		}
+	}
+	// Nothing listening: paused.
+	srv, _ := server(t, http.StatusOK)
+	srv.Close()
+	c := &Client{Key: "k", Endpoint: srv.URL, State: filepath.Join(t.TempDir(), "telemetry.json")}
+	c.Send(context.Background(), Event{})
+	if c.load().FailedAt.IsZero() {
+		t.Error("an unreachable Amplitude did not pause sending")
+	}
+}
+
+// An install ID that cannot be kept would make each command a new install.
+func TestNothingIsSentWithoutAPlaceForTheInstallID(t *testing.T) {
+	srv, got := server(t, http.StatusOK)
+	blocked := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocked, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := &Client{Key: "k", Endpoint: srv.URL, State: filepath.Join(blocked, "telemetry.json")}
+	c.Send(context.Background(), Event{})
+	if len(*got) != 0 {
+		t.Errorf("sent %d events", len(*got))
 	}
 }

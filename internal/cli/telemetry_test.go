@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -136,5 +137,50 @@ func TestOfflineSendsNoEvent(t *testing.T) {
 	h.run("doctor", dir, "--offline")
 	if len(*bodies) != 0 {
 		t.Errorf("events: %v", *bodies)
+	}
+}
+
+// The variable that hands an event over does nothing without the argument
+// only the CLI passes: a command run with it set still runs.
+func TestTheHandOverVariableAloneChangesNothing(t *testing.T) {
+	t.Setenv(telemetryEventVar, "{}")
+	var out, errOut bytes.Buffer
+	if code := Execute([]string{"version"}, &out, &errOut); code != 0 || !strings.Contains(out.String(), "Tenjin CLI") {
+		t.Errorf("exit = %d, stdout = %q, stderr = %q", code, out.String(), errOut.String())
+	}
+	out.Reset()
+	if code := Execute([]string{telemetrySendArg}, &out, &errOut); code != 0 || out.Len() != 0 {
+		t.Errorf("the copy: exit = %d, stdout = %q", code, out.String())
+	}
+}
+
+// A run asked to stay offline keeps the coding agent's own runs offline too.
+func TestAnOfflineRunsAgentSendsNothing(t *testing.T) {
+	h, dir := brokenAndroid(t)
+	h.telemetry()
+	agent := h.installAgent()
+	h.run("doctor", dir, "--offline", "--agent", "claude")
+	if !strings.Contains(agent.read("telemetryvars"), "TENJIN_NO_TELEMETRY=1") {
+		t.Errorf("offline: agent's environment had %q", agent.read("telemetryvars"))
+	}
+	h, dir = brokenAndroid(t)
+	h.telemetry()
+	agent = h.installAgent()
+	h.run("doctor", dir, "--agent", "claude")
+	if agent.runs() != "1" || agent.read("telemetryvars") != "" {
+		t.Errorf("online: runs = %q, agent's environment had %q", agent.runs(), agent.read("telemetryvars"))
+	}
+}
+
+// A no at a question is a run like any other, said as such.
+func TestADeclinedRunIsSaid(t *testing.T) {
+	h, dir := newHarness(t), t.TempDir()
+	bodies := h.telemetry()
+	h.typing("n")
+	if code, _, _ := h.run("agent", "install", dir, "--agent", "claude"); code != 0 || len(*bodies) != 1 {
+		t.Fatalf("exit = %d, events %v", code, *bodies)
+	}
+	if props := eventProperties(t, (*bodies)[0]); props["declined"] != true || props["status"] != "ok" {
+		t.Errorf("properties = %v", props)
 	}
 }

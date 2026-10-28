@@ -16,6 +16,7 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/project"
 	"github.com/tenjin/tenjin-cli/internal/render"
 	"github.com/tenjin/tenjin-cli/internal/session"
+	"github.com/tenjin/tenjin-cli/internal/telemetry"
 	"github.com/tenjin/tenjin-cli/internal/verify"
 )
 
@@ -978,6 +979,10 @@ func (s *setup) runAgentOn(p *project.Project, prompt, working string, keys bool
 		toolDir = filepath.Dir(exe)
 	}
 	task := agent.Task{Dir: p.Root, Prompt: prompt, ToolDir: toolDir}
+	// The agent's own tenjin runs keep to what this one was asked.
+	if s.offline || s.env.telemetry == nil {
+		task.Env = []string{telemetry.OffVar + "=1"}
+	}
 
 	s.env.note("agent_used", s.helper.ID)
 	s.say("\n%s %s. This can take a few minutes.", s.helper.Name, working)
@@ -1088,6 +1093,7 @@ func (s *setup) check() error {
 		if err := narrowBuilds(p, s.chosen); err != nil {
 			return err
 		}
+		s.env.noteProject(p)
 		// A placeholder whose key was skipped earlier is asked about again
 		// once the developer comes back to check.
 		if err := s.fillKeys(p, round > 0); err != nil {

@@ -28,8 +28,13 @@ import (
 const telemetryWait = time.Second
 
 // telemetryEventVar hands an event to a copy of the CLI started only to send
-// it, so the command ends without waiting for the network.
-const telemetryEventVar = "TENJIN_TELEMETRY_EVENT"
+// it, so the command ends without waiting for the network. The copy is
+// started with telemetrySendArg as its only argument; the variable alone
+// does nothing.
+const (
+	telemetryEventVar = "TENJIN_TELEMETRY_EVENT"
+	telemetrySendArg  = "__send-telemetry"
+)
 
 // detachedWait bounds the send of a copy that nobody waits for.
 const detachedWait = 10 * time.Second
@@ -44,7 +49,7 @@ func sendDetached(ev telemetry.Event) error {
 	if err != nil {
 		return err
 	}
-	return proc.Detach(exe, nil, append(os.Environ(), telemetryEventVar+"="+string(raw)))
+	return proc.Detach(exe, []string{telemetrySendArg}, append(agent.WithoutKeys(os.Environ()), telemetryEventVar+"="+string(raw)))
 }
 
 // sendHandedEvent is the whole run of a copy started by sendDetached.

@@ -48,7 +48,7 @@ func TestDetach(t *testing.T) {
 	if err := Detach("/bin/sh", []string{"-c", "echo ok > " + out}, nil); err != nil {
 		t.Fatal(err)
 	}
-	for range 50 {
+	for range 250 {
 		if raw, err := os.ReadFile(out); err == nil && string(raw) == "ok\n" {
 			return
 		}

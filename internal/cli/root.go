@@ -382,7 +382,7 @@ func (e *environment) api() *tenjinapi.Client {
 // Execute runs the CLI and returns the process exit code. The result goes to
 // stdout; everything else, including errors, goes to stderr.
 func Execute(args []string, stdout, stderr io.Writer) int {
-	if raw := os.Getenv(telemetryEventVar); raw != "" {
+	if raw := os.Getenv(telemetryEventVar); raw != "" && len(args) == 1 && args[0] == telemetrySendArg {
 		sendHandedEvent(raw)
 		return 0
 	}
@@ -412,6 +412,10 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	root.SetErr(stderr)
 
 	ran, err := root.ExecuteContextC(ctx)
+	var no declined
+	if errors.As(err, &no) {
+		env.note("declined", true)
+	}
 	e := outcome(ctx, err, ran, root)
 	code, kind := 0, ""
 	if e != nil {
@@ -420,9 +424,10 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	}
 	// From here, a second Ctrl-C ends the process at once.
 	stop()
-	sent := env.sendTelemetry(ran, code, kind, time.Since(start))
+	// Sent first: with --verbose its request is logged, and that line must
+	// not land inside the update notice.
+	env.sendTelemetry(ran, code, kind, time.Since(start))()
 	env.reportUpdate(stderr)
-	sent()
 	return code
 }
 

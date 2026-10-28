@@ -116,6 +116,9 @@ type Task struct {
 	// ToolDir is put on the agent's PATH so it can run `tenjin doctor` and
 	// `tenjin sdk guide`, the commands it is allowed to run.
 	ToolDir string
+	// Env is added to the agent's environment, such as TENJIN_NO_TELEMETRY
+	// for a run that was asked to stay offline.
+	Env []string
 }
 
 // Action is one thing the agent did, for showing progress.
@@ -210,7 +213,7 @@ func (a Agent) Run(ctx context.Context, task Task, progress func(Action)) (Resul
 	cmd := proc.Command(ctx, a.Path, a.args(task, sessionID)...)
 	cmd.Dir = task.Dir
 	cmd.Stdin = strings.NewReader(task.Prompt)
-	cmd.Env = withPath(withoutKeys(os.Environ(), foldEnv), task.ToolDir, foldEnv)
+	cmd.Env = append(withPath(withoutKeys(os.Environ(), foldEnv), task.ToolDir, foldEnv), task.Env...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -373,6 +376,9 @@ func withoutKeys(env []string, fold bool) []string {
 	}
 	return out
 }
+
+// WithoutKeys is env without the variables that carry Tenjin secrets.
+func WithoutKeys(env []string) []string { return withoutKeys(env, foldEnv) }
 
 // withPath returns env with dir placed first on PATH, keeping the name the
 // entry already has.

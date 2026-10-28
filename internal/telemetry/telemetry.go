@@ -5,7 +5,8 @@
 // contains. A random ID, kept in a small state file, tells installs apart.
 //
 // It is off in builds without an Amplitude key (any build but a release), in
-// CI, and with TENJIN_NO_TELEMETRY or DO_NOT_TRACK set.
+// CI, and with TENJIN_NO_TELEMETRY or DO_NOT_TRACK set. The key is readable
+// in a released binary, as any Amplitude ingestion key is: it only sends.
 package telemetry
 
 import (
@@ -15,27 +16,35 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 )
 
-// apiKey is Amplitude's key for the CLI's project, stamped by the linker
-// from the release's secrets. Empty in every other build, which then sends
-// nothing.
+// apiKey is Amplitude's key for the CLI's project, stamped by the linker at
+// release. Empty in every other build, which then sends nothing.
 var apiKey string
 
 // Endpoint is Amplitude's HTTP API.
 const Endpoint = "https://api2.amplitude.com/2/httpapi"
 
-// retryAfter is how long a failed send keeps the next ones from trying, so
-// being offline costs one short wait an hour, not one per command.
+// retryAfter is how long a send that could not reach Amplitude keeps the
+// next ones from trying, so being offline costs one short wait an hour, not
+// one per command.
 const retryAfter = time.Hour
+
+// OffVar turns telemetry off.
+const OffVar = "TENJIN_NO_TELEMETRY"
+
+// offVars turn telemetry off: the person's choice, and CI services, most of
+// which set CI and some of which only their own variable.
+var offVars = []string{OffVar, "DO_NOT_TRACK", "CI", "JENKINS_URL", "TF_BUILD", "TEAMCITY_VERSION", "CODEBUILD_BUILD_ID"}
 
 // Off reports whether the person or the machine asked for no telemetry.
 func Off(getenv func(string) string) bool {
-	for _, name := range []string{"TENJIN_NO_TELEMETRY", "DO_NOT_TRACK", "CI"} {
+	for _, name := range offVars {
 		if v := getenv(name); v != "" && v != "0" && v != "false" {
 			return true
 		}
@@ -59,7 +68,7 @@ type Client struct {
 
 // Event is one run of a command.
 type Event struct {
-	// Command is the command's path without "tenjin", such as "apps ensure".
+	// Command is the command's path, such as "tenjin apps ensure".
 	Command string
 	// Flags are the names of the flags given, never their values.
 	Flags    []string
@@ -90,17 +99,32 @@ func (c *Client) Send(ctx context.Context, ev Event) {
 	}
 	s := c.load()
 	if s.InstallID == "" {
+		// An ID that cannot be kept would count each command as an install.
 		s.InstallID = randomID()
-		c.save(s)
+		if c.save(s) != nil {
+			return
+		}
 	}
 	if since := now().Sub(s.FailedAt); since >= 0 && since < retryAfter {
 		return
 	}
-	if err := c.post(ctx, s.InstallID, ev, now()); err != nil {
+	// Only a failure to reach Amplitude, or its asking to wait, pauses the
+	// next sends. An event it refused is dropped alone, and a send cut short
+	// by the wait was only slow.
+	err := c.post(ctx, s.InstallID, ev, now())
+	var refused refusal
+	if err != nil && ctx.Err() == nil && (!errors.As(err, &refused) || refused.retry()) {
 		s.FailedAt = now()
-		c.save(s)
+		_ = c.save(s)
 	}
 }
+
+// refusal is Amplitude's answer when it was not 200.
+type refusal int
+
+func (r refusal) Error() string { return fmt.Sprintf("amplitude answered %d", int(r)) }
+
+func (r refusal) retry() bool { return r == http.StatusTooManyRequests || r >= 500 }
 
 func (c *Client) post(ctx context.Context, installID string, ev Event, at time.Time) error {
 	props := map[string]any{
@@ -151,7 +175,7 @@ func (c *Client) post(ctx context.Context, installID string, ev Event, at time.T
 	}
 	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return errors.New(resp.Status)
+		return refusal(resp.StatusCode)
 	}
 	return nil
 }
@@ -172,26 +196,29 @@ func (c *Client) load() state {
 
 // save writes the state through a temporary file, so two commands run at
 // once never leave it half written.
-func (c *Client) save(s state) {
+func (c *Client) save(s state) error {
+	if c.State == "" {
+		return errors.New("no state file")
+	}
 	raw, err := json.Marshal(s)
-	if err != nil || c.State == "" {
-		return
+	if err != nil {
+		return err
 	}
 	dir := filepath.Dir(c.State)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return
+		return err
 	}
 	tmp, err := os.CreateTemp(dir, ".telemetry-*")
 	if err != nil {
-		return
+		return err
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }()
 	if _, err := tmp.Write(raw); err != nil {
 		_ = tmp.Close()
-		return
+		return err
 	}
 	if err := tmp.Close(); err != nil {
-		return
+		return err
 	}
-	_ = os.Rename(tmp.Name(), c.State)
+	return os.Rename(tmp.Name(), c.State)
 }

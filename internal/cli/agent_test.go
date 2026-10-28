@@ -27,6 +27,7 @@ printf '%s\n' "$@" > "$FAKE_AGENT_DIR/args"
 cat > "$FAKE_AGENT_DIR/prompt"
 echo "$PATH" > "$FAKE_AGENT_DIR/path"
 env | grep '^TENJIN_SDK_KEY' > "$FAKE_AGENT_DIR/keyvars"
+env | grep '^TENJIN_NO_TELEMETRY' > "$FAKE_AGENT_DIR/telemetryvars"
 n=$(cat "$FAKE_AGENT_DIR/runs" 2>/dev/null || echo 0)
 n=$((n+1))
 echo "$n" > "$FAKE_AGENT_DIR/runs"
