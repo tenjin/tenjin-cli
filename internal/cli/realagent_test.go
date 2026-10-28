@@ -273,10 +273,11 @@ func TestSetupWithTheRealCodex(t *testing.T) {
 	defaults := ""
 	if os.Getenv("TENJIN_REALAGENT_CODEX_DEFAULTS") != "" {
 		// A stand-in named codex that adds one option and hands over to the
-		// real one. Everything else is what setup itself passes.
+		// real one. Everything else is what setup itself passes. Listing
+		// the MCP servers reads an empty configuration, as the run does.
 		defaults = "--ignore-user-config"
 		wrapper := filepath.Join(t.TempDir(), "codex")
-		script := "#!/bin/sh\nshift\nexec " + codex + " exec " + defaults + " \"$@\"\n"
+		script := "#!/bin/sh\nif [ \"$1\" != exec ]; then CODEX_HOME=" + t.TempDir() + " exec " + codex + " \"$@\"; fi\nshift\nexec " + codex + " exec " + defaults + " \"$@\"\n"
 		if err := os.WriteFile(wrapper, []byte(script), 0o755); err != nil {
 			t.Fatal(err)
 		}

@@ -267,6 +267,23 @@ func TestReadCodexEventsReadsOnAfterAnError(t *testing.T) {
 	}
 }
 
+// Codex reads a dot in a -c key as a step into a table, quoted or not, so a
+// server's name goes in the value, as a TOML key.
+func TestTomlKey(t *testing.T) {
+	for name, want := range map[string]string{
+		"github":    `github`,
+		"my-docs_2": `my-docs_2`,
+		"my.docs":   `"my.docs"`,
+		`a "b" \ c`: `"a \"b\" \\ c"`,
+		"tab\there": `"tab\u0009here"`,
+		"café":      `"café"`,
+	} {
+		if got := tomlKey(name); got != want {
+			t.Errorf("tomlKey(%q) = %s, want %s", name, got, want)
+		}
+	}
+}
+
 func TestReadEventsReadsOnAfterAnError(t *testing.T) {
 	stream := strings.NewReader(`{"type":"result","is_error":true,"result":"usage limit reached"}` + "\n" + tail)
 	_, finished, err := readEvents(stream, "/work", nil)

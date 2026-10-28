@@ -2,11 +2,16 @@ package agent
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strings"
+
+	"github.com/tenjin/tenjin-cli/internal/proc"
 )
 
 // Codex has no list of allowed commands. It is kept to the task by its own
@@ -20,8 +25,8 @@ var codex = driver{
 	limits:       "it runs in Codex's sandbox: it can change files in this project only and has no network access, but it can read files elsewhere on this machine; it is told not to commit",
 	readsOutside: true,
 	doctor:       "tenjin doctor --offline --json .",
-	args: func(task Task, _ string) []string {
-		return []string{
+	args: func(task Task, _ string, confinement []string) []string {
+		args := []string{
 			"exec", "--json",
 			"--sandbox", "workspace-write",
 			// Pinned here, so that the developer's own Codex configuration
@@ -33,17 +38,99 @@ var codex = driver{
 			"-c", "sandbox_workspace_write.exclude_tmpdir_env_var=true",
 			// A project need not be a Git repository to be integrated.
 			"--skip-git-repo-check",
-			// The developer's connectors have no part in this task. The rest
-			// of their Codex configuration, such as the model, is kept.
-			"-c", "mcp_servers={}",
-			"-C", task.Dir,
-			// The task is read from standard input.
-			"-",
 		}
+		// The developer's MCP servers turned off; the rest of their Codex
+		// configuration, such as the model, is kept.
+		args = append(args, confinement...)
+		// The task is read from standard input.
+		return append(args, "-C", task.Dir, "-")
 	},
-	read:   readCodexEvents,
-	resume: func(sessionID string) string { return "codex resume " + sessionID },
-	inside: []string{"CODEX_THREAD_ID", "CODEX_SANDBOX"},
+	confine: confineCodex,
+	read:    readCodexEvents,
+	resume:  func(sessionID string) string { return "codex resume " + sessionID },
+	inside:  []string{"CODEX_THREAD_ID", "CODEX_SANDBOX"},
+}
+
+// confineCodex turns off what would give Codex tools outside its sandbox:
+// the developer's MCP servers, and the connectors and plugins that bring
+// servers of their own. An override of mcp_servers is merged with the
+// configuration, not put in its place, so each server Codex lists, here
+// where it will run, is turned off by name; then Codex is asked again, and
+// is not started if any is still on.
+func confineCodex(ctx context.Context, path, dir string, env []string) ([]string, error) {
+	args := []string{"-c", "features.apps=false", "-c", "features.plugins=false"}
+	servers, err := codexServers(ctx, path, dir, env, args)
+	if err != nil {
+		return nil, unconfined(err)
+	}
+	if len(servers) == 0 {
+		return args, nil
+	}
+	off := make([]string, len(servers))
+	for i, s := range servers {
+		off[i] = tomlKey(s.Name) + "={enabled=false}"
+	}
+	args = append(args, "-c", "mcp_servers={"+strings.Join(off, ",")+"}")
+	if servers, err = codexServers(ctx, path, dir, env, args); err != nil {
+		return nil, unconfined(err)
+	}
+	for _, s := range servers {
+		if s.Enabled == nil || *s.Enabled {
+			return nil, unconfined(fmt.Errorf("%q is still on", s.Name))
+		}
+	}
+	return args, nil
+}
+
+func unconfined(reason error) error {
+	return fmt.Errorf("this version of Codex cannot be held to the task: its MCP servers could not be turned off (%w). Update Codex, or turn them off in its configuration, then run this again", reason)
+}
+
+type codexServer struct {
+	Name    string `json:"name"`
+	Enabled *bool  `json:"enabled"`
+}
+
+// codexServers returns the MCP servers Codex would start with the given
+// overrides. What went wrong is not passed on: Codex's errors can quote the
+// configuration, which may hold tokens.
+func codexServers(ctx context.Context, path, dir string, env, overrides []string) ([]codexServer, error) {
+	cmd := proc.Command(ctx, path, slices.Concat(overrides, []string{"mcp", "list", "--json"})...)
+	cmd.Dir = dir
+	cmd.Env = env
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, errors.New("'codex mcp list --json' failed")
+	}
+	var servers []codexServer
+	if json.Unmarshal(out, &servers) != nil {
+		return nil, errors.New("'codex mcp list --json' answered in a form this CLI does not know")
+	}
+	return servers, nil
+}
+
+var bareKey = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// tomlKey writes a server's name as a TOML key, quoted unless it is bare.
+func tomlKey(name string) string {
+	if bareKey.MatchString(name) {
+		return name
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range name {
+		switch {
+		case r == '"' || r == '\\':
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		case r < 0x20 || r == 0x7f:
+			fmt.Fprintf(&b, `\u%04X`, r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
 }
 
 // codexEvent is the part of `codex exec --json` output this package reads.

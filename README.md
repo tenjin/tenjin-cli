@@ -212,7 +212,7 @@ On yes, it starts the agent in your project, under your own account, with the op
 | Agent | Confined to | Checks its work with |
 | --- | --- | --- |
 | Claude Code | Reading and editing files in the project, and running `tenjin doctor` and `tenjin sdk guide`. No other command, and no settings or hooks from the project or your own configuration | `tenjin doctor` |
-| Codex | Its sandbox: changes to files in this project only (not even `/tmp`), and no network. It can still read files elsewhere on your machine, so it is neither offered nor started where your Tenjin sign-in is kept in a file rather than a system keychain, or when an SDK key or `TENJIN_API_TOKEN` was given to that run (`setup`, `doctor` and `sdk upgrade` alike) | `tenjin doctor --offline` |
+| Codex | Its sandbox: changes to files in this project only (not even `/tmp`), and no network. Your MCP servers, connectors and plugins are turned off for the run, and Codex is not started if one stays on. It can still read files elsewhere on your machine, so it is neither offered nor started where your Tenjin sign-in is kept in a file rather than a system keychain, or when an SDK key or `TENJIN_API_TOKEN` was given to that run (`setup`, `doctor` and `sdk upgrade` alike) | `tenjin doctor --offline` |
 
 `setup` then lists the files that changed and runs the checks itself; the agent's word is not taken for it. It prints the command that reopens the conversation, so you can ask the agent why something changed.
 

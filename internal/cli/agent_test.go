@@ -87,8 +87,20 @@ func (h *harness) onPath(name, path string) {
 
 // fakeCodexScript stands in for `codex exec --json`, with the events the
 // real one was seen to emit: commands wrapped in a login shell, file changes
-// with absolute paths, and the report as the last message.
+// with absolute paths, and the report as the last message. It also answers
+// `codex mcp list --json` with the servers in FAKE_CODEX_MCP, turned off
+// when an override names them, unless FAKE_CODEX_MCP_STAYS is set.
 const fakeCodexScript = `#!/bin/sh
+case " $* " in *" mcp list --json "*)
+  printf '%s\n' "$@" >> "$FAKE_CODEX_DIR/mcpargs"
+  pwd -P > "$FAKE_CODEX_DIR/mcpdir"
+  [ -n "$FAKE_CODEX_MCP_FAIL" ] && { echo "error: unexpected argument '--json'" >&2; exit 2; }
+  case " $* " in *" mcp_servers="*)
+    [ -z "$FAKE_CODEX_MCP_STAYS" ] && { echo "${FAKE_CODEX_MCP:-[]}" | sed 's/"enabled":true/"enabled":false/g'; exit 0; } ;;
+  esac
+  echo "${FAKE_CODEX_MCP:-[]}"
+  exit 0 ;;
+esac
 printf '%s\n' "$@" > "$FAKE_CODEX_DIR/args"
 cat > "$FAKE_CODEX_DIR/prompt"
 echo '{"type":"thread.started","thread_id":"01a0fdba-284c-7ed2-88aa-48efee485cf3"}'
@@ -415,7 +427,7 @@ func TestSetupIntegratesUsingCodex(t *testing.T) {
 		t.Errorf("the task:\n%s", prompt)
 	}
 	for _, want := range []string{
-		"exec\n--json\n", "--sandbox\nworkspace-write\n", "mcp_servers={}", "-C\n" + dir,
+		"exec\n--json\n", "--sandbox\nworkspace-write\n", "-c\nfeatures.apps=false\n", "-C\n" + dir,
 		// Nothing but the project is writable: not /tmp, not $TMPDIR.
 		"sandbox_workspace_write.writable_roots=[]",
 		"sandbox_workspace_write.exclude_slash_tmp=true",
@@ -427,6 +439,51 @@ func TestSetupIntegratesUsingCodex(t *testing.T) {
 	}
 	if strings.Contains(args, "dangerously") {
 		t.Errorf("args = %q", args)
+	}
+}
+
+// An override of mcp_servers merges with the developer's configuration
+// rather than replacing it, so each server Codex lists is turned off by name,
+// and Codex is asked again to be sure none is left on.
+func TestCodexRunsWithEveryMCPServerTurnedOff(t *testing.T) {
+	h, dir := brokenAndroid(t)
+	codex := h.installCodex()
+	t.Setenv("FAKE_CODEX_MCP", `[{"name":"github","enabled":true},{"name":"my.docs","enabled":true},{"name":"off","enabled":false}]`)
+	if code, stdout, stderr := h.run("setup", dir, "--agent", "codex"); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	const off = `mcp_servers={github={enabled=false},"my.docs"={enabled=false},off={enabled=false}}`
+	if args := codex.read("args"); !strings.Contains(args, "-c\n"+off+"\n") || strings.Contains(args, "mcp_servers={}") {
+		t.Errorf("args = %q", args)
+	}
+	// Listed where Codex runs, since a project can bring servers of its own,
+	// and listed again with the overrides.
+	if real, _ := filepath.EvalSymlinks(dir); codex.read("mcpdir") != real {
+		t.Errorf("listed in %q, not %q", codex.read("mcpdir"), real)
+	}
+	if mcp := codex.read("mcpargs"); strings.Count(mcp, "list\n--json") != 2 || !strings.Contains(mcp, off) {
+		t.Errorf("mcp list args = %q", mcp)
+	}
+}
+
+func TestCodexIsNotStartedWhenItsMCPServersStayOn(t *testing.T) {
+	for _, tc := range []struct{ name, variable string }{
+		{"the override does not take", "FAKE_CODEX_MCP_STAYS"},
+		{"this version cannot list them", "FAKE_CODEX_MCP_FAIL"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, dir := brokenAndroid(t)
+			codex := h.installCodex()
+			t.Setenv("FAKE_CODEX_MCP", `[{"name":"github","enabled":true}]`)
+			t.Setenv(tc.variable, "1")
+			code, stdout, _ := h.run("setup", dir, "--agent", "codex")
+			if codex.read("args") != "" {
+				t.Fatal("Codex was started")
+			}
+			if code != 9 || !strings.Contains(stdout, "its MCP servers could not be turned off") || !strings.Contains(stdout, "No files were changed.") {
+				t.Errorf("exit = %d\n%s", code, stdout)
+			}
+		})
 	}
 }
 

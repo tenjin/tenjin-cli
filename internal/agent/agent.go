@@ -43,14 +43,17 @@ type driver struct {
 	// ownSession is true when this package picks the conversation's ID and
 	// passes it in; otherwise the agent reports the ID it chose.
 	ownSession bool
-	args       func(task Task, sessionID string) []string
-	read       func(r io.Reader, dir string, progress func(Action)) (Result, bool, error)
-	resume     func(sessionID string) string
+	// args are the arguments the agent is started with; confinement is what
+	// confine returned.
+	args   func(task Task, sessionID string, confinement []string) []string
+	read   func(r io.Reader, dir string, progress func(Action)) (Result, bool, error)
+	resume func(sessionID string) string
 	// inside names environment variables the agent sets for what it runs.
 	inside []string
-	// confinable checks, before a run, that this installed version can be
-	// held to the limits above. Nil when nothing needs checking.
-	confinable func(ctx context.Context, path string) error
+	// confine checks, before a run, that this installed version can be held
+	// to the limits above, and returns any arguments that hold it there. Nil
+	// when nothing needs checking.
+	confine func(ctx context.Context, path, dir string, env []string) ([]string, error)
 }
 
 // drivers lists the agents this package can run headless, in the order they
@@ -159,7 +162,7 @@ var claude = driver{
 	limits:     "it may edit files and run 'tenjin doctor' and 'tenjin sdk guide', and nothing else; it commits nothing",
 	doctor:     "tenjin doctor --json .",
 	ownSession: true,
-	args: func(_ Task, sessionID string) []string {
+	args: func(_ Task, sessionID string, _ []string) []string {
 		return []string{
 			"--print",
 			"--output-format", "stream-json", "--verbose",
@@ -184,12 +187,12 @@ var claude = driver{
 	read:   readEvents,
 	resume: func(sessionID string) string { return "claude --resume " + sessionID },
 	inside: []string{"CLAUDECODE"},
-	confinable: func(ctx context.Context, path string) error {
+	confine: func(ctx context.Context, path, _ string, _ []string) ([]string, error) {
 		help, _ := exec.CommandContext(ctx, path, "--help").CombinedOutput()
 		if !strings.Contains(string(help), "--restricted") {
-			return errors.New("this version of Claude Code cannot be held to the task (it has no --restricted mode). Update it with 'claude update', then run this again")
+			return nil, errors.New("this version of Claude Code cannot be held to the task (it has no --restricted mode). Update it with 'claude update', then run this again")
 		}
-		return nil
+		return nil, nil
 	},
 }
 
@@ -204,16 +207,19 @@ func (a Agent) Run(ctx context.Context, task Task, progress func(Action)) (Resul
 		}
 		sessionID = id
 	}
-	if a.confinable != nil {
-		if err := a.confinable(ctx, a.Path); err != nil {
+	env := append(withPath(withoutKeys(os.Environ(), foldEnv), task.ToolDir, foldEnv), task.Env...)
+	var confinement []string
+	if a.confine != nil {
+		var err error
+		if confinement, err = a.confine(ctx, a.Path, task.Dir, env); err != nil {
 			return Result{}, err
 		}
 	}
 	// Its own process group, so stopping it stops the commands it started.
-	cmd := proc.Command(ctx, a.Path, a.args(task, sessionID)...)
+	cmd := proc.Command(ctx, a.Path, a.args(task, sessionID, confinement)...)
 	cmd.Dir = task.Dir
 	cmd.Stdin = strings.NewReader(task.Prompt)
-	cmd.Env = append(withPath(withoutKeys(os.Environ(), foldEnv), task.ToolDir, foldEnv), task.Env...)
+	cmd.Env = env
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
