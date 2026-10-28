@@ -382,9 +382,10 @@ func (r *runner) checkChosenUserID() bool {
 	if len(passed) == 0 {
 		return false
 	}
-	same := regexp.MustCompile(`(?:^|[^\w$])` + regexp.QuoteMeta(chosen) + `(?:$|[^\w$])`)
+	// The whole expression, not one found inside another: user.id is not
+	// previous.user.id, and a transformation of it may not be the same value.
 	for _, u := range passed {
-		if same.MatchString(strings.ReplaceAll(u.Expression, " ", "")) {
+		if strings.Join(strings.Fields(u.Expression), "") == chosen {
 			r.pass("feature."+project.FeatureUserID, "", "The customer user ID chosen is passed to Tenjin", u.File, u.Line)
 			return true
 		}

@@ -323,6 +323,34 @@ func TestEventsNamedAreAddedWhereOthersAreSentAlready(t *testing.T) {
 	lacks(t, stdout, "Custom events are sent to Tenjin, each one chosen", "The customer user ID chosen is passed to Tenjin")
 }
 
+// Whether an event named is sent is looked up among every one the app
+// sends, not only as many as are suggested.
+func TestAnEventNamedIsFoundPastTheSuggestions(t *testing.T) {
+	var events []string
+	for i := range 51 {
+		events = append(events, fmt.Sprintf("event_%02d", i))
+	}
+	h, dir := analyticsSetup(t, sendsTenjin("user.id", events...))
+	code, stdout, _ := h.run("doctor", dir, "--offline", "--agent", "none", "--events", "event_50", "--strict")
+	if code != 0 {
+		t.Fatalf("exit = %d\n%s", code, stdout)
+	}
+	lacks(t, stdout, "Custom events are sent to Tenjin, each one chosen")
+}
+
+// The user ID named passes only as the whole expression the app passes:
+// user.id is not previous.user.id.
+func TestTheUserIDNamedIsTheWholeExpression(t *testing.T) {
+	h, dir := analyticsSetup(t, sendsTenjin("previous.user.id"))
+	_, stdout, _ := h.run("doctor", dir, "--offline", "--agent", "none", "--user-id", "user.id")
+	lacks(t, stdout, "The customer user ID passed to Tenjin is not the one chosen", `Passed to Tenjin: "previous.user.id"`)
+	if strings.Contains(stdout, "The customer user ID chosen is passed to Tenjin") {
+		t.Errorf("passed:\n%s", stdout)
+	}
+	_, stdout, _ = h.run("doctor", dir, "--offline", "--agent", "none", "--user-id", "previous.user.id")
+	lacks(t, stdout, "The customer user ID chosen is passed to Tenjin")
+}
+
 func TestDoctorTakesTheEventsFlagAsTheFeatureChosen(t *testing.T) {
 	h, dir := analyticsSetup(t, withAnalytics())
 	_, stdout, _ := h.run("doctor", dir, "--offline", "--events", "boss_defeated")

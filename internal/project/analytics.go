@@ -93,18 +93,19 @@ func (p *Project) ReadAnalytics() {
 	}
 	p.analyticsRead = true
 	d := &detector{root: p.Root, p: p}
-	p.Analytics = d.findAnalytics(sdkList(analyticsSDKs))
+	p.Analytics = d.findAnalytics(sdkList(analyticsSDKs), true)
 }
 
 // SentToTenjin reads, once, the custom events and customer user IDs the app
 // sends Tenjin's own SDK: by the same rules as the other SDKs' (names from
 // literals and known constants, one level of the app's own wrapper), so
-// that a name the developer chose can be told sent or not.
+// that a name the developer chose can be told sent or not. Every one, not
+// only as many as are suggested.
 func (p *Project) SentToTenjin() Analytics {
 	if !p.sentToTenjinRead {
 		p.sentToTenjinRead = true
 		d := &detector{root: p.Root, p: p}
-		p.sentToTenjin = d.findAnalytics([]*analyticsSDK{&tenjinSDK})
+		p.sentToTenjin = d.findAnalytics([]*analyticsSDK{&tenjinSDK}, false)
 	}
 	return p.sentToTenjin
 }
@@ -518,7 +519,7 @@ type sighting struct {
 }
 
 // findAnalytics reads what the app sends to these SDKs.
-func (d *detector) findAnalytics(sdks []*analyticsSDK) Analytics {
+func (d *detector) findAnalytics(sdks []*analyticsSDK, capped bool) Analytics {
 	switch d.p.Framework {
 	case Native, Flutter, ReactNative, Capacitor, Unity:
 	default:
@@ -565,7 +566,7 @@ func (d *detector) findAnalytics(sdks []*analyticsSDK) Analytics {
 		}
 	}
 	s.followWrappers()
-	return s.result()
+	return s.result(capped)
 }
 
 // readSource reads one of the app's source files, or returns nil for one
@@ -1016,8 +1017,9 @@ func isJS(ext string) bool {
 }
 
 // result merges the sightings: one entry per SDK and name, token or
-// expression, the most often sent first.
-func (s *analyticsScan) result() Analytics {
+// expression, the most often sent first; when capped, as many as are worth
+// suggesting.
+func (s *analyticsScan) result(capped bool) Analytics {
 	type key struct {
 		sdk  string
 		kind analyticsKind
@@ -1050,11 +1052,11 @@ func (s *analyticsScan) result() Analytics {
 		sight := merged[k]
 		switch k.kind {
 		case userIDCall:
-			if len(out.UserIDs) < maxAnalyticsUserIDs {
+			if !capped || len(out.UserIDs) < maxAnalyticsUserIDs {
 				out.UserIDs = append(out.UserIDs, AnalyticsUserID{Expression: sight.expr, SDK: sight.sdk, File: sight.file, Line: sight.line, Through: sight.through, Count: counts[k]})
 			}
 		default:
-			if len(out.Events) >= maxAnalyticsEvents {
+			if capped && len(out.Events) >= maxAnalyticsEvents {
 				continue
 			}
 			e := AnalyticsEvent{Expression: sight.expr, SDK: sight.sdk, File: sight.file, Line: sight.line, Through: sight.through, Count: counts[k]}
