@@ -806,6 +806,14 @@ func TestReactNativeDefaultImportUnderAnyName(t *testing.T) {
 	}, verify.Options{})
 	expect(t, r, "sdk.init", "", verify.Pass)
 	expect(t, r, "sdk.connect", "", verify.Pass)
+
+	// A name that does not say Tenjin at all.
+	r = run(t, testproject.Files{
+		"package.json": `{"dependencies": {"react-native": "0.79.2", "react-native-tenjin": "1.7.0"}}`,
+		"App.tsx":      "import sdk from 'react-native-tenjin';\nsdk.initialize('" + testproject.Key + "');\nsdk.connect();\n",
+	}, verify.Options{})
+	expect(t, r, "sdk.init", "", verify.Pass)
+	expect(t, r, "sdk.connect", "", verify.Pass)
 }
 
 // A connect that only debug builds make does nothing for the app people

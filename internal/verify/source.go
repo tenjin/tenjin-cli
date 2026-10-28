@@ -230,8 +230,10 @@ func (r *runner) scanSource(spec frameworkSpec, dirs []string) source {
 				continue
 			}
 			text := blankComments(project.Text(raw))
-			// Cheap filter: most files never mention the SDK.
-			if !strings.Contains(text, "Tenjin") {
+			// Cheap filter: most files never mention the SDK. One that
+			// imports it under another name still names its package:
+			// import sdk from 'react-native-tenjin'.
+			if !strings.Contains(text, "Tenjin") && !strings.Contains(text, "tenjin") {
 				continue
 			}
 			if spec.normalize != nil {
