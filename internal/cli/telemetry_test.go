@@ -47,7 +47,7 @@ func TestACommandsEventSaysItsShapeAndNothingOfTheProject(t *testing.T) {
 	h, dir := brokenAndroid(t)
 	bodies := h.telemetry()
 	const key = "0123456789abcdef0123456789abcdef"
-	code, _, _ := h.run("doctor", dir, "--offline", "--sdk-key", "android="+key)
+	code, _, _ := h.run("doctor", dir, "--sdk-key", "android="+key)
 	if code != 9 || len(*bodies) != 1 {
 		t.Fatalf("exit = %d, %d events", code, len(*bodies))
 	}
@@ -62,7 +62,7 @@ func TestACommandsEventSaysItsShapeAndNothingOfTheProject(t *testing.T) {
 		t.Errorf("properties = %v", props)
 	}
 	flags, _ := props["set_flags"].([]any)
-	if !slices.Equal(flags, []any{"offline", "sdk-key"}) {
+	if !slices.Equal(flags, []any{"sdk-key"}) {
 		t.Errorf("flags = %v", props["set_flags"])
 	}
 	failed, _ := props["failed_checks"].([]any)
@@ -126,5 +126,15 @@ func TestAHandedEventSurvivesTheHandOver(t *testing.T) {
 	var back telemetry.Event
 	if err := json.Unmarshal(raw, &back); err != nil || back.Command != ev.Command || back.Duration != ev.Duration || back.Facts["setup_step"] != float64(3) {
 		t.Errorf("%+v, %v", back, err)
+	}
+}
+
+// --offline asks for no network the command can do without: no event.
+func TestOfflineSendsNoEvent(t *testing.T) {
+	h, dir := brokenAndroid(t)
+	bodies := h.telemetry()
+	h.run("doctor", dir, "--offline")
+	if len(*bodies) != 0 {
+		t.Errorf("events: %v", *bodies)
 	}
 }

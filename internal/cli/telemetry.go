@@ -143,6 +143,10 @@ func (e *environment) sendTelemetry(ran *cobra.Command, code int, kind string, t
 			return func() {}
 		}
 	}
+	// --offline asks for no network the command can do without.
+	if f := ran.Flags().Lookup("offline"); f != nil && f.Value.String() == "true" {
+		return func() {}
+	}
 	var flags []string
 	ran.Flags().Visit(func(f *pflag.Flag) { flags = append(flags, f.Name) })
 	info := buildinfo.Get()
