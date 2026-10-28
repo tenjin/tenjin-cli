@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/zalando/go-keyring"
@@ -92,6 +93,13 @@ type systemStore struct {
 	set      func(service, user, secret string) error
 	timeout  time.Duration
 	lockWait time.Duration
+
+	mu sync.Mutex
+	// busy is closed when the last keychain call started has returned.
+	busy chan struct{}
+	// kept is the lock file, still locked after unlock while a keychain
+	// write started under it has not returned.
+	kept *os.File
 }
 
 func (s *systemStore) file(environment string) string {
@@ -101,6 +109,15 @@ func (s *systemStore) file(environment string) string {
 // Lock takes the lock file beside the credentials file, whether or not the
 // credentials are in the keychain. The file stays; only the lock on it ends.
 func (s *systemStore) Lock(ctx context.Context, environment string) (func(), error) {
+	s.mu.Lock()
+	if f := s.kept; f != nil {
+		// Still held for a write of this process's: no other process can
+		// have saved since, and this one's writes go in order.
+		s.kept = nil
+		s.mu.Unlock()
+		return s.unlocker(f), nil
+	}
+	s.mu.Unlock()
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return nil, err
 	}
@@ -116,10 +133,7 @@ func (s *systemStore) Lock(ctx context.Context, environment string) (func(), err
 			_ = f.Close()
 			return nil, err
 		case taken:
-			return func() {
-				unlockFile(f)
-				_ = f.Close()
-			}, nil
+			return s.unlocker(f), nil
 		case time.Now().After(deadline):
 			_ = f.Close()
 			return nil, errLockBusy
@@ -130,6 +144,56 @@ func (s *systemStore) Lock(ctx context.Context, environment string) (func(), err
 			return nil, ctx.Err()
 		case <-time.After(50 * time.Millisecond):
 		}
+	}
+}
+
+// unlocker lets go of the lock on f, at once unless a keychain write is on
+// its way: then not before it returns, so that no other process saves under
+// the lock and has the write land over its sign-in. The caller does not wait.
+func (s *systemStore) unlocker(f *os.File) func() {
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if busy := s.busy; !returned(busy) {
+			s.kept = f
+			go s.release(f, busy)
+			return
+		}
+		unlockFile(f)
+		_ = f.Close()
+	}
+}
+
+// release lets go of f once every keychain call has returned, unless this
+// process has taken the lock back meanwhile.
+func (s *systemStore) release(f *os.File, busy chan struct{}) {
+	for {
+		<-busy
+		s.mu.Lock()
+		if s.kept != f {
+			s.mu.Unlock()
+			return
+		}
+		if busy = s.busy; returned(busy) {
+			s.kept = nil
+			s.mu.Unlock()
+			unlockFile(f)
+			_ = f.Close()
+			return
+		}
+		s.mu.Unlock()
+	}
+}
+
+func returned(busy chan struct{}) bool {
+	if busy == nil {
+		return true
+	}
+	select {
+	case <-busy:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -222,29 +286,42 @@ func KeychainTimedOut(err error) bool {
 }
 
 func (s *systemStore) keychainGet(environment string) (string, error) {
-	type result struct {
-		secret string
-		err    error
-	}
-	done := make(chan result, 1)
-	go func() {
-		secret, err := s.get(keyringService, environment)
-		done <- result{secret, err}
-	}()
-	select {
-	case r := <-done:
-		return r.secret, r.err
-	case <-time.After(s.timeout):
+	var secret string
+	var err error
+	if s.keychain(func() { secret, err = s.get(keyringService, environment) }) != nil {
 		return "", errKeychainTimeout
 	}
+	return secret, err
 }
 
 func (s *systemStore) keychainSet(environment, secret string) error {
-	done := make(chan error, 1)
-	go func() { done <- s.set(keyringService, environment, secret) }()
+	var err error
+	if s.keychain(func() { err = s.set(keyringService, environment, secret) }) != nil {
+		return errKeychainTimeout
+	}
+	return err
+}
+
+// keychain makes call once every keychain call started before it has
+// returned, so that a write that outlived its wait lands before a later
+// save's, never after it. The caller waits s.timeout at most, the calls
+// ahead of it included; call's results are its own only when this returns
+// nil.
+func (s *systemStore) keychain(call func()) error {
+	s.mu.Lock()
+	ahead, done := s.busy, make(chan struct{})
+	s.busy = done
+	s.mu.Unlock()
+	go func() {
+		defer close(done)
+		if ahead != nil {
+			<-ahead
+		}
+		call()
+	}()
 	select {
-	case err := <-done:
-		return err
+	case <-done:
+		return nil
 	case <-time.After(s.timeout):
 		return errKeychainTimeout
 	}
