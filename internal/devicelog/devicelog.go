@@ -185,6 +185,7 @@ func Parse(r io.Reader) (*Log, error) {
 	log := &Log{}
 	var pending *Request
 	waiting := map[string]*Request{}
+	iosWaiting := map[string]*Request{}
 	flush := func() {
 		if pending != nil {
 			log.Requests = append(log.Requests, *pending)
@@ -200,7 +201,7 @@ func Parse(r io.Reader) (*Log, error) {
 		n := i + 1
 		if strings.Contains(line, iosTag) {
 			log.SawSDK, log.Platform = true, "ios"
-			pending = parseIOSLine(log, pending, line, n)
+			parseIOSLine(log, iosWaiting, line, n)
 			continue
 		}
 		pid := linePID(line)
@@ -240,13 +241,14 @@ func Parse(r io.Reader) (*Log, error) {
 			}
 		}
 	}
-	if pending != nil && log.Platform == "ios" {
-		pending.Unread = len(pending.Params) == 0
-	}
 	flush()
 	// Requests still waiting for an answer, in the order they began.
 	var unanswered []Request
 	for _, req := range waiting {
+		unanswered = append(unanswered, *req)
+	}
+	for _, req := range iosWaiting {
+		req.Unread = len(req.Params) == 0
 		unanswered = append(unanswered, *req)
 	}
 	sort.Slice(unanswered, func(i, j int) bool { return unanswered[i].Line < unanswered[j].Line })
@@ -306,27 +308,35 @@ func decodeText(raw []byte) string {
 	return string(raw)
 }
 
-// parseIOSLine reads one line of the iOS SDK's output into the request it
-// belongs to, and returns the request still open.
-func parseIOSLine(log *Log, pending *Request, line string, n int) *Request {
+// iosPID matches the process ID in a unified log or console line:
+// "Sample[3930:b3ce6c]".
+var iosPID = regexp.MustCompile(`\[(\d+):[0-9a-fA-Fx]+\]`)
+
+// parseIOSLine reads one line of the iOS SDK's output into the request its
+// process has open, so that two apps logging at once do not mix.
+func parseIOSLine(log *Log, waiting map[string]*Request, line string, n int) {
+	pid := ""
+	if m := iosPID.FindStringSubmatch(line); m != nil {
+		pid = m[1]
+	}
+	pending := waiting[pid]
 	flush := func() {
 		if pending != nil {
 			pending.Unread = len(pending.Params) == 0
 			log.Requests = append(log.Requests, *pending)
 			pending = nil
+			delete(waiting, pid)
 		}
 	}
 	switch {
 	case strings.Contains(line, iosMarkURL):
 		flush()
 		u := strings.TrimSpace(after(line, iosMarkURL))
-		return &Request{URL: u, Endpoint: endpoint(u), Params: map[string]string{}, Line: n, Time: lineTime(line)}
+		waiting[pid] = &Request{URL: u, Endpoint: endpoint(u), Params: map[string]string{}, Line: n, Time: lineTime(line)}
 	case strings.Contains(line, iosMarkDeduped):
 		log.Deduped++
 		log.DedupedLine = n
-		return pending
 	case pending == nil:
-		return nil
 	case strings.Contains(line, iosMarkParams):
 		if values, err := url.ParseQuery(strings.TrimSpace(after(line, iosMarkParams))); err == nil {
 			for k, v := range values {
@@ -344,7 +354,6 @@ func parseIOSLine(log *Log, pending *Request, line string, n int) *Request {
 		}
 		flush()
 	}
-	return pending
 }
 
 func after(line, marker string) string {

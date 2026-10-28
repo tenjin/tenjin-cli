@@ -342,6 +342,28 @@ func TestParseIOSWithoutDebugLogs(t *testing.T) {
 	}
 }
 
+func TestParseIOSKeepsEachProcessesLinesTogether(t *testing.T) {
+	log, err := Parse(strings.NewReader(`2026-10-06 10:04:49.416 Df Other[3956:b3ce6f] (TenjinSDK) [Tenjin] - LOG: Sending request - https://track.tenjin.com/v0/event
+2026-10-06 10:04:49.416 Df Other[3956:b3ce6f] (TenjinSDK) [Tenjin] - DEBUG: request body bundle_id=com.other.app&platform=ios
+2026-10-06 10:04:49.420 Df Sample[17522:c1] (TenjinSDK) [Tenjin] - LOG: Sending request - https://track.tenjin.com/v0/event
+2026-10-06 10:04:49.420 Df Sample[17522:c1] (TenjinSDK) [Tenjin] - DEBUG: request body bundle_id=com.example.sample&platform=ios
+2026-10-06 10:04:49.903 Df Other[3956:b3ce70] (TenjinSDK) [Tenjin] - LOG: Got http response 200
+2026-10-06 10:04:49.903 Df Other[3956:b3ce70] (TenjinSDK) [Tenjin] - DEBUG: Response body {"code":200,"success":true}
+2026-10-06 10:04:49.910 Df Sample[17522:c2] (TenjinSDK) [Tenjin] - LOG: Got http response 401
+2026-10-06 10:04:49.910 Df Sample[17522:c2] (TenjinSDK) [Tenjin] - DEBUG: Response body {"code":401,"message":"bad key"}
+`))
+	if err != nil || len(log.Requests) != 2 {
+		t.Fatalf("requests = %+v, err = %v", log, err)
+	}
+	other, sample := log.Requests[0], log.Requests[1]
+	if other.Params["bundle_id"] != "com.other.app" || !other.Accepted() {
+		t.Errorf("other = %+v", other)
+	}
+	if sample.Params["bundle_id"] != "com.example.sample" || sample.Code != 401 || sample.Message != "bad key" {
+		t.Errorf("sample = %+v", sample)
+	}
+}
+
 func TestParseIOSSkippedConnect(t *testing.T) {
 	log, _ := Parse(strings.NewReader(`2026-10-06 10:04:49.416 Df Sample[1:2] (TenjinSDK) [Tenjin] - DEBUG: Connect sent 4.2s ago (interval: 30.0s), ignoring duplicate ping
 `))
