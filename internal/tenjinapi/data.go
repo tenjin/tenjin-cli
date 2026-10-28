@@ -259,6 +259,25 @@ func (c *Client) AppCallback(ctx context.Context, app, callback string) (Documen
 	return c.fetch(ctx, func(cl clients) (*http.Response, error) { return cl.cma.GetAppsAppIdCallbacksId(ctx, appID, id) })
 }
 
+// CallbackActive reads whether one of an app's callbacks is active.
+func (c *Client) CallbackActive(ctx context.Context, app, callback string) (bool, error) {
+	doc, err := c.AppCallback(ctx, app, callback)
+	if err != nil {
+		return false, err
+	}
+	var read struct {
+		Data struct {
+			Attributes struct {
+				Active *bool `json:"active"`
+			} `json:"attributes"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(doc, &read) != nil || read.Data.Attributes.Active == nil {
+		return false, clierr.New(clierr.Upstream, "the Tenjin API's answer for the callback does not say whether it is active")
+	}
+	return *read.Data.Attributes.Active, nil
+}
+
 // AppS2SCallbacks lists an app's server-to-server callbacks.
 func (c *Client) AppS2SCallbacks(ctx context.Context, app string, p Paging) (Document, error) {
 	id, err := ParseID(app, "app")

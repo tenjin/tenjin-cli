@@ -169,6 +169,11 @@ type writeSpec struct {
 	// whether to ask with no as the default. It runs before the question and
 	// the dry run, not with --yes alone, where nothing is said.
 	look func(ctx context.Context, api *tenjinapi.Client, body tenjinapi.Fields, said string) (what string, cautious bool)
+	// keep adds to the body what the API would otherwise change unasked,
+	// read from the account, and says it for the question. It runs before
+	// the question and the dry run, and with --yes too, since it changes what
+	// is sent.
+	keep func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (string, error)
 	// update refuses an empty body: there would be nothing to change.
 	update bool
 	// destructive asks with no as the default.
@@ -242,6 +247,13 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 			// Planned first, so that what the request needs, such as its
 			// IDs, is checked before the question and the dry run.
 			api := env.api()
+			if s.keep != nil {
+				kept, err := s.keep(cmd.Context(), api, args, body)
+				if err != nil {
+					return err
+				}
+				what += kept
+			}
 			planned, err := api.Plan(write)
 			if err != nil {
 				return err
@@ -602,10 +614,29 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 			}),
 			writeCmd(opts, env, writeSpec{
 				use: "update <callback-id> --app <app-id>", short: "Change a callback", update: true,
+				long: `Change a callback: only the flags given. Tenjin switches a callback on when
+an update does not say whether it is active, so without --active the callback
+is read first and its current state sent with the change.`,
 				args:   exactArgs(1, "the callback's ID, from 'tenjin apps callbacks list'"),
 				fields: callbackFields(false), flags: needApp,
 				prepare: func(args []string, body tenjinapi.Fields, said string) (string, error) {
 					return "Change the callback " + args[0] + ": " + said, checkApp()
+				},
+				keep: func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (string, error) {
+					if _, given := body["active"]; given {
+						return "", nil
+					}
+					active, err := api.CallbackActive(ctx, app, args[0])
+					if err != nil {
+						e := clierr.From(err)
+						return "", clierr.Wrap(e.Kind, err, "could not read whether the callback %s is active, which the change must send to leave it so: %s", render.Clean(args[0]), e.Message).
+							WithHint("Say it with --active or --active=false.")
+					}
+					body["active"] = active
+					if active {
+						return "; it stays active", nil
+					}
+					return "; it stays switched off (--active=false is sent, since Tenjin would otherwise switch it on)", nil
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 					doc, err := api.UpdateAppCallback(ctx, app, args[0], body)

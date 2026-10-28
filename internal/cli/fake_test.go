@@ -70,6 +70,10 @@ type fakeTenjin struct {
 	// resource (and {} for a delete).
 	writes       []apiWrite
 	writeAnswers map[string]func(r *http.Request) (int, any)
+	// callbacks says whether each app callback is active, by ID; one not
+	// listed is. As the API does, an update that does not send active
+	// switches the callback on.
+	callbacks map[string]bool
 	// siteIDRules are the Site ID Optimization rules; siteIDCalls records
 	// each call as "Method body".
 	siteIDRules []map[string]any
@@ -239,7 +243,12 @@ func (f *fakeTenjin) dataRead(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.dataAsked = append(f.dataAsked, r.URL)
 	answer := f.data[r.URL.Path]
+	id, active, isCallback := f.callback(r.URL.Path)
 	f.mu.Unlock()
+	if answer == nil && isCallback {
+		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"id": id, "type": "callback", "attributes": map[string]any{"name": "First", "active": active}}})
+		return
+	}
 	if answer == nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"data":  []any{map[string]any{"id": "00000000-0000-4000-8000-0000000000aa", "type": "thing", "attributes": map[string]any{"name": "First"}}},
@@ -325,6 +334,13 @@ func (f *fakeTenjin) dataWrite(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	f.writes = append(f.writes, apiWrite{method: r.Method, path: r.URL.Path, body: body})
 	answer := f.writeAnswers[r.Method+" "+r.URL.Path]
+	if id, _, ok := f.callback(r.URL.Path); ok && r.Method == http.MethodPatch && answer == nil {
+		active, sent := body["active"].(bool)
+		if f.callbacks == nil {
+			f.callbacks = map[string]bool{}
+		}
+		f.callbacks[id] = active || !sent
+	}
 	f.mu.Unlock()
 	switch {
 	case answer != nil:
@@ -337,6 +353,20 @@ func (f *fakeTenjin) dataWrite(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"id": "00000000-0000-4000-8000-0000000000bb", "type": "thing", "attributes": body}})
 	}
+}
+
+// callback reads the callback a path names, if it names one, under f.mu.
+func (f *fakeTenjin) callback(path string) (id string, active, ok bool) {
+	rest, found := strings.CutPrefix(path, "/v2/apps/")
+	if !found {
+		return "", false, false
+	}
+	parts := strings.Split(rest, "/")
+	if len(parts) != 3 || parts[1] != "callbacks" {
+		return "", false, false
+	}
+	active, listed := f.callbacks[parts[2]]
+	return parts[2], active || !listed, true
 }
 
 func (f *fakeTenjin) authorized(w http.ResponseWriter, r *http.Request) bool {

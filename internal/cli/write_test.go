@@ -145,6 +145,59 @@ func TestInactiveCallbackSaysBothWrites(t *testing.T) {
 	}
 }
 
+// Tenjin switches a callback on when an update leaves active out, so one
+// without --active sends the callback's current state, and says so.
+func TestChangingACallbackLeavesItAsActiveAsItWas(t *testing.T) {
+	update := []string{"apps", "callbacks", "update", testOther, "--app", testApp, "--name", "Renamed"}
+	for _, active := range []bool{false, true} {
+		h := newHarness(t)
+		h.signIn()
+		h.fake.callbacks = map[string]bool{testOther: active}
+		state := "switched off"
+		if active {
+			state = "active"
+		}
+
+		code, stdout, stderr := h.run(append(update, "--dry-run")...)
+		var body map[string]any
+		if err := json.Unmarshal([]byte(stdout), &body); err != nil || code != 0 || body["name"] != "Renamed" || body["active"] != active ||
+			!strings.Contains(stderr, "it stays "+state) {
+			t.Errorf("dry run: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+		}
+		h.typing("n")
+		if _, _, stderr := h.run(update...); !strings.Contains(stderr, "it stays "+state) || len(h.fake.writes) != 0 {
+			t.Errorf("question: stderr = %q", stderr)
+		}
+		h.env.interactive = false
+		if code, _, stderr := h.run(append(update, "--yes")...); code != 0 || len(h.fake.writes) != 1 {
+			t.Fatalf("exit = %d, stderr = %q", code, stderr)
+		}
+		if h.fake.callbacks[testOther] != active {
+			t.Errorf("a callback that was %s is now active = %v", state, h.fake.callbacks[testOther])
+		}
+	}
+
+	// Said, the state is sent as given, with nothing read first.
+	h := newHarness(t)
+	h.signIn()
+	h.fake.callbacks = map[string]bool{testOther: false}
+	if code, _, stderr := h.run(append(update, "--active", "--yes")...); code != 0 || len(h.fake.dataAsked) != 0 || !h.fake.callbacks[testOther] {
+		t.Errorf("--active: exit = %d, %d reads, stderr = %q", code, len(h.fake.dataAsked), stderr)
+	}
+
+	// A state that cannot be read is not guessed.
+	h = newHarness(t)
+	h.signIn()
+	h.fake.data = map[string]func(*http.Request) (int, any){
+		"/v2/apps/" + testApp + "/callbacks/" + testOther: func(*http.Request) (int, any) {
+			return http.StatusInternalServerError, map[string]string{"error": "boom"}
+		},
+	}
+	if code, _, stderr := h.run(append(update, "--yes")...); code == 0 || len(h.fake.writes) != 0 || !strings.Contains(stderr, "--active=false") {
+		t.Errorf("unreadable: exit = %d, %d writes, stderr = %q", code, len(h.fake.writes), stderr)
+	}
+}
+
 // IDs are checked before the question and the dry run.
 func TestWriteChecksIDsBeforeAsking(t *testing.T) {
 	h := newHarness(t)
