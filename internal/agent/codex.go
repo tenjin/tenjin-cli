@@ -52,13 +52,15 @@ var codex = driver{
 }
 
 // confineCodex turns off what would give Codex tools outside its sandbox:
-// the developer's MCP servers, and the connectors and plugins that bring
-// servers of their own. An override of mcp_servers is merged with the
+// the developer's MCP servers, and the features in codexFeaturesOff. An override of mcp_servers is merged with the
 // configuration, not put in its place, so each server Codex lists, here
 // where it will run, is turned off by name; then Codex is asked again, and
 // is not started if any is still on.
 func confineCodex(ctx context.Context, path, dir string, env []string) ([]string, error) {
-	args := []string{"-c", "features.apps=false", "-c", "features.plugins=false"}
+	var args []string
+	for _, feature := range codexFeaturesOff {
+		args = append(args, "-c", "features."+feature+"=false")
+	}
 	servers, err := codexServers(ctx, path, dir, env, args)
 	if err != nil {
 		return nil, unconfined(err)
@@ -81,6 +83,12 @@ func confineCodex(ctx context.Context, path, dir string, env []string) ([]string
 	}
 	return args, nil
 }
+
+// codexFeaturesOff are Codex's features that act outside its sandbox or
+// bring tools of their own: connectors, plugins, hooks, the browser and
+// computer use. A -c override of a feature a version does not know is
+// ignored, so naming one is harmless.
+var codexFeaturesOff = []string{"apps", "plugins", "skill_mcp_dependency_install", "hooks", "browser_use", "browser_use_external", "in_app_browser", "computer_use"}
 
 func unconfined(reason error) error {
 	return fmt.Errorf("this version of Codex cannot be held to the task: its MCP servers could not be turned off (%w). Update Codex, or turn them off in its configuration, then run this again", reason)
