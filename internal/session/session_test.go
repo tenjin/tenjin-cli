@@ -184,7 +184,8 @@ func TestARefreshWaitsForAnotherProcessAndTakesItsResult(t *testing.T) {
 	}
 }
 
-// A lock held past the wait does not hold the command forever.
+// A lock held past the wait does not hold the command forever, and does not
+// let it refresh either.
 func TestALockHeldTooLongIsNotWaitedOnForever(t *testing.T) {
 	dir := t.TempDir()
 	store := fileStoreIn(dir)
@@ -198,9 +199,26 @@ func TestALockHeldTooLongIsNotWaitedOnForever(t *testing.T) {
 	if _, err := store.Lock(context.Background(), "production"); !errors.Is(err, errLockBusy) {
 		t.Errorf("Lock = %v, want busy", err)
 	}
-	m := &Manager{Environment: "production", Store: store, Authority: &rotating{valid: "refresh-0"}}
-	if jwt, err := m.Token(context.Background()); err != nil || jwt != "jwt-access" {
-		t.Errorf("Token = %q, %v", jwt, err)
+	// The holder may have spent the refresh token and not yet saved the one
+	// it got back: refreshing now would spend it again, and the refusal
+	// would erase the holder's sign-in. So this one stops and says why.
+	auth := &rotating{valid: "refresh-0"}
+	m := &Manager{Environment: "production", Store: store, Authority: auth}
+	if _, err = m.Token(context.Background()); err == nil {
+		t.Fatal("refreshed without the lock")
+	}
+	if e := clierr.From(err); e.Kind != clierr.Internal || !strings.Contains(e.Message, "another tenjin") || !strings.Contains(e.Hint, "try again") {
+		t.Errorf("Token: %v", err)
+	}
+	if auth.n != 0 {
+		t.Errorf("refreshed %d times without the lock", auth.n)
+	}
+	if c, _ := store.Load("production"); c.RefreshToken != "refresh-0" {
+		t.Errorf("stored %+v", c)
+	}
+	// Signing out does not spend the refresh token, so it goes ahead.
+	if out, err := m.Logout(context.Background()); err != nil || !out.WasSignedIn {
+		t.Errorf("Logout = %+v, %v", out, err)
 	}
 }
 
