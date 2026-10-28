@@ -77,9 +77,11 @@ func (f *agentFlags) targets(env *environment, loc skill.Location) ([]skill.Targ
 	return targets, nil
 }
 
-// named resolves --agent, by ID or by the agent's program name.
+// named resolves --agent, by ID or by the agent's program name. Names for
+// the same target, such as codex and cursor for AGENTS.md, give it once.
 func (f *agentFlags) named() ([]skill.Target, error) {
 	var targets []skill.Target
+	seen := map[string]bool{}
 	for _, id := range f.agents {
 		t, ok := skill.FindTarget(id)
 		if !ok {
@@ -88,7 +90,10 @@ func (f *agentFlags) named() ([]skill.Target, error) {
 		if f.global && !t.Global {
 			return nil, clierr.New(clierr.Usage, "%s is set up per project; it cannot be used with --global", t.Name)
 		}
-		targets = append(targets, t)
+		if !seen[t.ID] {
+			seen[t.ID] = true
+			targets = append(targets, t)
+		}
 	}
 	return targets, nil
 }

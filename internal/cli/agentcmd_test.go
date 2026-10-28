@@ -187,6 +187,20 @@ func TestAgentInstallTakesCodex(t *testing.T) {
 	}
 }
 
+// Two names for one target change it once.
+func TestAgentInstallTakesTwoNamesForAGENTSmdOnce(t *testing.T) {
+	h, dir := newHarness(t), t.TempDir()
+	for _, command := range []string{"install", "uninstall"} {
+		code, stdout, stderr := h.run("agent", command, dir, "--agent", "codex,cursor,agents-md", "--yes", "--json")
+		if code != 0 || strings.Count(stdout, "AGENTS.md") != 1 {
+			t.Errorf("%s: exit = %d, stderr = %q\n%s", command, code, stderr, stdout)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Errorf("AGENTS.md is still there: %v", err)
+	}
+}
+
 // An AGENTS.md whose markers do not fence one section is refused as it is:
 // guessing could remove the developer's own text.
 func TestAgentInstallLeavesBrokenMarkersAlone(t *testing.T) {
