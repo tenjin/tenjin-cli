@@ -509,7 +509,7 @@ func npmDeclaration(root string, i project.Integration, pkg, packageJSON string)
 	if where := npmSource(spec); where != "" {
 		return declaration{why: "It is taken from " + where + " (" + spec + "), not from a release on npm, so it has no version to plan from. Declare " + pkg + " with a version to upgrade it here."}
 	}
-	d := declaration{text: spec, current: npmInstalled(root, i.Source, pkg)}
+	d := declaration{text: spec, current: npmInstalled(root, i.Source, pkg, spec)}
 	if r, ok := nodeRule(spec); ok {
 		d.admits = r
 	}
@@ -540,7 +540,7 @@ func npmSource(spec string) string {
 // that Node would load, looking up from package.json's folder as Node
 // does, or else the one a lock file names, as far up as the first folder
 // that has one, the workspace's root.
-func npmInstalled(root, source, pkg string) string {
+func npmInstalled(root, source, pkg, spec string) string {
 	dir := filepath.Join(root, filepath.FromSlash(path.Dir(source)))
 	below := ""
 	for {
@@ -551,7 +551,7 @@ func npmInstalled(root, source, pkg string) string {
 			return installed.Version
 		}
 		if manager, _ := lockIn(dir); manager != "" {
-			return lockedVersion(dir, below, pkg)
+			return lockedVersion(dir, below, pkg, spec)
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -572,9 +572,10 @@ func lockIn(dir string) (manager, file string) {
 	return "", ""
 }
 
-// lockedVersion reads the package's version from the lock file in dir.
-// below is the path from dir to the package.json's folder.
-func lockedVersion(dir, below, pkg string) string {
+// lockedVersion reads the version the lock file in dir resolves the
+// declaration pkg@spec to. below is the path from dir to the package.json's
+// folder.
+func lockedVersion(dir, below, pkg, spec string) string {
 	if raw, err := os.ReadFile(filepath.Join(dir, "package-lock.json")); err == nil {
 		var lock struct {
 			Packages map[string]struct {
@@ -589,21 +590,126 @@ func lockedVersion(dir, below, pkg string) string {
 			}
 		}
 	}
-	name := regexp.QuoteMeta(pkg)
 	if raw, err := os.ReadFile(filepath.Join(dir, "yarn.lock")); err == nil {
-		entry := regexp.MustCompile(`(?m)^"?` + name + `@[^\n]*:\n(?:[ \t]+[^\n]*\n)*?[ \t]+version:?[ \t]+"?([^"\s]+)"?`)
-		if m := entry.FindStringSubmatch(project.Text(raw)); m != nil {
-			return m[1]
-		}
+		return yarnLocked(project.Text(raw), pkg, spec)
 	}
 	if raw, err := os.ReadFile(filepath.Join(dir, "pnpm-lock.yaml")); err == nil {
-		entry := regexp.MustCompile(`(?m)^[ \t]+'?/?` + name + `@([0-9][^:(\s']*)`)
-		if m := entry.FindStringSubmatch(project.Text(raw)); m != nil {
-			return m[1]
+		importer := below
+		if importer == "" {
+			importer = "."
+		}
+		return pnpmLocked(project.Text(raw), importer, pkg)
+	}
+	return ""
+}
+
+var yarnLockVersion = regexp.MustCompile(`^[ \t]+version:?[ \t]+"?([^"\s]+)"?`)
+
+// yarnLocked is the version yarn.lock resolves the declaration pkg@spec
+// to. An entry's first line lists every declaration it resolves, Yarn 1's
+// as pkg@^1.6.0 and later Yarn's as pkg@npm:^1.6.0; another workspace's
+// range of the same package has an entry of its own.
+func yarnLocked(lock, pkg, spec string) string {
+	want := map[string]bool{pkg + "@" + spec: true, pkg + "@npm:" + spec: true}
+	lines := strings.Split(lock, "\n")
+	for i, line := range lines {
+		if line == "" || line[0] == ' ' || line[0] == '\t' || line[0] == '#' || !strings.HasSuffix(strings.TrimRight(line, " \t"), ":") {
+			continue
+		}
+		header := strings.TrimSuffix(strings.TrimRight(line, " \t"), ":")
+		match := false
+		for _, selector := range strings.Split(header, ",") {
+			if want[strings.Trim(strings.TrimSpace(selector), `"`)] {
+				match = true
+			}
+		}
+		if !match {
+			continue
+		}
+		for _, body := range lines[i+1:] {
+			if body == "" || (body[0] != ' ' && body[0] != '\t') {
+				break
+			}
+			if m := yarnLockVersion.FindStringSubmatch(body); m != nil {
+				return m[1]
+			}
 		}
 	}
 	return ""
 }
+
+// pnpmLocked is the version pnpm-lock.yaml resolves pkg to for one
+// importer, the workspace package at that path ("." for the root), whose
+// own dependencies the lock file lists apart from every other's. A lock
+// file without importers is a single package's.
+func pnpmLocked(lock, importer, pkg string) string {
+	lines := strings.Split(lock, "\n")
+	from, to, base := 0, len(lines), 0
+	if at, _, ok := yamlKey(lines, 0, len(lines), 0, "importers"); ok {
+		at, _, ok = yamlKey(lines, at+1, yamlBlockEnd(lines, at, 0), 2, importer)
+		if !ok {
+			return ""
+		}
+		from, to, base = at+1, yamlBlockEnd(lines, at, 2), 4
+	}
+	for _, kind := range []string{"dependencies", "devDependencies", "optionalDependencies"} {
+		deps, _, ok := yamlKey(lines, from, to, base, kind)
+		if !ok {
+			continue
+		}
+		at, value, ok := yamlKey(lines, deps+1, yamlBlockEnd(lines, deps, base), base+2, pkg)
+		if !ok {
+			continue
+		}
+		// pnpm 6 and later write the specifier and the version under the
+		// package; earlier ones write the version on its line.
+		if value == "" {
+			_, value, _ = yamlKey(lines, at+1, yamlBlockEnd(lines, at, base+2), base+4, "version")
+		}
+		// Peer dependencies follow the version: 1.6.1(react-native@0.79.2),
+		// or 1.6.1_react-native@0.79.2 before pnpm 8.
+		if i := strings.IndexAny(value, "(_"); i >= 0 {
+			value = value[:i]
+		}
+		if value != "" && value[0] >= '0' && value[0] <= '9' {
+			return value
+		}
+		return ""
+	}
+	return ""
+}
+
+// yamlKey finds key among lines[from:to] at the given indentation, and
+// returns its line and the value written on it.
+func yamlKey(lines []string, from, to, indent int, key string) (int, string, bool) {
+	for i := from; i < to && i < len(lines); i++ {
+		line := strings.TrimRight(lines[i], " \t")
+		if yamlIndent(line) != indent {
+			continue
+		}
+		name, value, found := strings.Cut(strings.TrimSpace(line), ":")
+		if !found {
+			continue
+		}
+		if strings.Trim(name, `'"`) == key {
+			return i, yamlScalar(value), true
+		}
+	}
+	return 0, "", false
+}
+
+// yamlBlockEnd is the line after the block under lines[at]: the next line
+// indented no deeper than it.
+func yamlBlockEnd(lines []string, at, indent int) int {
+	for i := at + 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) != "" && yamlIndent(lines[i]) <= indent {
+			return i
+		}
+	}
+	return len(lines)
+}
+
+func yamlIndent(line string) int { return len(line) - len(strings.TrimLeft(line, " ")) }
 
 // npmManager is the package manager that installs the package: the one
 // whose lock file is nearest above package.json, else the one package.json

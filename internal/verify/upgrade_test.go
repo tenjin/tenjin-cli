@@ -421,6 +421,39 @@ func TestUpgradeInAnNPMWorkspace(t *testing.T) {
 	}
 }
 
+// A workspace's lock file resolves each declaration of the package on its
+// own: the app's version is the one its own range resolved to, not the
+// first entry for the package.
+func TestUpgradeReadsTheLockEntryOfTheAppsOwnRange(t *testing.T) {
+	files := testproject.Files{
+		"package.json":             `{"private": true, "workspaces": ["apps/*"]}`,
+		"apps/web/package.json":    `{"dependencies": {"react-native-tenjin": "^1.8.0"}}`,
+		"apps/mobile/package.json": `{"dependencies": {"react-native": "0.79.2", "react-native-tenjin": "~1.6.0"}}`,
+		"apps/mobile/App.tsx":      "import Tenjin from 'react-native-tenjin';\nTenjin.initialize('" + testproject.Key + "');\nTenjin.connect();\n",
+	}
+	live := map[string]string{"react-native-tenjin": "1.8.0"}
+	for name, lock := range map[string]testproject.Files{
+		"yarn 1": {"yarn.lock": "react-native-tenjin@^1.8.0:\n  version \"1.8.0\"\n\n\"react-native-tenjin@~1.5.0\", react-native-tenjin@~1.6.0:\n  version \"1.6.1\"\n"},
+		"yarn berry": {
+			"yarn.lock":   "\"react-native-tenjin@npm:^1.8.0\":\n  version: 1.8.0\n  resolution: \"react-native-tenjin@npm:1.8.0\"\n\n\"react-native-tenjin@npm:~1.6.0\":\n  version: 1.6.1\n  resolution: \"react-native-tenjin@npm:1.6.1\"\n",
+			".yarnrc.yml": "nodeLinker: node-modules\n",
+		},
+		"pnpm":   {"pnpm-lock.yaml": "lockfileVersion: '9.0'\n\nimporters:\n\n  .: {}\n\n  apps/web:\n    dependencies:\n      react-native-tenjin:\n        specifier: ^1.8.0\n        version: 1.8.0\n\n  apps/mobile:\n    dependencies:\n      react-native:\n        specifier: 0.79.2\n        version: 0.79.2\n      react-native-tenjin:\n        specifier: ~1.6.0\n        version: 1.6.1(react-native@0.79.2)\n\npackages:\n\n  react-native-tenjin@1.8.0:\n    resolution: {integrity: sha512-a}\n\n  react-native-tenjin@1.6.1:\n    resolution: {integrity: sha512-b}\n"},
+		"pnpm 5": {"pnpm-lock.yaml": "lockfileVersion: 5.4\n\nimporters:\n\n  apps/web:\n    specifiers:\n      react-native-tenjin: ^1.8.0\n    dependencies:\n      react-native-tenjin: 1.8.0\n\n  apps/mobile:\n    specifiers:\n      react-native-tenjin: ~1.6.0\n    dependencies:\n      react-native-tenjin: 1.6.1_react-native@0.79.2\n\npackages:\n\n  /react-native-tenjin/1.8.0:\n    resolution: {integrity: sha512-a}\n"},
+		"npm":    {"package-lock.json": `{"packages": {"node_modules/react-native-tenjin": {"version": "1.8.0"}, "apps/mobile/node_modules/react-native-tenjin": {"version": "1.6.1"}}}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, err := project.Detect(testproject.Write(t, files.With(lock)) + "/apps/mobile")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if u := only(t, verify.Upgrades(p, live)); u.Current != "1.6.1" || !u.Edit {
+				t.Errorf("upgrade = %+v", u)
+			}
+		})
+	}
+}
+
 // A React Native library's range is planned as written: ^1.7.0 already
 // allows 1.8.0. Doctor still reads it as before.
 func TestUpgradeOfAReactNativeLibrary(t *testing.T) {
