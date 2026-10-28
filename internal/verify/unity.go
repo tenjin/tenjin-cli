@@ -52,7 +52,7 @@ const (
 
 var (
 	componentKey  = regexp.MustCompile(`(?m)^[ \t]*sdkKey:[ \t]*(\S*)[ \t\r]*$`)
-	overriddenKey = regexp.MustCompile(`propertyPath: sdkKey\s+value:[ \t]*(\S*)`)
+	overriddenKey = regexp.MustCompile(`target: \{[^}\n]*guid: ` + tenjinObjectPrefab + `[^}\n]*\}\s+propertyPath: sdkKey\s+value:[ \t]*(\S*)`)
 	minifyRelease = regexp.MustCompile(`(?m)^\s*AndroidMinify(?:Release|Debug): 1\s*$`)
 	// The component's Debug Logs box, ticked on it or as a prefab override.
 	componentDebugLogs  = regexp.MustCompile(`(?m)^[ \t]*debugLogs:[ \t]*1[ \t\r]*$`)
@@ -165,14 +165,27 @@ func (r *runner) findTenjinObject(src *source) bool {
 		c := call{File: rel, Line: lineAt(text, at), Text: text}
 		src.inits = append(src.inits, c)
 		src.connects = append(src.connects, c)
-		for _, re := range []*regexp.Regexp{overriddenKey, componentKey} {
-			for _, m := range re.FindAllStringSubmatchIndex(text, -1) {
-				src.keys = append(src.keys, keyLiteral{Value: text[m[2]:m[3]], File: rel, Line: lineAt(text, m[0])})
-			}
-		}
+		src.keys = append(src.keys, componentKeys(rel, text)...)
 		src.componentDebugLogs = append(src.componentDebugLogs, componentDebugTicks(rel, text)...)
 	}
 	return found
+}
+
+// componentKeys finds the SDK Key set on the TenjinObject components of a
+// scene or prefab, on the component or as an override of the prefab's.
+// Other scripts may have a field of the same name.
+func componentKeys(rel, text string) []keyLiteral {
+	var keys []keyLiteral
+	for _, d := range tenjinDocuments(text) {
+		re := componentKey
+		if !d.component {
+			re = overriddenKey
+		}
+		for _, m := range re.FindAllStringSubmatchIndex(d.text, -1) {
+			keys = append(keys, keyLiteral{Value: d.text[m[2]:m[3]], File: rel, Line: lineAt(text, d.start+m[2])})
+		}
+	}
+	return keys
 }
 
 // componentDebugTicks finds the TenjinObject components in a scene or
@@ -180,6 +193,30 @@ func (r *runner) findTenjinObject(src *source) bool {
 // document of its script, or as an override of the prefab's.
 func componentDebugTicks(rel, text string) []call {
 	var ticks []call
+	for _, d := range tenjinDocuments(text) {
+		re := componentDebugLogs
+		if !d.component {
+			re = overriddenDebugLogs
+		}
+		for _, loc := range re.FindAllStringIndex(d.text, -1) {
+			at := d.start + loc[0]
+			ticks = append(ticks, call{File: rel, Line: lineAt(text, at), At: at, Text: text})
+		}
+	}
+	return ticks
+}
+
+type unityDocument struct {
+	start     int
+	text      string
+	component bool
+}
+
+// tenjinDocuments splits a scene or prefab into its YAML documents and
+// keeps the TenjinObject's: a component of its script, or an instance of
+// its prefab.
+func tenjinDocuments(text string) []unityDocument {
+	var docs []unityDocument
 	start := 0
 	for start < len(text) {
 		end := strings.Index(text[start+1:], "\n--- ")
@@ -189,22 +226,15 @@ func componentDebugTicks(rel, text string) []call {
 			end += start + 1
 		}
 		doc := text[start:end]
-		var re *regexp.Regexp
 		switch {
 		case strings.Contains(doc, tenjinObjectScript):
-			re = componentDebugLogs
+			docs = append(docs, unityDocument{start: start, text: doc, component: true})
 		case strings.Contains(doc, tenjinObjectPrefab):
-			re = overriddenDebugLogs
-		}
-		if re != nil {
-			for _, loc := range re.FindAllStringIndex(doc, -1) {
-				at := start + loc[0]
-				ticks = append(ticks, call{File: rel, Line: lineAt(text, at), At: at, Text: text})
-			}
+			docs = append(docs, unityDocument{start: start, text: doc})
 		}
 		start = end
 	}
-	return ticks
+	return docs
 }
 
 // checkUnityDebugLogs reports the SDK's logs turned on in release builds:

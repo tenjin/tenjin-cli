@@ -324,3 +324,39 @@ PrefabInstance:
 		t.Errorf("key found at %s:%d", f.File, f.Line)
 	}
 }
+
+// Another script's sdkKey field, on a component or as a prefab override, is
+// that script's credential: it is never read as Tenjin's, nor sent to Tenjin.
+func TestUnityKeysAreReadFromTheTenjinComponentOnly(t *testing.T) {
+	const other = "OTHERVENDORSECRETKEY0000000000000"
+	scene := `%YAML 1.1
+--- !u!1001 &900
+PrefabInstance:
+  m_Modification:
+    m_Modifications:
+    - target: {fileID: 1, guid: 11111111111111111111111111111111, type: 3}
+      propertyPath: sdkKey
+      value: ` + other + `
+      objectReference: {fileID: 0}
+  m_SourcePrefab: {fileID: 100100000, guid: 11111111111111111111111111111111, type: 3}
+--- !u!114 &300
+MonoBehaviour:
+  m_Script: {fileID: 11500000, guid: 0123456789abcdef0123456789abcdef, type: 3}
+  sdkKey: ` + other + `
+--- !u!114 &200
+MonoBehaviour:
+  m_Script: {fileID: 11500000, guid: e3e00e20639f4f469350ac04120ef3b0, type: 3}
+  sdkKey: ` + testproject.Key + `
+`
+	keys := &fakeKeys{}
+	files := testproject.Unity().Without(unityScript).With(testproject.Files{"Assets/Scenes/Main.unity": scene})
+	run(t, files, verify.Options{Keys: keys})
+	if len(keys.asked) == 0 {
+		t.Fatal("the component's key was not checked")
+	}
+	for _, q := range keys.asked {
+		if strings.HasPrefix(q, other) {
+			t.Errorf("another component's key was sent: %s", q)
+		}
+	}
+}
