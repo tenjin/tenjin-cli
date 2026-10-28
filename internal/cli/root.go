@@ -30,6 +30,7 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/render"
 	"github.com/tenjin/tenjin-cli/internal/sdkrelease"
 	"github.com/tenjin/tenjin-cli/internal/session"
+	"github.com/tenjin/tenjin-cli/internal/telemetry"
 	"github.com/tenjin/tenjin-cli/internal/tenjinapi"
 	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/transport"
@@ -117,6 +118,13 @@ type environment struct {
 	updates *update.Checker
 	// updateNotice receives the check's answer once it was started.
 	updateNotice chan *update.Notice
+	// telemetry sends each command's event. Nil sends none (see
+	// telemetryClient), and facts are what the command adds to its event.
+	telemetry *telemetry.Client
+	facts     map[string]any
+	// detach hands an event to a copy of the CLI that sends it on its own.
+	// Nil sends it from this process.
+	detach func(telemetry.Event) error
 }
 
 // updateWait bounds the update check. A command that finishes first waits
@@ -156,6 +164,8 @@ func defaultEnvironment() (*environment, error) {
 	return &environment{
 		getenv:      os.Getenv,
 		updates:     updateChecker(os.Getenv),
+		telemetry:   telemetryClient(os.Getenv, endpoints),
+		detach:      sendDetached,
 		sdkReleases: sdkReleases(),
 		endpoints:   endpoints,
 		store:       session.NewStore(),
@@ -372,6 +382,10 @@ func (e *environment) api() *tenjinapi.Client {
 // Execute runs the CLI and returns the process exit code. The result goes to
 // stdout; everything else, including errors, goes to stderr.
 func Execute(args []string, stdout, stderr io.Writer) int {
+	if raw := os.Getenv(telemetryEventVar); raw != "" {
+		sendHandedEvent(raw)
+		return 0
+	}
 	defer render.PrepareConsole()()
 	env, err := defaultEnvironment()
 	if err != nil {
@@ -383,6 +397,7 @@ func Execute(args []string, stdout, stderr io.Writer) int {
 }
 
 func execute(args []string, stdout, stderr io.Writer, env *environment) int {
+	start := time.Now()
 	// Ctrl-C cancels the command's context, which stops anything it started,
 	// such as a coding agent. So do SIGTERM and SIGHUP, with the same exit
 	// status, 130 (interrupted): one code says the run was stopped from
@@ -397,16 +412,32 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	root.SetErr(stderr)
 
 	ran, err := root.ExecuteContextC(ctx)
-	defer env.reportUpdate(stderr)
+	e := outcome(ctx, err, ran, root)
+	code, kind := 0, ""
+	if e != nil {
+		writeError(stderr, e, wantsJSON(args))
+		code, kind = e.Kind.ExitCode(), string(e.Kind)
+	}
+	// From here, a second Ctrl-C ends the process at once.
+	stop()
+	sent := env.sendTelemetry(ran, code, kind, time.Since(start))
+	env.reportUpdate(stderr)
+	sent()
+	return code
+}
+
+// outcome is the error a run ended with, as it is reported, or nil for a
+// run that succeeded or was declined. A declined question is said on stderr.
+func outcome(ctx context.Context, err error, ran, root *cobra.Command) *clierr.Error {
 	if err == nil {
-		return 0
+		return nil
 	}
 	// A no at a question is not a failure: nothing went wrong, and nothing
 	// was done.
 	var no declined
 	if errors.As(err, &no) && ctx.Err() == nil {
-		_, _ = fmt.Fprintln(stderr, string(no))
-		return 0
+		_, _ = fmt.Fprintln(root.ErrOrStderr(), string(no))
+		return nil
 	}
 	// Whatever a Ctrl-C cut short failed because of it.
 	if ctx.Err() != nil {
@@ -424,8 +455,7 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	if e.Kind == clierr.Usage && e.Hint == "" && ran != nil && ran != root {
 		e = e.WithHint("Run '%s --help' for usage.", ran.CommandPath())
 	}
-	writeError(stderr, e, wantsJSON(args))
-	return e.Kind.ExitCode()
+	return e
 }
 
 // writeError reports a failure on stderr: prose for people, an object with a

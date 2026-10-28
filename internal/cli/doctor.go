@@ -103,6 +103,7 @@ otherwise. With --strict, warnings count too.`,
 			if err != nil {
 				return err
 			}
+			env.noteProject(p)
 			if !p.Supported {
 				return clierr.New(clierr.NotFound, "%s", strings.Join(p.Notes, " "))
 			}
@@ -164,6 +165,7 @@ otherwise. With --strict, warnings count too.`,
 				vopts.Device = input
 			}
 			report := verify.Run(cmd.Context(), p, vopts)
+			env.noteReport(report)
 
 			if format == render.JSON {
 				if err := render.WriteJSON(cmd.OutOrStdout(), report); err != nil {
@@ -196,6 +198,7 @@ otherwise. With --strict, warnings count too.`,
 				}
 				vopts.Device = nil
 				report = verify.Run(cmd.Context(), p, vopts)
+				env.noteReport(report)
 				fixer.say("\n%s", fixer.style.Heading("Checking again"))
 				if err := writeReport(cmd.OutOrStdout(), report, offline); err != nil {
 					return err

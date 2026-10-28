@@ -16,10 +16,10 @@ import (
 )
 
 func newProjectCmd(opts *options, env *environment) *cobra.Command {
-	return group("project", "Detect the mobile project in a directory, and write its SDK keys", newProjectDetectCmd(opts), newProjectSetKeysCmd(opts, env))
+	return group("project", "Detect the mobile project in a directory, and write its SDK keys", newProjectDetectCmd(opts, env), newProjectSetKeysCmd(opts, env))
 }
 
-func newProjectDetectCmd(opts *options) *cobra.Command {
+func newProjectDetectCmd(opts *options, env *environment) *cobra.Command {
 	return &cobra.Command{
 		Use:   "detect [path]",
 		Short: "Report the framework, platforms, bundle IDs and any Tenjin SDK",
@@ -41,6 +41,7 @@ It only reads files. It works offline and without signing in.`,
 			if err != nil {
 				return err
 			}
+			env.noteProject(p)
 			p.ReadAnalytics()
 			if format == render.JSON {
 				return render.WriteJSON(cmd.OutOrStdout(), p)

@@ -4,7 +4,9 @@ package proc
 
 import (
 	"context"
+	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"testing"
 	"time"
@@ -38,4 +40,19 @@ func TestStopContextLeavesAnIgnoredSignalIgnored(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("SIGTERM did not stop the run")
 	}
+}
+
+// A detached program runs on its own, after Detach has returned.
+func TestDetach(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "ran")
+	if err := Detach("/bin/sh", []string{"-c", "echo ok > " + out}, nil); err != nil {
+		t.Fatal(err)
+	}
+	for range 50 {
+		if raw, err := os.ReadFile(out); err == nil && string(raw) == "ok\n" {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Error("the detached program did not run")
 }

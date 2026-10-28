@@ -114,3 +114,16 @@ func resume(pid uint32) error {
 	}
 	return nil
 }
+
+// startDetached leaves the job the CLI may be in, where the job allows it.
+func startDetached(command func() *exec.Cmd) (*exec.Cmd, error) {
+	flags := uint32(windows.CREATE_NEW_PROCESS_GROUP | windows.DETACHED_PROCESS)
+	cmd := command()
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: flags | windows.CREATE_BREAKAWAY_FROM_JOB}
+	if err := cmd.Start(); err == nil {
+		return cmd, nil
+	}
+	cmd = command()
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: flags}
+	return cmd, cmd.Start()
+}

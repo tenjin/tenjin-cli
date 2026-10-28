@@ -69,6 +69,7 @@ hand. You run the package manager's update afterwards.`,
 			if err != nil {
 				return err
 			}
+			env.noteProject(p)
 			if !p.Supported {
 				return clierr.New(clierr.NotFound, "%s", strings.Join(p.Notes, " "))
 			}

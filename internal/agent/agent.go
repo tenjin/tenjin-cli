@@ -81,14 +81,19 @@ func Find(lookPath func(string) (string, error)) []Agent {
 // agent. Starting a second one from inside the first helps nobody: the agent
 // already at work should make the changes.
 func InsideAgent(getenv func(string) string) bool {
+	return Inside(getenv) != ""
+}
+
+// Inside returns the ID of the coding agent that started this process, or "".
+func Inside(getenv func(string) string) string {
 	for _, d := range drivers {
 		for _, name := range d.inside {
 			if getenv(name) != "" {
-				return true
+				return d.id
 			}
 		}
 	}
-	return false
+	return ""
 }
 
 // Limits says what the agent is and is not able to do while it works.

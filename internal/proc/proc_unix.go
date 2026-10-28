@@ -32,3 +32,9 @@ func (tree) prepare(cmd *exec.Cmd) {
 func (tree) start(cmd *exec.Cmd) error { return cmd.Start() }
 
 func (tree) release() {}
+
+func startDetached(command func() *exec.Cmd) (*exec.Cmd, error) {
+	cmd := command()
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	return cmd, cmd.Start()
+}

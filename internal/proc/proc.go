@@ -74,6 +74,21 @@ func (c *Cmd) Output() ([]byte, error) {
 	return stdout.Bytes(), err
 }
 
+// Detach starts a program that outlives the CLI and is not waited for: in a
+// session of its own on Unix, a new process group without a console on
+// Windows, with no input or output. Ctrl-C does not reach it.
+func Detach(name string, args, env []string) error {
+	cmd, err := startDetached(func() *exec.Cmd {
+		cmd := exec.Command(name, args...)
+		cmd.Env = env
+		return cmd
+	})
+	if err != nil {
+		return err
+	}
+	return cmd.Process.Release()
+}
+
 // StopContext returns a context that ends when the person or the system
 // stops the CLI: Ctrl-C, and the other signals in stopSignals. One the CLI
 // was started with ignored, as under nohup, stays ignored.

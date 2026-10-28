@@ -9,6 +9,10 @@ on:
     secrets:
       CODE_OPS_APP_PRIVATE_KEY:
         required: true
+      # Stamped into the binaries for the usage statistics; without it, a
+      # release sends none.
+      AMPLITUDE_API_KEY:
+        required: false
   # To run a failed release again, from main, while it is still a draft.
   workflow_dispatch:
     inputs:
@@ -99,6 +103,7 @@ jobs:
         env:
           GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AMPLITUDE_API_KEY: ${{ secrets.AMPLITUDE_API_KEY }}
       - name: Attest
         # Anyone can check a download came from this workflow:
         # gh attestation verify <archive> --repo tenjin/tenjin-cli \
