@@ -311,7 +311,7 @@ Questions about your Tenjin account or integration: [support@tenjin.com](mailto:
 
 ## Contributing
 
-Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers building, testing and the project's conventions. Each release's changes are on the [releases page](https://github.com/tenjin/tenjin-cli/releases), and everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
+Bug reports and ideas are welcome as [issues](https://github.com/tenjin/tenjin-cli/issues); we don't take pull requests from outside Tenjin yet. [CONTRIBUTING.md](CONTRIBUTING.md) covers building and testing the CLI yourself. Each release's changes are on the [releases page](https://github.com/tenjin/tenjin-cli/releases), and everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ```sh
 make build   # bin/tenjin

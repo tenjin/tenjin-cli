@@ -1,12 +1,13 @@
 # Contributing
 
-Thanks for helping improve the Tenjin CLI. Bug reports, fixes and new checks are all welcome.
+Thanks for helping improve the Tenjin CLI.
+
+**We don't take pull requests from outside Tenjin yet.** Bug reports and ideas are welcome as [issues](https://github.com/tenjin/tenjin-cli/issues): say what you ran, what you expected, and what happened. The rest of this page is for building the CLI yourself and for Tenjin's own changes.
 
 ## Before you start
 
 - **Questions about your Tenjin account or integration** go to [support@tenjin.com](mailto:support@tenjin.com), not to an issue here.
 - **Security issues** are reported privately: see [SECURITY.md](SECURITY.md).
-- **Larger changes**, such as a new command or a check for a new framework, are worth an issue first, so we can agree on the approach before you write it.
 
 ## Developing
 
@@ -77,9 +78,9 @@ One commit always builds the same archives, byte for byte, so running the releas
 
 ## Pull requests
 
+For Tenjin's own changes, for now.
+
 - Keep each pull request to one change, with tests.
 - `make test` and `make lint` pass, on macOS, Linux and Windows (CI runs all three). CI also lints the workflows and shell scripts, and comments the test coverage on the pull request: at least 80% of the changed statements must be tested.
 - Title the pull request as a [conventional commit](https://www.conventionalcommits.org/) (`feat: …`, `fix: …`, `docs: …`): squashed, it becomes the commit's title, and CI checks it. Its description says what changed and why.
 - Device log captures added as test fixtures must have every identifier, receipt, signature, key and location replaced first.
-
-By contributing, you agree that your contribution is licensed under the [MIT License](LICENSE).
