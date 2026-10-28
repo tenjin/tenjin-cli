@@ -24,7 +24,7 @@ var codex = driver{
 	id: "codex", name: "Codex", binary: "codex",
 	limits:       "it runs in Codex's sandbox: it can change files in this project only and has no network access, but it can read files elsewhere on this machine; it is told not to commit",
 	readsOutside: true,
-	doctor:       "tenjin doctor --offline --json .",
+	doctor:       offlineDoctor,
 	args: func(task Task, _ string, confinement []string) []string {
 		args := []string{
 			"exec", "--json",

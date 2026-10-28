@@ -953,7 +953,7 @@ func (s *setup) manualGuide(report *verify.Report) {
 // did. A failure here is not fatal: the check that follows is what decides
 // whether the integration works. Only Ctrl-C stops setup here.
 func (s *setup) runAgent(p *project.Project, report *verify.Report) (bool, error) {
-	return s.runAgentOn(p, integrationPrompt(p, report, s.inProject, s.features, s.analytics, s.helper.DoctorCommand()), "is working on the integration", true)
+	return s.runAgentOn(p, integrationPrompt(p, report, s.inProject, s.features, s.analytics, s.helper.DoctorCommand(s.offline)), "is working on the integration", true)
 }
 
 // runAgentOn starts the coding agent on a task and reports what it did, and

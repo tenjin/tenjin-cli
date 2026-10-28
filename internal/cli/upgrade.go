@@ -128,7 +128,7 @@ func (s *setup) upgrade(p *project.Project, plan verify.UpgradePlan, live map[st
 	}
 	if helper != nil {
 		s.helper = helper
-		ran, err := s.runAgentOn(p, upgradePrompt(p, work, helper.DoctorCommand()), "is upgrading the Tenjin SDK", false)
+		ran, err := s.runAgentOn(p, upgradePrompt(p, work, helper.DoctorCommand(s.offline)), "is upgrading the Tenjin SDK", false)
 		if err != nil {
 			return err
 		}

@@ -106,8 +106,16 @@ func (a Agent) Limits() string { return a.limits }
 // project while it works.
 func (a Agent) ReadsOutsideProject() bool { return a.readsOutside }
 
-// DoctorCommand is the check the agent runs on its own work.
-func (a Agent) DoctorCommand() string { return a.doctor }
+// DoctorCommand is the check the agent runs on its own work: the offline
+// one when the run that starts the agent was asked to stay offline.
+func (a Agent) DoctorCommand(offline bool) string {
+	if offline {
+		return offlineDoctor
+	}
+	return a.doctor
+}
+
+const offlineDoctor = "tenjin doctor --offline --json ."
 
 // Task is a piece of work for an agent.
 type Task struct {

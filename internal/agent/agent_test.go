@@ -186,9 +186,13 @@ func TestFindBothAgentsInTheOrderTheyAreOffered(t *testing.T) {
 	if found[0].ResumeCommand("abc") != "claude --resume abc" || found[1].ResumeCommand("abc") != "codex resume abc" {
 		t.Error("resume commands")
 	}
-	// Codex has no network in its sandbox, so it is given the offline check.
-	if found[0].DoctorCommand() != "tenjin doctor --json ." || found[1].DoctorCommand() != "tenjin doctor --offline --json ." {
+	// Codex has no network in its sandbox, so it is given the offline check;
+	// Claude Code is given it when the run is offline.
+	if found[0].DoctorCommand(false) != "tenjin doctor --json ." || found[1].DoctorCommand(false) != "tenjin doctor --offline --json ." {
 		t.Error("doctor commands")
+	}
+	if found[0].DoctorCommand(true) != "tenjin doctor --offline --json ." || found[1].DoctorCommand(true) != "tenjin doctor --offline --json ." {
+		t.Error("offline doctor commands")
 	}
 	if got := strings.Join(IDs(), ","); got != "claude,codex" {
 		t.Errorf("IDs = %q", got)
