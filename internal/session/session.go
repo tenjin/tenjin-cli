@@ -109,7 +109,13 @@ func (m *Manager) Login(ctx context.Context, open func(url string) error, pasted
 	// Under the refresh lock, so that the session replaced is the current
 	// one: another tenjin may have refreshed it while the browser was open.
 	unlock, err := m.lock(ctx)
-	if err != nil && !errors.Is(err, errLockBusy) {
+	if errors.Is(err, errLockBusy) {
+		// The new grant would be saved over by the holder's, or its save
+		// over the holder's: end it rather than leave it open.
+		_ = m.Authority.Revoke(ctx, c.ClientID, c.RefreshToken)
+		return nil, "", lockBusy(err)
+	}
+	if err != nil {
 		return nil, "", err
 	}
 	defer unlock()
@@ -213,8 +219,7 @@ func (m *Manager) refresh(ctx context.Context, refused string) (string, error) {
 	if errors.Is(err, errLockBusy) {
 		// Spending the refresh token now could spend it twice: the holder may
 		// have spent it and not yet saved the one it got back.
-		return "", clierr.Wrap(clierr.Internal, err, "another tenjin has been renewing the sign-in for more than %d seconds", int(lockWait.Seconds())).
-			WithHint("Wait for the other tenjin command to finish, then try again.")
+		return "", lockBusy(err)
 	}
 	if err != nil {
 		return "", err
@@ -286,12 +291,12 @@ func (m *Manager) saveOver(spent string, c *Credentials) error {
 	return err
 }
 
-// lock keeps other tenjin processes from refreshing this sign-in until
-// unlock is called. Where the store cannot lock, it goes ahead without. When
-// another process holds the lock past the wait, it returns errLockBusy with
-// a no-op unlock: signing in or out may go ahead, since neither spends a
-// refresh token and saveOver keeps a newer sign-in from being overwritten,
-// but a refresh may not.
+// lock keeps other tenjin processes from refreshing, signing in or out
+// until unlock is called. Where the store cannot lock, it goes ahead
+// without. When another process holds the lock past the wait, it returns
+// errLockBusy with a no-op unlock, and nothing may go ahead: the holder may
+// have spent the refresh token and not saved the next, or have a keychain
+// write still on its way that would land over a save made now.
 func (m *Manager) lock(ctx context.Context) (unlock func(), err error) {
 	locker, ok := m.Store.(Locker)
 	if !ok {
@@ -307,6 +312,11 @@ func (m *Manager) lock(ctx context.Context) (unlock func(), err error) {
 		return func() {}, nil
 	}
 	return unlock, nil
+}
+
+func lockBusy(err error) error {
+	return clierr.Wrap(clierr.Internal, err, "another tenjin has been renewing the sign-in for more than %d seconds", int(lockWait.Seconds())).
+		WithHint("Wait for the other tenjin command to finish, then try again.")
 }
 
 func (m *Manager) refreshFailed(c *Credentials, spent string, err error) error {
@@ -340,7 +350,10 @@ func (m *Manager) Logout(ctx context.Context) (Signout, error) {
 	// Under the refresh lock, so that the refresh token revoked is the
 	// current one, not one another tenjin is about to spend.
 	unlock, err := m.lock(ctx)
-	if err != nil && !errors.Is(err, errLockBusy) {
+	if errors.Is(err, errLockBusy) {
+		return Signout{}, lockBusy(err)
+	}
+	if err != nil {
 		return Signout{}, err
 	}
 	defer unlock()

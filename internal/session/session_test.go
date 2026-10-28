@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -216,9 +217,23 @@ func TestALockHeldTooLongIsNotWaitedOnForever(t *testing.T) {
 	if c, _ := store.Load("production"); c.RefreshToken != "refresh-0" {
 		t.Errorf("stored %+v", c)
 	}
-	// Signing out does not spend the refresh token, so it goes ahead.
-	if out, err := m.Logout(context.Background()); err != nil || !out.WasSignedIn {
+	// Signing out or in would race the holder too: it may have spent the
+	// refresh token, so a logout would revoke a dead one and leave the next
+	// open, and a keychain write of its may land over a save made now.
+	if out, err := m.Logout(context.Background()); err == nil || out.WasSignedIn || out.AccessEnded {
 		t.Errorf("Logout = %+v, %v", out, err)
+	}
+	signer := &signingIn{}
+	m.Authority = signer
+	if _, _, err := m.Login(context.Background(), nil, nil); err == nil || !strings.Contains(clierr.From(err).Message, "another tenjin") {
+		t.Errorf("Login = %v", err)
+	}
+	// The grant that could not be saved is not left open.
+	if want := []string{oauth.ClientID + " refresh-new"}; !slices.Equal(signer.revocations, want) {
+		t.Errorf("revoked %q, want %q", signer.revocations, want)
+	}
+	if c, _ := store.Load("production"); c.RefreshToken != "refresh-0" {
+		t.Errorf("stored %+v", c)
 	}
 }
 
