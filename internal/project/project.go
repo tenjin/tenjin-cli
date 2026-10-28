@@ -126,9 +126,12 @@ type IOSInfo struct {
 	// it could not be found, so that its keys cannot be checked.
 	MissingInfoPlist string `json:"-"`
 	// GeneratedInfoPlist means Xcode builds the plist from build settings.
-	GeneratedInfoPlist bool   `json:"generated_info_plist"`
-	Podfile            string `json:"podfile,omitempty"`
-	SwiftPackages      bool   `json:"swift_packages"`
+	GeneratedInfoPlist bool `json:"generated_info_plist"`
+	// InfoPlistSettings are the Info.plist keys the app target's build
+	// settings set (INFOPLIST_KEY_<key>), with their values.
+	InfoPlistSettings map[string]string `json:"-"`
+	Podfile           string            `json:"podfile,omitempty"`
+	SwiftPackages     bool              `json:"swift_packages"`
 	// Lifecycle is how the app starts: "swiftui" for an App struct,
 	// "app-delegate" otherwise. EntryPoint is the file that holds it.
 	Lifecycle  string `json:"lifecycle,omitempty"`

@@ -242,6 +242,25 @@ func TestNetworkPermissionsTheAppRemovesAreMissing(t *testing.T) {
 	}
 }
 
+// The tracking text in build settings counts for the app target only: a
+// test target's is not in the app's Info.plist.
+func TestTheTrackingTextInBuildSettingsIsTheAppTargets(t *testing.T) {
+	base := testproject.IOSNative()
+	const (
+		plist = "Sample/Info.plist"
+		pbx   = "Sample.xcodeproj/project.pbxproj"
+	)
+	without := strings.Replace(base[plist], "NSUserTrackingUsageDescription", "SomethingElse", 1)
+	setting := func(bundleID string) string {
+		return strings.ReplaceAll(base[pbx], "PRODUCT_BUNDLE_IDENTIFIER = "+bundleID+";", "PRODUCT_BUNDLE_IDENTIFIER = "+bundleID+";\n\t\t\t\tINFOPLIST_KEY_NSUserTrackingUsageDescription = \"To measure our ads.\";")
+	}
+	files := base.With(testproject.Files{plist: without, pbx: setting("com.example.sample.SampleTests")})
+	expect(t, run(t, files, verify.Options{}), "ios.plist.att_description", project.IOS, verify.Warning)
+
+	files = base.With(testproject.Files{plist: without, pbx: setting("com.example.sample")})
+	expect(t, run(t, files, verify.Options{}), "ios.plist.att_description", project.IOS, verify.Pass)
+}
+
 func TestProguardRulesSatisfyTheShrinkingCheck(t *testing.T) {
 	base := testproject.AndroidNative()
 	const build = "app/build.gradle.kts"

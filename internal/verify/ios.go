@@ -30,7 +30,6 @@ func (r *runner) checkIOS(spec frameworkSpec, t *project.Target, src source) {
 		return
 	}
 	plist := r.readCode(t.IOS.InfoPlist)
-	pbx := r.readCode(t.IOS.Xcodeproj + "/project.pbxproj")
 	if t.IOS.InfoPlist != "" && !strings.Contains(plist, "<plist") {
 		r.add(Finding{
 			ID: "ios.plist", Severity: Info, Platform: project.IOS,
@@ -44,7 +43,7 @@ func (r *runner) checkIOS(spec frameworkSpec, t *project.Target, src source) {
 	}
 
 	_, hasATT := plistString(plist, plistATT)
-	if hasATT || strings.Contains(pbx, "INFOPLIST_KEY_"+plistATT) {
+	if hasATT || t.IOS.InfoPlistSettings[plistATT] != "" {
 		r.pass("ios.plist.att_description", project.IOS, "The tracking prompt text ("+plistATT+") is set", plistFile, 0)
 	} else {
 		r.add(Finding{

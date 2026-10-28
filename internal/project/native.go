@@ -23,6 +23,7 @@ var (
 	pbxBundleID        = regexp.MustCompile(`PRODUCT_BUNDLE_IDENTIFIER = "?([^";]+)"?;`)
 	pbxInfoPlist       = regexp.MustCompile(`INFOPLIST_FILE = "?([^";]+)"?;`)
 	pbxGeneratedPlist  = regexp.MustCompile(`GENERATE_INFOPLIST_FILE = YES;`)
+	pbxInfoPlistKey    = regexp.MustCompile(`\b` + infoPlistKeyPrefix + `(\w+) = "?([^";]*)"?;`)
 	podTenjin          = regexp.MustCompile(`(?m)^\s*pod\s+['"]TenjinSDK['"]`)
 	podLockTenjin      = regexp.MustCompile(`(?m)^\s*-\s+TenjinSDK\s+\(([^)]+)\)`)
 	spmTenjin          = regexp.MustCompile(`github\.com/tenjin/(tenjin-ios-spm|tenjin-ios-sdk)`)
@@ -495,7 +496,37 @@ func (d *detector) iosTarget(rel string) (Target, bool) {
 		d.note("Could not read PRODUCT_BUNDLE_IDENTIFIER from %s.", xcodeproj)
 	}
 	d.chooseInfoPlist(info, pbx, dir, target.BundleID)
+	info.InfoPlistSettings = appInfoPlistSettings(pbx, target.BundleID)
 	return target, true
+}
+
+// infoPlistKeyPrefix starts a build setting that Xcode writes into the
+// generated Info.plist under the rest of its name.
+const infoPlistKeyPrefix = "INFOPLIST_KEY_"
+
+// appInfoPlistSettings reads the INFOPLIST_KEY_ settings of a project whose
+// targets could not be read, from the configurations that set the app's
+// bundle ID, or from anywhere in a file that has no configuration blocks.
+func appInfoPlistSettings(pbx, bundleID string) map[string]string {
+	blocks := []string{}
+	all := pbxBuildSettings.FindAllStringSubmatch(pbx, -1)
+	for _, block := range all {
+		if id := pbxBundleID.FindStringSubmatch(block[1]); id != nil && strings.TrimSpace(id[1]) == bundleID {
+			blocks = append(blocks, block[1])
+		}
+	}
+	if len(all) == 0 {
+		blocks = append(blocks, pbx)
+	}
+	settings := map[string]string{}
+	for _, block := range blocks {
+		for _, m := range pbxInfoPlistKey.FindAllStringSubmatch(block, -1) {
+			if v := strings.TrimSpace(m[2]); v != "" {
+				settings[m[1]] = v
+			}
+		}
+	}
+	return settings
 }
 
 // iosAppTarget takes the bundle ID and Info.plist from the project's iOS app
@@ -533,6 +564,16 @@ func (d *detector) iosAppTarget(target *Target, targets []xcodeTarget, dir strin
 	}
 
 	info.GeneratedInfoPlist = app.setting("GENERATE_INFOPLIST_FILE") == "YES"
+	info.InfoPlistSettings = map[string]string{}
+	for _, settings := range app.configs {
+		for k := range settings {
+			if key, ok := strings.CutPrefix(k, infoPlistKeyPrefix); ok {
+				if v := app.setting(k); v != "" {
+					info.InfoPlistSettings[key] = v
+				}
+			}
+		}
+	}
 	ids := app.values("PRODUCT_BUNDLE_IDENTIFIER")
 	for _, other := range apps[1:] {
 		ids = append(ids, other.values("PRODUCT_BUNDLE_IDENTIFIER")...)
