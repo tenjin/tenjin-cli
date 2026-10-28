@@ -209,6 +209,39 @@ func TestAdIDRemovalIsAnError(t *testing.T) {
 	expect(t, r, "android.permission.ad_id", project.Android, verify.Error)
 }
 
+// The build drops a permission the app's manifest removes, whatever brings
+// it: a library such as Google Mobile Ads, or a library module's manifest.
+func TestNetworkPermissionsTheAppRemovesAreMissing(t *testing.T) {
+	base := testproject.AndroidNative()
+	const (
+		manifest = "app/src/main/AndroidManifest.xml"
+		build    = "app/build.gradle.kts"
+	)
+	removing := `<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
+</manifest>
+`
+	files := base.With(testproject.Files{
+		manifest:                           removing,
+		build:                              strings.Replace(base[build], "dependencies {", "dependencies {\n    implementation(\"com.google.android.gms:play-services-ads:23.0.0\")\n    implementation(project(\":net\"))", 1),
+		"net/build.gradle.kts":             "plugins { id(\"com.android.library\") }\n",
+		"net/src/main/AndroidManifest.xml": testproject.AndroidManifest,
+	})
+	r := run(t, files, verify.Options{})
+	for id, severity := range map[string]verify.Severity{
+		"android.permission.internet":      verify.Error,
+		"android.permission.network_state": verify.Warning,
+	} {
+		f := expect(t, r, id, project.Android, severity)
+		if f.File != manifest || !strings.Contains(f.Fix, `tools:node="remove"`) {
+			t.Errorf("%s = %+v", id, f)
+		}
+	}
+}
+
 func TestProguardRulesSatisfyTheShrinkingCheck(t *testing.T) {
 	base := testproject.AndroidNative()
 	const build = "app/build.gradle.kts"

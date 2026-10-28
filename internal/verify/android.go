@@ -100,11 +100,20 @@ func (r *runner) checkAndroidManifest(t *project.Target, spec frameworkSpec) {
 		}
 	}
 
-	if declared[permInternet] {
+	switch {
+	case removed[permInternet]:
+		r.add(Finding{
+			ID: "android.permission.internet", Severity: Error, Platform: project.Android,
+			Title:  "The INTERNET permission is explicitly removed",
+			Detail: "The build drops it whatever declares it, so the SDK cannot send anything in release builds.",
+			File:   file,
+			Fix:    `Delete the tools:node="remove" entry for ` + permInternet + `.`,
+		})
+	case declared[permInternet]:
 		r.pass("android.permission.internet", project.Android, "INTERNET permission is declared", file, 0)
-	} else if lib := declaresNetwork(deps); lib != "" {
-		r.pass("android.permission.internet", project.Android, "INTERNET permission comes with "+lib, t.Android.BuildFile, 0)
-	} else {
+	case declaresNetwork(deps) != "":
+		r.pass("android.permission.internet", project.Android, "INTERNET permission comes with "+declaresNetwork(deps), t.Android.BuildFile, 0)
+	default:
 		r.add(Finding{
 			ID: "android.permission.internet", Severity: Error, Platform: project.Android,
 			Title:  "INTERNET permission is missing",
@@ -114,7 +123,14 @@ func (r *runner) checkAndroidManifest(t *project.Target, spec frameworkSpec) {
 		})
 	}
 
-	if declared[permNetworkState] {
+	if removed[permNetworkState] {
+		r.add(Finding{
+			ID: "android.permission.network_state", Severity: Warning, Platform: project.Android,
+			Title: "The ACCESS_NETWORK_STATE permission is explicitly removed",
+			File:  file,
+			Fix:   `Delete the tools:node="remove" entry for ` + permNetworkState + `.`,
+		})
+	} else if declared[permNetworkState] {
 		r.pass("android.permission.network_state", project.Android, "ACCESS_NETWORK_STATE permission is declared", file, 0)
 	} else if lib := declaresNetwork(deps); lib != "" {
 		r.pass("android.permission.network_state", project.Android, "ACCESS_NETWORK_STATE permission comes with "+lib, t.Android.BuildFile, 0)
@@ -164,7 +180,7 @@ func (r *runner) checkAndroidManifest(t *project.Target, spec frameworkSpec) {
 		})
 	}
 
-	if declared[permPhoneState] {
+	if declared[permPhoneState] && !removed[permPhoneState] {
 		r.add(Finding{
 			ID: "android.permission.read_phone_state", Severity: Warning, Platform: project.Android,
 			Title:  "READ_PHONE_STATE is declared",
