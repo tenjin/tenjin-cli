@@ -1,10 +1,13 @@
 package verify
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/tenjin/tenjin-cli/internal/guides"
 	"github.com/tenjin/tenjin-cli/internal/project"
@@ -195,6 +198,15 @@ func (r *runner) checkFeatures() {
 		case project.FeatureAdRevenue:
 			r.checkAdRevenue(f, chosen[f.ID], code)
 			continue
+		case project.FeatureCustomEvents:
+			if len(r.opts.Events) > 0 {
+				r.checkChosenEvents()
+				continue
+			}
+		case project.FeatureUserID:
+			if r.checkChosenUserID() {
+				continue
+			}
 		}
 		calls := featureCalls[f.ID]
 		file, line, ok := code.find(calls.distinct, calls.generic)
@@ -311,4 +323,96 @@ func (r *runner) checkAutoTracking(code *tenjinCode) {
 			})
 		}
 	}
+}
+
+// sentToTenjin is what the app sends Tenjin as custom events and customer
+// user IDs: nothing without the SDK, where a call of the same name is
+// another library's.
+func (r *runner) sentToTenjin() project.Analytics {
+	if len(r.p.Tenjin) == 0 {
+		return project.Analytics{}
+	}
+	return r.p.SentToTenjin()
+}
+
+// checkChosenEvents reports the custom events chosen that the app does not
+// send to Tenjin by name. The names come from the developer or the app's
+// other analytics and reach a coding agent's task, so the finding says them
+// as JSON strings.
+func (r *runner) checkChosenEvents() {
+	sent := r.sentToTenjin()
+	var missing []string
+	for _, name := range r.opts.Events {
+		if len(sent.EventsNamed(name)) == 0 {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) == 0 {
+		first := sent.EventsNamed(r.opts.Events[0])[0]
+		r.pass("feature."+project.FeatureCustomEvents, "", featureSent[project.FeatureCustomEvents]+", each one chosen", first.File, first.Line)
+		return
+	}
+	detail := "Not sent to Tenjin by name, each a JSON string: " + jsonStrings(missing) + "."
+	var runtime []string
+	for _, e := range sent.Events {
+		if e.Name == "" && e.Token == "" {
+			runtime = append(runtime, fmt.Sprintf("%s:%d", e.File, e.Line))
+		}
+	}
+	if len(runtime) > 0 {
+		detail += " The app also sends Tenjin events named at runtime (" + strings.Join(runtime[:min(len(runtime), 3)], ", ") + "), whose names this check cannot read."
+	}
+	r.add(Finding{
+		ID: "feature." + project.FeatureCustomEvents, Severity: Warning,
+		Title:  fmt.Sprintf("Custom events chosen but not sent to Tenjin: %d of %d", len(missing), len(r.opts.Events)),
+		Detail: detail,
+		Fix:    featureFix(r.p, project.FeatureCustomEvents),
+	})
+}
+
+// checkChosenUserID reports whether the customer user ID chosen, given as
+// code, is the one the app passes Tenjin, and says whether it reported. One
+// given in words, or none passed at all, is left to the feature's own check.
+func (r *runner) checkChosenUserID() bool {
+	chosen := strings.TrimSpace(r.opts.UserID)
+	if chosen == "" || strings.ContainsFunc(chosen, unicode.IsSpace) {
+		return false
+	}
+	passed := r.sentToTenjin().UserIDs
+	if len(passed) == 0 {
+		return false
+	}
+	same := regexp.MustCompile(`(?:^|[^\w$])` + regexp.QuoteMeta(chosen) + `(?:$|[^\w$])`)
+	for _, u := range passed {
+		if same.MatchString(strings.ReplaceAll(u.Expression, " ", "")) {
+			r.pass("feature."+project.FeatureUserID, "", "The customer user ID chosen is passed to Tenjin", u.File, u.Line)
+			return true
+		}
+	}
+	var where []string
+	for _, u := range passed[:min(len(passed), 3)] {
+		where = append(where, fmt.Sprintf("%s (%s:%d)", jsonStrings([]string{u.Expression}), u.File, u.Line))
+	}
+	r.add(Finding{
+		ID: "feature." + project.FeatureUserID, Severity: Warning,
+		Title:  "The customer user ID passed to Tenjin is not the one chosen",
+		Detail: "Chosen, as a JSON string: " + jsonStrings([]string{chosen}) + ". Passed to Tenjin: " + strings.Join(where, ", ") + ".",
+		File:   passed[0].File, Line: passed[0].Line,
+		Fix: featureFix(r.p, project.FeatureUserID),
+	})
+	return true
+}
+
+// jsonStrings writes values from the developer or the app's code as JSON
+// strings, comma-separated.
+func jsonStrings(values []string) string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		var b strings.Builder
+		enc := json.NewEncoder(&b)
+		enc.SetEscapeHTML(false)
+		_ = enc.Encode(v)
+		out[i] = strings.TrimSuffix(b.String(), "\n")
+	}
+	return strings.Join(out, ", ")
 }

@@ -79,6 +79,11 @@ type Options struct {
 	// project.Feature). A chosen feature that is not sent is a warning; nil
 	// means no choice was made, and unsent features are only suggested.
 	Features []string
+	// Events are the custom events chosen, by name: each must be sent to
+	// Tenjin, or the feature is open. UserID is the customer user ID
+	// chosen, as code or in words; as code, it must be what is passed.
+	Events []string
+	UserID string
 	// Latest holds newer SDK releases found in the registries, keyed by
 	// package prefix (see sdkrelease). One counts only within the major
 	// version this CLI knows: a new major can change what the checks look

@@ -475,3 +475,85 @@ func TestNoAnalytics(t *testing.T) {
 		t.Errorf("analytics = %+v", p.Analytics)
 	}
 }
+
+// sentToTenjin lists what the app sends Tenjin's own SDK, as events and
+// userIDs list the other SDKs'.
+func sentToTenjin(t *testing.T, files testproject.Files) (string, string) {
+	t.Helper()
+	sent := &project.Project{Analytics: detect(t, files).SentToTenjin()}
+	return events(sent), userIDs(sent)
+}
+
+// The custom events and the user ID the app sends Tenjin are read by the
+// same rules as other SDKs': on Tenjin's receivers, names from literals and
+// constants, and through one of the app's own functions.
+func TestWhatTheAppSendsTenjin(t *testing.T) {
+	const dir = "app/src/main/java/com/example/sample/"
+	android := testproject.AndroidNative()
+	got, ids := sentToTenjin(t, android.With(testproject.Files{
+		dir + "MainActivity.kt": strings.Replace(android[dir+"MainActivity.kt"], "tenjin.connect()", `tenjin.connect()
+        tenjin.eventWithName("existing_event")
+        tenjin.eventWithNameAndValue(Events.LEVEL, 5)
+        tenjin.customerUserId = user.id
+        track("through_a_wrapper")
+        player.eventWithName("not_tenjin")`, 1),
+		dir + "Events.kt": `package com.example.sample
+
+import com.tenjin.android.TenjinSDK
+
+object Events {
+    const val LEVEL = "level_up"
+}
+
+fun track(name: String) {
+    TenjinSDK.getInstance(null, "").eventWithName(name)
+}
+`,
+	}))
+	wantLines(t, "Android events", got,
+		"Tenjin name=existing_event @app/src/main/java/com/example/sample/MainActivity.kt:11 x1",
+		"Tenjin name=level_up (Events.LEVEL) @app/src/main/java/com/example/sample/MainActivity.kt:12 x1",
+		"Tenjin name=through_a_wrapper @app/src/main/java/com/example/sample/MainActivity.kt:14 x1 via track (app/src/main/java/com/example/sample/Events.kt:9)",
+	)
+	wantLines(t, "Android user IDs", ids, "Tenjin user.id @app/src/main/java/com/example/sample/MainActivity.kt:13")
+
+	ios := testproject.IOSNative()
+	got, ids = sentToTenjin(t, ios.With(testproject.Files{
+		"Sample/Events.swift": "import TenjinSDK\n\nfunc won() {\n    TenjinSDK.sendEvent(withName: \"swift_event\")\n    TenjinSDK.setCustomerUserId(account.id)\n}\n",
+		"Sample/Legacy.m":     "#import <TenjinSDK/TenjinSDK.h>\n\nvoid won(void) {\n    [TenjinSDK sendEventWithName:@\"objc_event\" andValue:5];\n}\n",
+	}))
+	if !strings.Contains(got, "name=swift_event") || !strings.Contains(got, "name=objc_event") || !strings.Contains(ids, "account.id") {
+		t.Errorf("iOS: events\n%s\nuser IDs\n%s", got, ids)
+	}
+
+	flutter := testproject.Flutter()
+	got, _ = sentToTenjin(t, flutter.With(testproject.Files{
+		"lib/events.dart": "import 'package:tenjin_plugin/tenjin_sdk.dart';\n\nvoid won() {\n  TenjinSDK.instance.eventWithName('dart_event');\n}\n",
+	}))
+	wantLines(t, "Flutter events", got, "Tenjin name=dart_event @lib/events.dart:4 x1")
+
+	unity := testproject.Unity()
+	got, _ = sentToTenjin(t, unity.With(testproject.Files{
+		"Assets/Scripts/TenjinBootstrap.cs": strings.Replace(unity["Assets/Scripts/TenjinBootstrap.cs"], "instance.SetAppStoreType(AppStoreType.googleplay);",
+			"instance.SetAppStoreType(AppStoreType.googleplay);\n        instance.SendEvent(\"unity_event\");", 1),
+	}))
+	if !strings.Contains(got, "name=unity_event") {
+		t.Errorf("Unity events:\n%s", got)
+	}
+
+	got, ids = sentToTenjin(t, testproject.Files{
+		"package.json":             `{"dependencies": {"react-native": "0.79.2", "react-native-tenjin": "^1.7.0"}}`,
+		"android/app/build.gradle": "apply plugin: \"com.android.application\"\nandroid { defaultConfig { applicationId \"com.example.rn\" } }\n",
+		"src/events.ts":            "import Tenjin from 'react-native-tenjin';\n\nexport function won(user) {\n  Tenjin.eventWithName('rn_event');\n  Tenjin.setCustomerUserId(user.id);\n}\n",
+	})
+	wantLines(t, "React Native events", got, "Tenjin name=rn_event @src/events.ts:4 x1")
+	wantLines(t, "React Native user IDs", ids, "Tenjin user.id @src/events.ts:5")
+
+	got, _ = sentToTenjin(t, testproject.Files{
+		"package.json":             `{"dependencies": {"@capacitor/core": "^8.0.0"}}`,
+		"capacitor.config.ts":      `const config = { appId: 'com.example.cap', appName: 'Cap' };`,
+		"android/app/build.gradle": "apply plugin: 'com.android.application'\nandroid { defaultConfig { applicationId \"com.example.cap\" } }\n",
+		"src/app.ts":               "import { Tenjin } from '@tenjin/capacitor';\n\nexport async function won() {\n  await Tenjin.eventWithName({ name: 'cap_event' });\n}\n",
+	})
+	wantLines(t, "Capacitor events", got, "Tenjin name=cap_event @src/app.ts:4 x1")
+}

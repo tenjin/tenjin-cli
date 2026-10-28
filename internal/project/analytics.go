@@ -93,7 +93,28 @@ func (p *Project) ReadAnalytics() {
 	}
 	p.analyticsRead = true
 	d := &detector{root: p.Root, p: p}
-	d.findAnalytics()
+	p.Analytics = d.findAnalytics(sdkList(analyticsSDKs))
+}
+
+// SentToTenjin reads, once, the custom events and customer user IDs the app
+// sends Tenjin's own SDK: by the same rules as the other SDKs' (names from
+// literals and known constants, one level of the app's own wrapper), so
+// that a name the developer chose can be told sent or not.
+func (p *Project) SentToTenjin() Analytics {
+	if !p.sentToTenjinRead {
+		p.sentToTenjinRead = true
+		d := &detector{root: p.Root, p: p}
+		p.sentToTenjin = d.findAnalytics([]*analyticsSDK{&tenjinSDK})
+	}
+	return p.sentToTenjin
+}
+
+func sdkList(sdks []analyticsSDK) []*analyticsSDK {
+	out := make([]*analyticsSDK, len(sdks))
+	for i := range sdks {
+		out[i] = &sdks[i]
+	}
+	return out
 }
 
 // ReadAnalyticsFor reads them when the features include custom events or
@@ -176,8 +197,31 @@ type analyticsSDK struct {
 	// constructors build an event from a token (Adjust), not a name.
 	constructors     []string
 	objcConstructors []string
+	// own is Tenjin's SDK, whose names in the app may say Tenjin.
+	own bool
 
 	m *sdkMatchers
+}
+
+// tenjinSDK is how code sends custom events and the customer user ID to
+// Tenjin, in every wrapper, read by SentToTenjin and never offered as
+// another SDK's.
+var tenjinSDK = analyticsSDK{
+	name:  "Tenjin",
+	own:   true,
+	hints: []string{"enjin"},
+	uses:  regexp.MustCompile(`[Tt]enjin`),
+	receivers: anywhere(`TenjinSDK\s*\.\s*getInstance\w*`+getInstanceArgs, `TenjinSDK\s*\.\s*instance`, `TenjinSDK`,
+		`Tenjin\s*\.\s*getInstance\w*`+getInstanceArgs, `Tenjin`),
+	objcReceivers:    []string{`TenjinSDK`, `\[\s*TenjinSDK\s+sharedInstance\s*\]`},
+	types:            []string{"TenjinSDK", "BaseTenjin"},
+	factories:        []string{`TenjinSDK\s*\.\s*getInstance`, `TenjinSDK\s*\.\s*instance\b`, `Tenjin\s*\.\s*getInstance`},
+	jsModules:        `[\w@./-]*tenjin[\w./-]*`,
+	events:           []string{"eventWithName", "eventWithNameAndValue", "sendEvent", "SendEvent"},
+	objcEvents:       []string{"sendEventWithName"},
+	userIDs:          []string{"setCustomerUserId", "SetCustomerUserId"},
+	objcUserIDs:      []string{"setCustomerUserId"},
+	userIDProperties: []string{"customerUserId"},
 }
 
 const getInstanceArgs = `\s*\(\s*(?:[^()]|\([^()]*\))*\)`
@@ -334,6 +378,7 @@ func init() {
 	for i := range analyticsSDKs {
 		analyticsSDKs[i].compile()
 	}
+	tenjinSDK.compile()
 }
 
 func (sdk *analyticsSDK) compile() {
@@ -472,13 +517,12 @@ type sighting struct {
 	through string
 }
 
-// findAnalytics reads what the app sends to other analytics SDKs.
-func (d *detector) findAnalytics() {
-	d.p.Analytics = Analytics{Events: []AnalyticsEvent{}, UserIDs: []AnalyticsUserID{}}
+// findAnalytics reads what the app sends to these SDKs.
+func (d *detector) findAnalytics(sdks []*analyticsSDK) Analytics {
 	switch d.p.Framework {
 	case Native, Flutter, ReactNative, Capacitor, Unity:
 	default:
-		return
+		return Analytics{Events: []AnalyticsEvent{}, UserIDs: []AnalyticsUserID{}}
 	}
 	var rels []string
 	for _, rel := range SourceFiles(d.root, ".", featureCodeExts...) {
@@ -498,7 +542,7 @@ func (d *detector) findAnalytics() {
 		go func() {
 			defer wg.Done()
 			for i := range next {
-				read[i] = readSource(d.root, rels[i])
+				read[i] = readSource(d.root, rels[i], sdks)
 			}
 		}()
 	}
@@ -521,12 +565,12 @@ func (d *detector) findAnalytics() {
 		}
 	}
 	s.followWrappers()
-	d.p.Analytics = s.result()
+	return s.result()
 }
 
 // readSource reads one of the app's source files, or returns nil for one
 // that is not the app's own: too large, minified, or an SDK's copied in.
-func readSource(root, rel string) *sourceFile {
+func readSource(root, rel string, sdks []*analyticsSDK) *sourceFile {
 	raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 	if err != nil || len(raw) > 2<<20 {
 		return nil
@@ -541,8 +585,8 @@ func readSource(root, rel string) *sourceFile {
 		return nil
 	}
 	f := &sourceFile{rel: rel, ext: ext, text: text, code: BlankStrings(text, ext)}
-	for i := range analyticsSDKs {
-		if sdk := &analyticsSDKs[i]; sdk.hinted(text) && sdk.uses.MatchString(text) {
+	for _, sdk := range sdks {
+		if sdk.hinted(text) && sdk.uses.MatchString(text) {
 			f.sdks = append(f.sdks, sdk)
 		}
 	}
@@ -770,7 +814,7 @@ func aliasesIn(f *sourceFile, sdk *analyticsSDK) (map[string]bool, map[analytics
 	aliases := map[string]bool{}
 	add := func(re *regexp.Regexp) {
 		for _, m := range re.FindAllStringSubmatch(f.text, -1) {
-			if n := m[1]; n != "" && !tenjinName(n) && !jsKeywords[n] {
+			if n := m[1]; n != "" && (sdk.own || !tenjinName(n)) && !jsKeywords[n] {
 				aliases[n] = true
 			}
 		}
@@ -797,7 +841,7 @@ func aliasesIn(f *sourceFile, sdk *analyticsSDK) (map[string]bool, map[analytics
 				functions[eventCall] = append(functions[eventCall], local)
 			case contains(sdk.userIDs, original):
 				functions[userIDCall] = append(functions[userIDCall], local)
-			case !tenjinName(local) && !jsKeywords[local]:
+			case (sdk.own || !tenjinName(local)) && !jsKeywords[local]:
 				aliases[local] = true
 			}
 		}

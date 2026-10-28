@@ -645,6 +645,13 @@ func (s *setup) givenForChecks() verify.GivenKeys {
 // verify runs the doctor checks on the project as it is now.
 func (s *setup) verify(p *project.Project) *verify.Report {
 	opts := verify.Options{Given: s.givenForChecks(), Features: s.features}
+	// The events and user ID chosen are open work until the app sends them.
+	if containsString(s.features, project.FeatureCustomEvents) {
+		opts.Events = s.analytics.events
+	}
+	if containsString(s.features, project.FeatureUserID) {
+		opts.UserID = s.analytics.userID
+	}
 	if keys := s.keyCheck(); keys != nil {
 		opts.Keys = keys
 	}

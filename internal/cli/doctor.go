@@ -148,6 +148,14 @@ otherwise. With --strict, warnings count too.`,
 			}
 			p.ReadAnalyticsFor(integrate)
 			vopts := verify.Options{Given: given, Features: chosen}
+			// Only what the flags name is checked: what the app sends other
+			// SDKs is a suggestion, not a choice.
+			if analytics.eventsGiven {
+				vopts.Events = analytics.events
+			}
+			if analytics.userIDGiven {
+				vopts.UserID = analytics.userID
+			}
 			var tenjin *track.Client
 			if !offline {
 				vopts.Latest = env.latestSDKs(cmd.Context())

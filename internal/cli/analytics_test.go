@@ -280,10 +280,53 @@ func TestEventsAndUserIDFlags(t *testing.T) {
 	}
 }
 
+// sendsTenjin is the Android sample sending these custom events to Tenjin,
+// and passing it this user ID.
+func sendsTenjin(userID string, events ...string) testproject.Files {
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	base := testproject.AndroidNative()
+	calls := "tenjin.connect()\n        tenjin.setCustomerUserId(" + userID + ")"
+	for _, e := range events {
+		calls += "\n        tenjin.eventWithName(\"" + e + "\")"
+	}
+	return base.With(testproject.Files{activity: strings.Replace(base[activity], "tenjin.connect()", calls, 1)})
+}
+
+// An event or a user ID named for the integration is work left until the
+// app sends it to Tenjin, even where it sends Tenjin others: the agent is
+// started for it, told the names as values, and doctor says which.
+func TestEventsNamedAreAddedWhereOthersAreSentAlready(t *testing.T) {
+	h, dir := analyticsSetup(t, sendsTenjin("user.id", "existing_event"))
+	agent := h.installAgent()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	t.Setenv("FAKE_AGENT_DO", `sed -i.bak 's/tenjin.connect()/tenjin.connect(); tenjin.eventWithName("new_event"); tenjin.setCustomerUserId(account.uid)/' `+activity+` && rm -f `+activity+`.bak`)
+
+	code, stdout, stderr := h.run("setup", dir, "--events", "new_event", "--user-id", "account.uid", "--agent", "claude")
+	if code != 0 || agent.runs() != "1" || strings.Contains(stdout, "already set up") {
+		t.Fatalf("exit = %d, runs = %q, stderr = %q\n%s", code, agent.runs(), stderr, stdout)
+	}
+	prompt := agent.read("prompt")
+	for _, want := range []string{"\n  - \"new_event\"", "\n  - \"account.uid\"", `Not sent to Tenjin by name, each a JSON string: "new_event".`} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the task lacks %q:\n%s", want, prompt)
+		}
+	}
+	lacks(t, stdout, "Custom events chosen but not sent to Tenjin: 1 of 1", "The customer user ID passed to Tenjin is not the one chosen",
+		"Nothing here would stop events reaching Tenjin")
+
+	// doctor names what is missing, and passes what is sent.
+	dir = testproject.Write(t, sendsTenjin("user.id", "existing_event"))
+	_, stdout, _ = h.run("doctor", dir, "--offline", "--agent", "none", "--events", "existing_event,new_event", "--user-id", "account.uid")
+	lacks(t, stdout, "Custom events chosen but not sent to Tenjin: 1 of 2", `Not sent to Tenjin by name, each a JSON string: "new_event".`,
+		"The customer user ID passed to Tenjin is not the one chosen", `Passed to Tenjin: "user.id" (`+activity)
+	_, stdout, _ = h.run("doctor", dir, "--offline", "--agent", "none", "--events", "existing_event", "--user-id", "user.id")
+	lacks(t, stdout, "Custom events are sent to Tenjin, each one chosen", "The customer user ID chosen is passed to Tenjin")
+}
+
 func TestDoctorTakesTheEventsFlagAsTheFeatureChosen(t *testing.T) {
 	h, dir := analyticsSetup(t, withAnalytics())
 	_, stdout, _ := h.run("doctor", dir, "--offline", "--events", "boss_defeated")
-	lacks(t, stdout, "Custom events: chosen for the integration, but not sent to Tenjin")
+	lacks(t, stdout, "Custom events chosen but not sent to Tenjin: 1 of 1", `"boss_defeated"`)
 	if strings.Contains(stdout, "Customer user ID") {
 		t.Errorf("the user ID was not chosen:\n%s", stdout)
 	}
