@@ -744,6 +744,60 @@ class MainActivity : Activity() {
 	expect(t, r, "sdk.connect", "", verify.Pass)
 }
 
+// A call written in a string is text the app prints, not a call; the key
+// in a string is still read.
+func TestCallsInsideStringsAreNotCalls(t *testing.T) {
+	android := testproject.AndroidNative()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	ios := testproject.IOSNative()
+	const delegate = "Sample/AppDelegate.swift"
+	flutter := testproject.Flutter()
+	unity := testproject.Unity()
+	// The Flutter project's Android folder gives the JavaScript wrappers an
+	// app to check their key for.
+	androidFolder := testproject.Files{
+		"android/app/build.gradle.kts":             flutter["android/app/build.gradle.kts"],
+		"android/app/src/main/AndroidManifest.xml": flutter["android/app/src/main/AndroidManifest.xml"],
+	}
+	java := "package com.example.sample;\nimport android.app.Activity;\nimport com.tenjin.android.TenjinSDK;\npublic class MainActivity extends Activity {\n  @Override protected void onResume() {\n    super.onResume();\n    TenjinSDK tenjin = TenjinSDK.getInstance(this, \"" + testproject.Key + "\");\n    System.out.println(\"tenjin.connect() has not been called yet\");\n  }\n}\n"
+	objc := "#import <TenjinSDK/TenjinSDK.h>\n@implementation AppDelegate\n- (void)applicationDidBecomeActive:(UIApplication *)application {\n  [TenjinSDK initialize:@\"" + testproject.Key + "\"];\n  NSLog(@\"[TenjinSDK connect] comes later\");\n}\n@end\n"
+	cases := []struct {
+		name     string
+		files    testproject.Files
+		platform project.Platform
+	}{
+		{"Kotlin", android.With(testproject.Files{activity: strings.Replace(android[activity], "tenjin.connect()", `println("tenjin.connect() has not been called yet")`, 1)}), project.Android},
+		{"Java", android.Without(activity).With(testproject.Files{"app/src/main/java/com/example/sample/MainActivity.java": java}), project.Android},
+		{"Swift", ios.With(testproject.Files{delegate: strings.Replace(ios[delegate], "TenjinSDK.connect()", `print("TenjinSDK.connect() is next")`, 1)}), project.IOS},
+		{"Objective-C", ios.With(testproject.Files{delegate: "", "Sample/AppDelegate.m": objc}), project.IOS},
+		{"Dart", flutter.With(testproject.Files{"lib/main.dart": strings.Replace(flutter["lib/main.dart"], "TenjinSDK.instance.connect();", `print('TenjinSDK.instance.connect() is next');`, 1)}), ""},
+		{"React Native", androidFolder.With(testproject.Files{
+			"package.json": `{"dependencies": {"react-native": "0.79.2", "react-native-tenjin": "1.7.0"}}`,
+			"App.tsx":      "import Tenjin from 'react-native-tenjin';\nTenjin.initialize('" + testproject.Key + "');\nconsole.log(`Tenjin.connect() is next`);\n",
+		}), ""},
+		{"Capacitor", androidFolder.With(testproject.Files{
+			"package.json":          `{"dependencies": {"@capacitor/core": "6.0.0", "ionic-capacitor-tenjin": "2.2.0"}}`,
+			"capacitor.config.json": `{"appId": "com.example.sample"}`,
+			"src/app.ts":            "import { Tenjin } from 'ionic-capacitor-tenjin';\nawait Tenjin.initialize({ sdkKey: '" + testproject.Key + "' });\nconsole.log(\"Tenjin.connect() is next\");\n",
+		}), ""},
+		{"C#", unity.With(testproject.Files{unityScript: strings.ReplaceAll(unity[unityScript], "instance.Connect();", `Debug.Log("instance.Connect() is next");`)}), ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			keys := &fakeKeys{}
+			r := run(t, c.files, verify.Options{Keys: keys})
+			expect(t, r, "sdk.init", c.platform, verify.Pass)
+			expect(t, r, "sdk.connect", c.platform, verify.Error)
+			if len(keys.asked) == 0 || !strings.HasPrefix(keys.asked[0], testproject.Key+"|") {
+				t.Errorf("the key was not read: asked %v", keys.asked)
+			}
+		})
+	}
+	// An initializer named in a string initializes nothing.
+	files := android.With(testproject.Files{activity: strings.Replace(android[activity], `val tenjin = TenjinSDK.getInstance(this, "`+testproject.Key+`")`, `val tenjin = Log.d("x", "TenjinSDK.getInstance(this, key)")`, 1)})
+	expect(t, run(t, files, verify.Options{}), "sdk.init", project.Android, verify.Error)
+}
+
 // React Native's default export can take any name.
 func TestReactNativeDefaultImportUnderAnyName(t *testing.T) {
 	r := run(t, testproject.Files{

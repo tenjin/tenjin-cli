@@ -237,30 +237,32 @@ func (r *runner) scanSource(spec frameworkSpec, dirs []string) source {
 			if spec.normalize != nil {
 				text = spec.normalize(text)
 			}
-			for _, loc := range spec.initCall.FindAllStringIndex(text, -1) {
-				src.inits = append(src.inits, call{File: rel, Line: lineAt(text, loc[0]), At: loc[0], Text: text})
+			// Calls are found where strings are blanked, at the same
+			// offsets: println("tenjin.connect()") is no call. Keys are
+			// read from the text, where the strings are.
+			code := project.BlankStrings(text, filepath.Ext(rel))
+			calls := func(re *regexp.Regexp) []call {
+				var found []call
+				for _, loc := range re.FindAllStringIndex(code, -1) {
+					found = append(found, call{File: rel, Line: lineAt(text, loc[0]), At: loc[0], Text: text})
+				}
+				return found
 			}
+			src.inits = append(src.inits, calls(spec.initCall)...)
 			if spec.deprecatedInit != nil {
-				for _, loc := range spec.deprecatedInit.FindAllStringIndex(text, -1) {
-					src.deprecated = append(src.deprecated, call{File: rel, Line: lineAt(text, loc[0]), At: loc[0], Text: text})
-				}
+				src.deprecated = append(src.deprecated, calls(spec.deprecatedInit)...)
 			}
-			for _, loc := range spec.connectCall.FindAllStringIndex(text, -1) {
-				src.connects = append(src.connects, call{File: rel, Line: lineAt(text, loc[0]), At: loc[0], Text: text})
-			}
+			src.connects = append(src.connects, calls(spec.connectCall)...)
 			if spec.attCall != nil {
-				for _, loc := range spec.attCall.FindAllStringIndex(text, -1) {
-					src.att = append(src.att, call{File: rel, Line: lineAt(text, loc[0]), At: loc[0], Text: text})
-				}
+				src.att = append(src.att, calls(spec.attCall)...)
 			}
 			if spec.debugLogsCall != nil {
-				// Not inside a string: Debug.Log("call DebugLogs()") is no call.
-				code := project.BlankStrings(text, filepath.Ext(rel))
-				for _, loc := range spec.debugLogsCall.FindAllStringIndex(code, -1) {
-					src.debugLogs = append(src.debugLogs, call{File: rel, Line: lineAt(text, loc[0]), At: loc[0], Text: text})
-				}
+				src.debugLogs = append(src.debugLogs, calls(spec.debugLogsCall)...)
 			}
 			for _, m := range spec.keyLiteral.FindAllStringSubmatchIndex(text, -1) {
+				if code[m[0]] != text[m[0]] {
+					continue
+				}
 				// Some patterns have one capture group per syntax; take
 				// whichever matched.
 				for g := 2; g+1 < len(m); g += 2 {
