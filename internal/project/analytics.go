@@ -206,14 +206,18 @@ type analyticsSDK struct {
 
 // tenjinSDK is how code sends custom events and the customer user ID to
 // Tenjin, in every wrapper, read by SentToTenjin and never offered as
-// another SDK's.
+// another SDK's. Its receivers include the usual names for it that doctor's
+// checks take in a file that mentions Tenjin, so that a call on one set in
+// another file is found: tenjin, tenjinSDK, and instance on its own. Not a
+// bare getInstance(), which AppsFlyerLib.getInstance() would match.
 var tenjinSDK = analyticsSDK{
 	name:  "Tenjin",
 	own:   true,
 	hints: []string{"enjin"},
 	uses:  regexp.MustCompile(`[Tt]enjin`),
 	receivers: anywhere(`TenjinSDK\s*\.\s*getInstance\w*`+getInstanceArgs, `TenjinSDK\s*\.\s*instance`, `TenjinSDK`,
-		`Tenjin\s*\.\s*getInstance\w*`+getInstanceArgs, `Tenjin`),
+		`Tenjin\s*\.\s*getInstance\w*`+getInstanceArgs, `Tenjin`,
+		`tenjin`, `tenjinSDK`, `^instance`),
 	objcReceivers:    []string{`TenjinSDK`, `\[\s*TenjinSDK\s+sharedInstance\s*\]`},
 	types:            []string{"TenjinSDK", "BaseTenjin"},
 	factories:        []string{`TenjinSDK\s*\.\s*getInstance`, `TenjinSDK\s*\.\s*instance\b`, `Tenjin\s*\.\s*getInstance`},

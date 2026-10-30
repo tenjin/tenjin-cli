@@ -582,4 +582,19 @@ export function won() {
 	})
 	wantLines(t, "Capacitor shorthand events", got, "Tenjin name=level_up @src/app.ts:13 x1 via track (src/app.ts:8)")
 	wantLines(t, "Capacitor shorthand user IDs", ids, "Tenjin userId @src/app.ts:5")
+
+	// The receiver may be set in another file, under one of the names doctor
+	// takes for it.
+	got, ids = sentToTenjin(t, testproject.Flutter().With(testproject.Files{
+		"lib/analytics.dart": "import 'package:tenjin_plugin/tenjin_sdk.dart';\n\nfinal tenjin = TenjinSDK.instance;\n",
+		"lib/game.dart":      "import 'package:tenjin_plugin/tenjin_sdk.dart';\nimport 'analytics.dart';\n\nvoid levelUp(User user) {\n  tenjin.eventWithName('level_up');\n  tenjin.setCustomerUserId(user.id);\n}\n",
+	}))
+	wantLines(t, "Flutter events on another file's receiver", got, "Tenjin name=level_up @lib/game.dart:5 x1")
+	wantLines(t, "Flutter user IDs on another file's receiver", ids, "Tenjin user.id @lib/game.dart:6")
+
+	// Another SDK's instance, or its getInstance(), is not Tenjin's.
+	_, ids = sentToTenjin(t, testproject.AndroidNative().With(testproject.Files{
+		"app/src/main/java/com/example/sample/Login.kt": "package com.example.sample\n\nimport com.appsflyer.AppsFlyerLib\nimport com.tenjin.android.TenjinSDK\n\nfun login(user: User) {\n    AppsFlyerLib.getInstance().setCustomerUserId(user.id)\n    Other.instance.setCustomerUserId(user.id)\n}\n",
+	}))
+	wantLines(t, "Android user IDs on other SDKs", ids)
 }
