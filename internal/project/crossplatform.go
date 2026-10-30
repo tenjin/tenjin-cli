@@ -24,6 +24,10 @@ var (
 	iniBundleID            = regexp.MustCompile(`(?m)^BundleIdentifier=(.+)$`)
 	iniPackageName         = regexp.MustCompile(`(?m)^PackageName=(.+)$`)
 	upluginVersion         = regexp.MustCompile(`"VersionName"\s*:\s*"([^"]+)"`)
+	// capacitorPlatformBlock is a platform's own options in capacitor.config.
+	capacitorPlatformBlock = regexp.MustCompile(`(?m)^\s*["']?(android|ios)["']?\s*:`)
+	// plainVersion is a version a shell passes on as it is.
+	plainVersion = regexp.MustCompile(`^[0-9][0-9A-Za-z.+-]*$`)
 )
 
 // packageJSON is the part of package.json detection needs.
@@ -68,6 +72,38 @@ func (d *detector) nativeTargets() {
 	}
 }
 
+// mobilePlatform is a platform a cross-platform framework adds a native
+// project for, in a folder of that name.
+type mobilePlatform struct {
+	platform     Platform
+	folder, name string
+}
+
+var mobilePlatforms = []mobilePlatform{{Android, "android", "Android"}, {IOS, "ios", "iOS"}}
+
+// notePlatformToAdd says, when a cross-platform project has the native
+// project of one platform and no folder for the other, that only the one is
+// covered and how the other is added. add gives the commands that add a
+// platform, and what in the project already names it, or "".
+func (d *detector) notePlatformToAdd(add func(mobilePlatform) (commands []string, why string)) {
+	if len(d.p.Targets) == 0 {
+		return
+	}
+	for i, m := range mobilePlatforms {
+		if d.p.Target(m.platform) != nil || d.exists(m.folder) {
+			continue
+		}
+		covered := mobilePlatforms[1-i].name
+		commands, why := add(m)
+		run := "`" + strings.Join(commands, "` and `") + "`"
+		if why != "" {
+			d.note("Only %s is covered: there is no %s/ folder yet, although %s. To add %s, run %s, then `tenjin setup` again.", covered, m.folder, why, m.name, run)
+		} else {
+			d.note("Only %s is covered: there is no %s/ folder. If the app ships on %s too, run %s, then `tenjin setup` again.", covered, m.folder, m.name, run)
+		}
+	}
+}
+
 func (d *detector) flutter() bool {
 	pubspec := d.read("pubspec.yaml")
 	if !flutterSDK.MatchString(pubspec) {
@@ -76,6 +112,9 @@ func (d *detector) flutter() bool {
 	d.p.Framework = Flutter
 	d.p.Supported = true
 	d.nativeTargets()
+	d.notePlatformToAdd(func(m mobilePlatform) ([]string, string) {
+		return []string{"flutter create --platforms=" + m.folder + " ."}, ""
+	})
 	if pubspecTenjin.MatchString(pubspec) {
 		i := Integration{Package: "tenjin_plugin", Source: "pubspec.yaml"}
 		if m := pubLockTenjin.FindStringSubmatch(d.read("pubspec.lock")); m != nil {
@@ -142,11 +181,21 @@ func (d *detector) reactNative() bool {
 	d.nativeTargets()
 
 	if _, expo := pkg.dependency("expo"); expo {
+		configured := d.expoTargets()
 		if len(d.p.Targets) == 0 {
-			d.expoTargets()
+			d.p.Targets = configured
 			d.note("This is an Expo project without native folders. The Tenjin SDK is a native module: run `npx expo prebuild` or use a development build before integrating.")
 		} else {
 			d.note("This is an Expo project. The Tenjin package ships no config plugin, so its native settings must be kept in the prebuilt android/ and ios/ folders.")
+			d.notePlatformToAdd(func(m mobilePlatform) ([]string, string) {
+				why := ""
+				for _, t := range configured {
+					if t.Platform == m.platform {
+						why = t.Source + " gives " + m.name + " a bundle ID"
+					}
+				}
+				return []string{"npx expo prebuild --platform " + m.folder}, why
+			})
 		}
 	}
 	if v, ok := pkg.dependency("react-native-tenjin"); ok {
@@ -162,9 +211,10 @@ var (
 	expoBundleIdentifier = regexp.MustCompile(`\bbundleIdentifier\s*:\s*["']([\w.-]+)["']`)
 )
 
-// expoTargets reads bundle IDs from app.json, or app.config, when there are
-// no native folders.
-func (d *detector) expoTargets() {
+// expoTargets reads the bundle IDs app.json, or app.config, gives. They are
+// the project's targets when there are no native folders.
+func (d *detector) expoTargets() []Target {
+	var targets []Target
 	var app struct {
 		Expo struct {
 			IOS     struct{ BundleIdentifier string } `json:"ios"`
@@ -181,21 +231,22 @@ func (d *detector) expoTargets() {
 				continue
 			}
 			if m := expoAndroidPackage.FindStringSubmatch(config); m != nil {
-				d.p.Targets = append(d.p.Targets, Target{Platform: Android, BundleID: m[1], Source: name})
+				targets = append(targets, Target{Platform: Android, BundleID: m[1], Source: name})
 			}
 			if m := expoBundleIdentifier.FindStringSubmatch(config); m != nil {
-				d.p.Targets = append(d.p.Targets, Target{Platform: IOS, BundleID: m[1], Source: name})
+				targets = append(targets, Target{Platform: IOS, BundleID: m[1], Source: name})
 			}
-			return
+			return targets
 		}
-		return
+		return nil
 	}
 	if id := app.Expo.Android.Package; id != "" {
-		d.p.Targets = append(d.p.Targets, Target{Platform: Android, BundleID: id, Source: "app.json"})
+		targets = append(targets, Target{Platform: Android, BundleID: id, Source: "app.json"})
 	}
 	if id := app.Expo.IOS.BundleIdentifier; id != "" {
-		d.p.Targets = append(d.p.Targets, Target{Platform: IOS, BundleID: id, Source: "app.json"})
+		targets = append(targets, Target{Platform: IOS, BundleID: id, Source: "app.json"})
 	}
+	return targets
 }
 
 // reactNativeThroughPackage records the SDK when the app gets
@@ -259,6 +310,35 @@ func (d *detector) capacitor() bool {
 			}
 		}
 	}
+	configured := stripComments(d.read(config))
+	d.notePlatformToAdd(func(m mobilePlatform) ([]string, string) {
+		add := "npx cap add " + m.folder
+		platformPkg := "@capacitor/" + m.folder
+		if _, ok := pkg.dependency(platformPkg); ok {
+			return []string{add}, platformPkg + " is a dependency"
+		}
+		why := ""
+		for _, block := range capacitorPlatformBlock.FindAllStringSubmatch(configured, -1) {
+			if block[1] == m.folder {
+				why = config + " configures " + m.name
+			}
+		}
+		// The platform's package is released with the core one, at the same
+		// version.
+		version, ok := pkg.dependency("@capacitor/core")
+		if !ok {
+			return []string{add}, why
+		}
+		install := map[string]string{"yarn": "yarn add", "pnpm": "pnpm add", "bun": "bun add"}[d.packageManager()]
+		if install == "" {
+			install = "npm install"
+		}
+		spec := platformPkg + "@" + version
+		if !plainVersion.MatchString(version) {
+			spec = "'" + spec + "'"
+		}
+		return []string{install + " " + spec, add}, why
+	})
 	if hasPkg {
 		if v, ok := pkg.dependency("ionic-capacitor-tenjin"); ok {
 			d.found(Integration{Package: "ionic-capacitor-tenjin", Version: v, Source: "package.json"})

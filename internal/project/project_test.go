@@ -209,6 +209,67 @@ func TestExpoWithoutNativeFolders(t *testing.T) {
 	}
 }
 
+// A cross-platform project with one platform's folder covers that one, and
+// says how the other is added, with what in the project names it.
+func TestAPlatformNotAddedYetIsNoted(t *testing.T) {
+	ios := testproject.Files{
+		"ios/App/App.xcodeproj/project.pbxproj": testproject.PBXProj(testproject.PBXTarget{Name: "App", BundleID: "com.example.cap", InfoPlist: "App/Info.plist"}),
+		"ios/App/App/Info.plist":                testproject.InfoPlist,
+	}
+	capacitor := ios.With(testproject.Files{
+		"package.json":        `{"dependencies": {"@capacitor/core": "8.5.3", "@capacitor/ios": "8.5.3"}}`,
+		"capacitor.config.ts": "const config = {\n  appId: 'com.example.cap',\n  ios: { contentInset: 'never' },\n  android: { backgroundColor: '#000000' },\n};\n",
+	})
+	android := testproject.Flutter().Without("ios/Runner.xcodeproj/project.pbxproj", "ios/Runner/Info.plist")
+	cases := []struct {
+		name  string
+		files testproject.Files
+		want  string // "" for no note
+	}{
+		{"capacitor configures it", capacitor,
+			"Only iOS is covered: there is no android/ folder yet, although capacitor.config.ts configures Android. To add Android, run `npm install @capacitor/android@8.5.3` and `npx cap add android`, then `tenjin setup` again."},
+		{"capacitor depends on it, with yarn", capacitor.With(testproject.Files{
+			"package.json": `{"dependencies": {"@capacitor/core": "^8.0.0", "@capacitor/android": "^8.0.0"}}`,
+			"yarn.lock":    "",
+		}), "although @capacitor/android is a dependency. To add Android, run `npx cap add android`, then"},
+		{"capacitor installs a range, quoted", capacitor.With(testproject.Files{
+			"package.json":   `{"dependencies": {"@capacitor/core": "^8.0.0"}}`,
+			"pnpm-lock.yaml": "",
+		}), "run `pnpm add '@capacitor/android@^8.0.0'` and `npx cap add android`"},
+		{"capacitor names nothing", capacitor.With(testproject.Files{
+			"capacitor.config.ts": "const config = { appId: 'com.example.cap' };\n",
+			"package.json":        `{"dependencies": {"@capacitor/core": "8.5.3"}}`,
+		}), "Only iOS is covered: there is no android/ folder. If the app ships on Android too, run `npm install @capacitor/android@8.5.3` and `npx cap add android`, then `tenjin setup` again."},
+		{"capacitor with both", capacitor.With(testproject.Files{
+			"android/app/build.gradle": "apply plugin: 'com.android.application'\nandroid { defaultConfig { applicationId \"com.example.cap\" } }\n",
+		}), ""},
+		{"expo configures it", ios.With(testproject.Files{
+			"package.json": `{"dependencies": {"react-native": "0.79.2", "expo": "~53.0.0"}}`,
+			"app.json":     `{"expo": {"ios": {"bundleIdentifier": "com.example.cap"}, "android": {"package": "com.example.cap"}}}`,
+		}), "although app.json gives Android a bundle ID. To add Android, run `npx expo prebuild --platform android`, then"},
+		{"flutter without ios", android,
+			"Only Android is covered: there is no ios/ folder. If the app ships on iOS too, run `flutter create --platforms=ios .`, then `tenjin setup` again."},
+		{"flutter with both", testproject.Flutter(), ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := detect(t, tc.files)
+			if tc.want == "" {
+				if len(p.Targets) != 2 || hasNote(p, "is covered") {
+					t.Errorf("targets = %+v, notes = %q", p.Targets, p.Notes)
+				}
+				return
+			}
+			if len(p.Targets) != 1 {
+				t.Fatalf("targets = %+v", p.Targets)
+			}
+			if !hasNote(p, tc.want) {
+				t.Errorf("notes = %q\nwant one with %q", p.Notes, tc.want)
+			}
+		})
+	}
+}
+
 func TestCordovaIsRecognisedAndUnsupported(t *testing.T) {
 	p := detect(t, testproject.Files{
 		"config.xml": `<?xml version='1.0' encoding='utf-8'?><widget id="com.example.cordova" version="1.0.0"></widget>`,
