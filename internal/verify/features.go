@@ -382,10 +382,8 @@ func (r *runner) checkChosenUserID() bool {
 	if len(passed) == 0 {
 		return false
 	}
-	// The whole expression, not one found inside another: user.id is not
-	// previous.user.id, and a transformation of it may not be the same value.
 	for _, u := range passed {
-		if strings.Join(strings.Fields(u.Expression), "") == chosen {
+		if sameExpression(u.Expression, chosen) {
 			r.pass("feature."+project.FeatureUserID, "", "The customer user ID chosen is passed to Tenjin", u.File, u.Line)
 			return true
 		}
@@ -402,6 +400,80 @@ func (r *runner) checkChosenUserID() bool {
 		Fix: featureFix(r.p, project.FeatureUserID),
 	})
 	return true
+}
+
+// sameExpression reports whether the code the app passes is the expression
+// chosen, as a whole: user.id is not previous.user.id, and a transformation
+// of it, such as user.id!!, is not taken for the same value. Only what
+// cannot change the value is left out of the comparison: the spaces between
+// tokens, and parentheses around the whole, so (user.id) is user.id.
+func sameExpression(passed, chosen string) bool {
+	return bareExpression(passed) == bareExpression(chosen)
+}
+
+// bareExpression is expr without spaces between tokens, except one between
+// two words (x as String), and without parentheses that group all of it.
+// Text inside a string literal is kept as it is.
+func bareExpression(expr string) string {
+	var b strings.Builder
+	var quote byte
+	for i := 0; i < len(expr); i++ {
+		c := expr[i]
+		switch {
+		case quote != 0:
+			b.WriteByte(c)
+			if c == '\\' && i+1 < len(expr) {
+				i++
+				b.WriteByte(expr[i])
+			} else if c == quote {
+				quote = 0
+			}
+		case c == '"' || c == '\'' || c == '`':
+			quote = c
+			b.WriteByte(c)
+		case isSpace(c):
+			j := skipSpace(expr, i)
+			if out := b.String(); out != "" && isWord(out[len(out)-1]) && j < len(expr) && isWord(expr[j]) {
+				b.WriteByte(' ')
+			}
+			i = j - 1
+		default:
+			b.WriteByte(c)
+		}
+	}
+	bare := b.String()
+	for len(bare) >= 2 && bare[0] == '(' && groupEnd(bare) == len(bare)-1 {
+		bare = bare[1 : len(bare)-1]
+	}
+	return bare
+}
+
+// groupEnd returns the index of the parenthesis that closes the one that
+// starts expr, or -1. Parentheses inside string literals do not count.
+func groupEnd(expr string) int {
+	depth := 0
+	var quote byte
+	for i := 0; i < len(expr); i++ {
+		c := expr[i]
+		switch {
+		case quote != 0:
+			switch c {
+			case '\\':
+				i++
+			case quote:
+				quote = 0
+			}
+		case c == '"' || c == '\'' || c == '`':
+			quote = c
+		case c == '(':
+			depth++
+		case c == ')':
+			if depth--; depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 // jsonStrings writes values from the developer or the app's code as JSON

@@ -351,6 +351,20 @@ func TestTheUserIDNamedIsTheWholeExpression(t *testing.T) {
 	lacks(t, stdout, "The customer user ID chosen is passed to Tenjin")
 }
 
+// Parentheses around the whole user ID do not change it: (user.id) is the
+// user.id named, and previous.user.id in them is still another.
+func TestTheUserIDNamedMayBeInParentheses(t *testing.T) {
+	h, dir := analyticsSetup(t, sendsTenjin("(user.id)"))
+	code, stdout, _ := h.run("doctor", dir, "--offline", "--agent", "none", "--user-id", "user.id", "--strict")
+	if code != 0 {
+		t.Fatalf("exit = %d\n%s", code, stdout)
+	}
+	lacks(t, stdout, "The customer user ID chosen is passed to Tenjin")
+	h, dir = analyticsSetup(t, sendsTenjin("(previous.user.id)"))
+	_, stdout, _ = h.run("doctor", dir, "--offline", "--agent", "none", "--user-id", "user.id")
+	lacks(t, stdout, "The customer user ID passed to Tenjin is not the one chosen")
+}
+
 func TestDoctorTakesTheEventsFlagAsTheFeatureChosen(t *testing.T) {
 	h, dir := analyticsSetup(t, withAnalytics())
 	_, stdout, _ := h.run("doctor", dir, "--offline", "--events", "boss_defeated")
