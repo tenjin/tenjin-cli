@@ -196,6 +196,13 @@ func TestChangingACallbackLeavesItAsActiveAsItWas(t *testing.T) {
 	if code, _, stderr := h.run(append(update, "--yes")...); code == 0 || len(h.fake.writes) != 0 || !strings.Contains(stderr, "--active=false") {
 		t.Errorf("unreadable: exit = %d, %d writes, stderr = %q", code, len(h.fake.writes), stderr)
 	}
+
+	// A read that fails for a reason of its own says how to fix that.
+	h = newHarness(t)
+	code, _, stderr := h.run(append(update, "--yes")...)
+	if code != 3 || !strings.Contains(stderr, "tenjin login") || strings.Contains(stderr, "--active=false") {
+		t.Errorf("not signed in: exit = %d, stderr = %q", code, stderr)
+	}
 }
 
 // IDs are checked before the question and the dry run.

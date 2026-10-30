@@ -245,18 +245,18 @@ func writeCmd(opts *options, env *environment, s writeSpec) *cobra.Command {
 				return writeDocument(cmd.OutOrStdout(), cmd.ErrOrStderr(), render.Table, doc, view{})
 			}
 			// Planned first, so that what the request needs, such as its
-			// IDs, is checked before the question and the dry run.
+			// IDs, is checked before any read, the question and the dry run.
 			api := env.api()
+			planned, err := api.Plan(write)
+			if err != nil {
+				return err
+			}
 			if s.keep != nil {
 				kept, err := s.keep(cmd.Context(), api, args, body)
 				if err != nil {
 					return err
 				}
 				what += kept
-			}
-			planned, err := api.Plan(write)
-			if err != nil {
-				return err
 			}
 			cautious := false
 			if s.look != nil && (dryRun || !yes) {
@@ -629,8 +629,18 @@ is read first and its current state sent with the change.`,
 					active, err := api.CallbackActive(ctx, app, args[0])
 					if err != nil {
 						e := clierr.From(err)
-						return "", clierr.Wrap(e.Kind, err, "could not read whether the callback %s is active, which the change must send to leave it so: %s", render.Clean(args[0]), e.Message).
-							WithHint("Say it with --active or --active=false.")
+						failed := clierr.Wrap(e.Kind, err, "could not read whether the callback %s is active, which the change must send to leave it so: %s", render.Clean(args[0]), e.Message)
+						switch {
+						case e.Kind == clierr.NotSignedIn || e.Kind == clierr.Permission || e.Kind == clierr.NotFound || e.Kind == clierr.Busy:
+							// The change would fail the same way: only what
+							// fixes the read helps.
+							failed.Hint = e.Hint
+						case e.Hint != "":
+							failed.Hint = e.Hint + " Or say it with --active or --active=false, and nothing is read."
+						default:
+							failed.Hint = "Say it with --active or --active=false, and nothing is read."
+						}
+						return "", failed
 					}
 					body["active"] = active
 					if active {
