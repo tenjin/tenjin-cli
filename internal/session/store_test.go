@@ -319,3 +319,45 @@ func TestTheLockIsKeptUntilALateKeychainWriteLands(t *testing.T) {
 	}
 	theirs()
 }
+
+// The lock kept for one environment's write is that environment's: taking
+// another's takes that one's own file, and leaves the first held.
+func TestALockKeptForOneEnvironmentIsNotAnothers(t *testing.T) {
+	keychain := newSlowKeychain()
+	dir := t.TempDir()
+	store := newStoreIn(dir)
+	store.get, store.set = keychain.get, keychain.set
+	store.timeout = 50 * time.Millisecond
+
+	unlock, err := store.Lock(context.Background(), "production")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Save(withRefresh("refresh-a")); err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+
+	staging, err := store.Lock(context.Background(), "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := newStoreIn(dir)
+	other.lockWait = 100 * time.Millisecond
+	if _, err := other.Lock(context.Background(), "staging"); !errors.Is(err, errLockBusy) {
+		t.Errorf("another tenjin took the staging lock this one holds: %v", err)
+	}
+	staging()
+	if _, err := other.Lock(context.Background(), "production"); !errors.Is(err, errLockBusy) {
+		t.Errorf("the production lock was let go with a write on its way: %v", err)
+	}
+
+	close(keychain.letGo)
+	<-keychain.landed
+	other.lockWait = time.Second
+	theirs, err := other.Lock(context.Background(), "production")
+	if err != nil {
+		t.Fatalf("the lock was not let go once the write landed: %v", err)
+	}
+	theirs()
+}

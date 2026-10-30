@@ -97,9 +97,9 @@ type systemStore struct {
 	mu sync.Mutex
 	// busy is closed when the last keychain call started has returned.
 	busy chan struct{}
-	// kept is the lock file, still locked after unlock while a keychain
-	// write started under it has not returned.
-	kept *os.File
+	// kept holds the lock files, by environment, still locked after unlock
+	// while a keychain write started under them has not returned.
+	kept map[string]*os.File
 }
 
 func (s *systemStore) file(environment string) string {
@@ -110,12 +110,12 @@ func (s *systemStore) file(environment string) string {
 // credentials are in the keychain. The file stays; only the lock on it ends.
 func (s *systemStore) Lock(ctx context.Context, environment string) (func(), error) {
 	s.mu.Lock()
-	if f := s.kept; f != nil {
+	if f := s.kept[environment]; f != nil {
 		// Still held for a write of this process's: no other process can
 		// have saved since, and this one's writes go in order.
-		s.kept = nil
+		delete(s.kept, environment)
 		s.mu.Unlock()
-		return s.unlocker(f), nil
+		return s.unlocker(environment, f), nil
 	}
 	s.mu.Unlock()
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
@@ -133,7 +133,7 @@ func (s *systemStore) Lock(ctx context.Context, environment string) (func(), err
 			_ = f.Close()
 			return nil, err
 		case taken:
-			return s.unlocker(f), nil
+			return s.unlocker(environment, f), nil
 		case time.Now().After(deadline):
 			_ = f.Close()
 			return nil, errLockBusy
@@ -150,13 +150,16 @@ func (s *systemStore) Lock(ctx context.Context, environment string) (func(), err
 // unlocker lets go of the lock on f, at once unless a keychain write is on
 // its way: then not before it returns, so that no other process saves under
 // the lock and has the write land over its sign-in. The caller does not wait.
-func (s *systemStore) unlocker(f *os.File) func() {
+func (s *systemStore) unlocker(environment string, f *os.File) func() {
 	return func() {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if busy := s.busy; !returned(busy) {
-			s.kept = f
-			go s.release(f, busy)
+			if s.kept == nil {
+				s.kept = map[string]*os.File{}
+			}
+			s.kept[environment] = f
+			go s.release(environment, f, busy)
 			return
 		}
 		unlockFile(f)
@@ -166,16 +169,16 @@ func (s *systemStore) unlocker(f *os.File) func() {
 
 // release lets go of f once every keychain call has returned, unless this
 // process has taken the lock back meanwhile.
-func (s *systemStore) release(f *os.File, busy chan struct{}) {
+func (s *systemStore) release(environment string, f *os.File, busy chan struct{}) {
 	for {
 		<-busy
 		s.mu.Lock()
-		if s.kept != f {
+		if s.kept[environment] != f {
 			s.mu.Unlock()
 			return
 		}
 		if busy = s.busy; returned(busy) {
-			s.kept = nil
+			delete(s.kept, environment)
 			s.mu.Unlock()
 			unlockFile(f)
 			_ = f.Close()
