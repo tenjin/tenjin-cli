@@ -124,8 +124,10 @@ type environment struct {
 	facts     map[string]any
 	// telemetryState is the file the install's ID is kept in, beside which
 	// tenjin telemetry off is recorded. Empty where there is no
-	// configuration folder.
-	telemetryState string
+	// configuration folder. telemetryUnsent is why this build sends no
+	// event whatever anyone chose, or "" (see telemetryUnsent).
+	telemetryState  string
+	telemetryUnsent string
 	// detach hands an event to a copy of the CLI that sends it on its own.
 	// Nil sends it from this process.
 	detach func(telemetry.Event) error
@@ -166,21 +168,23 @@ func defaultEnvironment() (*environment, error) {
 	}
 	interactive := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 	state := telemetryState()
+	unsent := telemetryUnsent(endpoints, state)
 	return &environment{
-		getenv:         os.Getenv,
-		updates:        updateChecker(os.Getenv),
-		telemetry:      telemetryClient(os.Getenv, endpoints, state),
-		telemetryState: state,
-		detach:         sendDetached,
-		sdkReleases:    sdkReleases(),
-		endpoints:      endpoints,
-		store:          session.NewStore(),
-		stdin:          bufio.NewReader(os.Stdin),
-		interactive:    interactive,
-		rawInput:       rawInput(interactive),
-		openBrowser:    openBrowser,
-		lookPath:       exec.LookPath,
-		executable:     os.Executable,
+		getenv:          os.Getenv,
+		updates:         updateChecker(os.Getenv),
+		telemetry:       telemetryClient(os.Getenv, state, unsent),
+		telemetryState:  state,
+		telemetryUnsent: unsent,
+		detach:          sendDetached,
+		sdkReleases:     sdkReleases(),
+		endpoints:       endpoints,
+		store:           session.NewStore(),
+		stdin:           bufio.NewReader(os.Stdin),
+		interactive:     interactive,
+		rawInput:        rawInput(interactive),
+		openBrowser:     openBrowser,
+		lookPath:        exec.LookPath,
+		executable:      os.Executable,
 		run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			// A device tool that hangs, such as adb with a wedged server,
 			// must not hold the command forever.

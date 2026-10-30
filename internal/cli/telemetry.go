@@ -58,7 +58,8 @@ func sendHandedEvent(raw string) {
 	if err != nil {
 		return
 	}
-	c := telemetryClient(os.Getenv, endpoints, telemetryState())
+	state := telemetryState()
+	c := telemetryClient(os.Getenv, state, telemetryUnsent(endpoints, state))
 	var ev telemetry.Event
 	if c == nil || json.Unmarshal([]byte(raw), &ev) != nil {
 		return
@@ -81,21 +82,17 @@ func telemetryState() string {
 
 // telemetryClient returns the client that sends each command's event, or
 // nil when telemetryOff gives a reason not to.
-func telemetryClient(getenv func(string) string, endpoints config.Endpoints, state string) *telemetry.Client {
-	if telemetryOff(getenv, endpoints, state) != "" {
+func telemetryClient(getenv func(string) string, state, unsent string) *telemetry.Client {
+	if telemetryOff(getenv, state, unsent) != "" {
 		return nil
 	}
 	return &telemetry.Client{Key: telemetry.Key(), Endpoint: telemetry.Endpoint, State: state}
 }
 
-// telemetryOff says why no event is sent, or returns "" when they are: the
-// person's choice first, then the machine's, then the build's.
-func telemetryOff(getenv func(string) string, endpoints config.Endpoints, state string) string {
-	switch name := telemetry.OffBy(getenv); {
-	case state != "" && telemetry.TurnedOff(state):
-		return "turned off with 'tenjin telemetry off'"
-	case name != "":
-		return name + " is set"
+// telemetryUnsent says why this build, pointed where it is, sends no event
+// whatever anyone chose, or returns "". None of it changes while it runs.
+func telemetryUnsent(endpoints config.Endpoints, state string) string {
+	switch {
 	case telemetry.Key() == "":
 		return "only release builds of the CLI send them, and this is not one"
 	case endpoints.Name != config.ProductionName:
@@ -104,6 +101,18 @@ func telemetryOff(getenv func(string) string, endpoints config.Endpoints, state 
 		return "there is no configuration folder to keep the install's ID in"
 	}
 	return ""
+}
+
+// telemetryOff says why no event is sent, or returns "" when one is: the
+// person's choice first, then the machine's, then unsent, the build's.
+func telemetryOff(getenv func(string) string, state, unsent string) string {
+	if state != "" && telemetry.TurnedOff(state) {
+		return "turned off with 'tenjin telemetry off'"
+	}
+	if name := telemetry.OffBy(getenv); name != "" {
+		return name + " is set"
+	}
+	return unsent
 }
 
 // note adds a fact to the command's event. Facts are the CLI's own names

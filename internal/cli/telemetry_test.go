@@ -24,7 +24,9 @@ func (h *harness) telemetry() *[]string {
 		bodies = append(bodies, string(raw))
 	}))
 	h.t.Cleanup(srv.Close)
+	// As a release, against production.
 	h.env.telemetry = &telemetry.Client{Key: "k", Endpoint: srv.URL, State: h.env.telemetryState}
+	h.env.telemetryUnsent = ""
 	return &bodies
 }
 
@@ -90,7 +92,7 @@ func TestCompletionSendsNoEvent(t *testing.T) {
 // when it was turned off.
 func TestTelemetryIsOffOutsideARelease(t *testing.T) {
 	h := newHarness(t)
-	if c := telemetryClient(h.env.getenv, h.env.endpoints, h.env.telemetryState); c != nil {
+	if c := telemetryClient(h.env.getenv, h.env.telemetryState, telemetryUnsent(h.env.endpoints, h.env.telemetryState)); c != nil {
 		t.Errorf("a build without a key, against a fake: %+v", c)
 	}
 }

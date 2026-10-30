@@ -117,11 +117,7 @@ func readTelemetryStatus(env *environment) telemetryStatus {
 	if env.telemetryState != "" && telemetry.TurnedOff(env.telemetryState) {
 		s.Setting = "off"
 	}
-	s.Reason = telemetryOff(env.getenv, env.endpoints, env.telemetryState)
-	// A command given a client sends with it while the setting stays on.
-	if env.telemetry != nil && s.Setting == "on" {
-		s.Reason = ""
-	}
+	s.Reason = telemetryOff(env.getenv, env.telemetryState, env.telemetryUnsent)
 	s.Enabled = s.Reason == ""
 	return s
 }

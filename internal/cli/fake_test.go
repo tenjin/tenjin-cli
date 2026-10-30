@@ -608,6 +608,8 @@ func newHarness(t *testing.T) *harness {
 			return nil
 		},
 	}
+	// What this build sends, as for any build but a release; telemetry turns it on.
+	h.env.telemetryUnsent = telemetryUnsent(h.env.endpoints, h.env.telemetryState)
 	return h
 }
 
