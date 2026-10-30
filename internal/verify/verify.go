@@ -84,6 +84,11 @@ type Options struct {
 	// chosen, as code or in words; as code, it must be what is passed.
 	Events []string
 	UserID string
+	// UserIDFromCode says UserID was read from the app's own code, as what
+	// it gives another SDK: code, even with spaces in it (user?.uid ?? "").
+	// Otherwise one with spaces may be words, which no code can be compared
+	// with.
+	UserIDFromCode bool
 	// Latest holds newer SDK releases found in the registries, keyed by
 	// package prefix (see sdkrelease). One counts only within the major
 	// version this CLI knows: a new major can change what the checks look

@@ -651,6 +651,7 @@ func (s *setup) verify(p *project.Project) *verify.Report {
 	}
 	if containsString(s.features, project.FeatureUserID) {
 		opts.UserID = s.analytics.userID
+		opts.UserIDFromCode = s.analytics.userIDSite != nil
 	}
 	if keys := s.keyCheck(); keys != nil {
 		opts.Keys = keys

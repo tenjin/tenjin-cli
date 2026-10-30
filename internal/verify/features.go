@@ -370,12 +370,12 @@ func (r *runner) checkChosenEvents() {
 	})
 }
 
-// checkChosenUserID reports whether the customer user ID chosen, given as
-// code, is the one the app passes Tenjin, and says whether it reported. One
-// given in words, or none passed at all, is left to the feature's own check.
+// checkChosenUserID reports whether the customer user ID chosen is the one
+// the app passes Tenjin, and says whether it reported. None passed at all is
+// left to the feature's own check.
 func (r *runner) checkChosenUserID() bool {
 	chosen := strings.TrimSpace(r.opts.UserID)
-	if chosen == "" || strings.ContainsFunc(chosen, unicode.IsSpace) {
+	if chosen == "" {
 		return false
 	}
 	passed := r.sentToTenjin().UserIDs
@@ -387,6 +387,17 @@ func (r *runner) checkChosenUserID() bool {
 			r.pass("feature."+project.FeatureUserID, "", "The customer user ID chosen is passed to Tenjin", u.File, u.Line)
 			return true
 		}
+	}
+	if !r.opts.UserIDFromCode && strings.ContainsFunc(chosen, unicode.IsSpace) {
+		// Perhaps words, such as "the account ID from the login response":
+		// whether the code passed is that value cannot be told.
+		r.add(Finding{
+			ID: "feature." + project.FeatureUserID, Severity: Info,
+			Title:  "A customer user ID is passed to Tenjin; whether it is the one chosen, as said, is not checked",
+			Detail: "Chosen, as a JSON string: " + jsonStrings([]string{chosen}) + ".",
+			File:   passed[0].File, Line: passed[0].Line,
+		})
+		return true
 	}
 	var where []string
 	for _, u := range passed[:min(len(passed), 3)] {

@@ -351,6 +351,28 @@ func TestTheUserIDNamedIsTheWholeExpression(t *testing.T) {
 	lacks(t, stdout, "The customer user ID chosen is passed to Tenjin")
 }
 
+// A user ID read from the app's code is code, spaces and all, and is
+// compared; one given with spaces may be words, and is not said to pass.
+func TestAUserIDWithSpacesIsComparedWhenItIsCode(t *testing.T) {
+	files := sendsTenjin("previous.id").With(testproject.Files{gameFile: strings.Replace(withAnalytics()[gameFile], "setUserId(user.id)", `setUserId(user?.uid ?: "")`, 1)})
+	h, dir := analyticsSetup(t, files)
+	_, stdout, _ := h.run("doctor", dir, "--offline", "--agent", "none", "--user-id", `user?.uid ?: ""`)
+	lacks(t, stdout, "The customer user ID passed to Tenjin is not the one chosen", `Passed to Tenjin: "previous.id"`)
+
+	_, stdout, _ = h.run("doctor", dir, "--offline", "--agent", "none", "--user-id", "the account ID from the login response")
+	lacks(t, stdout, "A customer user ID is passed to Tenjin; whether it is the one chosen, as said, is not checked")
+	if strings.Contains(stdout, "is passed to Tenjin  ") || strings.Contains(stdout, "✓ The customer user ID") {
+		t.Errorf("passed:\n%s", stdout)
+	}
+
+	h, dir = analyticsSetup(t, sendsTenjin(`user?.uid ?: ""`).With(testproject.Files{gameFile: files[gameFile]}))
+	code, stdout, _ := h.run("doctor", dir, "--offline", "--agent", "none", "--user-id", `user?.uid ?: ""`, "--strict")
+	if code != 0 {
+		t.Fatalf("exit = %d\n%s", code, stdout)
+	}
+	lacks(t, stdout, "The customer user ID chosen is passed to Tenjin")
+}
+
 // Parentheses around the whole user ID do not change it: (user.id) is the
 // user.id named, and previous.user.id in them is still another.
 func TestTheUserIDNamedMayBeInParentheses(t *testing.T) {

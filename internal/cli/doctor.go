@@ -155,6 +155,7 @@ otherwise. With --strict, warnings count too.`,
 			}
 			if analytics.userIDGiven {
 				vopts.UserID = analytics.userID
+				vopts.UserIDFromCode = userIDSite(p, analytics.userID) != nil
 			}
 			var tenjin *track.Client
 			if !offline {
