@@ -946,13 +946,29 @@ var (
 	// A Swift, Dart or C# argument label, or a Kotlin named argument.
 	argLabel   = regexp.MustCompile(`^[A-Za-z_]\w*\s*(?::[^:]|=[^=>])`)
 	identifier = regexp.MustCompile(`^[A-Za-z_$][\w$]*$`)
-	// An object or map literal's key that holds the name or the ID.
-	nameKey   = regexp.MustCompile(`(?:^|[{(,\s])['"]?(?:name|eventName|eventType|eventId|event)['"]?\s*:\s*`)
-	userIDKey = regexp.MustCompile(`(?:^|[{(,\s])['"]?(?:userId|userID|customerUserId|cuid|distinctId)['"]?\s*:\s*`)
+	// An object or map literal's key that holds the name or the ID, and the
+	// same key as a JavaScript shorthand property: { name } is { name: name }.
+	nameKey         = objectKey(nameKeys)
+	userIDKey       = objectKey(userIDKeys)
+	nameShorthand   = shorthandKey(nameKeys)
+	userIDShorthand = shorthandKey(userIDKeys)
 	// An event built by a constructor, such as BaseEvent("x") or
 	// AppEvents.Name("x").
 	eventConstructor = regexp.MustCompile(`^(?:new\s+)?(?:[\w.]*\.)?(?:\w*Event|Name|EventName)\s*\(`)
 )
+
+const (
+	nameKeys   = `name|eventName|eventType|eventId|event`
+	userIDKeys = `userId|userID|customerUserId|cuid|distinctId`
+)
+
+func objectKey(keys string) *regexp.Regexp {
+	return regexp.MustCompile(`(?:^|[{(,\s])['"]?(?:` + keys + `)['"]?\s*:\s*`)
+}
+
+func shorthandKey(keys string) *regexp.Regexp {
+	return regexp.MustCompile(`[{,]\s*(` + keys + `)\s*[,}]`)
+}
 
 // unlabel takes an argument label off, leaving the value.
 func unlabel(code string) string {
@@ -965,9 +981,9 @@ func unlabel(code string) string {
 // fromObject reads the name or the ID out of an object or map literal, or
 // out of the constructor of an event.
 func fromObject(code string, kind analyticsKind) (string, bool) {
-	key := nameKey
+	key, shorthand := nameKey, nameShorthand
 	if kind == userIDCall {
-		key = userIDKey
+		key, shorthand = userIDKey, userIDShorthand
 	}
 	switch {
 	case strings.HasPrefix(code, "{"):
@@ -980,6 +996,11 @@ func fromObject(code string, kind analyticsKind) (string, bool) {
 		args := splitArgs(code+")", loc[1], false)
 		if len(args) > 0 {
 			return strings.TrimSpace(code[args[0].start:args[0].end]), true
+		}
+	}
+	if code[open] == '{' {
+		if m := shorthand.FindStringSubmatch(code); m != nil {
+			return m[1], true
 		}
 	}
 	if code[open] == '(' {

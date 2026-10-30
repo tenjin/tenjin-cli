@@ -556,4 +556,30 @@ fun track(name: String) {
 		"src/app.ts":               "import { Tenjin } from '@tenjin/capacitor';\n\nexport async function won() {\n  await Tenjin.eventWithName({ name: 'cap_event' });\n}\n",
 	})
 	wantLines(t, "Capacitor events", got, "Tenjin name=cap_event @src/app.ts:4 x1")
+
+	// A shorthand property is the variable of that name: { userId } is
+	// { userId: userId }, and { name } in the app's own function is its
+	// parameter, followed to the calls that give it.
+	got, ids = sentToTenjin(t, testproject.Files{
+		"package.json":             `{"dependencies": {"@capacitor/core": "^8.0.0"}}`,
+		"capacitor.config.ts":      `const config = { appId: 'com.example.cap', appName: 'Cap' };`,
+		"android/app/build.gradle": "apply plugin: 'com.android.application'\nandroid { defaultConfig { applicationId \"com.example.cap\" } }\n",
+		"src/app.ts": `import { Tenjin } from '@tenjin/capacitor';
+
+export async function signedIn(user: User) {
+  const userId = user.id;
+  await Tenjin.setCustomerUserId({ userId });
+}
+
+function track(name: string) {
+  return Tenjin.eventWithName({ name });
+}
+
+export function won() {
+  track('level_up');
+}
+`,
+	})
+	wantLines(t, "Capacitor shorthand events", got, "Tenjin name=level_up @src/app.ts:13 x1 via track (src/app.ts:8)")
+	wantLines(t, "Capacitor shorthand user IDs", ids, "Tenjin userId @src/app.ts:5")
 }
