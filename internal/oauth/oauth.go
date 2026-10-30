@@ -156,7 +156,9 @@ func (c *Client) Login(ctx context.Context, opts LoginOptions) (Tokens, error) {
 		if result.err != nil {
 			http.Error(w, "Tenjin CLI: sign-in failed. You can close this tab and return to the terminal.", http.StatusBadRequest)
 		} else {
-			_, _ = io.WriteString(w, "Tenjin CLI: signed in. You can close this tab and return to the terminal.")
+			// The terminal says whether the sign-in was saved: a step is
+			// still to come, and may fail.
+			_, _ = io.WriteString(w, "Tenjin CLI: sign-in received. You can close this tab; the terminal says when you are signed in.")
 		}
 		select {
 		case done <- result:

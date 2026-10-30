@@ -103,7 +103,8 @@ func (m *Manager) Login(ctx context.Context, open func(url string) error, pasted
 	// issued. Ending a grant afterwards is no way out: revoking one of the
 	// CLI's own ends every CLI session of that user in the organization,
 	// the holder's included (see outlived).
-	unlock, locked := func() {}, error(nil)
+	var unlock func()
+	locked := error(nil)
 	tokens, err := m.Authority.Login(ctx, oauth.LoginOptions{
 		ClientID: oauth.ClientID, Open: open, Pasted: pasted,
 		BeforeRedeem: func(ctx context.Context) error {
@@ -116,16 +117,23 @@ func (m *Manager) Login(ctx context.Context, open func(url string) error, pasted
 			return nil
 		},
 	})
-	defer func() { unlock() }()
+	if unlock != nil {
+		defer unlock()
+	}
 	if errors.Is(locked, errLockBusy) {
 		return nil, "", lockBusy(locked, "this sign-in was not completed",
-			"Nothing was changed, and an earlier sign-in still stands. Run 'tenjin login' again once the other command has finished.")
+			"Nothing was changed. Run 'tenjin login' again once the other command has finished.")
 	}
 	if locked != nil {
 		return nil, "", locked
 	}
 	if err != nil {
 		return nil, "", clierr.Wrap(clierr.NotSignedIn, err, "sign-in failed: %v", err)
+	}
+	if unlock == nil {
+		// Saved without the lock, the sign-in could be lost to another
+		// tenjin's refresh: an Authority must run BeforeRedeem.
+		return nil, "", clierr.New(clierr.Internal, "the sign-in was redeemed without taking the sign-in lock, so it was not saved")
 	}
 	identity, err := m.Authority.Exchange(ctx, tokens.AccessToken)
 	if err != nil {

@@ -482,3 +482,26 @@ func TestARevokedGrantDoesNotEraseANewerSignIn(t *testing.T) {
 		t.Errorf("stored %+v", c)
 	}
 }
+
+// redeemingAnyway is an authorization server that redeems the code without
+// running BeforeRedeem.
+type redeemingAnyway struct{ *signingIn }
+
+func (a redeemingAnyway) Login(ctx context.Context, opts oauth.LoginOptions) (oauth.Tokens, error) {
+	opts.BeforeRedeem = nil
+	return a.signingIn.Login(ctx, opts)
+}
+
+// A sign-in redeemed without the lock is not saved: it could be lost to
+// another tenjin's refresh.
+func TestASignInRedeemedWithoutTheLockIsNotSaved(t *testing.T) {
+	store := fileStoreIn(t.TempDir())
+	signedIn(t, store, "refresh-0", "old", time.Now().Add(time.Hour))
+	m := &Manager{Environment: "production", Store: store, Authority: redeemingAnyway{&signingIn{}}}
+	if _, _, err := m.Login(context.Background(), nil, nil); clierr.From(err).Kind != clierr.Internal {
+		t.Errorf("Login = %v", err)
+	}
+	if c, _ := store.Load("production"); c.RefreshToken != "refresh-0" {
+		t.Errorf("stored %+v", c)
+	}
+}
