@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tenjin/tenjin-cli/internal/testproject"
 )
@@ -98,8 +99,10 @@ func TestSetupChecksALaunchOnTheIOSSimulator(t *testing.T) {
 		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
 	}
 	lacks(t, stdout,
-		"On an iPhone connected by cable, the Tenjin CLI launches the app itself",
-		"Install a debug build on the iPhone, or launch one on a simulator, then press Enter",
+		"An iPhone connected to this Mac by cable, unlocked, with the debug build installed (run it once from Xcode). The Tenjin CLI launches the app and reads its console.",
+		"An iOS simulator, with the debug build launched on it from Xcode.",
+		"Connect the iPhone, or launch the app on a simulator, then press Enter (s to skip):",
+		"No iPhone is connected, so this is the simulator's log.",
 		"Tenjin accepted the app's request. That is as far as a simulator or emulator goes",
 	)
 	// Nothing to wait for.
@@ -186,7 +189,12 @@ func TestSetupChecksALaunchOnAnIPhone(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d\n%s", code, stdout)
 	}
-	lacks(t, stdout, "✓ Tenjin received this device's install and processed it. The integration works end to end.")
+	lacks(t, stdout,
+		"Launching com.example.sample on Test iPhone and reading its console, for up to 90 seconds (Ctrl-C stops)…",
+		"  · The app is running on Test iPhone. Waiting for the Tenjin SDK…",
+		"  · The Tenjin SDK is logging. Waiting for Tenjin's answer to its connect…",
+		"✓ Tenjin received this device's install and processed it. The integration works end to end.",
+	)
 	if strings.Contains(stdout, "for registering it as a test device") || !strings.Contains(stdout, "register this device (IDFV ") {
 		t.Errorf("the test device is not said once, with its identifiers:\n%s", stdout)
 	}
@@ -220,7 +228,58 @@ func TestAnIPhoneLaunchWithoutTenjinSaysSo(t *testing.T) {
 		return []byte("Launched application with com.example.sample bundle identifier.\n"), nil
 	}
 	_, stdout, _ := h.run("doctor", dir, "--device", "--offline")
-	if !strings.Contains(stdout, "the Tenjin SDK logged nothing") || !strings.Contains(stdout, "answer the prompt on the phone") {
+	if !strings.Contains(stdout, "the Tenjin SDK logged nothing") || !strings.Contains(stdout, "npx cap sync ios") || !strings.Contains(stdout, "get the app there") {
 		t.Errorf("stdout:\n%s", stdout)
 	}
+}
+
+// A launch on an iPhone is followed for up to a minute and a half, so a
+// person is told how it goes: on stderr from doctor, and never with --json
+// or when no one is at the terminal.
+func TestALaunchOnAnIPhoneSaysHowItGoes(t *testing.T) {
+	dir := testproject.Write(t, testproject.IOSNative())
+	raw, _ := os.ReadFile(capturedIPhoneLog)
+	const launching = "Launching com.example.sample on Test iPhone and reading its console"
+	for _, c := range []struct {
+		name string
+		h    func(*harness) *harness
+		args []string
+		told bool
+	}{
+		{"at a terminal", func(h *harness) *harness { return h.typing() }, nil, true},
+		{"with --json", func(h *harness) *harness { return h.typing() }, []string{"--json"}, false},
+		{"in a script", func(h *harness) *harness { return h }, nil, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.connectIPhone(string(raw))
+			_, stdout, stderr := c.h(h).run(append([]string{"doctor", dir, "--device", "--offline"}, c.args...)...)
+			if strings.Contains(stderr, launching) != c.told || strings.Contains(stdout, launching) {
+				t.Errorf("told = %v\nstdout:\n%s\nstderr:\n%s", c.told, stdout, stderr)
+			}
+			if c.told && !strings.Contains(stderr, "  · The Tenjin SDK is logging.") {
+				t.Errorf("stderr:\n%s", stderr)
+			}
+		})
+	}
+}
+
+// While the SDK has logged nothing, the wait is said as it goes, with what
+// may be holding the app's connect.
+func TestASilentLaunchOnAnIPhoneSaysItIsStillWaiting(t *testing.T) {
+	defer func(tick time.Duration) { launchTick = tick }(launchTick)
+	launchTick = time.Millisecond
+	h := newHarness(t)
+	dir := testproject.Write(t, testproject.IOSNative())
+	h.connectIPhone("")
+	h.env.stream = func(_ context.Context, _ string, _ []string, stop func(string) bool) ([]byte, error) {
+		stop("Launched application with com.example.sample bundle identifier.")
+		time.Sleep(50 * time.Millisecond)
+		return []byte("Launched application with com.example.sample bundle identifier.\n"), nil
+	}
+	_, _, stderr := h.typing().run("doctor", dir, "--device", "--offline")
+	lacks(t, stderr,
+		"  · The app is running on Test iPhone. Waiting for the Tenjin SDK…",
+		"of 90 seconds, and nothing from the Tenjin SDK yet. If the app shows the tracking prompt, answer it.",
+	)
 }

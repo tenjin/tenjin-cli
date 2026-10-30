@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -164,7 +165,13 @@ otherwise. With --strict, warnings count too.`,
 				vopts.Keys = tenjin
 			}
 			if device || logs != "" {
-				input, err := readDevice(cmd, env, p, serial, logs)
+				// A launch on an iPhone is followed for up to a minute and a
+				// half; a person at a terminal is told how it goes.
+				var say func(string, ...any)
+				if format != render.JSON && env.interactive {
+					say = func(format string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), format+"\n", a...) }
+				}
+				input, err := readDevice(cmd, env, p, serial, logs, say)
 				if err != nil {
 					return err
 				}
@@ -453,7 +460,7 @@ func (s *setup) askToFix(installed []agent.Agent) (*agent.Agent, error) {
 // readDevice gets the device log from a device, a file or standard input. A
 // device that cannot be read is reported in the findings, not as a failure
 // of the command; a file that cannot be read is the user's mistake.
-func readDevice(cmd *cobra.Command, env *environment, p *project.Project, serial, logs string) (*verify.DeviceInput, error) {
+func readDevice(cmd *cobra.Command, env *environment, p *project.Project, serial, logs string, say func(string, ...any)) (*verify.DeviceInput, error) {
 	var raw []byte
 	var platform project.Platform
 	switch {
@@ -473,7 +480,7 @@ func readDevice(cmd *cobra.Command, env *environment, p *project.Project, serial
 		var problems []*devicelog.Unavailable
 		var tried []project.Platform
 		for _, candidate := range devicePlatforms(p, serial) {
-			b, _, err := readDeviceLog(cmd.Context(), env, p, candidate, serial)
+			b, _, err := readDeviceLog(cmd.Context(), env, p, candidate, serial, say)
 			var unavailable *devicelog.Unavailable
 			if errors.As(err, &unavailable) {
 				problems, tried = append(problems, unavailable), append(tried, candidate)
@@ -539,8 +546,8 @@ const serialUsage = "which device to read, when several are connected: an Androi
 // says what kind of device it was. On iOS a connected iPhone is preferred to
 // a simulator: tenjin launches the app on it to read its console. The error
 // is a *devicelog.Unavailable when there is nothing to read from.
-func readDeviceLog(ctx context.Context, env *environment, p *project.Project, platform project.Platform, serial string) ([]byte, string, error) {
-	return readLaunch(ctx, env, p, platform, serial, nil)
+func readDeviceLog(ctx context.Context, env *environment, p *project.Project, platform project.Platform, serial string, say func(string, ...any)) ([]byte, string, error) {
+	return readLaunch(ctx, env, p, platform, serial, nil, say)
 }
 
 // launchMark is where a device's log stood before a launch: the time of the
@@ -565,7 +572,9 @@ func markLaunch(ctx context.Context, env *environment, platform project.Platform
 }
 
 // readLaunch is readDeviceLog for what came after mark; nil reads it all.
-func readLaunch(ctx context.Context, env *environment, p *project.Project, platform project.Platform, serial string, mark *launchMark) ([]byte, string, error) {
+// say, which may be nil, is told what is read, and how a launch on an
+// iPhone goes while it is followed.
+func readLaunch(ctx context.Context, env *environment, p *project.Project, platform project.Platform, serial string, mark *launchMark, say func(string, ...any)) ([]byte, string, error) {
 	since := time.Time{}
 	if mark != nil {
 		// A second's margin for the log's rounding.
@@ -601,10 +610,13 @@ func readLaunch(ctx context.Context, env *environment, p *project.Project, platf
 			if t := p.Target(project.IOS); t != nil {
 				bundle = t.BundleID
 			}
-			raw, err := devicelog.ReadIPhone(ctx, env.streamer(), xcrun, matching[0], bundle)
+			raw, err := readIPhone(ctx, env, xcrun, matching[0], bundle, say)
 			return raw, fromIPhone, err
 		}
 		raw, err := devicelog.ReadIOSSimulatorSince(ctx, env.runner(), xcrun, serial, since)
+		if err == nil && say != nil {
+			say("No iPhone is connected, so this is the simulator's log.")
+		}
 		// With no simulator either, a devicectl that failed is the more
 		// likely reason nothing was found.
 		var unavailable *devicelog.Unavailable
@@ -625,6 +637,63 @@ func readLaunch(ctx context.Context, env *environment, p *project.Project, platf
 		raw = devicelog.Since(raw, mark.android)
 	}
 	return raw, fromAndroid, err
+}
+
+// launchTick is how often a person waiting on a launch on an iPhone is told
+// that the SDK has not logged yet. Tests shorten it.
+var launchTick = 30 * time.Second
+
+// readIPhone is devicelog.ReadIPhone, saying as it goes what the launch has
+// reached, since it can take as long as devicelog.IPhoneLaunchWindow.
+func readIPhone(ctx context.Context, env *environment, xcrun string, phone devicelog.IPhone, bundle string, say func(string, ...any)) ([]byte, error) {
+	if say == nil {
+		return devicelog.ReadIPhone(ctx, env.streamer(), xcrun, phone, bundle, nil)
+	}
+	window := int(devicelog.IPhoneLaunchWindow / time.Second)
+	// Device names come from the device.
+	name := render.Clean(phone.Name)
+	say("Launching %s on %s and reading its console, for up to %d seconds (Ctrl-C stops)…", bundle, name, window)
+	// mu orders what is said; once the read has ended, the ticker says
+	// nothing more, and has stopped before readIPhone returns.
+	var mu sync.Mutex
+	logging, ended := false, false
+	tick := launchTick
+	done, stopped := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		ticker := time.NewTicker(tick)
+		defer ticker.Stop()
+		for waited := tick; ; waited += tick {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+			}
+			mu.Lock()
+			if !logging && !ended {
+				say("  · %d of %d seconds, and nothing from the Tenjin SDK yet. If the app shows the tracking prompt, answer it.", int(waited/time.Second), window)
+			}
+			mu.Unlock()
+		}
+	}()
+	defer func() {
+		mu.Lock()
+		ended = true
+		mu.Unlock()
+		close(done)
+		<-stopped
+	}()
+	return devicelog.ReadIPhone(ctx, env.streamer(), xcrun, phone, bundle, func(stage devicelog.LaunchStage) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch stage {
+		case devicelog.AppStarted:
+			say("  · The app is running on %s. Waiting for the Tenjin SDK…", name)
+		case devicelog.SDKLogging:
+			logging = true
+			say("  · The Tenjin SDK is logging. Waiting for Tenjin's answer to its connect…")
+		}
+	})
 }
 
 // combineProblems says why no device could be read, for every platform tried.

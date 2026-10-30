@@ -71,7 +71,10 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		return nil
 	}
 	if platform == project.IOS {
-		s.say("On an iPhone connected by cable, the Tenjin CLI launches the app itself to read its console: install a debug build on it first (run it once from Xcode), keep the phone unlocked, and answer the tracking prompt if the app shows one. On a simulator, launch the app yourself. Either way, debug builds must call TenjinSDK.debugLogs(), as the checks above say.")
+		s.say("Tenjin's answer is read from a launch of a debug build, on one of these:")
+		s.say("  %s An iPhone connected to this Mac by cable, unlocked, with the debug build installed (run it once from Xcode). The Tenjin CLI launches the app and reads its console.", s.style.Dim("·"))
+		s.say("  %s An iOS simulator, with the debug build launched on it from Xcode.", s.style.Dim("·"))
+		s.say("Debug builds must call TenjinSDK.debugLogs() in the iOS launch code, or the SDK logs nothing to read. If the app asks for tracking permission before it connects, answer on the device.")
 	}
 
 	// refused is set once a read shows Tenjin refusing the app's connect, so
@@ -81,7 +84,7 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		mark := markLaunch(s.cmd.Context(), s.env, platform, s.serial)
 		prompt := fmt.Sprintf("\nLaunch a debug build of the app on %s, then press Enter (s to skip):", deviceNoun(platform))
 		if platform == project.IOS {
-			prompt = "\nInstall a debug build on the iPhone, or launch one on a simulator, then press Enter (s to skip):"
+			prompt = "\nConnect the iPhone, or launch the app on a simulator, then press Enter (s to skip):"
 		}
 		answer, err := s.env.ask(s.out, prompt)
 		if err != nil {
@@ -96,7 +99,7 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 			return nil
 		}
 
-		raw, from, err := readLaunch(s.cmd.Context(), s.env, p, platform, s.serial, mark)
+		raw, from, err := readLaunch(s.cmd.Context(), s.env, p, platform, s.serial, mark, s.say)
 		var unavailable *devicelog.Unavailable
 		if errors.As(err, &unavailable) {
 			// Device names come from the device.

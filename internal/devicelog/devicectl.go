@@ -18,11 +18,22 @@ type Streamer func(ctx context.Context, name string, args []string, stop func(li
 // starts with a dash from being taken for an option of devicectl.
 var bundleIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]*$`)
 
-// iPhoneLaunchWindow is how long a launch is read for, at most. Tenjin
+// IPhoneLaunchWindow is how long a launch is read for, at most. Tenjin
 // usually answers within a second of the app starting, but an app that
 // connects once the tracking prompt is answered waits for the person, and
 // the read stops as soon as Tenjin has answered anyway.
-const iPhoneLaunchWindow = 90 * time.Second
+const IPhoneLaunchWindow = 90 * time.Second
+
+// LaunchStage is how far a launch on an iPhone has come, for a person
+// waiting on it.
+type LaunchStage int
+
+const (
+	// AppStarted: the app is running, and its console is followed.
+	AppStarted LaunchStage = iota + 1
+	// SDKLogging: the Tenjin SDK has written its first line.
+	SDKLogging
+)
 
 // IPhone is a physical iOS device connected to this Mac.
 type IPhone struct {
@@ -81,8 +92,9 @@ func ConnectedIPhones(ctx context.Context, run Runner, xcrun string) ([]IPhone, 
 // ReadIPhone launches the app on a connected iPhone and returns what it
 // writes to its console until Tenjin has answered its connect. The app must
 // already be installed, as a debug build that turns the SDK's logs on. It
-// is left running afterwards: only the console is closed.
-func ReadIPhone(ctx context.Context, stream Streamer, xcrun string, phone IPhone, bundleID string) ([]byte, error) {
+// is left running afterwards: only the console is closed. progress, which
+// may be nil, is told each stage once, as the launch reaches it.
+func ReadIPhone(ctx context.Context, stream Streamer, xcrun string, phone IPhone, bundleID string, progress func(LaunchStage)) ([]byte, error) {
 	parent := ctx
 	if !phone.DeveloperMode {
 		return nil, &Unavailable{
@@ -93,13 +105,29 @@ func ReadIPhone(ctx context.Context, stream Streamer, xcrun string, phone IPhone
 	if !bundleIDPattern.MatchString(bundleID) {
 		return nil, &Unavailable{Reason: "The app's bundle ID could not be read, so it cannot be launched on " + phone.Name}
 	}
-	ctx, cancel := context.WithTimeout(ctx, iPhoneLaunchWindow)
+	reached := LaunchStage(0)
+	reach := func(stage LaunchStage) {
+		if stage > reached {
+			reached = stage
+			if progress != nil {
+				progress(stage)
+			}
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, IPhoneLaunchWindow)
 	defer cancel()
 	out, err := stream(ctx, xcrun, []string{"devicectl", "device", "process", "launch",
 		"--device", phone.UDID, "--terminate-existing", "--console", bundleID}, func(line string) bool {
+		if strings.HasPrefix(line, "Launched application") {
+			reach(AppStarted)
+		}
+		if !strings.Contains(line, iosTag) {
+			return false
+		}
+		reach(SDKLogging)
 		// The response body comes with debug logs, and "Connect succeeded"
 		// after it; either way Tenjin has answered.
-		return strings.Contains(line, iosTag) && (strings.Contains(line, iosMarkResponse) ||
+		return (strings.Contains(line, iosMarkResponse) ||
 			strings.Contains(line, "Connect succeeded") || strings.Contains(line, iosMarkDeduped))
 	})
 	if parent.Err() != nil {
@@ -107,8 +135,9 @@ func ReadIPhone(ctx context.Context, stream Streamer, xcrun string, phone IPhone
 	}
 	if err == nil && !strings.Contains(string(out), iosTag) {
 		return nil, &Unavailable{
-			Reason: fmt.Sprintf("%s ran on %s for %d seconds and the Tenjin SDK logged nothing", bundleID, phone.Name, int(iPhoneLaunchWindow/time.Second)),
-			Fix:    "Debug builds must call TenjinSDK.debugLogs(). If the app asks for tracking permission before it connects, answer the prompt on the phone. Then run this again.",
+			Reason: fmt.Sprintf("%s ran on %s for %d seconds and the Tenjin SDK logged nothing", bundleID, phone.Name, int(IPhoneLaunchWindow/time.Second)),
+			Fix: "Check that the build on the phone has the SDK in it (after adding it, update the native project, with npx cap sync ios or pod install where the app uses them, then rebuild from Xcode), that debug builds call TenjinSDK.debugLogs(), " +
+				"and that connect() runs within " + fmt.Sprint(int(IPhoneLaunchWindow/time.Second)) + " seconds: if it waits for the tracking prompt or a later screen, get the app there. Then run this again.",
 		}
 	}
 	if err != nil && !strings.Contains(string(out), iosTag) {
