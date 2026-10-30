@@ -106,6 +106,55 @@ func TestOff(t *testing.T) {
 		if got := Off(func(n string) string { return env[n] }); got != want {
 			t.Errorf("%q: Off = %v", vars, got)
 		}
+		if name, _, _ := strings.Cut(vars, "="); want && OffBy(func(n string) string { return env[n] }) != name {
+			t.Errorf("%q: OffBy = %q", vars, OffBy(func(n string) string { return env[n] }))
+		}
+	}
+}
+
+// Turned off, nothing is sent, not even by a client made before, and the
+// install's ID is forgotten: turned on again, it is a new install.
+func TestTurningItOffSendsNothingAndForgetsTheInstall(t *testing.T) {
+	srv, got := server(t, http.StatusOK)
+	c := &Client{Key: "k", Endpoint: srv.URL, State: filepath.Join(t.TempDir(), "tenjin", "telemetry.json")}
+	c.Send(context.Background(), Event{Command: "tenjin"})
+	if TurnedOff(c.State) {
+		t.Fatal("off before it was turned off")
+	}
+	if err := TurnOff(c.State); err != nil {
+		t.Fatal(err)
+	}
+	c.Send(context.Background(), Event{Command: "tenjin version"})
+	if !TurnedOff(c.State) || len(*got) != 1 {
+		t.Fatalf("turned off = %v, sent %d", TurnedOff(c.State), len(*got))
+	}
+	if _, err := os.Stat(c.State); !os.IsNotExist(err) {
+		t.Errorf("the install's ID is kept: %v", err)
+	}
+	if err := TurnOff(c.State); err != nil {
+		t.Errorf("again: %v", err)
+	}
+
+	if err := TurnOn(c.State); err != nil {
+		t.Fatal(err)
+	}
+	if err := TurnOn(c.State); err != nil {
+		t.Errorf("again: %v", err)
+	}
+	c.Send(context.Background(), Event{Command: "tenjin"})
+	if len(*got) != 2 || (*got)[0].Events[0]["device_id"] == (*got)[1].Events[0]["device_id"] {
+		t.Errorf("received %+v", *got)
+	}
+}
+
+// A machine where the choice cannot be kept says so.
+func TestTurningItOffWhereNothingCanBeWritten(t *testing.T) {
+	blocked := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocked, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := TurnOff(filepath.Join(blocked, "tenjin", "telemetry.json")); err == nil {
+		t.Error("TurnOff succeeded under a file")
 	}
 }
 

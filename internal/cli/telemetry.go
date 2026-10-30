@@ -58,7 +58,7 @@ func sendHandedEvent(raw string) {
 	if err != nil {
 		return
 	}
-	c := telemetryClient(os.Getenv, endpoints)
+	c := telemetryClient(os.Getenv, endpoints, telemetryState())
 	var ev telemetry.Event
 	if c == nil || json.Unmarshal([]byte(raw), &ev) != nil {
 		return
@@ -69,18 +69,41 @@ func sendHandedEvent(raw string) {
 	c.Send(ctx, ev)
 }
 
-// telemetryClient returns the client that sends each command's event, or
-// nil: in a build without a key, when it was turned off, and against any
-// Tenjin but production.
-func telemetryClient(getenv func(string) string, endpoints config.Endpoints) *telemetry.Client {
-	if telemetry.Key() == "" || telemetry.Off(getenv) || endpoints.Name != config.ProductionName {
-		return nil
-	}
+// telemetryState returns the file the install's ID is kept in, or "" where
+// there is no configuration folder.
+func telemetryState() string {
 	dir, err := os.UserConfigDir()
 	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "tenjin", "telemetry.json")
+}
+
+// telemetryClient returns the client that sends each command's event, or
+// nil when telemetryOff gives a reason not to.
+func telemetryClient(getenv func(string) string, endpoints config.Endpoints, state string) *telemetry.Client {
+	if telemetryOff(getenv, endpoints, state) != "" {
 		return nil
 	}
-	return &telemetry.Client{Key: telemetry.Key(), Endpoint: telemetry.Endpoint, State: filepath.Join(dir, "tenjin", "telemetry.json")}
+	return &telemetry.Client{Key: telemetry.Key(), Endpoint: telemetry.Endpoint, State: state}
+}
+
+// telemetryOff says why no event is sent, or returns "" when they are: the
+// person's choice first, then the machine's, then the build's.
+func telemetryOff(getenv func(string) string, endpoints config.Endpoints, state string) string {
+	switch name := telemetry.OffBy(getenv); {
+	case state != "" && telemetry.TurnedOff(state):
+		return "turned off with 'tenjin telemetry off'"
+	case name != "":
+		return name + " is set"
+	case telemetry.Key() == "":
+		return "only release builds of the CLI send them, and this is not one"
+	case endpoints.Name != config.ProductionName:
+		return "the CLI is pointed at another copy of Tenjin"
+	case state == "":
+		return "there is no configuration folder to keep the install's ID in"
+	}
+	return ""
 }
 
 // note adds a fact to the command's event. Facts are the CLI's own names

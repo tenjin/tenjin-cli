@@ -5,7 +5,8 @@
 // contains. A random ID, kept in a small state file, tells installs apart.
 //
 // It is off in builds without an Amplitude key (any build but a release), in
-// CI, and with TENJIN_NO_TELEMETRY or DO_NOT_TRACK set. The key is readable
+// CI, with TENJIN_NO_TELEMETRY or DO_NOT_TRACK set, and once turned off with
+// tenjin telemetry off. The key is readable
 // in a released binary, as any Amplitude ingestion key is: it only sends.
 package telemetry
 
@@ -17,6 +18,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,13 +45,54 @@ const OffVar = "TENJIN_NO_TELEMETRY"
 var offVars = []string{OffVar, "DO_NOT_TRACK", "CI", "JENKINS_URL", "TF_BUILD", "TEAMCITY_VERSION", "CODEBUILD_BUILD_ID"}
 
 // Off reports whether the person or the machine asked for no telemetry.
-func Off(getenv func(string) string) bool {
+func Off(getenv func(string) string) bool { return OffBy(getenv) != "" }
+
+// OffBy returns the variable that turns telemetry off, or "".
+func OffBy(getenv func(string) string) string {
 	for _, name := range offVars {
 		if v := getenv(name); v != "" && v != "0" && v != "false" {
-			return true
+			return name
 		}
 	}
-	return false
+	return ""
+}
+
+// offFile records tenjin telemetry off, beside the state file. It is a file
+// of its own because a send under way rewrites the state, and must not undo
+// the choice.
+const offFile = "telemetry-off"
+
+func offPath(state string) string { return filepath.Join(filepath.Dir(state), offFile) }
+
+// TurnedOff reports whether telemetry was turned off on this machine, for
+// the state file state.
+func TurnedOff(state string) bool {
+	_, err := os.Lstat(offPath(state))
+	return err == nil
+}
+
+// TurnOff records that nothing is to be sent from this machine, and forgets
+// the install's ID, so that turning it on again counts a new install that
+// nothing ties to this one.
+func TurnOff(state string) error {
+	if err := os.MkdirAll(filepath.Dir(state), 0o700); err != nil {
+		return err
+	}
+	if err := os.WriteFile(offPath(state), []byte("Usage statistics are off: tenjin telemetry on turns them on.\n"), 0o600); err != nil {
+		return err
+	}
+	if err := os.Remove(state); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+// TurnOn undoes TurnOff.
+func TurnOn(state string) error {
+	if err := os.Remove(offPath(state)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // Key returns the key the build was stamped with, or "".
@@ -90,9 +133,12 @@ type state struct {
 	FailedAt  time.Time `json:"failed_at,omitzero"`
 }
 
-// Send sends ev. It never fails: telemetry must not get in the way of the
-// command.
+// Send sends ev, unless telemetry was turned off since the command started.
+// It never fails: telemetry must not get in the way of the command.
 func (c *Client) Send(ctx context.Context, ev Event) {
+	if TurnedOff(c.State) {
+		return
+	}
 	now := time.Now
 	if c.Now != nil {
 		now = c.Now

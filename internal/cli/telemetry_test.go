@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -25,7 +24,7 @@ func (h *harness) telemetry() *[]string {
 		bodies = append(bodies, string(raw))
 	}))
 	h.t.Cleanup(srv.Close)
-	h.env.telemetry = &telemetry.Client{Key: "k", Endpoint: srv.URL, State: filepath.Join(h.t.TempDir(), "telemetry.json")}
+	h.env.telemetry = &telemetry.Client{Key: "k", Endpoint: srv.URL, State: h.env.telemetryState}
 	return &bodies
 }
 
@@ -91,7 +90,7 @@ func TestCompletionSendsNoEvent(t *testing.T) {
 // when it was turned off.
 func TestTelemetryIsOffOutsideARelease(t *testing.T) {
 	h := newHarness(t)
-	if c := telemetryClient(h.env.getenv, h.env.endpoints); c != nil {
+	if c := telemetryClient(h.env.getenv, h.env.endpoints, h.env.telemetryState); c != nil {
 		t.Errorf("a build without a key, against a fake: %+v", c)
 	}
 }
@@ -214,5 +213,83 @@ func TestADeclinedRunIsSaid(t *testing.T) {
 	}
 	if props := eventProperties(t, (*bodies)[0]); props["declined"] != true || props["status"] != "ok" {
 		t.Errorf("properties = %v", props)
+	}
+}
+
+func telemetryStatusOf(t *testing.T, h *harness) telemetryStatus {
+	t.Helper()
+	code, stdout, stderr := h.run("telemetry", "status", "--json")
+	var s telemetryStatus
+	if err := json.Unmarshal([]byte(stdout), &s); code != 0 || err != nil {
+		t.Fatalf("exit = %d, %v\n%s%s", code, err, stdout, stderr)
+	}
+	return s
+}
+
+// Turned off, nothing more is sent, from this command or any other, until
+// it is turned on again.
+func TestTelemetryOffAndOn(t *testing.T) {
+	h := newHarness(t)
+	bodies := h.telemetry()
+	h.run("version")
+	if s := telemetryStatusOf(t, h); !s.Enabled || s.Setting != "on" || s.Reason != "" {
+		t.Errorf("status = %+v", s)
+	}
+	sent := len(*bodies)
+
+	code, stdout, stderr := h.run("telemetry", "off")
+	if code != 0 || stdout != "Usage statistics are off. Nothing more is sent from this machine, and its random ID was deleted.\n" || stderr != "" {
+		t.Fatalf("off: exit = %d\n%s%s", code, stdout, stderr)
+	}
+	// A client made before the choice sends nothing either.
+	bodies = h.telemetry()
+	h.run("version")
+	if want := (telemetryStatus{Setting: "off", Reason: "turned off with 'tenjin telemetry off'"}); telemetryStatusOf(t, h) != want {
+		t.Errorf("status = %+v", telemetryStatusOf(t, h))
+	}
+	if len(*bodies) != 0 || sent != 2 {
+		t.Errorf("sent %v after it was turned off, and %d before", *bodies, sent)
+	}
+	_, stdout, _ = h.run("telemetry", "status")
+	lacks(t, stdout, "Usage statistics are off: turned off with 'tenjin telemetry off'.")
+
+	code, stdout, _ = h.run("telemetry", "on")
+	if code != 0 || !strings.HasPrefix(stdout, "Usage statistics are on. What they hold: "+privacyURL) {
+		t.Fatalf("on: exit = %d\n%s", code, stdout)
+	}
+	h.run("version")
+	if s := telemetryStatusOf(t, h); !s.Enabled || s.Setting != "on" || len(*bodies) == 0 {
+		t.Errorf("status = %+v, sent %v", s, *bodies)
+	}
+}
+
+// Off in the environment, it stays off whatever the setting, and says why.
+func TestTelemetryOffInTheEnvironmentSaysSo(t *testing.T) {
+	h := newHarness(t)
+	h.vars[telemetry.OffVar] = "1"
+	if want := (telemetryStatus{Setting: "on", Reason: telemetry.OffVar + " is set"}); telemetryStatusOf(t, h) != want {
+		t.Errorf("status = %+v", telemetryStatusOf(t, h))
+	}
+	code, stdout, _ := h.run("telemetry", "on")
+	if code != 0 || stdout != "Usage statistics are on, but none are sent: TENJIN_NO_TELEMETRY is set.\n" {
+		t.Errorf("on: exit = %d\n%s", code, stdout)
+	}
+	code, stdout, _ = h.run("telemetry", "off", "--json")
+	var s telemetryStatus
+	if err := json.Unmarshal([]byte(stdout), &s); code != 0 || err != nil || s != (telemetryStatus{Setting: "off", Reason: "turned off with 'tenjin telemetry off'"}) {
+		t.Errorf("off --json: exit = %d, %+v, %v", code, s, err)
+	}
+}
+
+// Without a configuration folder there is nowhere to keep the choice.
+func TestTelemetryOffWithoutAConfigurationFolder(t *testing.T) {
+	h := newHarness(t)
+	h.env.telemetryState = ""
+	code, _, stderr := h.run("telemetry", "off")
+	if code != 1 || !strings.Contains(stderr, "no configuration folder") || !strings.Contains(stderr, "TENJIN_NO_TELEMETRY=1") {
+		t.Errorf("exit = %d\n%s", code, stderr)
+	}
+	if s := telemetryStatusOf(t, h); s.Enabled || s.Reason == "" {
+		t.Errorf("status = %+v", s)
 	}
 }

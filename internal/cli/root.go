@@ -122,6 +122,10 @@ type environment struct {
 	// telemetryClient), and facts are what the command adds to its event.
 	telemetry *telemetry.Client
 	facts     map[string]any
+	// telemetryState is the file the install's ID is kept in, beside which
+	// tenjin telemetry off is recorded. Empty where there is no
+	// configuration folder.
+	telemetryState string
 	// detach hands an event to a copy of the CLI that sends it on its own.
 	// Nil sends it from this process.
 	detach func(telemetry.Event) error
@@ -161,20 +165,22 @@ func defaultEnvironment() (*environment, error) {
 		return nil, clierr.Wrap(clierr.Usage, err, "%v", err)
 	}
 	interactive := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+	state := telemetryState()
 	return &environment{
-		getenv:      os.Getenv,
-		updates:     updateChecker(os.Getenv),
-		telemetry:   telemetryClient(os.Getenv, endpoints),
-		detach:      sendDetached,
-		sdkReleases: sdkReleases(),
-		endpoints:   endpoints,
-		store:       session.NewStore(),
-		stdin:       bufio.NewReader(os.Stdin),
-		interactive: interactive,
-		rawInput:    rawInput(interactive),
-		openBrowser: openBrowser,
-		lookPath:    exec.LookPath,
-		executable:  os.Executable,
+		getenv:         os.Getenv,
+		updates:        updateChecker(os.Getenv),
+		telemetry:      telemetryClient(os.Getenv, endpoints, state),
+		telemetryState: state,
+		detach:         sendDetached,
+		sdkReleases:    sdkReleases(),
+		endpoints:      endpoints,
+		store:          session.NewStore(),
+		stdin:          bufio.NewReader(os.Stdin),
+		interactive:    interactive,
+		rawInput:       rawInput(interactive),
+		openBrowser:    openBrowser,
+		lookPath:       exec.LookPath,
+		executable:     os.Executable,
 		run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			// A device tool that hangs, such as adb with a wedged server,
 			// must not hold the command forever.
@@ -597,7 +603,7 @@ Details: 'tenjin help scripting'.`
 			root.AddCommand(c)
 		}
 	}
-	root.AddCommand(newDocsCmd(opts, env), newVersionCmd(opts))
+	root.AddCommand(newDocsCmd(opts, env), newTelemetryCmd(opts, env), newVersionCmd(opts))
 	root.AddCommand(newGuideCmds(opts.data)...)
 	root.SetUsageTemplate(rootUsageTemplate)
 	root.SetHelpCommand(newHelpCmd(root))
