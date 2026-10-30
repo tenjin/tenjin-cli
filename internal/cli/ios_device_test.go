@@ -283,3 +283,33 @@ func TestASilentLaunchOnAnIPhoneSaysItIsStillWaiting(t *testing.T) {
 		"of 90 seconds, and nothing from the Tenjin SDK yet. If the app shows the tracking prompt, answer it.",
 	)
 }
+
+// A read that cannot launch the app says so at once, without first saying
+// it is launching it.
+func TestAnIPhoneThatCannotLaunchSaysNoLaunch(t *testing.T) {
+	h := newHarness(t)
+	dir := testproject.Write(t, testproject.IOSNative())
+	h.connectIPhone("", `{"connectionProperties":{"tunnelState":"connected"},"deviceProperties":{"name":"Test iPhone","developerModeStatus":"disabled"},"hardwareProperties":{"udid":"00008130-000000000000000A","reality":"physical","platform":"iOS"}}`)
+	_, stdout, stderr := h.typing().run("doctor", dir, "--device", "--offline")
+	if strings.Contains(stderr, "Launching") || !strings.Contains(stdout, "Developer Mode is off on Test iPhone") {
+		t.Errorf("stdout:\n%s\nstderr:\n%s", stdout, stderr)
+	}
+}
+
+// Until the app has started, the wait says what keeps it from starting.
+func TestALaunchThatHasNotStartedSaysSo(t *testing.T) {
+	defer func(tick time.Duration) { launchTick = tick }(launchTick)
+	launchTick = time.Millisecond
+	h := newHarness(t)
+	dir := testproject.Write(t, testproject.IOSNative())
+	h.connectIPhone("")
+	h.env.stream = func(context.Context, string, []string, func(string) bool) ([]byte, error) {
+		time.Sleep(50 * time.Millisecond)
+		return nil, nil
+	}
+	_, _, stderr := h.typing().run("doctor", dir, "--device", "--offline")
+	lacks(t, stderr, "and the app has not started yet. Keep the phone unlocked.")
+	if strings.Contains(stderr, "nothing from the Tenjin SDK yet") {
+		t.Errorf("stderr:\n%s", stderr)
+	}
+}

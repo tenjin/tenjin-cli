@@ -29,8 +29,11 @@ const IPhoneLaunchWindow = 90 * time.Second
 type LaunchStage int
 
 const (
+	// Launching: the phone and the app can be launched, and the launch is
+	// asked for.
+	Launching LaunchStage = iota + 1
 	// AppStarted: the app is running, and its console is followed.
-	AppStarted LaunchStage = iota + 1
+	AppStarted
 	// SDKLogging: the Tenjin SDK has written its first line.
 	SDKLogging
 )
@@ -116,6 +119,7 @@ func ReadIPhone(ctx context.Context, stream Streamer, xcrun string, phone IPhone
 	}
 	ctx, cancel := context.WithTimeout(ctx, IPhoneLaunchWindow)
 	defer cancel()
+	reach(Launching)
 	out, err := stream(ctx, xcrun, []string{"devicectl", "device", "process", "launch",
 		"--device", phone.UDID, "--terminate-existing", "--console", bundleID}, func(line string) bool {
 		if strings.HasPrefix(line, "Launched application") {

@@ -3,6 +3,7 @@ package verify_test
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -1029,32 +1030,11 @@ func TestAnEmptyKeyIsSaidToBe(t *testing.T) {
 	}
 }
 
-// capacitorApp is a Capacitor app for both platforms, with Tenjin's plugin
-// installed and synced into each native project, iOS through Swift
-// packages.
-func capacitorApp() testproject.Files {
-	flutter := testproject.Flutter()
-	return testproject.Files{
-		"package.json":          `{"dependencies": {"@capacitor/core": "8.5.3", "@capacitor/android": "8.5.3", "@capacitor/ios": "8.5.3", "ionic-capacitor-tenjin": "2.3.1"}}`,
-		"package-lock.json":     "{}",
-		"capacitor.config.json": `{"appId": "com.example.sample"}`,
-		"src/app.ts":            "import { Tenjin } from 'ionic-capacitor-tenjin';\nawait Tenjin.initialize({ sdkKey: '" + testproject.Key + "' });\nawait Tenjin.connect();\n",
-		"node_modules/ionic-capacitor-tenjin/package.json": `{"name": "ionic-capacitor-tenjin", "version": "2.3.1"}`,
-		"android/app/build.gradle.kts":                     flutter["android/app/build.gradle.kts"],
-		"android/app/src/main/AndroidManifest.xml":         flutter["android/app/src/main/AndroidManifest.xml"],
-		"android/capacitor.settings.gradle":                "include ':capacitor-android'\ninclude ':ionic-capacitor-tenjin'\nproject(':ionic-capacitor-tenjin').projectDir = new File('../node_modules/ionic-capacitor-tenjin/android')\n",
-		"ios/App/App.xcodeproj/project.pbxproj":            testproject.PBXProj(testproject.PBXTarget{Name: "App", BundleID: "com.example.sample", InfoPlist: "App/Info.plist"}),
-		"ios/App/App/Info.plist":                           testproject.InfoPlist,
-		"ios/App/App/AppDelegate.swift":                    "import UIKit\nimport Capacitor\n\n@UIApplicationMain\nclass AppDelegate: UIResponder, UIApplicationDelegate {\n    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {\n        return true\n    }\n}\n",
-		"ios/App/CapApp-SPM/Package.swift":                 "let package = Package(\n    dependencies: [\n        .package(name: \"IonicCapacitorTenjin\", path: \"../../../node_modules/ionic-capacitor-tenjin\")\n    ]\n)\n",
-	}
-}
-
 // A plugin package.json declares but a native project does not include
 // stops that platform's events: the check reads the file the sync writes,
 // and says nothing without one.
 func TestAPluginNotSyncedIntoANativeProject(t *testing.T) {
-	app := capacitorApp()
+	app := testproject.Capacitor()
 	unsyncedSPM := "let package = Package(\n    dependencies: [\n        .package(url: \"https://github.com/ionic-team/capacitor-swift-pm.git\", exact: \"8.5.3\")\n    ]\n)\n"
 	pods := app.Without("ios/App/CapApp-SPM/Package.swift").With(testproject.Files{
 		"ios/App/Podfile": "platform :ios, '14.0'\ntarget 'App' do\n  pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'\nend\n",
@@ -1063,7 +1043,7 @@ func TestAPluginNotSyncedIntoANativeProject(t *testing.T) {
 		"package.json":                         `{"dependencies": {"react-native": "0.79.2", "react-native-tenjin": "1.7.0"}}`,
 		"yarn.lock":                            "",
 		"index.js":                             "import Tenjin from 'react-native-tenjin';\nTenjin.initialize('" + testproject.Key + "');\nTenjin.connect();\n",
-		"ios/Sample.xcodeproj/project.pbxproj": testproject.PBXProj(testproject.PBXTarget{Name: "Sample", BundleID: "com.example.sample", InfoPlist: "Sample/Info.plist"}),
+		"ios/Sample.xcodeproj/project.pbxproj": testproject.PBXProj(testproject.PBXTarget{Name: "Sample", ProductType: "com.apple.product-type.application", BundleID: "com.example.sample", InfoPlist: "Sample/Info.plist"}),
 		"ios/Sample/Info.plist":                testproject.InfoPlist,
 		"ios/Podfile":                          "target 'Sample' do\n  use_native_modules!\nend\n",
 		"ios/Podfile.lock":                     "PODS:\n  - React-Core (0.79.2)\n",
@@ -1086,6 +1066,10 @@ func TestAPluginNotSyncedIntoANativeProject(t *testing.T) {
 		{"android", app.With(testproject.Files{"android/capacitor.settings.gradle": "include ':capacitor-android'\n"}), project.Android,
 			"Run npx cap sync android, then build the app again."},
 		{"react native", reactNative, project.IOS, "Run yarn install, then pod install in ios/, then build the app again."},
+		{"commented out", pods.With(testproject.Files{"ios/App/Podfile": pods["ios/App/Podfile"] + "  # pod 'IonicCapacitorTenjin', :path => '../../node_modules/ionic-capacitor-tenjin'\n"}), project.IOS,
+			"Run npx cap sync ios, then build the app again."},
+		{"commented out in gradle", app.With(testproject.Files{"android/capacitor.settings.gradle": "include ':capacitor-android'\n// include ':ionic-capacitor-tenjin'\n"}), project.Android,
+			"Run npx cap sync android, then build the app again."},
 		{"react native synced", reactNative.With(testproject.Files{"ios/Podfile.lock": "PODS:\n  - react-native-tenjin (1.7.0)\n"}), project.IOS, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -1108,26 +1092,29 @@ func TestAPluginNotSyncedIntoANativeProject(t *testing.T) {
 // A cross-platform app's native iOS code is where the SDK's logs are
 // turned on, as Tenjin's guide for each framework says: where it is not,
 // the finding says where to, and the by-hand guide has it as an iOS step.
-// An Expo project's ios/ folder is written again, so it is not asked there.
+// An Expo project's ios/ folder that git ignores is written again, so it
+// is not asked there; one that is committed is.
 func TestWrappersAreToldWhereToTurnOnTheIOSLogs(t *testing.T) {
 	const delegate = "ios/App/App/AppDelegate.swift"
+	expo := testproject.Files{
+		"package.json":                         `{"dependencies": {"react-native": "0.79.2", "expo": "~53.0.0", "react-native-tenjin": "1.7.0"}}`,
+		"index.js":                             "import Tenjin from 'react-native-tenjin';\nTenjin.initialize('" + testproject.Key + "');\nTenjin.connect();\n",
+		"ios/Sample.xcodeproj/project.pbxproj": testproject.PBXProj(testproject.PBXTarget{Name: "Sample", ProductType: "com.apple.product-type.application", BundleID: "com.example.sample", InfoPlist: "Sample/Info.plist"}),
+		"ios/Sample/Info.plist":                testproject.InfoPlist,
+		"ios/Sample/AppDelegate.swift":         "import Expo\n\n@UIApplicationMain\nclass AppDelegate: ExpoAppDelegate {\n}\n",
+	}
 	for _, c := range []struct {
 		name  string
 		files testproject.Files
 		want  string // a part of the fix; "" for no finding
 	}{
-		{"capacitor", capacitorApp(), "In " + delegate + ", at the start of application(_:didFinishLaunchingWithOptions:), add TenjinSDK.debugLogs() inside #if DEBUG … #endif (with import TenjinSDK)"},
-		{"objective-c", capacitorApp().Without(delegate).With(testproject.Files{"ios/App/App/AppDelegate.m": "@implementation AppDelegate\n- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {\n  return YES;\n}\n@end\n"}),
+		{"capacitor", testproject.Capacitor(), "In " + delegate + ", at the start of application(_:didFinishLaunchingWithOptions:), add TenjinSDK.debugLogs() inside #if DEBUG … #endif (with import TenjinSDK)"},
+		{"objective-c", testproject.Capacitor().Without(delegate).With(testproject.Files{"ios/App/App/AppDelegate.m": "@implementation AppDelegate\n- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {\n  return YES;\n}\n@end\n"}),
 			"add [TenjinSDK debugLogs] inside #ifdef DEBUG … #endif (with #import \"TenjinSDK.h\")"},
 		{"flutter", testproject.Flutter().With(testproject.Files{"ios/Runner/AppDelegate.swift": "import Flutter\n\n@main\nclass AppDelegate: FlutterAppDelegate {\n}\n"}),
-			"In ios/Runner/AppDelegate.swift, before GeneratedPluginRegistrant.register(with: self), add TenjinSDK.debugLogs()"},
-		{"expo", testproject.Files{
-			"package.json":                         `{"dependencies": {"react-native": "0.79.2", "expo": "~53.0.0", "react-native-tenjin": "1.7.0"}}`,
-			"index.js":                             "import Tenjin from 'react-native-tenjin';\nTenjin.initialize('" + testproject.Key + "');\nTenjin.connect();\n",
-			"ios/Sample.xcodeproj/project.pbxproj": testproject.PBXProj(testproject.PBXTarget{Name: "Sample", BundleID: "com.example.sample", InfoPlist: "Sample/Info.plist"}),
-			"ios/Sample/Info.plist":                testproject.InfoPlist,
-			"ios/Sample/AppDelegate.swift":         "import Expo\n\n@UIApplicationMain\nclass AppDelegate: ExpoAppDelegate {\n}\n",
-		}, ""},
+			"In ios/Runner/AppDelegate.swift, at the start of application(_:didFinishLaunchingWithOptions:), add TenjinSDK.debugLogs()"},
+		{"expo, ios/ ignored", expo.With(testproject.Files{".gitignore": "node_modules/\n/ios\n/android\n"}), ""},
+		{"expo, ios/ committed", expo, "In ios/Sample/AppDelegate.swift, at the start of application(_:didFinishLaunchingWithOptions:)"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			r := run(t, c.files, verify.Options{})
@@ -1154,7 +1141,7 @@ func TestWrappersAreToldWhereToTurnOnTheIOSLogs(t *testing.T) {
 		})
 	}
 	// Once the call is there, neither says it again.
-	files := capacitorApp()
+	files := testproject.Capacitor()
 	files["ios/App/App/AppDelegate.swift"] = strings.Replace(files["ios/App/App/AppDelegate.swift"], "        return true\n", "        #if DEBUG\n        TenjinSDK.debugLogs()\n        #endif\n        return true\n", 1)
 	r := run(t, files, verify.Options{})
 	expect(t, r, "ios.debug_logs", project.IOS, verify.Pass)
@@ -1162,5 +1149,23 @@ func TestWrappersAreToldWhereToTurnOnTheIOSLogs(t *testing.T) {
 		if part.Platform == project.IOS {
 			t.Errorf("guide part = %+v", part)
 		}
+	}
+}
+
+// In a workspace the plugin is installed at its root, where Node finds it:
+// the fix does not ask to install it again.
+func TestAPluginHoistedInAWorkspaceIsInstalled(t *testing.T) {
+	files := testproject.Files{"node_modules/ionic-capacitor-tenjin/package.json": `{"name": "ionic-capacitor-tenjin"}`}
+	for name, content := range testproject.Capacitor().Without("node_modules/ionic-capacitor-tenjin/package.json") {
+		files["apps/mobile/"+name] = content
+	}
+	files["apps/mobile/ios/App/CapApp-SPM/Package.swift"] = "let package = Package()\n"
+	p, err := project.Detect(filepath.Join(testproject.Write(t, files), "apps", "mobile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := expect(t, verify.Run(context.Background(), p, verify.Options{}), "sdk.native_sync", project.IOS, verify.Error)
+	if f.Fix != "Run npx cap sync ios, then build the app again." {
+		t.Errorf("fix = %q", f.Fix)
 	}
 }

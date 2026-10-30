@@ -305,6 +305,27 @@ android {
 	}
 }
 
+// Capacitor is a Capacitor app for both platforms, with Tenjin's plugin
+// installed and synced into each native project, iOS through Swift
+// packages.
+func Capacitor() Files {
+	flutter := Flutter()
+	return Files{
+		"package.json":          `{"dependencies": {"@capacitor/core": "8.5.3", "@capacitor/android": "8.5.3", "@capacitor/ios": "8.5.3", "ionic-capacitor-tenjin": "2.3.1", "capacitor-plugin-app-tracking-transparency": "3.0.0"}}`,
+		"package-lock.json":     "{}",
+		"capacitor.config.json": `{"appId": "com.example.sample"}`,
+		"src/app.ts":            "import { Tenjin } from 'ionic-capacitor-tenjin';\nimport { AppTrackingTransparency } from 'capacitor-plugin-app-tracking-transparency';\nawait Tenjin.initialize({ sdkKey: '" + Key + "' });\nawait AppTrackingTransparency.requestPermission();\nawait Tenjin.connect();\n",
+		"node_modules/ionic-capacitor-tenjin/package.json": `{"name": "ionic-capacitor-tenjin", "version": "2.3.1"}`,
+		"android/app/build.gradle.kts":                     flutter["android/app/build.gradle.kts"] + "\ndependencies {\n    implementation(\"com.google.android.gms:play-services-ads-identifier:18.3.0\")\n    implementation(\"com.google.android.gms:play-services-appset:16.1.0\")\n}\n",
+		"android/app/src/main/AndroidManifest.xml":         flutter["android/app/src/main/AndroidManifest.xml"],
+		"android/capacitor.settings.gradle":                "include ':capacitor-android'\ninclude ':ionic-capacitor-tenjin'\nproject(':ionic-capacitor-tenjin').projectDir = new File('../node_modules/ionic-capacitor-tenjin/android')\n",
+		"ios/App/App.xcodeproj/project.pbxproj":            PBXProj(PBXTarget{Name: "App", ProductType: "com.apple.product-type.application", BundleID: "com.example.sample", InfoPlist: "App/Info.plist"}),
+		"ios/App/App/Info.plist":                           InfoPlist,
+		"ios/App/App/AppDelegate.swift":                    "import UIKit\nimport Capacitor\n\n@UIApplicationMain\nclass AppDelegate: UIResponder, UIApplicationDelegate {\n    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {\n        return true\n    }\n}\n",
+		"ios/App/CapApp-SPM/Package.swift":                 "let package = Package(\n    dependencies: [\n        .package(name: \"IonicCapacitorTenjin\", path: \"../../../node_modules/ionic-capacitor-tenjin\")\n    ]\n)\n",
+	}
+}
+
 // Unity is a Unity project for both platforms, with Tenjin installed from
 // its Git address and integrated in code, as the Unity SDK's README shows.
 func Unity() Files {

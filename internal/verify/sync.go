@@ -43,11 +43,11 @@ func (r *runner) checkNativeSync(spec frameworkSpec, t *project.Target) {
 			step += " in " + dir + "/"
 		}
 	}
-	if file == "" || !r.fileExists(file) || strings.Contains(readProjectFile(r.p.Root, file), pkg) {
+	if file == "" || !r.fileExists(file) || strings.Contains(r.readSynced(file), pkg) {
 		return
 	}
 	fix := "Run " + step + ", then build the app again."
-	if !r.fileExists(path.Join("node_modules", pkg, "package.json")) {
+	if !installed(r.p.Root, pkg) {
 		manager, _ := npmManager(r.p.Root, "package.json")
 		fix = "Run " + manager + " install, then " + step + ", then build the app again."
 	}
@@ -59,6 +59,38 @@ func (r *runner) checkNativeSync(spec frameworkSpec, t *project.Target) {
 		File:   file,
 		Fix:    fix,
 	})
+}
+
+// readSynced reads a file a sync writes without its comments, as its own
+// tool reads it: a plugin line commented out is not there.
+func (r *runner) readSynced(rel string) string {
+	content := readProjectFile(r.p.Root, rel)
+	switch path.Base(rel) {
+	case "Podfile":
+		return project.StripRubyComments(content)
+	case "Podfile.lock":
+		return content
+	}
+	return project.BlankComments(content)
+}
+
+// installed reports whether a JavaScript package is installed where Node
+// finds it: in node_modules here or in a folder above, as a workspace
+// hoists it, and through a link, as pnpm installs it. It only looks for
+// the package, so it may follow a link out of the project.
+func installed(root, pkg string) bool {
+	dir, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	for ; ; dir = filepath.Dir(dir) {
+		if info, err := os.Stat(filepath.Join(dir, "node_modules", filepath.FromSlash(pkg), "package.json")); err == nil && !info.IsDir() {
+			return true
+		}
+		if filepath.Dir(dir) == dir {
+			return false
+		}
+	}
 }
 
 // fileExists reports whether the project has a file at rel, which, like

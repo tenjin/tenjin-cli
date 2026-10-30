@@ -51,10 +51,10 @@ type Project struct {
 	// PackageManager is the JavaScript package manager, for the frameworks
 	// that have one.
 	PackageManager string `json:"package_manager,omitempty"`
-	// Expo is a React Native project made with Expo, whose native folders
-	// npx expo prebuild writes again: changes made in them by hand do not
-	// last.
-	Expo bool `json:"expo,omitempty"`
+	// GeneratedIOS is an Expo project's ios/ folder that git ignores: npx
+	// expo prebuild writes it again from the app config, so changes made in
+	// it by hand do not last.
+	GeneratedIOS bool `json:"generated_ios,omitempty"`
 	// AdSDKs are the advertising SDKs found among the dependencies.
 	AdSDKs []AdSDK `json:"ad_sdks"`
 	// TrackingPrompt is where the app already asks for tracking permission

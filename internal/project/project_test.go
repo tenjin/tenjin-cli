@@ -213,7 +213,7 @@ func TestExpoWithoutNativeFolders(t *testing.T) {
 // says how the other is added, with what in the project names it.
 func TestAPlatformNotAddedYetIsNoted(t *testing.T) {
 	ios := testproject.Files{
-		"ios/App/App.xcodeproj/project.pbxproj": testproject.PBXProj(testproject.PBXTarget{Name: "App", BundleID: "com.example.cap", InfoPlist: "App/Info.plist"}),
+		"ios/App/App.xcodeproj/project.pbxproj": testproject.PBXProj(testproject.PBXTarget{Name: "App", ProductType: "com.apple.product-type.application", BundleID: "com.example.cap", InfoPlist: "App/Info.plist"}),
 		"ios/App/App/Info.plist":                testproject.InfoPlist,
 	}
 	capacitor := ios.With(testproject.Files{
@@ -224,7 +224,7 @@ func TestAPlatformNotAddedYetIsNoted(t *testing.T) {
 	cases := []struct {
 		name  string
 		files testproject.Files
-		want  string // "" for no note
+		want  string // "" for no note with both platforms, "-" for none with one
 	}{
 		{"capacitor configures it", capacitor,
 			"Only iOS is covered: there is no android/ folder yet, although capacitor.config.ts configures Android. To add Android, run `npm install @capacitor/android@8.5.3` and `npx cap add android`, then `tenjin setup` again."},
@@ -235,11 +235,17 @@ func TestAPlatformNotAddedYetIsNoted(t *testing.T) {
 		{"capacitor installs a range, quoted", capacitor.With(testproject.Files{
 			"package.json":   `{"dependencies": {"@capacitor/core": "^8.0.0"}}`,
 			"pnpm-lock.yaml": "",
-		}), "run `pnpm add '@capacitor/android@^8.0.0'` and `npx cap add android`"},
+		}), "run `pnpm add \"@capacitor/android@^8.0.0\"` and `npx cap add android`"},
+		{"capacitor in a workspace", capacitor.With(testproject.Files{
+			"package.json": `{"dependencies": {"@capacitor/core": "workspace:*"}}`,
+		}), "run `npm install @capacitor/android` (at the version @capacitor/core has, workspace:*) and `npx cap add android`, then"},
 		{"capacitor names nothing", capacitor.With(testproject.Files{
 			"capacitor.config.ts": "const config = { appId: 'com.example.cap' };\n",
 			"package.json":        `{"dependencies": {"@capacitor/core": "8.5.3"}}`,
 		}), "Only iOS is covered: there is no android/ folder. If the app ships on Android too, run `npm install @capacitor/android@8.5.3` and `npx cap add android`, then `tenjin setup` again."},
+		{"capacitor keeps android elsewhere", capacitor.With(testproject.Files{
+			"capacitor.config.ts": "const config = {\n  appId: 'com.example.cap',\n  android: { path: 'native/android' },\n};\n",
+		}), "-"},
 		{"capacitor with both", capacitor.With(testproject.Files{
 			"android/app/build.gradle": "apply plugin: 'com.android.application'\nandroid { defaultConfig { applicationId \"com.example.cap\" } }\n",
 		}), ""},
@@ -254,6 +260,13 @@ func TestAPlatformNotAddedYetIsNoted(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			p := detect(t, tc.files)
+			if tc.want == "-" {
+				// One platform is found, and where the other is cannot be told.
+				if len(p.Targets) != 1 || hasNote(p, "is covered") {
+					t.Errorf("targets = %+v, notes = %q", p.Targets, p.Notes)
+				}
+				return
+			}
 			if tc.want == "" {
 				if len(p.Targets) != 2 || hasNote(p, "is covered") {
 					t.Errorf("targets = %+v, notes = %q", p.Targets, p.Notes)

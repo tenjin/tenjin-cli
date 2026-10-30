@@ -615,7 +615,12 @@ func readLaunch(ctx context.Context, env *environment, p *project.Project, platf
 		}
 		raw, err := devicelog.ReadIOSSimulatorSince(ctx, env.runner(), xcrun, serial, since)
 		if err == nil && say != nil {
-			say("No iPhone is connected, so this is the simulator's log.")
+			// Only a list that came back empty says no iPhone is there.
+			if listErr == nil && len(phones) == 0 {
+				say("No iPhone is connected, so this is the simulator's log.")
+			} else {
+				say("This is the simulator's log.")
+			}
 		}
 		// With no simulator either, a devicectl that failed is the more
 		// likely reason nothing was found.
@@ -649,29 +654,35 @@ func readIPhone(ctx context.Context, env *environment, xcrun string, phone devic
 	if say == nil {
 		return devicelog.ReadIPhone(ctx, env.streamer(), xcrun, phone, bundle, nil)
 	}
-	window := int(devicelog.IPhoneLaunchWindow / time.Second)
-	// Device names come from the device.
-	name := render.Clean(phone.Name)
-	say("Launching %s on %s and reading its console, for up to %d seconds (Ctrl-C stops)…", bundle, name, window)
+	window := devicelog.IPhoneLaunchWindow
+	// Device names come from the device, and bundle IDs from the project.
+	name, app := render.Clean(phone.Name), render.Clean(bundle)
 	// mu orders what is said; once the read has ended, the ticker says
 	// nothing more, and has stopped before readIPhone returns.
 	var mu sync.Mutex
-	logging, ended := false, false
+	reached, ended := devicelog.LaunchStage(0), false
 	tick := launchTick
 	done, stopped := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(stopped)
 		ticker := time.NewTicker(tick)
 		defer ticker.Stop()
-		for waited := tick; ; waited += tick {
+		// The read ends at the window; a tick then would say nothing new.
+		for waited := tick; waited < window; waited += tick {
 			select {
 			case <-done:
 				return
 			case <-ticker.C:
 			}
 			mu.Lock()
-			if !logging && !ended {
-				say("  · %d of %d seconds, and nothing from the Tenjin SDK yet. If the app shows the tracking prompt, answer it.", int(waited/time.Second), window)
+			if !ended {
+				seconds := fmt.Sprintf("%d of %d seconds", int(waited/time.Second), int(window/time.Second))
+				switch reached {
+				case devicelog.Launching:
+					say("  · %s, and the app has not started yet. Keep the phone unlocked.", seconds)
+				case devicelog.AppStarted:
+					say("  · %s, and nothing from the Tenjin SDK yet. If the app shows the tracking prompt, answer it.", seconds)
+				}
 			}
 			mu.Unlock()
 		}
@@ -686,11 +697,13 @@ func readIPhone(ctx context.Context, env *environment, xcrun string, phone devic
 	return devicelog.ReadIPhone(ctx, env.streamer(), xcrun, phone, bundle, func(stage devicelog.LaunchStage) {
 		mu.Lock()
 		defer mu.Unlock()
+		reached = stage
 		switch stage {
+		case devicelog.Launching:
+			say("Launching %s on %s and reading its console, for up to %d seconds (Ctrl-C stops)…", app, name, int(window/time.Second))
 		case devicelog.AppStarted:
 			say("  · The app is running on %s. Waiting for the Tenjin SDK…", name)
 		case devicelog.SDKLogging:
-			logging = true
 			say("  · The Tenjin SDK is logging. Waiting for Tenjin's answer to its connect…")
 		}
 	})

@@ -26,8 +26,14 @@ var (
 	upluginVersion         = regexp.MustCompile(`"VersionName"\s*:\s*"([^"]+)"`)
 	// capacitorPlatformBlock is a platform's own options in capacitor.config.
 	capacitorPlatformBlock = regexp.MustCompile(`(?m)^\s*["']?(android|ios)["']?\s*:`)
-	// plainVersion is a version a shell passes on as it is.
+	// capacitorPlatformPath is a platform's own folder set in
+	// capacitor.config, in place of android/ or ios/.
+	capacitorPlatformPath = regexp.MustCompile(`["']?(android|ios)["']?\s*:\s*\{[^{}]*\bpath["']?\s*:`)
+	// plainVersion is a version a shell passes on as it is, and
+	// versionRange one npm can install, which goes in double quotes: they
+	// work in sh, PowerShell and cmd.exe alike.
 	plainVersion = regexp.MustCompile(`^[0-9][0-9A-Za-z.+-]*$`)
+	versionRange = regexp.MustCompile(`^[\^~<>=]*\s*[0-9][0-9A-Za-z.+\-<>=|^~ ]*$`)
 )
 
 // packageJSON is the part of package.json detection needs.
@@ -81,11 +87,17 @@ type mobilePlatform struct {
 
 var mobilePlatforms = []mobilePlatform{{Android, "android", "Android"}, {IOS, "ios", "iOS"}}
 
+// commands says commands to run, one after the other, in a note.
+func commands(run ...string) string {
+	return "`" + strings.Join(run, "` and `") + "`"
+}
+
 // notePlatformToAdd says, when a cross-platform project has the native
 // project of one platform and no folder for the other, that only the one is
 // covered and how the other is added. add gives the commands that add a
-// platform, and what in the project already names it, or "".
-func (d *detector) notePlatformToAdd(add func(mobilePlatform) (commands []string, why string)) {
+// platform (see commands), and what in the project already names it, or "";
+// or false, when it cannot tell where the platform's folder would be.
+func (d *detector) notePlatformToAdd(add func(mobilePlatform) (run, why string, ok bool)) {
 	if len(d.p.Targets) == 0 {
 		return
 	}
@@ -94,8 +106,10 @@ func (d *detector) notePlatformToAdd(add func(mobilePlatform) (commands []string
 			continue
 		}
 		covered := mobilePlatforms[1-i].name
-		commands, why := add(m)
-		run := "`" + strings.Join(commands, "` and `") + "`"
+		run, why, ok := add(m)
+		if !ok {
+			continue
+		}
 		if why != "" {
 			d.note("Only %s is covered: there is no %s/ folder yet, although %s. To add %s, run %s, then `tenjin setup` again.", covered, m.folder, why, m.name, run)
 		} else {
@@ -112,8 +126,8 @@ func (d *detector) flutter() bool {
 	d.p.Framework = Flutter
 	d.p.Supported = true
 	d.nativeTargets()
-	d.notePlatformToAdd(func(m mobilePlatform) ([]string, string) {
-		return []string{"flutter create --platforms=" + m.folder + " ."}, ""
+	d.notePlatformToAdd(func(m mobilePlatform) (string, string, bool) {
+		return commands("flutter create --platforms=" + m.folder + " ."), "", true
 	})
 	if pubspecTenjin.MatchString(pubspec) {
 		i := Integration{Package: "tenjin_plugin", Source: "pubspec.yaml"}
@@ -181,21 +195,21 @@ func (d *detector) reactNative() bool {
 	d.nativeTargets()
 
 	if _, expo := pkg.dependency("expo"); expo {
-		d.p.Expo = true
+		d.p.GeneratedIOS = d.isDir("ios") && d.gitIgnores("ios")
 		configured := d.expoTargets()
 		if len(d.p.Targets) == 0 {
 			d.p.Targets = configured
 			d.note("This is an Expo project without native folders. The Tenjin SDK is a native module: run `npx expo prebuild` or use a development build before integrating.")
 		} else {
 			d.note("This is an Expo project. The Tenjin package ships no config plugin, so its native settings must be kept in the prebuilt android/ and ios/ folders.")
-			d.notePlatformToAdd(func(m mobilePlatform) ([]string, string) {
+			d.notePlatformToAdd(func(m mobilePlatform) (string, string, bool) {
 				why := ""
 				for _, t := range configured {
 					if t.Platform == m.platform {
 						why = t.Source + " gives " + m.name + " a bundle ID"
 					}
 				}
-				return []string{"npx expo prebuild --platform " + m.folder}, why
+				return commands("npx expo prebuild --platform " + m.folder), why, true
 			})
 		}
 	}
@@ -211,6 +225,18 @@ var (
 	expoAndroidPackage   = regexp.MustCompile(`\bpackage\s*:\s*["']([\w.]+)["']`)
 	expoBundleIdentifier = regexp.MustCompile(`\bbundleIdentifier\s*:\s*["']([\w.-]+)["']`)
 )
+
+// gitIgnores reports whether the project's .gitignore names a folder at its
+// root, as Expo's does for the native folders prebuild writes.
+func (d *detector) gitIgnores(folder string) bool {
+	for _, line := range strings.Split(d.read(".gitignore"), "\n") {
+		switch strings.TrimSpace(line) {
+		case folder, folder + "/", "/" + folder, "/" + folder + "/":
+			return true
+		}
+	}
+	return false
+}
 
 // expoTargets reads the bundle IDs app.json, or app.config, gives. They are
 // the project's targets when there are no native folders.
@@ -312,11 +338,16 @@ func (d *detector) capacitor() bool {
 		}
 	}
 	configured := stripComments(d.read(config))
-	d.notePlatformToAdd(func(m mobilePlatform) ([]string, string) {
+	d.notePlatformToAdd(func(m mobilePlatform) (string, string, bool) {
+		for _, set := range capacitorPlatformPath.FindAllStringSubmatch(configured, -1) {
+			if set[1] == m.folder {
+				return "", "", false
+			}
+		}
 		add := "npx cap add " + m.folder
 		platformPkg := "@capacitor/" + m.folder
 		if _, ok := pkg.dependency(platformPkg); ok {
-			return []string{add}, platformPkg + " is a dependency"
+			return commands(add), platformPkg + " is a dependency", true
 		}
 		why := ""
 		for _, block := range capacitorPlatformBlock.FindAllStringSubmatch(configured, -1) {
@@ -328,17 +359,20 @@ func (d *detector) capacitor() bool {
 		// version.
 		version, ok := pkg.dependency("@capacitor/core")
 		if !ok {
-			return []string{add}, why
+			return commands(add), why, true
 		}
 		install := map[string]string{"yarn": "yarn add", "pnpm": "pnpm add", "bun": "bun add"}[d.packageManager()]
 		if install == "" {
 			install = "npm install"
 		}
-		spec := platformPkg + "@" + version
-		if !plainVersion.MatchString(version) {
-			spec = "'" + spec + "'"
+		switch {
+		case plainVersion.MatchString(version):
+			return commands(install+" "+platformPkg+"@"+version, add), why, true
+		case versionRange.MatchString(version):
+			return commands(install+` "`+platformPkg+"@"+version+`"`, add), why, true
 		}
-		return []string{install + " " + spec, add}, why
+		// A workspace or catalog version is the project's own to give.
+		return commands(install+" "+platformPkg) + " (at the version @capacitor/core has, " + version + ") and " + commands(add), why, true
 	})
 	if hasPkg {
 		if v, ok := pkg.dependency("ionic-capacitor-tenjin"); ok {

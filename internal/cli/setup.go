@@ -682,8 +682,9 @@ func (s *setup) integrate(p *project.Project) error {
 		if len(work) > 0 {
 			s.sayUnnamed()
 		}
+		installs := s.installsLeft(report)
 		if keysOpen(report) {
-			s.keysLeft(report, true)
+			s.keysLeft(report, !installs)
 		}
 		return nil
 	}
@@ -693,9 +694,11 @@ func (s *setup) integrate(p *project.Project) error {
 		return err
 	}
 	if helper == nil {
+		// The guide is the code to add; installing the plugin and a key
+		// refused where it is written are the developer's too, and no step
+		// of the guide says so.
+		s.installsLeft(report)
 		s.manualGuide(report)
-		// The guide is the code to add; a key refused where it is written
-		// is the developer's too, and no step of the guide says so.
 		if keysOpen(report) {
 			s.keysLeft(report, false)
 		}
@@ -770,6 +773,27 @@ func openLabel(p *project.Project, f verify.Finding) string {
 		return platformNames[f.Platform] + ": "
 	}
 	return ""
+}
+
+// installsLeft says the commands that install the plugin into the native
+// projects (sdk.native_sync), which the developer runs: an agent installs
+// nothing, and step 5's list leaves the fixes out. It reports whether there
+// were any.
+func (s *setup) installsLeft(report *verify.Report) bool {
+	var fixes []string
+	for _, f := range forPeople(report).Findings {
+		if f.ID == "sdk.native_sync" && f.Severity == verify.Error {
+			fixes = append(fixes, openLabel(report.Project, f)+f.Fix)
+		}
+	}
+	if len(fixes) == 0 {
+		return false
+	}
+	s.say("The plugin is yours to install into the native projects, before the launch:")
+	for _, fix := range fixes {
+		s.say("  %s %s", s.style.Dim("·"), fix)
+	}
+	return true
 }
 
 // keysLeft says what settles the SDK keys still open after step 5. A key
