@@ -30,6 +30,16 @@ func Guide(report *Report) []GuidePart {
 		}
 		return false
 	}
+	// missing reports whether the report gives exactly this fix, which only
+	// a call not found at all is given.
+	missing := func(id string, platform project.Platform, fix string) bool {
+		for _, f := range report.Findings {
+			if f.ID == id && f.Platform == platform && f.Fix == fix {
+				return true
+			}
+		}
+		return false
+	}
 	steps := func(spec frameworkSpec, platform project.Platform) []string {
 		var out []string
 		if !done("sdk.dependency", platform) {
@@ -68,6 +78,13 @@ func Guide(report *Report) []GuidePart {
 		}
 	case project.Flutter, project.ReactNative, project.Capacitor:
 		add(GuidePart{Steps: steps(wrapperSpecs[p.Framework], "")})
+		// The iOS SDK's logs are turned on in the native code, where the
+		// framework's code cannot reach.
+		if t := p.Target(project.IOS); t != nil {
+			if fix := wrapperDebugLogsFix(p, t); fix != "" && missing("ios.debug_logs", project.IOS, fix) {
+				add(GuidePart{Platform: project.IOS, File: t.IOS.EntryPoint, Steps: []string{fix}})
+			}
+		}
 	case project.Unity:
 		add(GuidePart{Steps: steps(unitySpec, "")})
 	}

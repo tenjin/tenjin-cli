@@ -683,7 +683,7 @@ func (s *setup) integrate(p *project.Project) error {
 			s.sayUnnamed()
 		}
 		if keysOpen(report) {
-			s.keysLeft(report)
+			s.keysLeft(report, true)
 		}
 		return nil
 	}
@@ -694,6 +694,11 @@ func (s *setup) integrate(p *project.Project) error {
 	}
 	if helper == nil {
 		s.manualGuide(report)
+		// The guide is the code to add; a key refused where it is written
+		// is the developer's too, and no step of the guide says so.
+		if keysOpen(report) {
+			s.keysLeft(report, false)
+		}
 		return nil
 	}
 	s.helper = helper
@@ -769,8 +774,9 @@ func openLabel(p *project.Project, f verify.Finding) string {
 
 // keysLeft says what settles the SDK keys still open after step 5. A key
 // written in the project that Tenjin refuses is the developer's to replace:
-// setup writes a key only over its placeholder.
-func (s *setup) keysLeft(report *verify.Report) {
+// setup writes a key only over its placeholder. alone is whether the keys
+// are all that is left; when they are not, only a refused key is said.
+func (s *setup) keysLeft(report *verify.Report, alone bool) {
 	var where []string
 	refused, other := false, false
 	for _, f := range forPeople(report).Findings {
@@ -794,8 +800,10 @@ func (s *setup) keysLeft(report *verify.Report) {
 		}
 	}
 	switch {
-	case !refused:
+	case !refused && alone:
 		s.say("What is left is the SDK keys, which the next step settles.")
+		return
+	case !refused:
 		return
 	case len(where) == 1:
 		s.say("Tenjin refuses the SDK key written in %s, and setup writes keys only over its own placeholders: replace it there with the app's own key, from its page in the Tenjin dashboard. The next step checks it again.", where[0])
@@ -1186,15 +1194,16 @@ func (s *setup) writeOpen(report *verify.Report) {
 }
 
 // agentWork is what a coding agent is asked to resolve: the errors and
-// warnings, but not whether Tenjin accepts a key, nor writing the key, which
-// are not the agent's to do. Turning on the iOS SDK's logs in debug builds
-// stops nothing, but it is what lets setup check the launch, so the agent
-// does it too.
+// warnings, but not whether Tenjin accepts a key, nor writing the key, nor
+// installing a plugin into the native projects (sdk.native_sync), which
+// are not the agent's to do: it installs nothing. Turning on the iOS SDK's
+// logs in debug builds stops nothing, but it is what lets setup check the
+// launch, so the agent does it too.
 func agentWork(report *verify.Report) []verify.Finding {
 	var work []verify.Finding
 	for _, f := range report.Findings {
 		wanted := f.Severity == verify.Error || f.Severity == verify.Warning || (f.ID == "ios.debug_logs" && f.Fix != "")
-		if wanted && !strings.HasPrefix(f.ID, "key.") && f.ID != "sdk.key.unfilled" {
+		if wanted && !strings.HasPrefix(f.ID, "key.") && f.ID != "sdk.key.unfilled" && f.ID != "sdk.native_sync" {
 			work = append(work, f)
 		}
 	}
@@ -1344,14 +1353,14 @@ func integrationPrompt(p *project.Project, report *verify.Report, inProject proj
 		}
 	}
 
-	expected := `findings whose id starts with "key." and the "sdk.key.unfilled" findings for the placeholders, which are expected`
+	expected := `findings whose id starts with "key.", the "sdk.key.unfilled" findings for the placeholders, and "sdk.native_sync", whose install the developer runs after you; all are expected`
 	summary := "at most six short lines"
 	if len(proposals) > 0 {
 		var ids []string
 		for _, id := range proposals {
 			ids = append(ids, `"feature.`+id+`"`)
 		}
-		expected = `findings whose id starts with "key.", the "sdk.key.unfilled" findings for the placeholders, and ` + strings.Join(ids, " and ") + `, for what you only propose; all are expected`
+		expected = `findings whose id starts with "key.", the "sdk.key.unfilled" findings for the placeholders, "sdk.native_sync", whose install the developer runs after you, and ` + strings.Join(ids, " and ") + `, for what you only propose; all are expected`
 		summary = "at most six short lines, then your proposals"
 	}
 	defaults := "pick a sensible default and list it at the end"

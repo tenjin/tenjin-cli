@@ -2,6 +2,7 @@ package verify
 
 import (
 	"encoding/json"
+	"path"
 	"regexp"
 	"strings"
 
@@ -140,14 +141,39 @@ func (r *runner) checkDebugLogs(spec frameworkSpec, src source) {
 
 // checkNativeDebugLogs looks for the iOS SDK's debugLogs call in the native
 // code of a Flutter, React Native or Capacitor app, where it can only be
-// added by hand: the framework's code has no such call.
+// added by hand: the framework's code has no such call. Its absence is said
+// as Tenjin's guides for these frameworks say to add it, except in an Expo
+// project, whose ios/ folder is written again from its config.
 func (r *runner) checkNativeDebugLogs(t *project.Target) {
 	if t.IOS == nil || t.IOS.Xcodeproj == "" {
 		return
 	}
 	native := nativeSpecs[project.IOS]
-	native.debugLogsFix = ""
+	native.debugLogsFix = wrapperDebugLogsFix(r.p, t)
 	r.checkDebugLogs(native, r.scanSource(native, native.sourceDirs(t)))
+}
+
+// wrapperDebugLogsFix says where a cross-platform app's native iOS code
+// turns the SDK's logs on, as Tenjin's guide for its framework does, or ""
+// where a change there would not last.
+func wrapperDebugLogsFix(p *project.Project, t *project.Target) string {
+	if p.Expo || t.IOS == nil {
+		return ""
+	}
+	where := "the app delegate"
+	if t.IOS.EntryPoint != "" {
+		where = t.IOS.EntryPoint
+	}
+	call := "add TenjinSDK.debugLogs() inside #if DEBUG … #endif (with import TenjinSDK)"
+	if ext := path.Ext(t.IOS.EntryPoint); ext == ".m" || ext == ".mm" {
+		call = "add [TenjinSDK debugLogs] inside #ifdef DEBUG … #endif (with #import \"TenjinSDK.h\")"
+	}
+	at := "at the start of application(_:didFinishLaunchingWithOptions:)"
+	if p.Framework == project.Flutter {
+		at = "before GeneratedPluginRegistrant.register(with: self)"
+	}
+	return "In " + where + ", " + at + ", " + call + ", so that debug builds log Tenjin's answers and the launch check can read them. " +
+		"If the import does not resolve in the app target, leave it out: events still reach Tenjin, and the dashboard's Live Event Tool shows a test device's instead."
 }
 
 // skanFix says where the SKAdNetwork endpoint goes. A project whose

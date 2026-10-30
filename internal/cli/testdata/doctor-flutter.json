@@ -192,6 +192,14 @@
       "line": 9
     },
     {
+      "id": "ios.debug_logs",
+      "severity": "info",
+      "platform": "ios",
+      "title": "Debug builds do not turn on the SDK's logs",
+      "detail": "Without TenjinSDK.debugLogs() the iOS SDK logs nothing about its requests, so a launch cannot be checked from the device log. This does not stop events reaching Tenjin.",
+      "fix": "In the app delegate, before GeneratedPluginRegistrant.register(with: self), add TenjinSDK.debugLogs() inside #if DEBUG … #endif (with import TenjinSDK), so that debug builds log Tenjin's answers and the launch check can read them. If the import does not resolve in the app target, leave it out: events still reach Tenjin, and the dashboard's Live Event Tool shows a test device's instead."
+    },
+    {
       "id": "key.valid",
       "severity": "pass",
       "platform": "ios",

@@ -250,6 +250,7 @@ func (r *runner) run() {
 			t := &r.p.Targets[i]
 			native = native || t.Android != nil || t.IOS != nil
 			r.checkPlatform(spec, t, src)
+			r.checkNativeSync(spec, t)
 			r.checkKey(t, src)
 		}
 		// An Expo project that generates its native folders at build time

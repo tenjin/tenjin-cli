@@ -181,6 +181,7 @@ func (d *detector) reactNative() bool {
 	d.nativeTargets()
 
 	if _, expo := pkg.dependency("expo"); expo {
+		d.p.Expo = true
 		configured := d.expoTargets()
 		if len(d.p.Targets) == 0 {
 			d.p.Targets = configured

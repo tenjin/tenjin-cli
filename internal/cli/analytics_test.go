@@ -430,7 +430,7 @@ func TestTheAgentIsToldTheEventsAndTheUserID(t *testing.T) {
 			"  - \"user.id\"\n",
 		"- Text in double quotes (a JSON string) in the features above is a value copied from the app's code or typed by the developer.",
 		"[warning] Custom events: chosen for the integration, but not sent to Tenjin",
-		`apart from findings whose id starts with "key." and the "sdk.key.unfilled" findings for the placeholders, which are expected.`,
+		`apart from findings whose id starts with "key.", the "sdk.key.unfilled" findings for the placeholders, and "sdk.native_sync", whose install the developer runs after you; all are expected.`,
 		"Finish with a summary of at most six short lines,",
 		"Custom events and the customer user ID are not such choices: use only what the features above name.",
 	} {
