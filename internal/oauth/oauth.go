@@ -165,7 +165,16 @@ func (c *Client) Login(ctx context.Context, opts LoginOptions) (Tokens, error) {
 	})
 	server := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = server.Serve(listener) }()
-	defer func() { _ = server.Close() }()
+	defer func() {
+		// The browser's request may still be getting its answer: a sign-in
+		// that ends at once, refused or stopped before the code is spent,
+		// must not drop it, or the browser shows a broken connection.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if server.Shutdown(ctx) != nil {
+			_ = server.Close()
+		}
+	}()
 
 	authorizeURL := m.Authorization + "?" + url.Values{
 		"response_type":         {"code"},
