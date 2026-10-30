@@ -102,6 +102,10 @@ type LoginOptions struct {
 	// redirect to this machine's loopback address cannot arrive. Whichever
 	// comes first, the redirect or the paste, is used.
 	Pasted func() (string, error)
+	// BeforeRedeem, when set, runs once the browser has answered and before
+	// its code is traded for tokens. An error from it ends the sign-in with
+	// the code unspent, so no grant was issued and none is left to end.
+	BeforeRedeem func(ctx context.Context) error
 }
 
 // Login runs the browser sign-in and returns the tokens it produced.
@@ -210,6 +214,11 @@ func (c *Client) Login(ctx context.Context, opts LoginOptions) (Tokens, error) {
 	}
 	if result.err != nil {
 		return Tokens{}, result.err
+	}
+	if opts.BeforeRedeem != nil {
+		if err := opts.BeforeRedeem(ctx); err != nil {
+			return Tokens{}, err
+		}
 	}
 
 	return c.token(ctx, m.Token, url.Values{

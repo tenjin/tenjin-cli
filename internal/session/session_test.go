@@ -3,7 +3,6 @@ package session
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -208,7 +207,7 @@ func TestALockHeldTooLongIsNotWaitedOnForever(t *testing.T) {
 	if _, err = m.Token(context.Background()); err == nil {
 		t.Fatal("refreshed without the lock")
 	}
-	if e := clierr.From(err); e.Kind != clierr.Internal || !strings.Contains(e.Message, "another tenjin") || !strings.Contains(e.Hint, "try again") {
+	if e := clierr.From(err); e.Kind != clierr.Internal || !strings.Contains(e.Message, "another tenjin") || !strings.Contains(e.Hint, "again") {
 		t.Errorf("Token: %v", err)
 	}
 	if auth.n != 0 {
@@ -223,16 +222,36 @@ func TestALockHeldTooLongIsNotWaitedOnForever(t *testing.T) {
 	if out, err := m.Logout(context.Background()); err == nil || out.WasSignedIn || out.AccessEnded {
 		t.Errorf("Logout = %+v, %v", out, err)
 	}
+	if c, _ := store.Load("production"); c.RefreshToken != "refresh-0" {
+		t.Errorf("stored %+v", c)
+	}
+}
+
+// A sign-in that finds the lock held past the wait stops before the
+// browser's code is redeemed. A grant issued then could not be saved, and
+// ending it would end every CLI session of the user in the organization,
+// the one signed in already and the holder's among them.
+func TestASignInThatCannotTakeTheLockIssuesNoGrant(t *testing.T) {
+	dir := t.TempDir()
+	store := fileStoreIn(dir)
+	store.lockWait = 100 * time.Millisecond
+	signedIn(t, store, "refresh-0", "old", time.Now().Add(time.Hour))
+	unlock, err := fileStoreIn(dir).Lock(context.Background(), "production")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+
 	signer := &signingIn{}
-	m.Authority = signer
-	if _, _, err := m.Login(context.Background(), nil, nil); err == nil || !strings.Contains(clierr.From(err).Message, "another tenjin") {
+	m := &Manager{Environment: "production", Store: store, Authority: signer}
+	_, _, err = m.Login(context.Background(), nil, nil)
+	if e := clierr.From(err); err == nil || !strings.Contains(e.Message, "another tenjin") || !strings.Contains(e.Hint, "tenjin login' again") {
 		t.Errorf("Login = %v", err)
 	}
-	// The grant that could not be saved is not left open.
-	if want := []string{oauth.ClientID + " refresh-new"}; !slices.Equal(signer.revocations, want) {
-		t.Errorf("revoked %q, want %q", signer.revocations, want)
+	if signer.issued != 0 || len(signer.revocations) != 0 {
+		t.Errorf("issued %d grants and revoked %q", signer.issued, signer.revocations)
 	}
-	if c, _ := store.Load("production"); c.RefreshToken != "refresh-0" {
+	if c, _ := store.Load("production"); c.RefreshToken != "refresh-0" || c.JWT != "old" {
 		t.Errorf("stored %+v", c)
 	}
 }
@@ -294,17 +313,26 @@ func TestAFailedExchangeKeepsTheNewRefreshToken(t *testing.T) {
 }
 
 // signingIn is an authorization server whose sign-in issues refresh-new for
-// identity, and that records each revocation as "client token".
+// identity, and that records each revocation as "client token". As the real
+// one does, it redeems the browser's code only once BeforeRedeem lets it,
+// counting each grant it issues.
 type signingIn struct {
 	identity    oauth.Identity
 	onLogin     func()
+	issued      int
 	revocations []string
 }
 
-func (a *signingIn) Login(context.Context, oauth.LoginOptions) (oauth.Tokens, error) {
+func (a *signingIn) Login(ctx context.Context, opts oauth.LoginOptions) (oauth.Tokens, error) {
 	if a.onLogin != nil {
 		a.onLogin()
 	}
+	if opts.BeforeRedeem != nil {
+		if err := opts.BeforeRedeem(ctx); err != nil {
+			return oauth.Tokens{}, err
+		}
+	}
+	a.issued++
 	return oauth.Tokens{AccessToken: "access-new", RefreshToken: "refresh-new"}, nil
 }
 func (a *signingIn) Refresh(context.Context, string, string) (oauth.Tokens, error) {

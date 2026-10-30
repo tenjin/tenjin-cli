@@ -96,7 +96,34 @@ func (m *Manager) StatusOf(c *Credentials) Status {
 // reads the address a browser on another machine ended on (see
 // oauth.LoginOptions).
 func (m *Manager) Login(ctx context.Context, open func(url string) error, pasted func() (string, error)) (*Credentials, string, error) {
-	tokens, err := m.Authority.Login(ctx, oauth.LoginOptions{ClientID: oauth.ClientID, Open: open, Pasted: pasted})
+	// The browser's code is redeemed under the refresh lock, so that the
+	// session replaced is the current one: another tenjin may have refreshed
+	// it while the browser was open. The lock is taken before the code is
+	// spent, so a lock held past the wait ends the sign-in with no grant
+	// issued. Ending a grant afterwards is no way out: revoking one of the
+	// CLI's own ends every CLI session of that user in the organization,
+	// the holder's included (see outlived).
+	unlock, locked := func() {}, error(nil)
+	tokens, err := m.Authority.Login(ctx, oauth.LoginOptions{
+		ClientID: oauth.ClientID, Open: open, Pasted: pasted,
+		BeforeRedeem: func(ctx context.Context) error {
+			release, err := m.lock(ctx)
+			if err != nil {
+				locked = err
+				return err
+			}
+			unlock = release
+			return nil
+		},
+	})
+	defer func() { unlock() }()
+	if errors.Is(locked, errLockBusy) {
+		return nil, "", lockBusy(locked, "this sign-in was not completed",
+			"Nothing was changed, and an earlier sign-in still stands. Run 'tenjin login' again once the other command has finished.")
+	}
+	if locked != nil {
+		return nil, "", locked
+	}
 	if err != nil {
 		return nil, "", clierr.Wrap(clierr.NotSignedIn, err, "sign-in failed: %v", err)
 	}
@@ -106,19 +133,6 @@ func (m *Manager) Login(ctx context.Context, open func(url string) error, pasted
 	}
 	c := &Credentials{Environment: m.Environment, ClientID: oauth.ClientID}
 	c.apply(tokens, identity)
-	// Under the refresh lock, so that the session replaced is the current
-	// one: another tenjin may have refreshed it while the browser was open.
-	unlock, err := m.lock(ctx)
-	if errors.Is(err, errLockBusy) {
-		// The new grant would be saved over by the holder's, or its save
-		// over the holder's: end it rather than leave it open.
-		_ = m.Authority.Revoke(ctx, c.ClientID, c.RefreshToken)
-		return nil, "", lockBusy(err)
-	}
-	if err != nil {
-		return nil, "", err
-	}
-	defer unlock()
 	// A keychain that does not answer hides the previous session, not the
 	// new one, which goes to the file.
 	previous, err := m.Store.Load(m.Environment)
@@ -219,7 +233,8 @@ func (m *Manager) refresh(ctx context.Context, refused string) (string, error) {
 	if errors.Is(err, errLockBusy) {
 		// Spending the refresh token now could spend it twice: the holder may
 		// have spent it and not yet saved the one it got back.
-		return "", lockBusy(err)
+		return "", lockBusy(err, "this command could not renew it",
+			"Nothing was changed. Run this command again once the other one has finished.")
 	}
 	if err != nil {
 		return "", err
@@ -314,9 +329,11 @@ func (m *Manager) lock(ctx context.Context) (unlock func(), err error) {
 	return unlock, nil
 }
 
-func lockBusy(err error) error {
-	return clierr.Wrap(clierr.Internal, err, "another tenjin has been renewing the sign-in for more than %d seconds", int(lockWait.Seconds())).
-		WithHint("Wait for the other tenjin command to finish, then try again.")
+// lockBusy is the error for a lock another tenjin has held past the wait:
+// outcome says what did not happen, hint what to do about it.
+func lockBusy(err error, outcome, hint string) error {
+	return clierr.Wrap(clierr.Internal, err, "another tenjin command has been using the sign-in for more than %d seconds, so %s", int(lockWait.Seconds()), outcome).
+		WithHint("%s", hint)
 }
 
 func (m *Manager) refreshFailed(c *Credentials, spent string, err error) error {
@@ -351,7 +368,8 @@ func (m *Manager) Logout(ctx context.Context) (Signout, error) {
 	// current one, not one another tenjin is about to spend.
 	unlock, err := m.lock(ctx)
 	if errors.Is(err, errLockBusy) {
-		return Signout{}, lockBusy(err)
+		return Signout{}, lockBusy(err, "the sign-in was not ended",
+			"Nothing was changed. Run 'tenjin logout' again once the other command has finished.")
 	}
 	if err != nil {
 		return Signout{}, err

@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -32,6 +35,60 @@ func server(t *testing.T, status int, body string) *Client {
 	srv = httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return New(srv.URL, "https://resource.test")
+}
+
+// approving opens the sign-in as a browser would, and approves it: the
+// authorization server sends it back to the CLI's loopback address with a
+// code and the request's state.
+func approving(t *testing.T) func(string) error {
+	return func(authorizeURL string) error {
+		u, err := url.Parse(authorizeURL)
+		if err != nil {
+			return err
+		}
+		q := u.Query()
+		go func() {
+			resp, err := http.Get(q.Get("redirect_uri") + "?" + url.Values{"code": {"code-1"}, "state": {q.Get("state")}}.Encode())
+			if err != nil {
+				t.Errorf("callback: %v", err)
+				return
+			}
+			_ = resp.Body.Close()
+		}()
+		return nil
+	}
+}
+
+// BeforeRedeem runs once the browser has answered and before the code is
+// spent; when it refuses, the code is never traded for tokens.
+func TestBeforeRedeemComesBeforeTheCodeIsSpent(t *testing.T) {
+	var redeemed atomic.Int32
+	mux := http.NewServeMux()
+	var srv *httptest.Server
+	mux.HandleFunc("GET /.well-known/oauth-authorization-server", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]string{"authorization_endpoint": srv.URL + "/authorize", "token_endpoint": srv.URL + "/token"})
+	})
+	mux.HandleFunc("POST /token", func(w http.ResponseWriter, _ *http.Request) {
+		redeemed.Add(1)
+		_, _ = w.Write([]byte(`{"access_token":"access","refresh_token":"refresh"}`))
+	})
+	srv = httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	c := New(srv.URL, "https://resource.test")
+
+	refused := errors.New("not now")
+	_, err := c.Login(context.Background(), LoginOptions{ClientID: ClientID, Open: approving(t), Timeout: 5 * time.Second,
+		BeforeRedeem: func(context.Context) error { return refused }})
+	if !errors.Is(err, refused) || redeemed.Load() != 0 {
+		t.Errorf("Login = %v, with the code redeemed %d times", err, redeemed.Load())
+	}
+
+	var before int32 = -1
+	tokens, err := c.Login(context.Background(), LoginOptions{ClientID: ClientID, Open: approving(t), Timeout: 5 * time.Second,
+		BeforeRedeem: func(context.Context) error { before = redeemed.Load(); return nil }})
+	if err != nil || tokens.RefreshToken != "refresh" || before != 0 || redeemed.Load() != 1 {
+		t.Errorf("Login = %+v, %v; redeemed %d times, %d before BeforeRedeem", tokens, err, redeemed.Load(), before)
+	}
 }
 
 // Any successful answer can carry tokens, whatever its status: an error
