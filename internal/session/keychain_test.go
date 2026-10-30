@@ -17,6 +17,8 @@ func TestSystemStoreRoundTripsThroughTheKeychain(t *testing.T) {
 	t.Cleanup(func() { _ = keyring.Delete(keyringService, environment) })
 
 	store := newStoreIn(t.TempDir())
+	// As NewStore has it: on macOS, through security, as the CLI writes.
+	store.set = keychainSet
 	if got, err := store.Load(environment); err != nil || got != nil {
 		t.Fatalf("before saving: got %+v, err %v", got, err)
 	}

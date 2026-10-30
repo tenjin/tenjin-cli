@@ -89,7 +89,7 @@ func fileStoreIn(dir string) *systemStore {
 	store := newStoreIn(dir)
 	none := errors.New("no keychain")
 	store.get = func(string, string) (string, error) { return "", none }
-	store.set = func(string, string, string) error { return none }
+	store.set = func(context.Context, string, string, string) error { return none }
 	return store
 }
 

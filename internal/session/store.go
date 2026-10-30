@@ -79,18 +79,30 @@ func NewStore() Store {
 			dir = os.TempDir()
 		}
 	}
-	return newStoreIn(filepath.Join(dir, "tenjin"))
+	s := newStoreIn(filepath.Join(dir, "tenjin"))
+	s.set = keychainSet
+	return s
 }
 
-// newStoreIn is NewStore with the file kept in dir, for tests.
+// newStoreIn is NewStore with the file kept in dir, for tests: its keychain
+// writes go through go-keyring, whose mock the tests use, never through
+// keychainSet, which on macOS reaches the real keychain whatever the mock.
 func newStoreIn(dir string) *systemStore {
-	return &systemStore{dir: dir, get: keyring.Get, set: keyring.Set, timeout: keychainTimeout, lockWait: lockWait}
+	return &systemStore{dir: dir, get: keyring.Get, set: keyringSet, timeout: keychainTimeout, lockWait: lockWait}
+}
+
+// keyringSet writes through go-keyring. The call cannot be stopped once
+// made, so ctx is not used.
+func keyringSet(_ context.Context, service, user, secret string) error {
+	return keyring.Set(service, user, secret)
 }
 
 type systemStore struct {
-	dir      string
-	get      func(service, user string) (string, error)
-	set      func(service, user, secret string) error
+	dir string
+	get func(service, user string) (string, error)
+	// set stops a write still on its way when ctx ends, where the keychain
+	// allows it (see keychainSet).
+	set      func(ctx context.Context, service, user, secret string) error
 	timeout  time.Duration
 	lockWait time.Duration
 
@@ -291,7 +303,7 @@ func KeychainTimedOut(err error) bool {
 func (s *systemStore) keychainGet(environment string) (string, error) {
 	var secret string
 	var err error
-	if s.keychain(func() { secret, err = s.get(keyringService, environment) }) != nil {
+	if s.keychain(func(context.Context) { secret, err = s.get(keyringService, environment) }) != nil {
 		return "", errKeychainTimeout
 	}
 	return secret, err
@@ -299,7 +311,7 @@ func (s *systemStore) keychainGet(environment string) (string, error) {
 
 func (s *systemStore) keychainSet(environment, secret string) error {
 	var err error
-	if s.keychain(func() { err = s.set(keyringService, environment, secret) }) != nil {
+	if s.keychain(func(ctx context.Context) { err = s.set(ctx, keyringService, environment, secret) }) != nil {
 		return errKeychainTimeout
 	}
 	return err
@@ -309,19 +321,22 @@ func (s *systemStore) keychainSet(environment, secret string) error {
 // returned, so that a write that outlived its wait lands before a later
 // save's, never after it. The caller waits s.timeout at most, the calls
 // ahead of it included; call's results are its own only when this returns
-// nil.
-func (s *systemStore) keychain(call func()) error {
+// nil. Past the wait, call's context ends: a write that can be stopped
+// stops, and the lock kept for it is let go once it has.
+func (s *systemStore) keychain(call func(context.Context)) error {
 	s.mu.Lock()
 	ahead, done := s.busy, make(chan struct{})
 	s.busy = done
 	s.mu.Unlock()
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		defer close(done)
 		if ahead != nil {
 			<-ahead
 		}
-		call()
+		call(ctx)
 	}()
+	defer cancel()
 	select {
 	case <-done:
 		return nil

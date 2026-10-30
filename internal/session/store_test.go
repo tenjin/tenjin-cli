@@ -109,7 +109,7 @@ func TestAKeychainThatDoesNotAnswerIsPassedOver(t *testing.T) {
 	block := make(chan struct{})
 	t.Cleanup(func() { close(block) })
 	var asked atomic.Int32
-	store.set = func(string, string, string) error { asked.Add(1); <-block; return nil }
+	store.set = func(context.Context, string, string, string) error { asked.Add(1); <-block; return nil }
 	store.get = func(string, string) (string, error) { asked.Add(1); <-block; return "", nil }
 	store.timeout = 10 * time.Millisecond
 
@@ -212,7 +212,8 @@ func newSlowKeychain() *slowKeychain {
 	return &slowKeychain{secrets: map[string]string{}, letGo: make(chan struct{}), landed: make(chan struct{})}
 }
 
-func (k *slowKeychain) set(_, user, secret string) error {
+// set is a write that, once made, cannot be stopped, as on Linux.
+func (k *slowKeychain) set(_ context.Context, _, user, secret string) error {
 	k.mu.Lock()
 	k.writes++
 	first := k.writes == 1
@@ -358,6 +359,37 @@ func TestALockKeptForOneEnvironmentIsNotAnothers(t *testing.T) {
 	theirs, err := other.Lock(context.Background(), "production")
 	if err != nil {
 		t.Fatalf("the lock was not let go once the write landed: %v", err)
+	}
+	theirs()
+}
+
+// A keychain write that can be stopped is stopped past the wait, so the
+// lock kept for it is let go at once rather than when the keychain answers.
+func TestAStoppedKeychainWriteLetsTheLockGo(t *testing.T) {
+	dir := t.TempDir()
+	store := newStoreIn(dir)
+	store.timeout = 50 * time.Millisecond
+	stopped := make(chan struct{})
+	store.set = func(ctx context.Context, _, _, _ string) error {
+		<-ctx.Done()
+		close(stopped)
+		return ctx.Err()
+	}
+	unlock, err := store.Lock(context.Background(), "production")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if where, err := store.Save(withRefresh("refresh-a")); err != nil || !strings.Contains(where, "credentials-production.json") {
+		t.Fatalf("where = %q, %v", where, err)
+	}
+	<-stopped
+	unlock()
+
+	other := newStoreIn(dir)
+	other.lockWait = time.Second
+	theirs, err := other.Lock(context.Background(), "production")
+	if err != nil {
+		t.Fatalf("the lock was kept for a write that was stopped: %v", err)
 	}
 	theirs()
 }
