@@ -35,13 +35,15 @@ on_path() {
 	esac
 }
 
-# Adds the folder to PATH in a shell startup file, once, and records it in
-# changed. A file that cannot be written, such as one a dotfiles manager keeps
-# read-only, is reported and skipped.
+# Adds the folder to PATH in a shell startup file, once. A file it was added
+# to is recorded in changed, and one that had it already in present. A file
+# that cannot be written, such as one a dotfiles manager keeps read-only, is
+# reported and skipped.
 add_to() {
 	file="$1"
 	line="$2"
 	if [ -f "$file" ] && grep -qF "$line" "$file" 2>/dev/null; then
+		present="$present $file"
 		return 0
 	fi
 	mkdir -p "$(dirname "$file")" 2>/dev/null || true
@@ -155,7 +157,7 @@ main() {
 	echo "Installed $("$dir/tenjin" version) in $dir"
 
 	changed=""
-
+	present=""
 	if ! on_path "$dir" && [ "${TENJIN_NO_MODIFY_PATH:-}" != 1 ]; then
 		# The folder goes inside double quotes in these lines, so the characters
 		# special there are escaped: a path holding a quote, a dollar sign or a
@@ -208,7 +210,9 @@ main() {
 	fi
 	if on_path "$dir"; then
 		echo "Start with: tenjin setup"
-	elif [ -n "$changed" ]; then
+	elif [ -n "$changed$present" ]; then
+		# Present only: an earlier run added it, and this terminal started
+		# before that.
 		echo "New terminals will find the tenjin command. In this one, start with: $dir/tenjin setup"
 	else
 		echo "$dir is not on your PATH. Start with: $dir/tenjin setup"
