@@ -44,10 +44,8 @@ const OffVar = "TENJIN_NO_TELEMETRY"
 // which set CI and some of which only their own variable.
 var offVars = []string{OffVar, "DO_NOT_TRACK", "CI", "JENKINS_URL", "TF_BUILD", "TEAMCITY_VERSION", "CODEBUILD_BUILD_ID"}
 
-// Off reports whether the person or the machine asked for no telemetry.
-func Off(getenv func(string) string) bool { return OffBy(getenv) != "" }
-
-// OffBy returns the variable that turns telemetry off, or "".
+// OffBy returns the variable that turns telemetry off, the person's or a CI
+// service's, or "".
 func OffBy(getenv func(string) string) string {
 	for _, name := range offVars {
 		if v := getenv(name); v != "" && v != "0" && v != "false" {
@@ -232,6 +230,8 @@ func randomID() string {
 	return hex.EncodeToString(b)
 }
 
+var errTurnedOff = errors.New("telemetry was turned off")
+
 func (c *Client) load() state {
 	var s state
 	if raw, err := os.ReadFile(c.State); err == nil {
@@ -265,6 +265,11 @@ func (c *Client) save(s state) error {
 	}
 	if err := tmp.Close(); err != nil {
 		return err
+	}
+	// Turned off while this send was on its way: the state, with the
+	// install's ID, was deleted, and is not brought back.
+	if TurnedOff(c.State) {
+		return errTurnedOff
 	}
 	return os.Rename(tmp.Name(), c.State)
 }

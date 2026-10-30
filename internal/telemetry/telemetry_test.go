@@ -103,11 +103,9 @@ func TestOff(t *testing.T) {
 			name, value, _ := strings.Cut(vars, "=")
 			env[name] = value
 		}
-		if got := Off(func(n string) string { return env[n] }); got != want {
-			t.Errorf("%q: Off = %v", vars, got)
-		}
-		if name, _, _ := strings.Cut(vars, "="); want && OffBy(func(n string) string { return env[n] }) != name {
-			t.Errorf("%q: OffBy = %q", vars, OffBy(func(n string) string { return env[n] }))
+		got := OffBy(func(n string) string { return env[n] })
+		if name, _, _ := strings.Cut(vars, "="); (got != "") != want || want && got != name {
+			t.Errorf("%q: OffBy = %q", vars, got)
 		}
 	}
 }
@@ -144,6 +142,24 @@ func TestTurningItOffSendsNothingAndForgetsTheInstall(t *testing.T) {
 	c.Send(context.Background(), Event{Command: "tenjin"})
 	if len(*got) != 2 || (*got)[0].Events[0]["device_id"] == (*got)[1].Events[0]["device_id"] {
 		t.Errorf("received %+v", *got)
+	}
+}
+
+// A send on its way when telemetry is turned off does not save the state
+// again, so the install's ID stays deleted.
+func TestASendUnderWayDoesNotBringTheIDBack(t *testing.T) {
+	state := filepath.Join(t.TempDir(), "tenjin", "telemetry.json")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if err := TurnOff(state); err != nil {
+			t.Error(err)
+		}
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(srv.Close)
+	c := &Client{Key: "k", Endpoint: srv.URL, State: state}
+	c.Send(context.Background(), Event{Command: "tenjin doctor"})
+	if _, err := os.Stat(state); !os.IsNotExist(err) {
+		t.Errorf("the state is back: %v", err)
 	}
 }
 
