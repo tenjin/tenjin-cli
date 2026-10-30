@@ -3,7 +3,7 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.sh | sh
 #
-# TENJIN_VERSION         a version to install, such as 0.1.0 (default: the
+# TENJIN_VERSION         a version to install, such as 1.0.0 (default: the
 #                        latest)
 # TENJIN_INSTALL_DIR     where to put the binary (default: where tenjin already
 #                        is, or a folder already on PATH that needs no sudo, or

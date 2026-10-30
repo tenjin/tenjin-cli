@@ -75,7 +75,7 @@ release:
   github:
     owner: tenjin
     name: tenjin-cli
-  # Fills the draft release-please made, found by this name (v0.1.0), and
+  # Fills the draft release-please made, found by this name (v1.0.0), and
   # leaves it a draft: release.yaml publishes it once it is attested.
   name_template: "{{ .Tag }}"
   use_existing_draft: true

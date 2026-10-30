@@ -24,7 +24,7 @@ const checkEvery = 24 * time.Hour
 
 // Checker finds the latest release.
 type Checker struct {
-	// Current is the running version, such as 0.1.0. Only a release
+	// Current is the running version, such as 1.0.0. Only a release
 	// version is checked; a development build never is.
 	Current string
 	// Releases is the releases page; its /latest redirects to the newest tag.

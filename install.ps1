@@ -2,7 +2,7 @@
 #
 #   irm https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.ps1 | iex
 #
-# TENJIN_VERSION       a version to install, such as 0.1.0 (default: the latest)
+# TENJIN_VERSION       a version to install, such as 1.0.0 (default: the latest)
 # TENJIN_INSTALL_DIR   where to put tenjin.exe (default:
 #                      %LOCALAPPDATA%\Programs\tenjin)
 #

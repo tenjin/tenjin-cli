@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: The draft release's tag, such as v0.1.0
+        description: The draft release's tag, such as v1.0.0
         type: string
         required: true
 permissions:
@@ -57,7 +57,7 @@ jobs:
             echo "Releases run from main, not $GITHUB_REF."; exit 1
           fi
           if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
-            echo "$TAG is not a version tag such as v0.1.0."; exit 1
+            echo "$TAG is not a version tag such as v1.0.0."; exit 1
           fi
           if ! git merge-base --is-ancestor "refs/tags/$TAG" origin/main; then
             echo "$TAG is not a commit on main."; exit 1

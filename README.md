@@ -58,7 +58,7 @@ Archives for macOS, Linux and Windows (Intel and ARM) are also on the [releases 
 
 | Variable | Effect |
 | --- | --- |
-| `TENJIN_VERSION` | Install this version (for example `v0.1.0`) instead of the latest |
+| `TENJIN_VERSION` | Install this version (for example `v1.0.0`) instead of the latest |
 | `TENJIN_INSTALL_DIR` | Install into this folder |
 | `TENJIN_NO_MODIFY_PATH=1` | Never edit shell startup files (`install.sh`) |
 
