@@ -332,7 +332,7 @@ func (m *Manager) lock(ctx context.Context) (unlock func(), err error) {
 // lockBusy is the error for a lock another tenjin has held past the wait:
 // outcome says what did not happen, hint what to do about it.
 func lockBusy(err error, outcome, hint string) error {
-	return clierr.Wrap(clierr.Internal, err, "another tenjin command has been using the sign-in for more than %d seconds, so %s", int(lockWait.Seconds()), outcome).
+	return clierr.Wrap(clierr.Busy, err, "another tenjin command has been using the sign-in for more than %d seconds, so %s", int(lockWait.Seconds()), outcome).
 		WithHint("%s", hint)
 }
 

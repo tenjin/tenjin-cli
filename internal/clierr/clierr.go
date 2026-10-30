@@ -27,6 +27,10 @@ const (
 	// Refused is a request Tenjin understood and turned down, such as a
 	// value it does not accept: the input is at fault, not the CLI.
 	Refused Kind = "refused"
+	// Busy is a wait for another tenjin command that ran out, such as one
+	// using the sign-in: nothing was done, and running the command again
+	// once the other has finished is enough.
+	Busy Kind = "busy"
 )
 
 // ExitCode is the process exit status for a failure of this kind. 8 is kept
@@ -52,6 +56,8 @@ func (k Kind) ExitCode() int {
 		return 9
 	case Refused:
 		return 11
+	case Busy:
+		return 12
 	case Interrupted:
 		// The shells' code for a program stopped by SIGINT.
 		return 130

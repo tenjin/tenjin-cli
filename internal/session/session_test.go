@@ -207,7 +207,7 @@ func TestALockHeldTooLongIsNotWaitedOnForever(t *testing.T) {
 	if _, err = m.Token(context.Background()); err == nil {
 		t.Fatal("refreshed without the lock")
 	}
-	if e := clierr.From(err); e.Kind != clierr.Internal || !strings.Contains(e.Message, "another tenjin") || !strings.Contains(e.Hint, "again") {
+	if e := clierr.From(err); e.Kind != clierr.Busy || !strings.Contains(e.Message, "another tenjin") || !strings.Contains(e.Hint, "again") {
 		t.Errorf("Token: %v", err)
 	}
 	if auth.n != 0 {
@@ -245,7 +245,7 @@ func TestASignInThatCannotTakeTheLockIssuesNoGrant(t *testing.T) {
 	signer := &signingIn{}
 	m := &Manager{Environment: "production", Store: store, Authority: signer}
 	_, _, err = m.Login(context.Background(), nil, nil)
-	if e := clierr.From(err); err == nil || !strings.Contains(e.Message, "another tenjin") || !strings.Contains(e.Hint, "tenjin login' again") {
+	if e := clierr.From(err); e.Kind != clierr.Busy || !strings.Contains(e.Message, "another tenjin") || !strings.Contains(e.Hint, "tenjin login' again") {
 		t.Errorf("Login = %v", err)
 	}
 	if signer.issued != 0 || len(signer.revocations) != 0 {

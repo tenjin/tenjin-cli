@@ -256,6 +256,7 @@ Every command except `setup` is built to be driven by a program:
 | 9 | `doctor` found problems |
 | 10 | Already exists |
 | 11 | Tenjin refused the request, such as a value it does not accept; its message says why |
+| 12 | Another `tenjin` command was using the sign-in for too long; nothing was done, so run it again once that one has finished |
 | 130 | Stopped: Ctrl-C, or SIGTERM or SIGHUP (a closed terminal) |
 
 `--verbose` (`-v`) writes a line to stderr for each request to Tenjin and each program run, with the address, the answer and the time taken. It never shows a credential or a request body, so it is safe to paste into a support request. Requests that fail in transit are retried up to twice when that is safe. When Tenjin refuses a sign-in that looked current, the CLI renews it and sends the request once more.

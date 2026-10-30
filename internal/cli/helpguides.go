@@ -182,6 +182,7 @@ The exit status says what happened:
   9     doctor found problems
   10    already exists
   11    Tenjin refused the request, such as a value it does not accept
+  12    another tenjin command was using the sign-in; run it again
   130   stopped: Ctrl-C, SIGTERM or SIGHUP
 
 For a coding agent (Claude Code, Codex, Cursor and others):
