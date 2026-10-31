@@ -435,6 +435,24 @@ func TestAppWritesShowNoSecret(t *testing.T) {
 	}
 }
 
+// An empty secret clears it: the question and the dry run say so, rather
+// than show it as a secret by its last four characters.
+func TestClearingASecretIsSaidAsIt(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	update := []string{"apps", "update", testApp, "--public-key", ""}
+	code, stdout, stderr := h.run(append(update, "--dry-run")...)
+	var body map[string]any
+	if err := json.Unmarshal([]byte(stdout), &body); err != nil || code != 0 || body["public_key"] != "" ||
+		!strings.Contains(stderr, `--public-key "" (which clears it)`) || strings.Contains(stdout+stderr, "…") || strings.Contains(stderr, "last four characters") {
+		t.Errorf("dry run: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+	h.typing("n")
+	if _, _, stderr := h.run(update...); !strings.Contains(stderr, `Change the app `+testApp+`: --public-key "" (which clears it)?`) || strings.Contains(stderr, "…") {
+		t.Errorf("question: stderr = %q", stderr)
+	}
+}
+
 // An answer that is neither yes nor no is asked again.
 func TestUnclearAnswerIsAskedAgain(t *testing.T) {
 	h := newHarness(t)

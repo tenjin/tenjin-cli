@@ -42,7 +42,7 @@ type field struct {
 	kind              fieldKind
 	required          bool
 	// secret is said by its last four characters, in the question and the
-	// dry run.
+	// dry run; an empty one, which clears it, as it is.
 	secret bool
 	// check refuses a text value the API would not take.
 	check func(flag, value string) error
@@ -133,12 +133,13 @@ func (s *fieldSet) body(cmd *cobra.Command) (tenjinapi.Fields, error) {
 }
 
 // masked is the body with its secrets by their last four characters, and
-// whether it had any.
+// whether it had any. An empty one is shown as it is: it clears the secret,
+// and hides nothing.
 func (s *fieldSet) masked(body tenjinapi.Fields) (tenjinapi.Fields, bool) {
 	out := maps.Clone(body)
 	hid := false
 	for _, fd := range s.fields {
-		if v, ok := body[fd.name].(string); ok && fd.secret {
+		if v, ok := body[fd.name].(string); ok && fd.secret && v != "" {
 			out[fd.name], hid = maskKey(v), true
 		}
 	}
@@ -364,7 +365,11 @@ func (s *fieldSet) describe(body tenjinapi.Fields) string {
 			}
 			parts = append(parts, "--"+fd.flag+" "+strings.Join(numbers, ","))
 		case string:
-			if fd.secret {
+			switch {
+			case fd.secret && t == "":
+				parts = append(parts, fmt.Sprintf("--%s \"\" (which clears it)", fd.flag))
+				continue
+			case fd.secret:
 				t = maskKey(t)
 			}
 			if strings.ContainsAny(t, " \t") || t == "" {
