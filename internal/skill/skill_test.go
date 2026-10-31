@@ -19,37 +19,53 @@ func target(t *testing.T, id string) Target {
 	return found
 }
 
+// install applies an install and returns its first change, the skill's.
 func install(t *testing.T, tg Target, loc Location) Change {
 	t.Helper()
-	change, err := PlanInstall(tg, loc)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := Apply(change); err != nil {
-		t.Fatal(err)
-	}
-	return change
+	return installAll(t, tg, loc)[0]
 }
 
-func remove(t *testing.T, tg Target, loc Location) Change {
+func installAll(t *testing.T, tg Target, loc Location) []Change {
 	t.Helper()
-	change, err := PlanRemove(tg, loc)
+	changes, err := PlanInstall(tg, loc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := Apply(change); err != nil {
+	for _, c := range changes {
+		if err := Apply(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return changes
+}
+
+// remove applies a removal and returns its first change, the skill's.
+func remove(t *testing.T, tg Target, loc Location) Change {
+	t.Helper()
+	return removeAll(t, tg, loc)[0]
+}
+
+func removeAll(t *testing.T, tg Target, loc Location) []Change {
+	t.Helper()
+	changes, err := PlanRemove(tg, loc)
+	if err != nil {
 		t.Fatal(err)
 	}
-	return change
+	for _, c := range changes {
+		if err := Apply(c); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return changes
 }
 
 func state(t *testing.T, tg Target, loc Location) State {
 	t.Helper()
-	s, _, err := Check(tg, loc)
+	s, err := Check(tg, loc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return s
+	return s.State
 }
 
 func TestClaudeSkillInstallAndRemove(t *testing.T) {
@@ -168,8 +184,8 @@ func TestClaudeSkillGlobal(t *testing.T) {
 		t.Error("a global install wrote into the project")
 	}
 
-	if _, err := PlanInstall(target(t, "agents-md"), Location{ProjectDir: project, Home: home, Global: true}); err == nil {
-		t.Error("AGENTS.md has no global location, but one was planned")
+	if _, err := PlanInstall(target(t, "agents"), Location{ProjectDir: project, Home: home, Global: true}); err == nil {
+		t.Error("the agents' target has no global location, but one was planned")
 	}
 	if _, err := PlanInstall(target(t, "claude"), Location{ProjectDir: project, Global: true}); err == nil {
 		t.Error("a global install without a home directory was planned")
@@ -193,30 +209,30 @@ func TestAgentsFileKeepsEverythingElse(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			file := filepath.Join(dir, "AGENTS.md")
-			agents, loc := target(t, "agents-md"), Location{ProjectDir: dir}
+			agents, loc := target(t, "agents"), Location{ProjectDir: dir}
 			if tc.before != "" {
 				if err := os.WriteFile(file, []byte(tc.before), 0o644); err != nil {
 					t.Fatal(err)
 				}
 			}
 
-			c := install(t, agents, loc)
-			if want := map[bool]Action{true: Create, false: Update}[tc.before == ""]; c.Action != want {
-				t.Errorf("install action = %q, want %q", c.Action, want)
+			c := installAll(t, agents, loc)[1]
+			if want := map[bool]Action{true: Create, false: Update}[tc.before == ""]; c.Action != want || c.Path != file {
+				t.Errorf("install = %+v, want %q of %s", c, want, file)
 			}
 			raw, _ := os.ReadFile(file)
-			if !strings.HasPrefix(string(raw), tc.before) || !strings.Contains(string(raw), "tenjin doctor --json") {
+			if !strings.HasPrefix(string(raw), tc.before) || !strings.Contains(string(raw), pointer) {
 				t.Errorf("after install:\n%.200s", raw)
 			}
 			if strings.Count(string(raw), beginMarker) != 1 {
 				t.Error("the section is not there exactly once")
 			}
 			// Installing again replaces the section; it does not add another.
-			if c := install(t, agents, loc); c.Action != Unchanged {
+			if c := installAll(t, agents, loc)[1]; c.Action != Unchanged {
 				t.Errorf("second install = %q", c.Action)
 			}
 
-			remove(t, agents, loc)
+			removeAll(t, agents, loc)
 			raw, err := os.ReadFile(file)
 			switch {
 			case tc.after == "" && !errors.Is(err, os.ErrNotExist):
@@ -235,17 +251,17 @@ func TestAgentsFileSectionInTheMiddleIsReplacedInPlace(t *testing.T) {
 	if err := os.WriteFile(file, []byte(old), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	agents, loc := target(t, "agents-md"), Location{ProjectDir: dir}
+	agents, loc := target(t, "agents"), Location{ProjectDir: dir}
 	if got := state(t, agents, loc); got != Outdated {
 		t.Errorf("state = %q", got)
 	}
-	install(t, agents, loc)
+	installAll(t, agents, loc)
 	raw, _ := os.ReadFile(file)
 	text := string(raw)
-	if strings.Contains(text, "old instructions") || !strings.HasPrefix(text, "# Top\n\n<!-- tenjin-cli:begin") || !strings.HasSuffix(text, "<!-- tenjin-cli:end -->\n\n# Bottom\n") {
-		t.Errorf("after install:\n%.200s\n...\n%s", text, text[max(0, len(text)-80):])
+	if text != "# Top\n\n"+beginMarker+"\n"+pointer+endMarker+"\n\n# Bottom\n" {
+		t.Errorf("after install:\n%s", text)
 	}
-	remove(t, agents, loc)
+	removeAll(t, agents, loc)
 	raw, _ = os.ReadFile(file)
 	if string(raw) != "# Top\n\n# Bottom\n" {
 		t.Errorf("after removal = %q", raw)
@@ -268,14 +284,14 @@ func TestAgentsFileWithBrokenMarkersIsLeftAlone(t *testing.T) {
 			if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			agents, loc := target(t, "agents-md"), Location{ProjectDir: dir}
+			agents, loc := target(t, "agents"), Location{ProjectDir: dir}
 			if _, err := PlanInstall(agents, loc); err == nil || !strings.Contains(err.Error(), "do not fence one section") || !strings.Contains(err.Error(), file) {
 				t.Errorf("install: err = %v", err)
 			}
 			if _, err := PlanRemove(agents, loc); err == nil || !strings.Contains(err.Error(), "Remove the section by hand") {
 				t.Errorf("remove: err = %v", err)
 			}
-			if _, _, err := Check(agents, loc); err == nil {
+			if _, err := Check(agents, loc); err == nil {
 				t.Error("status: no error")
 			}
 			if raw, _ := os.ReadFile(file); string(raw) != content {
@@ -290,9 +306,9 @@ func TestAgentsFileWithoutTheSectionHasNothingToRemove(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# Notes\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	c, err := PlanRemove(target(t, "agents-md"), Location{ProjectDir: dir})
-	if err != nil || c.Action != Absent {
-		t.Errorf("change = %+v, err = %v", c, err)
+	changes, err := PlanRemove(target(t, "agents"), Location{ProjectDir: dir})
+	if err != nil || len(changes) != 2 || changes[0].Action != Absent || changes[1].Action != Absent {
+		t.Errorf("changes = %+v, err = %v", changes, err)
 	}
 }
 
@@ -316,7 +332,7 @@ func TestDetect(t *testing.T) {
 		}
 		return "", os.ErrNotExist
 	}
-	if got := ids(Detect(dir, onPath)); got != "claude,agents-md" {
+	if got := ids(Detect(dir, onPath)); got != "claude,agents" {
 		t.Errorf("both on PATH: %q", got)
 	}
 	// A project already set up for an agent counts, even on a machine
@@ -324,8 +340,15 @@ func TestDetect(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := ids(Detect(dir, none)); got != "agents-md" {
+	if got := ids(Detect(dir, none)); got != "agents" {
 		t.Errorf("AGENTS.md in the project: %q", got)
+	}
+	other := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(other, ".agents", "skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := ids(Detect(other, none)); got != "agents" {
+		t.Errorf(".agents in the project: %q", got)
 	}
 }
 
@@ -372,5 +395,57 @@ func TestTheSkillNeverHasTheAgentWriteAKey(t *testing.T) {
 	}
 	if !strings.Contains(Body(), "Do not run `tenjin setup` or `tenjin project set-keys` yourself") {
 		t.Error("the skill does not tell the agent to leave the keys to the developer")
+	}
+}
+
+// Claude Code and the other agents get the same skill, under the same name,
+// so a tool that reads both folders finds nothing to choose between; the
+// pointer in AGENTS.md names the file the agents' target wrote.
+func TestBothTargetsInstallOneSkill(t *testing.T) {
+	dir := t.TempDir()
+	loc := Location{ProjectDir: dir}
+	claude := install(t, target(t, "claude"), loc)
+	agents := installAll(t, target(t, "agents"), loc)
+	if len(agents) != 2 || agents[0].Path != filepath.Join(dir, ".agents", "skills", Name, "SKILL.md") || agents[1].Path != filepath.Join(dir, "AGENTS.md") {
+		t.Fatalf("agents' changes = %+v", agents)
+	}
+	first, _ := os.ReadFile(claude.Path)
+	second, _ := os.ReadFile(agents[0].Path)
+	if len(first) == 0 || string(first) != string(second) {
+		t.Error("the two skill files differ")
+	}
+	named := regexp.MustCompile(`read (\S+/SKILL\.md)`).FindStringSubmatch(pointer)
+	if named == nil || filepath.Join(dir, filepath.FromSlash(named[1])) != agents[0].Path {
+		t.Errorf("the pointer names %v, not the skill it goes with", named)
+	}
+	if lines := strings.Count(pointer, "\n"); lines != 2 {
+		t.Errorf("the pointer has %d lines", lines)
+	}
+
+	// Removal takes each skill's own folder and the pointer, and leaves the
+	// folders above.
+	removeAll(t, target(t, "agents"), loc)
+	if _, err := os.Stat(filepath.Dir(agents[0].Path)); !errors.Is(err, os.ErrNotExist) {
+		t.Error("the agents' skill folder is still there")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills")); err != nil {
+		t.Errorf(".agents/skills was removed: %v", err)
+	}
+	if _, err := os.Stat(claude.Path); err != nil {
+		t.Errorf("removing the agents' target took Claude Code's skill: %v", err)
+	}
+}
+
+// A project whose .agents folder is a link out of it is not written to.
+func TestInstallRefusesALinkedAgentsFolder(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need privileges on Windows")
+	}
+	project, outside := t.TempDir(), t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(project, ".agents")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PlanInstall(target(t, "agents"), Location{ProjectDir: project}); err == nil || !strings.Contains(err.Error(), "symbolic link") {
+		t.Fatalf("err = %v", err)
 	}
 }

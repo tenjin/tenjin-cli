@@ -5,11 +5,13 @@
 package skill
 
 import (
+	"bytes"
 	_ "embed"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -28,20 +30,28 @@ var body string
 // Body returns the instructions themselves, as Markdown.
 func Body() string { return body }
 
-// Markers fence the instructions inside a file that also holds other
-// content, so they can be replaced and removed without touching the rest.
+// Markers fence the pointer to the instructions inside AGENTS.md, which
+// also holds other content, so it can be replaced and removed without
+// touching the rest.
 const (
 	beginMarker = "<!-- tenjin-cli:begin (written by `tenjin agent install`; edits are overwritten) -->"
 	endMarker   = "<!-- tenjin-cli:end -->"
 )
 
-// Target is a place the instructions can be installed.
+// Target is a set of agents the instructions can be installed for.
 type Target struct {
 	ID   string
 	Name string
 	// Global reports whether the target can be installed for every project
 	// of the user, and not only into one project.
 	Global bool
+	// folder holds the skills folder the target's agents read: .claude or
+	// .agents.
+	folder string
+	// pointer is true when the target also has a marked section in
+	// AGENTS.md that points to its skill, for the tools that read AGENTS.md
+	// and no skills folder.
+	pointer bool
 	// binaries and markers are how the target's agents are detected: a
 	// program on PATH, or a file or folder in the project.
 	binaries []string
@@ -49,13 +59,29 @@ type Target struct {
 }
 
 // Targets lists the supported places, in the order they are offered.
+//
+// Claude Code reads .claude/skills. Codex reads .agents/skills: as of
+// 0.166.0 it looks for one in each folder from the project's root down to
+// the working folder, and in ~/.agents/skills, and reads no .claude folder.
+// Cursor and GitHub Copilot read both folders, and Gemini CLI
+// .agents/skills, by their documentation. An agent loads a skill's name and
+// description up front and its body only when the task calls for it, so the
+// instructions cost little in a session that has nothing to do with Tenjin.
+//
+// No tool reads two copies in full. The two skill files are one file under
+// one name, so a tool that reads both folders lists the same skill twice and
+// has nothing to choose between. AGENTS.md, which Codex reads on every turn
+// and Claude Code reads where a project has no CLAUDE.md (the default as of
+// 2.1.308), holds only a pointer, which sends a tool to the file only when
+// it has not loaded the skill.
 var Targets = []Target{
-	{ID: "claude", Name: "Claude Code", Global: true, binaries: []string{"claude"}, markers: []string{".claude"}},
-	{ID: "agents-md", Name: "AGENTS.md (Codex, Cursor and others)", binaries: []string{"codex", "cursor-agent", "cursor"}, markers: []string{"AGENTS.md"}},
+	{ID: "claude", Name: "Claude Code", Global: true, folder: ".claude", binaries: []string{"claude"}, markers: []string{".claude"}},
+	{ID: "agents", Name: "Codex, Cursor, Copilot, Gemini CLI and others", folder: ".agents", pointer: true,
+		binaries: []string{"codex", "cursor-agent", "cursor", "copilot", "gemini"}, markers: []string{".agents", "AGENTS.md"}},
 }
 
-// FindTarget returns the target with the given ID. An agent that reads
-// AGENTS.md, such as codex or cursor, names that target too.
+// FindTarget returns the target with the given ID. An agent that reads the
+// .agents folder, such as codex or cursor, names that target too.
 func FindTarget(id string) (Target, bool) {
 	for _, t := range Targets {
 		if t.ID == id || contains(t.binaries, id) {
@@ -125,28 +151,34 @@ type Change struct {
 	remove  bool
 }
 
-// path returns the file a target's instructions live in.
-func (t Target) path(loc Location) (string, error) {
+// files returns the files a target's instructions live in: its skill, and
+// the AGENTS.md that holds its pointer, or "" when it has none.
+func (t Target) files(loc Location) (skillPath, pointerPath string, err error) {
 	switch {
 	case loc.Global && !t.Global:
-		return "", fmt.Errorf("%s is installed per project; it has no user-wide location", t.Name)
+		return "", "", fmt.Errorf("%s is installed per project; it has no user-wide location", t.Name)
 	case loc.Global && loc.Home == "":
-		return "", errors.New("the home directory is not known")
+		return "", "", errors.New("the home directory is not known")
 	}
 	base := loc.ProjectDir
 	if loc.Global {
 		base = loc.Home
 	}
-	path := filepath.Join(base, "AGENTS.md")
-	if t.ID == "claude" {
-		path = filepath.Join(base, ".claude", "skills", Name, "SKILL.md")
+	skillPath = filepath.Join(base, t.folder, "skills", Name, "SKILL.md")
+	if t.pointer {
+		pointerPath = filepath.Join(base, "AGENTS.md")
 	}
 	if !loc.Global {
-		if err := noLinks(base, path); err != nil {
-			return "", err
+		for _, path := range []string{skillPath, pointerPath} {
+			if path == "" {
+				continue
+			}
+			if err := noLinks(base, path); err != nil {
+				return "", "", err
+			}
 		}
 	}
-	return path, nil
+	return skillPath, pointerPath, nil
 }
 
 // noLinks refuses a path inside a project that goes through a symbolic
@@ -181,80 +213,103 @@ func skillFile() string {
 		"<!-- Written by `tenjin agent install`. Edits are overwritten; run it again after updating the CLI. -->\n\n" + body
 }
 
-// block is the fenced section added to a shared instructions file.
+// pointer is what the section in AGENTS.md says: where the instructions
+// are, for a tool that has not loaded them as a skill. The path is from the
+// project's root, where AGENTS.md is.
+const pointer = "For Tenjin SDK work (adding the SDK, or an integration that shows no installs or events), use the tenjin-cli skill.\n" +
+	"If it is not among your skills, read .agents/skills/tenjin-cli/SKILL.md and follow it.\n"
+
+// block is the fenced section added to AGENTS.md.
 func block() string {
-	return beginMarker + "\n" + strings.TrimRight(body, "\n") + "\n" + endMarker + "\n"
+	return beginMarker + "\n" + pointer + endMarker + "\n"
 }
 
 // PlanInstall works out what installing for a target would write, without
-// writing it.
-func PlanInstall(t Target, loc Location) (Change, error) {
-	path, err := t.path(loc)
+// writing it: its skill first, then the pointer to it, if it has one.
+func PlanInstall(t Target, loc Location) ([]Change, error) {
+	skillPath, pointerPath, err := t.files(loc)
 	if err != nil {
-		return Change{}, err
+		return nil, err
 	}
-	existing, err := os.ReadFile(path)
-	exists := err == nil
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return Change{}, err
+	existing, exists, err := read(skillPath)
+	if err != nil {
+		return nil, err
 	}
-	change := Change{Target: t.ID, Path: path}
-
-	if t.ID == "claude" {
-		change.content = []byte(skillFile())
-	} else {
-		change.Detail = "the section between the tenjin-cli markers; the rest of the file is kept"
-		content, err := withBlock(string(existing))
-		if err != nil {
-			return Change{}, fmt.Errorf("%s: %w", path, err)
-		}
-		change.content = []byte(content)
+	content := []byte(skillFile())
+	changes := []Change{{Target: t.ID, Path: skillPath, Action: action(exists, existing, content), content: content}}
+	if pointerPath == "" {
+		return changes, nil
 	}
-	switch {
-	case !exists:
-		change.Action = Create
-	case string(existing) == string(change.content):
-		change.Action = Unchanged
-	default:
-		change.Action = Update
+	if existing, exists, err = read(pointerPath); err != nil {
+		return nil, err
 	}
-	return change, nil
+	withPointer, err := withBlock(string(existing))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", pointerPath, err)
+	}
+	return append(changes, Change{
+		Target: t.ID, Path: pointerPath, Action: action(exists, existing, []byte(withPointer)),
+		Detail:  "the section between the tenjin-cli markers, two lines that point to the skill; the rest of the file is kept",
+		content: []byte(withPointer),
+	}), nil
 }
 
-// PlanRemove works out what removing a target's instructions would do.
-func PlanRemove(t Target, loc Location) (Change, error) {
-	path, err := t.path(loc)
-	if err != nil {
-		return Change{}, err
-	}
-	existing, err := os.ReadFile(path)
+// read returns a file's content, and whether it is there.
+func read(path string) ([]byte, bool, error) {
+	content, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return Change{Target: t.ID, Path: path, Action: Absent}, nil
+		return nil, false, nil
 	}
-	if err != nil {
-		return Change{}, err
-	}
-	change := Change{Target: t.ID, Path: path, Action: Remove}
-	if t.ID == "claude" {
-		change.remove = true
-		return change, nil
-	}
-	rest, had, err := withoutBlock(string(existing))
-	if err != nil {
-		return Change{}, fmt.Errorf("%s: %w", path, err)
-	}
+	return content, err == nil, err
+}
+
+func action(exists bool, existing, content []byte) Action {
 	switch {
-	case !had:
-		change.Action = Absent
+	case !exists:
+		return Create
+	case bytes.Equal(existing, content):
+		return Unchanged
+	}
+	return Update
+}
+
+// PlanRemove works out what removing a target's instructions would do: its
+// skill first, then the pointer to it, if it has one.
+func PlanRemove(t Target, loc Location) ([]Change, error) {
+	skillPath, pointerPath, err := t.files(loc)
+	if err != nil {
+		return nil, err
+	}
+	_, exists, err := read(skillPath)
+	if err != nil {
+		return nil, err
+	}
+	changes := []Change{{Target: t.ID, Path: skillPath, Action: Absent}}
+	if exists {
+		changes[0].Action, changes[0].remove = Remove, true
+	}
+	if pointerPath == "" {
+		return changes, nil
+	}
+	existing, exists, err := read(pointerPath)
+	if err != nil {
+		return nil, err
+	}
+	change := Change{Target: t.ID, Path: pointerPath, Action: Absent}
+	rest, had, err := withoutBlock(string(existing))
+	switch {
+	case err != nil:
+		return nil, fmt.Errorf("%s: %w", pointerPath, err)
+	case !exists || !had:
 	case strings.TrimSpace(rest) == "":
 		// The file held nothing but the section.
-		change.remove = true
+		change.Action, change.remove = Remove, true
 	default:
 		change.Action = Update
 		change.Detail = "the section between the tenjin-cli markers is removed; the rest of the file is kept"
 		change.content = []byte(rest)
 	}
-	return change, nil
+	return append(changes, change), nil
 }
 
 // State is whether a target has the instructions, and whether they are the
@@ -267,23 +322,68 @@ const (
 	NotInstalled State = "not_installed"
 )
 
-// Check reports a target's state at a location, and the file concerned.
-func Check(t Target, loc Location) (State, string, error) {
+// Status is a target's state at a location.
+type Status struct {
+	State State
+	// Path is the target's skill file.
+	Path string
+	// Detail says what is out of date, where the state alone does not.
+	Detail string
+}
+
+// Check reports a target's state at a location.
+func Check(t Target, loc Location) (Status, error) {
 	removal, err := PlanRemove(t, loc)
 	if err != nil {
-		return "", "", err
-	}
-	if removal.Action == Absent {
-		return NotInstalled, removal.Path, nil
+		return Status{}, err
 	}
 	install, err := PlanInstall(t, loc)
 	if err != nil {
-		return "", "", err
+		return Status{}, err
 	}
-	if install.Action == Unchanged {
-		return Current, install.Path, nil
+	status := Status{State: NotInstalled, Path: install[0].Path}
+	if !slices.ContainsFunc(removal, func(c Change) bool { return c.Action != Absent }) {
+		return status, nil
 	}
-	return Outdated, install.Path, nil
+	status.State = Current
+	var details []string
+	for i, c := range install {
+		if c.Action == Unchanged {
+			continue
+		}
+		status.State = Outdated
+		if i == 0 {
+			if c.Action == Create {
+				details = append(details, c.Path+" is missing")
+			}
+			continue
+		}
+		switch text, ok := section(c.Path); {
+		case !ok:
+			details = append(details, c.Path+" has no pointer to the skill")
+		case strings.HasPrefix(text, "# "):
+			// Versions before the pointer put the whole instructions
+			// there, which start with their title.
+			details = append(details, c.Path+" holds the whole instructions, as earlier versions wrote them; they are in the skill now, and AGENTS.md has two lines that point to it")
+		}
+	}
+	status.Detail = strings.Join(details, "; ")
+	return status, nil
+}
+
+// section returns the text between the markers in a file, and whether the
+// file has them.
+func section(path string) (string, bool) {
+	content, _, err := read(path)
+	if err != nil {
+		return "", false
+	}
+	begin, end, ok, err := findBlock(string(content))
+	if err != nil || !ok {
+		return "", false
+	}
+	text := strings.TrimSuffix(string(content[begin:end]), endMarker)
+	return strings.TrimLeft(strings.TrimPrefix(text, beginMarker), "\r\n"), true
 }
 
 // Apply carries out a planned change.
@@ -298,8 +398,8 @@ func Apply(c Change) error {
 		// The skill's own folder goes with it when nothing else is in it
 		// (os.Remove refuses a folder that is not empty), and when it is a
 		// folder, not a link someone made to one. The folders above it, such
-		// as .claude, may have been there before the install, empty or not,
-		// or be a link to a dotfiles folder, so they stay.
+		// as .claude or .agents, may have been there before the install,
+		// empty or not, or be a link to a dotfiles folder, so they stay.
 		if filepath.Base(c.Path) == "SKILL.md" {
 			dir := filepath.Dir(c.Path)
 			if info, err := os.Lstat(dir); err == nil && info.IsDir() {

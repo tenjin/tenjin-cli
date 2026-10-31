@@ -233,7 +233,7 @@ tenjin agent status
 tenjin agent uninstall
 ```
 
-For Claude Code, this writes a skill to `.claude/skills/tenjin-cli/` in the project (`--global` for your home folder); `uninstall` removes that file and its `tenjin-cli` folder, and leaves the folders above it, such as `.claude`, as they are. For Codex, Cursor and other agents that read `AGENTS.md`, it adds a marked section to that file, which `uninstall` takes out again. `tenjin agent skill` prints the instructions for anything else. They describe the commands of the installed version, so run `tenjin agent install` again after updating.
+For Claude Code, this writes a skill to `.claude/skills/tenjin-cli/` in the project (`--global` for your home folder). For Codex, Cursor, Copilot, Gemini CLI and other agents, it writes the same skill to `.agents/skills/tenjin-cli/`, and a marked section of two lines to `AGENTS.md` that points to it, for tools that read only that file. An agent reads a skill when a task calls for it, so the instructions do not weigh on sessions that have nothing to do with Tenjin. `uninstall` removes those files, each skill's `tenjin-cli` folder and the section, and leaves the folders above, such as `.claude` and `.agents`, as they are. An `AGENTS.md` that holds the whole instructions, as earlier versions wrote them, gets the two lines in their place on the next `install`. `tenjin agent skill` prints the instructions for anything else. They describe the commands of the installed version, so run `tenjin agent install` again after updating.
 
 ## Scripts, CI and coding agents
 

@@ -78,7 +78,8 @@ func (f *agentFlags) targets(env *environment, loc skill.Location) ([]skill.Targ
 }
 
 // named resolves --agent, by ID or by the agent's program name. Names for
-// the same target, such as codex and cursor for AGENTS.md, give it once.
+// the same target, such as codex and cursor for the agents' skill, give it
+// once.
 func (f *agentFlags) named() ([]skill.Target, error) {
 	var targets []skill.Target
 	seen := map[string]bool{}
@@ -128,8 +129,11 @@ their output means.
 
 For Claude Code they are installed as a skill, in the project's
 .claude/skills folder, or in your home directory with --global. For Codex,
-Cursor and other agents that read AGENTS.md they are a marked section of
-that file; the rest of the file is left as it is.
+Cursor, Copilot, Gemini CLI and other agents they are the same skill in the
+project's .agents/skills folder. An agent reads a skill only when the task
+calls for it. AGENTS.md, which some tools read on every turn, gets a marked
+section of two lines that points to the skill; the rest of the file is left
+as it is.
 
 The command lists every file it would write and asks before writing. Run it
 again after updating the CLI. 'tenjin agent uninstall' removes what it wrote.`,
@@ -175,7 +179,7 @@ func newAgentUninstallCmd(opts *options, env *environment) *cobra.Command {
 
 // runAgentChange plans, shows, confirms and applies an install or a removal.
 func runAgentChange(cmd *cobra.Command, opts *options, env *environment, flags *agentFlags, args []string, yes, dryRun bool,
-	plan func(skill.Target, skill.Location) (skill.Change, error), verb string) error {
+	plan func(skill.Target, skill.Location) ([]skill.Change, error), verb string) error {
 	format, err := opts.format(cmd)
 	if err != nil {
 		return err
@@ -191,13 +195,15 @@ func runAgentChange(cmd *cobra.Command, opts *options, env *environment, flags *
 	result := agentResult{Changes: []skill.Change{}}
 	pending := 0
 	for _, t := range targets {
-		change, err := plan(t, loc)
+		changes, err := plan(t, loc)
 		if err != nil {
 			return clierr.Wrap(clierr.Internal, err, "%s: %v", t.Name, err)
 		}
-		result.Changes = append(result.Changes, change)
-		if change.Action != skill.Unchanged && change.Action != skill.Absent {
-			pending++
+		for _, change := range changes {
+			result.Changes = append(result.Changes, change)
+			if change.Action != skill.Unchanged && change.Action != skill.Absent {
+				pending++
+			}
 		}
 	}
 
@@ -261,6 +267,8 @@ type agentStatus struct {
 	Name  string      `json:"name"`
 	State skill.State `json:"state"`
 	Path  string      `json:"path"`
+	// Detail says what is out of date, where the state alone does not.
+	Detail string `json:"detail,omitempty"`
 }
 
 func newAgentStatusCmd(opts *options, env *environment) *cobra.Command {
@@ -287,11 +295,11 @@ func newAgentStatusCmd(opts *options, env *environment) *cobra.Command {
 				if (len(named) > 0 && !slices.ContainsFunc(named, func(n skill.Target) bool { return n.ID == t.ID })) || (flags.global && !t.Global) {
 					continue
 				}
-				state, path, err := skill.Check(t, loc)
+				status, err := skill.Check(t, loc)
 				if err != nil {
 					return clierr.Wrap(clierr.Internal, err, "%s: %v", t.Name, err)
 				}
-				rows = append(rows, agentStatus{Agent: t.ID, Name: t.Name, State: state, Path: path})
+				rows = append(rows, agentStatus{Agent: t.ID, Name: t.Name, State: status.State, Path: status.Path, Detail: status.Detail})
 			}
 			if format == render.JSON {
 				return render.WriteJSON(cmd.OutOrStdout(), rows)
@@ -305,7 +313,15 @@ func newAgentStatusCmd(opts *options, env *environment) *cobra.Command {
 			for _, r := range rows {
 				table = append(table, []string{r.Name, words[r.State], r.Path})
 			}
-			return render.WriteTable(cmd.OutOrStdout(), render.NewStyler(cmd.OutOrStdout()), []string{"agent", "instructions", "file"}, table)
+			if err := render.WriteTable(cmd.OutOrStdout(), render.NewStyler(cmd.OutOrStdout()), []string{"agent", "instructions", "file"}, table); err != nil {
+				return err
+			}
+			for _, r := range rows {
+				if r.Detail != "" {
+					_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\n%s: %s.\n", r.Name, r.Detail)
+				}
+			}
+			return nil
 		},
 	}
 	flags.register(cmd)
