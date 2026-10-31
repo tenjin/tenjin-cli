@@ -597,4 +597,25 @@ export function won() {
 		"app/src/main/java/com/example/sample/Login.kt": "package com.example.sample\n\nimport com.appsflyer.AppsFlyerLib\nimport com.tenjin.android.TenjinSDK\n\nfun login(user: User) {\n    AppsFlyerLib.getInstance().setCustomerUserId(user.id)\n    Other.instance.setCustomerUserId(user.id)\n}\n",
 	}))
 	wantLines(t, "Android user IDs on other SDKs", ids)
+
+	// Nor is a variable named instance that the file sets from another SDK.
+	_, ids = sentToTenjin(t, testproject.AndroidNative().With(testproject.Files{
+		"app/src/main/java/com/example/sample/Login.kt": "package com.example.sample\n\nimport com.appsflyer.AppsFlyerLib\nimport com.tenjin.android.TenjinSDK\n\nfun login(user: User) {\n    val instance = AppsFlyerLib.getInstance()\n    instance.setCustomerUserId(user.id)\n}\n",
+	}))
+	wantLines(t, "Android user IDs on another SDK's instance", ids)
+	got, _ = sentToTenjin(t, testproject.Flutter().With(testproject.Files{
+		"lib/game.dart": "import 'package:tenjin_plugin/tenjin_sdk.dart';\n\nvoid levelUp() {\n  final instance = Other.instance;\n  instance.sendEvent('level_up');\n}\n",
+	}))
+	wantLines(t, "Flutter events on another SDK's instance", got)
+	got, _ = sentToTenjin(t, unity.With(testproject.Files{
+		"Assets/Scripts/Store.cs": "using AppsFlyerSDK;\n\npublic class Store {\n    void Start() {\n        Tenjin.getInstance(Keys.Tenjin).Connect();\n    }\n\n    void Bought() {\n        var instance = AppsFlyer.instance;\n        instance.SendEvent(\"purchase\");\n    }\n}\n",
+	}))
+	wantLines(t, "Unity events on another SDK's instance", got)
+
+	// An instance the file does not set may be Tenjin's, set in another file.
+	got, ids = sentToTenjin(t, unity.With(testproject.Files{
+		"Assets/Scripts/Level.cs": "public partial class TenjinManager {\n    void Won(User user) {\n        instance.SendEvent(\"level_up\");\n        instance.SetCustomerUserId(user.id);\n    }\n}\n",
+	}))
+	wantLines(t, "Unity events on another file's instance", got, "Tenjin name=level_up @Assets/Scripts/Level.cs:3 x1")
+	wantLines(t, "Unity user IDs on another file's instance", ids, "Tenjin user.id @Assets/Scripts/Level.cs:4")
 }

@@ -232,3 +232,32 @@ func TestNoFeatureIsSentWithoutTheSDK(t *testing.T) {
 		t.Fatalf("a call passed without the SDK: %+v", f)
 	}
 }
+
+// Another SDK's setCustomerUserId, in a file that mentions Tenjin, passes
+// nothing to Tenjin: called on its getInstance(), or on a variable named
+// instance that the file sets from it.
+func TestAnotherSDKsUserIDIsNotTenjins(t *testing.T) {
+	const login = "app/src/main/java/com/example/sample/Login.kt"
+	cases := []struct {
+		name, body string
+		want       verify.Severity
+	}{
+		{"on another SDK's getInstance()", "    AppsFlyerLib.getInstance().setCustomerUserId(user.id)\n", verify.Warning},
+		{"on another SDK's instance", "    val instance = AppsFlyerLib.getInstance()\n    instance.setCustomerUserId(user.id)\n", verify.Warning},
+		{"on Tenjin's getInstance()", "    TenjinSDK.getInstance(context, \"\").setCustomerUserId(user.id)\n", verify.Pass},
+		{"on Tenjin's instance", "    val instance = TenjinSDK.getInstance(context, \"\")\n    instance.setCustomerUserId(user.id)\n", verify.Pass},
+	}
+	for _, c := range cases {
+		files := testproject.AndroidNative().With(testproject.Files{
+			login: "package com.example.sample\n\nimport android.content.Context\nimport com.appsflyer.AppsFlyerLib\nimport com.tenjin.android.TenjinSDK\n\nfun login(context: Context, user: User) {\n" + c.body + "}\n",
+		})
+		for _, opts := range []verify.Options{
+			{Features: []string{project.FeatureUserID}},
+			{Features: []string{project.FeatureUserID}, UserID: "user.id"},
+		} {
+			if f := featureFinding(t, run(t, files, opts), "feature.user_id"); f == nil || f.Severity != c.want {
+				t.Errorf("%s, user ID %q: %+v", c.name, opts.UserID, f)
+			}
+		}
+	}
+}

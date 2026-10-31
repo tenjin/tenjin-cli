@@ -323,6 +323,20 @@ func TestEventsNamedAreAddedWhereOthersAreSentAlready(t *testing.T) {
 	lacks(t, stdout, "Custom events are sent to Tenjin, each one chosen", "The customer user ID chosen is passed to Tenjin")
 }
 
+// A user ID passed to another SDK, on a variable named instance in a file
+// that mentions Tenjin, is not passed to Tenjin: doctor says so, and setup
+// still has it to add.
+func TestAUserIDOnAnotherSDKsInstanceIsNotTenjins(t *testing.T) {
+	h, dir := analyticsSetup(t, sendsTenjin("account.uid").With(testproject.Files{
+		"app/src/main/java/com/example/sample/Login.kt": "package com.example.sample\n\nimport com.appsflyer.AppsFlyerLib\nimport com.tenjin.android.TenjinSDK\n\nfun login(user: User) {\n    val instance = AppsFlyerLib.getInstance()\n    instance.setCustomerUserId(user.id)\n}\n",
+	}))
+	_, stdout, _ := h.run("doctor", dir, "--offline", "--agent", "none", "--user-id", "user.id")
+	lacks(t, stdout, "The customer user ID passed to Tenjin is not the one chosen", `Passed to Tenjin: "account.uid" (`)
+	if strings.Contains(stdout, "The customer user ID chosen is passed to Tenjin") {
+		t.Errorf("another SDK's user ID passed for Tenjin's:\n%s", stdout)
+	}
+}
+
 // Whether an event named is sent is looked up among every one the app
 // sends, not only as many as are suggested.
 func TestAnEventNamedIsFoundPastTheSuggestions(t *testing.T) {

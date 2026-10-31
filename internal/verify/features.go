@@ -128,7 +128,12 @@ func (r *runner) tenjinCode() *tenjinCode {
 			continue
 		}
 		text := blankComments(project.Text(raw))
-		receivers := []string{`TenjinSDK\s*\.\s*instance`, "TenjinSDK", "Tenjin", "instance", "tenjin", "tenjinSDK", `getInstance\([^()]*(?:\([^()]*\)[^()]*)*\)`}
+		// Another SDK's getInstance() is not Tenjin's, nor is Other.instance,
+		// nor an instance the file sets from something else.
+		receivers := []string{`TenjinSDK\s*\.\s*instance`, "TenjinSDK", "Tenjin", "tenjin", "tenjinSDK", `(?:TenjinSDK|Tenjin)\s*\.\s*getInstance\w*\([^()]*(?:\([^()]*\)[^()]*)*\)`}
+		for _, name := range project.TenjinBareNames(text) {
+			receivers = append(receivers, `(?:(?m:^)|[^\w$.\n])`+regexp.QuoteMeta(name))
+		}
 		for _, name := range helperAliases(text) {
 			receivers = append(receivers, regexp.QuoteMeta(name))
 		}

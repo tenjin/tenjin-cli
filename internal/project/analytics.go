@@ -165,6 +165,11 @@ type analyticsSDK struct {
 	// on; objcReceivers the same in an Objective-C message.
 	receivers     []receiver
 	objcReceivers []string
+	// bare are names that stand for the SDK as the whole receiver, though
+	// the file need not set them, unless the file binds them to something
+	// else: `val instance = AppsFlyerLib.getInstance()` makes instance
+	// AppsFlyer's there.
+	bare []string
 	// types and factories make the receivers a file names itself: a
 	// variable of one of the types, or set from one of the factories.
 	types     []string
@@ -208,8 +213,9 @@ type analyticsSDK struct {
 // Tenjin, in every wrapper, read by SentToTenjin and never offered as
 // another SDK's. Its receivers include the usual names for it that doctor's
 // checks take in a file that mentions Tenjin, so that a call on one set in
-// another file is found: tenjin, tenjinSDK, and instance on its own. Not a
-// bare getInstance(), which AppsFlyerLib.getInstance() would match.
+// another file is found: tenjin, tenjinSDK, and instance on its own where
+// the file does not set it from something else. Not a bare getInstance(),
+// which AppsFlyerLib.getInstance() would match.
 var tenjinSDK = analyticsSDK{
 	name:  "Tenjin",
 	own:   true,
@@ -217,8 +223,9 @@ var tenjinSDK = analyticsSDK{
 	uses:  regexp.MustCompile(`[Tt]enjin`),
 	receivers: anywhere(`TenjinSDK\s*\.\s*getInstance\w*`+getInstanceArgs, `TenjinSDK\s*\.\s*instance`, `TenjinSDK`,
 		`Tenjin\s*\.\s*getInstance\w*`+getInstanceArgs, `Tenjin`,
-		`tenjin`, `tenjinSDK`, `^instance`),
+		`tenjin`, `tenjinSDK`),
 	objcReceivers:    []string{`TenjinSDK`, `\[\s*TenjinSDK\s+sharedInstance\s*\]`},
+	bare:             []string{"instance"},
 	types:            []string{"TenjinSDK", "BaseTenjin"},
 	factories:        []string{`TenjinSDK\s*\.\s*getInstance`, `TenjinSDK\s*\.\s*instance\b`, `Tenjin\s*\.\s*getInstance`},
 	jsModules:        `[\w@./-]*tenjin[\w./-]*`,
@@ -370,7 +377,10 @@ type sdkMatchers struct {
 	constructors            []*regexp.Regexp
 	objcConstructors        []*regexp.Regexp
 	// aliases find the names a file gives the SDK, in their first group.
-	aliases   []*regexp.Regexp
+	aliases []*regexp.Regexp
+	// bindings find where a file binds one of the bare names, in either
+	// group: set, declared with a type, or taken as a parameter.
+	bindings  *regexp.Regexp
 	jsAliases []*regexp.Regexp
 	jsNamed   *regexp.Regexp
 	accessor  *regexp.Regexp
@@ -431,6 +441,14 @@ func (sdk *analyticsSDK) compile() {
 		m.aliases = append(m.aliases,
 			regexp.MustCompile(`\b(\w+)\s*(?::\s*[\w.<>?!]+\s*)?=\s*(?:await\s+)?(?:new\s+)?(?:`+factories+`)`),
 			regexp.MustCompile(`\b(\w+)\s+by\s+lazy\s*\{\s*(?:`+factories+`)`))
+	}
+	if len(sdk.bare) > 0 {
+		quoted := make([]string, len(sdk.bare))
+		for i, n := range sdk.bare {
+			quoted[i] = regexp.QuoteMeta(n)
+		}
+		names := `(` + strings.Join(quoted, "|") + `)\b`
+		m.bindings = regexp.MustCompile(`\b` + names + `\s*(?:=[^=]|:\s*[\w.]|by\s+lazy\b)|\b[A-Z][\w.]*(?:<[^<>;]*>)?[?!]?[ \t]+` + names + `\s*[=;,)]`)
 	}
 	if sdk.jsModules != "" {
 		module := `\s*['"](?:` + sdk.jsModules + `)['"]`
@@ -674,11 +692,12 @@ type analyticsScan struct {
 // without its strings, and their arguments read from the code with them.
 func (s *analyticsScan) scan(f *sourceFile, sdk *analyticsSDK) {
 	aliases, functions := aliasesIn(f, sdk)
+	bare := bareNames(sdk, f.code)
 	m := sdk.m
 	static := sdk.static(f.ext)
 	onSDK := func(dot int) bool {
 		_, recv := receiverAt(f.code, dot)
-		return isReceiver(sdk, static, aliases, recv)
+		return isReceiver(sdk, static, aliases, recv) || bare[recv]
 	}
 	if m.events != nil {
 		for _, loc := range m.events.FindAllStringSubmatchIndex(f.code, -1) {
@@ -714,7 +733,7 @@ func (s *analyticsScan) scan(f *sourceFile, sdk *analyticsSDK) {
 			}
 			for _, loc := range re.FindAllStringSubmatchIndex(f.code, -1) {
 				recv := f.code[loc[2]:loc[3]]
-				if (m.objcReceiver != nil && m.objcReceiver.MatchString(recv)) || aliases[recv] {
+				if (m.objcReceiver != nil && m.objcReceiver.MatchString(recv)) || aliases[recv] || bare[recv] {
 					s.call(f, sdk, loc[4], loc[5], loc[1], analyticsKind(kind), true)
 				}
 			}
@@ -852,6 +871,49 @@ func aliasesIn(f *sourceFile, sdk *analyticsSDK) (map[string]bool, map[analytics
 		}
 	}
 	return aliases, functions
+}
+
+// bareNames returns which of the SDK's bare names stand for it in the code:
+// each the code does not bind, or binds only where one of the SDK's aliases
+// is, as `BaseTenjin instance = Tenjin.getInstance(key)` is.
+func bareNames(sdk *analyticsSDK, code string) map[string]bool {
+	if len(sdk.bare) == 0 {
+		return nil
+	}
+	names := map[string]bool{}
+	for _, n := range sdk.bare {
+		names[n] = true
+	}
+	bindings := sdk.m.bindings.FindAllStringSubmatchIndex(code, -1)
+	if len(bindings) == 0 {
+		return names
+	}
+	own := map[int]bool{}
+	for _, re := range sdk.m.aliases {
+		for _, loc := range re.FindAllStringSubmatchIndex(code, -1) {
+			own[loc[2]] = true
+		}
+	}
+	for _, loc := range bindings {
+		for g := 2; g+1 < len(loc); g += 2 {
+			if loc[g] >= 0 && !own[loc[g]] {
+				delete(names, code[loc[g]:loc[g+1]])
+			}
+		}
+	}
+	return names
+}
+
+// TenjinBareNames returns the names that stand for Tenjin's SDK as the whole
+// receiver of a call in code that mentions it, though the code need not set
+// them: those it does not bind to anything else.
+func TenjinBareNames(code string) []string {
+	names := make([]string, 0, len(tenjinSDK.bare))
+	for n := range bareNames(&tenjinSDK, code) {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // isReceiver reports whether recv, what a call is made on, is the SDK: one
