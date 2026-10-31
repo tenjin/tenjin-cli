@@ -29,7 +29,7 @@ The commands for an account's data (campaigns, channels, callbacks, reports and 
 
 The tests need no Tenjin account and make no network requests: Tenjin's services are faked (`internal/cli/fake_test.go`), and devices are faked through `adb`, `simctl` and `devicectl` stand-ins. Project fixtures come from `internal/testproject`: start from a correct integration and change one thing.
 
-`CLAUDE.md` describes how the code is laid out and the rules it follows. The ones that most often matter in a review:
+`AGENTS.md` describes how the code is laid out and the rules it follows. The ones that most often matter in a review:
 
 - Every command supports `--json`, writes only its result to stdout, and never prompts when stdin is not a terminal.
 - A check that cannot tell must not report a pass.
