@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/tenjin/tenjin-cli/internal/agent"
+	"github.com/tenjin/tenjin-cli/internal/buildinfo"
 	"github.com/tenjin/tenjin-cli/internal/clierr"
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
 	"github.com/tenjin/tenjin-cli/internal/keyfill"
@@ -181,6 +182,7 @@ otherwise. With --strict, warnings count too.`,
 				vopts.Device = input
 			}
 			report := verify.Run(cmd.Context(), p, vopts)
+			report.Findings = append(report.Findings, skillFindings(env.otherSkills(p.Root, buildinfo.Get().Version), p.Root, buildinfo.Get().Version)...)
 			env.noteReport(report)
 
 			if format == render.JSON {

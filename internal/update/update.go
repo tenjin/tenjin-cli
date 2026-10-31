@@ -67,6 +67,27 @@ type state struct {
 	// answer from the other one is checked again.
 	Source     string    `json:"source,omitempty"`
 	NotifiedAt time.Time `json:"notified_at,omitempty"`
+	// Ran is the release that last ran, for Upgraded.
+	Ran string `json:"ran,omitempty"`
+}
+
+// Upgraded reports whether this is the first run of the current release
+// since another one ran, and records that it ran, so a caller says what an
+// update changed once. The first release to run has nothing to compare
+// with, and a development build is no release. Call it after Check has
+// returned: both keep their answers in the same file.
+func (c *Checker) Upgraded() bool {
+	if _, ok := parse(c.Current); !ok {
+		return false
+	}
+	s := c.load()
+	if s.Ran == c.Current {
+		return false
+	}
+	previous := s.Ran
+	s.Ran = c.Current
+	c.save(s)
+	return previous != ""
 }
 
 // Check returns a newer release, or nil when there is none, it was already
@@ -237,6 +258,15 @@ func parse(v string) ([3]int, bool) {
 		out[i] = n
 	}
 	return out, true
+}
+
+// Newer reports whether release version a is newer than release version b.
+// Anything that is not a release, such as a development build, is neither
+// newer nor older than another version.
+func Newer(a, b string) bool {
+	x, ok := parse(a)
+	y, alsoOK := parse(b)
+	return ok && alsoOK && newer(x, y)
 }
 
 func newer(a, b [3]int) bool {

@@ -6,8 +6,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/tenjin/tenjin-cli/internal/buildinfo"
 )
 
 func target(t *testing.T, id string) Target {
@@ -447,5 +450,47 @@ func TestInstallRefusesALinkedAgentsFolder(t *testing.T) {
 	}
 	if _, err := PlanInstall(target(t, "agents"), Location{ProjectDir: project}); err == nil || !strings.Contains(err.Error(), "symbolic link") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// A skill file names the version that wrote it, and the copies another
+// version wrote are found in the project and in the home folder.
+func TestOtherVersionsFindsTheCopiesAnotherVersionWrote(t *testing.T) {
+	project, home := t.TempDir(), t.TempDir()
+	current := buildinfo.Get().Version
+	written := install(t, target(t, "claude"), Location{ProjectDir: project})
+	installAll(t, target(t, "agents"), Location{ProjectDir: project})
+	raw, _ := os.ReadFile(written.Path)
+	if got := recorded(raw); got != current {
+		t.Fatalf("the skill says it was written by %q, not %q", got, current)
+	}
+	if copies := OtherVersions(project, home, current); len(copies) != 0 {
+		t.Errorf("copies this version wrote were reported: %+v", copies)
+	}
+
+	// The same files, read by a later version; and copies written before
+	// versions were recorded, at home and in AGENTS.md.
+	if copies := OtherVersions(project, home, "9.9.9"); len(copies) != 2 || copies[0].Version != current || copies[0].Global {
+		t.Errorf("read by 9.9.9: %+v", copies)
+	}
+	unversioned := strings.Replace(skillFile(), " (Tenjin CLI "+current+")", "", 1)
+	if recorded([]byte(unversioned)) != "" || !writtenBy.MatchString(unversioned) {
+		t.Fatal("the line without a version is not read as one")
+	}
+	global := filepath.Join(home, ".claude", "skills", Name, "SKILL.md")
+	if err := os.MkdirAll(filepath.Dir(global), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(global, []byte(unversioned), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	full := "# Notes\n\n" + beginMarker + "\n" + strings.TrimRight(Body(), "\n") + "\n" + endMarker + "\n"
+	if err := os.WriteFile(filepath.Join(project, "AGENTS.md"), []byte(full), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	copies := OtherVersions(project, home, current)
+	want := []Copy{{Path: filepath.Join(project, "AGENTS.md")}, {Path: global, Global: true}}
+	if !slices.Equal(copies, want) {
+		t.Errorf("copies = %+v, want %+v", copies, want)
 	}
 }

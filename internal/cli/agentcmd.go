@@ -52,11 +52,7 @@ func (f *agentFlags) location(env *environment, args []string) (skill.Location, 
 	if err != nil {
 		return skill.Location{}, err
 	}
-	home := env.getenv("HOME")
-	if home == "" {
-		home = env.getenv("USERPROFILE")
-	}
-	return skill.Location{ProjectDir: abs, Home: home, Global: f.global}, nil
+	return skill.Location{ProjectDir: abs, Home: env.home(), Global: f.global}, nil
 }
 
 // targets resolves --agent, or detects the agents present when it is absent.

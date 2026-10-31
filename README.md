@@ -233,7 +233,7 @@ tenjin agent status
 tenjin agent uninstall
 ```
 
-For Claude Code, this writes a skill to `.claude/skills/tenjin-cli/` in the project (`--global` for your home folder). For Codex, Cursor, Copilot, Gemini CLI and other agents, it writes the same skill to `.agents/skills/tenjin-cli/`, and a marked section of two lines to `AGENTS.md` that points to it, for tools that read only that file. An agent reads a skill when a task calls for it, so the instructions do not weigh on sessions that have nothing to do with Tenjin. `uninstall` removes those files, each skill's `tenjin-cli` folder and the section, and leaves the folders above, such as `.claude` and `.agents`, as they are. An `AGENTS.md` that holds the whole instructions, as earlier versions wrote them, gets the two lines in their place on the next `install`. `tenjin agent skill` prints the instructions for anything else. They describe the commands of the installed version, so run `tenjin agent install` again after updating.
+For Claude Code, this writes a skill to `.claude/skills/tenjin-cli/` in the project (`--global` for your home folder). For Codex, Cursor, Copilot, Gemini CLI and other agents, it writes the same skill to `.agents/skills/tenjin-cli/`, and a marked section of two lines to `AGENTS.md` that points to it, for tools that read only that file. An agent reads a skill when a task calls for it, so the instructions do not weigh on sessions that have nothing to do with Tenjin. `uninstall` removes those files, each skill's `tenjin-cli` folder and the section, and leaves the folders above, such as `.claude` and `.agents`, as they are. An `AGENTS.md` that holds the whole instructions, as earlier versions wrote them, gets the two lines in their place on the next `install`. `tenjin agent skill` prints the instructions for anything else. They describe the commands of the installed version, so run `tenjin agent install` again after updating. Each skill file names the version that wrote it, and a copy another version wrote, in the project or your home folder, is named by `tenjin doctor` (`agent.skill.version`, for information), on the first run at a terminal after an update, and, to an agent, in the error for a command or flag this version does not have.
 
 ## Scripts, CI and coding agents
 
@@ -290,7 +290,7 @@ The CLI keeps a few small files in a `tenjin` folder in your user configuration 
 | Linux | `$XDG_CONFIG_HOME/tenjin`, or `~/.config/tenjin` |
 | Windows | `%AppData%\tenjin` |
 
-It holds the time of the last update check and the newest SDK releases it found, whether you turned the usage statistics off and when one last failed to send (no identifier), and a lock file that keeps two `tenjin` commands from renewing the sign-in at once. Your session is kept in the system keychain (macOS Keychain, Windows Credential Manager, the Secret Service on Linux), or in this folder, readable only by you, where there is no keychain.
+It holds the time of the last update check, the version that last ran, and the newest SDK releases it found, whether you turned the usage statistics off and when one last failed to send (no identifier), and a lock file that keeps two `tenjin` commands from renewing the sign-in at once. Your session is kept in the system keychain (macOS Keychain, Windows Credential Manager, the Secret Service on Linux), or in this folder, readable only by you, where there is no keychain.
 
 ## Privacy and security
 

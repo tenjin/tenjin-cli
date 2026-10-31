@@ -11,8 +11,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/tenjin/tenjin-cli/internal/buildinfo"
 )
 
 // Name is the skill's name, and the name of the folder it is installed in.
@@ -207,10 +210,69 @@ func noLinks(base, path string) error {
 	return nil
 }
 
-// skillFile is the whole file a skill-aware agent reads.
+// skillFile is the whole file a skill-aware agent reads. It says which
+// version of the CLI wrote it, since it describes that version's commands.
 func skillFile() string {
 	return "---\nname: " + Name + "\ndescription: " + description + "\n---\n\n" +
-		"<!-- Written by `tenjin agent install`. Edits are overwritten; run it again after updating the CLI. -->\n\n" + body
+		"<!-- Written by `tenjin agent install` (Tenjin CLI " + buildinfo.Get().Version + "). Edits are overwritten; run it again after updating the CLI. -->\n\n" + body
+}
+
+// writtenBy finds the version in the line skillFile writes. Copies written
+// before it named one have the line without it.
+var writtenBy = regexp.MustCompile("(?m)^<!-- Written by `tenjin agent install`(?: \\(Tenjin CLI ([^\\s)]+)\\))?\\.")
+
+// Copy is a copy of the instructions installed where an agent reads them.
+type Copy struct {
+	Path string
+	// Global is true for a copy in the home folder, which serves every
+	// project.
+	Global bool
+	// Version is the version of the CLI that wrote it, or "" when it does
+	// not say: one written before versions were recorded.
+	Version string
+}
+
+// OtherVersions returns the copies of the instructions, in a project and in
+// the home folder (home may be ""), that a version of the CLI other than
+// current wrote: their commands and flags may not be this version's. An
+// AGENTS.md that holds the whole instructions, as versions before the
+// pointer wrote it, is one of them.
+func OtherVersions(projectDir, home, current string) []Copy {
+	var copies []Copy
+	look := func(base string, global bool) {
+		for _, t := range Targets {
+			if global && !t.Global {
+				continue
+			}
+			skillPath, pointerPath, err := t.files(Location{ProjectDir: base, Home: base, Global: global})
+			if err != nil {
+				continue
+			}
+			if content, ok, _ := read(skillPath); ok {
+				if version := recorded(content); version != current {
+					copies = append(copies, Copy{Path: skillPath, Global: global, Version: version})
+				}
+			}
+			if text, ok := section(pointerPath); pointerPath != "" && ok && strings.HasPrefix(text, "# ") {
+				copies = append(copies, Copy{Path: pointerPath, Global: global})
+			}
+		}
+	}
+	if projectDir != "" {
+		look(projectDir, false)
+	}
+	if home != "" && home != projectDir {
+		look(home, true)
+	}
+	return copies
+}
+
+// recorded returns the version a skill file says wrote it, or "".
+func recorded(content []byte) string {
+	if m := writtenBy.FindSubmatch(content); m != nil {
+		return string(m[1])
+	}
+	return ""
 }
 
 // pointer is what the section in AGENTS.md says: where the instructions

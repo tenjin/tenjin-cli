@@ -251,3 +251,52 @@ func TestTheUpdateCommandFollowsTheInstall(t *testing.T) {
 		}
 	}
 }
+
+// An update is said once: on the first run of a release after another ran.
+func TestUpgradedIsToldOnceAfterTheVersionChanged(t *testing.T) {
+	now := time.Date(2026, 10, 7, 9, 0, 0, 0, time.UTC)
+	first := checker(t, "0.1.0", "", &now)
+	if first.Upgraded() {
+		t.Error("the first release to run was taken for an update")
+	}
+	if first.Upgraded() {
+		t.Error("the same release, again, was taken for an update")
+	}
+	// The daily check's answer is kept beside it.
+	first.save(state{CheckedAt: now, Latest: "0.2.0", Ran: first.load().Ran})
+
+	next := *first
+	next.Current = "0.2.0"
+	if !next.Upgraded() {
+		t.Error("the run after an update was not told")
+	}
+	if next.Upgraded() {
+		t.Error("told twice")
+	}
+	if s := next.load(); s.Latest != "0.2.0" || !s.CheckedAt.Equal(now) {
+		t.Errorf("the check's answer was lost: %+v", s)
+	}
+
+	dev := next
+	dev.Current = "dev"
+	if dev.Upgraded() {
+		t.Error("a development build was taken for an update")
+	}
+}
+
+func TestNewer(t *testing.T) {
+	for _, c := range []struct {
+		a, b  string
+		newer bool
+	}{
+		{"0.2.0", "0.1.0", true},
+		{"0.1.0", "0.2.0", false},
+		{"0.1.0", "0.1.0", false},
+		{"0.2.0", "dev", false},
+		{"dev", "0.1.0", false},
+	} {
+		if got := Newer(c.a, c.b); got != c.newer {
+			t.Errorf("Newer(%s, %s) = %v", c.a, c.b, got)
+		}
+	}
+}

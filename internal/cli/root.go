@@ -309,6 +309,8 @@ func (e *environment) reportUpdate(w io.Writer) {
 	}
 	n := <-e.updateNotice
 	e.updateNotice = nil
+	// Once the check is done: the two share its state file.
+	e.reportOtherSkills(w)
 	if n == nil {
 		return
 	}
@@ -455,6 +457,7 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	e := outcome(ctx, err, ran, root)
 	code, kind := 0, ""
 	if e != nil {
+		env.hintOtherSkill(e)
 		writeError(stderr, e, wantsJSON(args))
 		code, kind = e.Kind.ExitCode(), string(e.Kind)
 	}
@@ -643,9 +646,9 @@ Details: 'tenjin help scripting'.`
 
 func unknownCommand(cmd *cobra.Command, name string) error {
 	if suggestions := cmd.SuggestionsFor(name); len(suggestions) > 0 {
-		return clierr.New(clierr.Usage, "unknown command %q for %q; did you mean %q?", name, cmd.CommandPath(), closest(name, suggestions))
+		return clierr.Wrap(clierr.Usage, errUnknownName, "unknown command %q for %q; did you mean %q?", name, cmd.CommandPath(), closest(name, suggestions))
 	}
-	return clierr.New(clierr.Usage, "unknown command %q for %q", name, cmd.CommandPath())
+	return clierr.Wrap(clierr.Usage, errUnknownName, "unknown command %q for %q", name, cmd.CommandPath())
 }
 
 // closest is the suggestion nearest to name: cobra lists its suggestions in
