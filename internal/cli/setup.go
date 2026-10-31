@@ -572,7 +572,11 @@ func (s *setup) buildKey(t *project.Target, b project.Build, report *verify.Repo
 			s.say("    %s The project holds another key for this app, at %s, which Tenjin refuses, and setup writes keys only over its own placeholders: replace it there with this one (%s).", s.style.Yellow("!"), written, maskKey(key))
 		}
 	}
-	if given, ok := s.given.For(b.ID); ok {
+	given, ok, passed := givenFor(s.given, t, b)
+	if passed != "" {
+		s.say("  %s %s: %s", s.style.Yellow("!"), label, render.Clean(passed))
+	}
+	if ok {
 		verdict := checkGivenKey(s.cmd.Context(), s.keyCheck(), given.Value, b, s.keyURLs[b.ID] != "")
 		s.asker().verdict(label+", key "+maskKey(given.Value)+" from "+given.Source, verdict)
 		if verdict.ok {
@@ -626,7 +630,7 @@ func refusedInProject(report *verify.Report, t *project.Target, b project.Build)
 
 // asker is setup's way of asking for a key.
 func (s *setup) asker() keyAsker {
-	return keyAsker{env: s.env, out: s.out, style: s.style, ctx: s.cmd.Context(), check: s.keyCheck()}
+	return keyAsker{env: s.env, out: s.out, style: s.style, ctx: s.cmd.Context(), check: s.keyCheck(), later: checksAgain}
 }
 
 // accepted returns the finding that says Tenjin accepts a build's key, also

@@ -404,7 +404,7 @@ func (s *setup) writeGivenKeys(p *project.Project) error {
 		if verdict.ok && !verdict.checked {
 			// Kept by setup, which checks again later; doctor writes only
 			// what Tenjin has accepted.
-			verdict = keyVerdict{message: strings.TrimSuffix(verdict.message, checksAgain) + ", so it was not written"}
+			verdict = keyVerdict{message: verdict.message + ", so it was not written"}
 		}
 		s.asker().verdict(label, verdict)
 		if verdict.checked {

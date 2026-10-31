@@ -128,6 +128,27 @@ func resolveGiven(given *verify.GivenKeys, p *project.Project, getenv func(strin
 	return nil
 }
 
+// givenFor returns the key given for a build. A key given without naming a
+// build (--sdk-key <key>, TENJIN_SDK_KEY) serves a platform with one build
+// only: where the platform has several, each is an app of its own in Tenjin
+// with its own key, and one app's key never stands in for another's. note
+// is then why that key was passed over, for the developer; otherwise "".
+// target is nil for a platform whose builds could not be read, which stands
+// for its one app.
+func givenFor(given verify.GivenKeys, target *project.Target, b project.Build) (key verify.GivenKey, ok bool, note string) {
+	if k, ok := given.ByBuild[b.ID]; ok && k.Value != "" {
+		return k, true, ""
+	}
+	if given.All.Value == "" {
+		return verify.GivenKey{}, false, ""
+	}
+	if target != nil && len(target.Builds) > 1 {
+		return verify.GivenKey{}, false, fmt.Sprintf("the key from %s is not used for it: %s has %d builds, each an app of its own in Tenjin with its own key. Give this one's with --sdk-key %s=<key>, or in %s.",
+			given.All.Source, platformNames[target.Platform], len(target.Builds), b.ID, verify.KeyVariable(b.ID))
+	}
+	return given.All, true, ""
+}
+
 // cleanKey removes what comes along when a key is copied: surrounding space
 // and quotes.
 func cleanKey(key string) string {
@@ -154,13 +175,18 @@ type keyVerdict struct {
 	// ok is false when the key will not work and another should be tried.
 	ok      bool
 	checked bool
+	// later is true when the check could not be made now but can be made
+	// again: Tenjin could not be reached, or gave an answer the CLI does not
+	// know. What then becomes of the key is the command's to say
+	// (keyAsker.later).
+	later   bool
 	message string
 }
 
 // checkGivenKey asks Tenjin whether a key is valid for an app. A check that
-// cannot be made is not a refusal: the key is kept, and the verdict says the
-// check is still to come. appKnown says the app was just found in, or added
-// to, the signed-in organization, which narrows what a refusal can mean.
+// cannot be made is not a refusal: the key is kept, unchecked. appKnown says
+// the app was just found in, or added to, the signed-in organization, which
+// narrows what a refusal can mean.
 func checkGivenKey(ctx context.Context, keys verify.KeyChecker, key string, b project.Build, appKnown bool) keyVerdict {
 	switch {
 	case keys == nil:
@@ -170,7 +196,7 @@ func checkGivenKey(ctx context.Context, keys verify.KeyChecker, key string, b pr
 	}
 	result, err := keys.CheckKey(ctx, key, b.BundleID, b.TenjinPlatform)
 	if err != nil {
-		return keyVerdict{ok: true, message: fmt.Sprintf("could not reach Tenjin to check it (%v)", err) + checksAgain}
+		return keyVerdict{ok: true, later: true, message: fmt.Sprintf("could not reach Tenjin to check it (%v)", err)}
 	}
 	switch result.Status {
 	case track.KeyValid:
@@ -187,11 +213,16 @@ func checkGivenKey(ctx context.Context, keys verify.KeyChecker, key string, b pr
 	case track.KeyDisabled:
 		return keyVerdict{message: "This key is disabled. Enable it in the dashboard, or copy another of the app's keys."}
 	}
-	return keyVerdict{ok: true, message: "Tenjin gave an unexpected answer (" + result.Detail + ")" + checksAgain}
+	return keyVerdict{ok: true, later: true, message: "Tenjin gave an unexpected answer (" + result.Detail + ")"}
 }
 
-// checksAgain ends a verdict on a key that is kept unchecked, in setup.
+// checksAgain ends setup's verdict on a key it keeps although Tenjin could
+// not check it: setup checks again before it ends.
 const checksAgain = "; the last step checks again"
+
+// writtenUnchecked ends set-keys' verdict on such a key. set-keys has no
+// later step, so it says what checks the key instead.
+const writtenUnchecked = "; it is written unchecked, and 'tenjin doctor' checks it"
 
 // fetchedKey is a key Tenjin's API served, with what Tenjin said
 // about it.
@@ -247,6 +278,9 @@ type keyAsker struct {
 	// written is where the project holds a key Tenjin refuses for the
 	// build, which no skip changes.
 	written string
+	// later ends the verdict on a key kept although Tenjin could not check
+	// it (keyVerdict.later): what becomes of it.
+	later string
 }
 
 func (k keyAsker) say(format string, a ...any) {
@@ -302,7 +336,11 @@ func (k keyAsker) verdict(what string, v keyVerdict) {
 	case !v.checked:
 		mark = k.style.Yellow("!")
 	}
-	k.say("  %s %s: %s", mark, render.Clean(what), render.Clean(v.message))
+	message := v.message
+	if v.later {
+		message += k.later
+	}
+	k.say("  %s %s: %s", mark, render.Clean(what), render.Clean(message))
 }
 
 // setKeysResult is what `project set-keys` reports.
@@ -340,11 +378,17 @@ Each key comes from, in this order:
   2. Tenjin, when you are signed in
   3. at a terminal, pasted after the CLI says where to copy it from
 
+A key given without naming a build (--sdk-key <key>, TENJIN_SDK_KEY) serves
+a platform with one build only: where it has several, each is an app of its
+own with its own key.
+
 It is checked with Tenjin first, against that build's own app, and a key
-Tenjin refuses is not written. The keys are never printed whole. set-keys
-asks for no confirmation: it writes only over its own placeholders. Run it
-yourself, not through a coding agent: once written, a key is in a file the
-agent reads.`,
+Tenjin refuses is not written. One Tenjin cannot check, with --offline or
+when Tenjin cannot be reached, is written unchecked, and 'tenjin doctor'
+checks it. The keys are never printed whole. set-keys asks for no
+confirmation: it writes only over its own placeholders. Run it yourself,
+not through a coding agent: once written, a key is in a file the agent
+reads.`,
 		Args: maxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format, err := opts.format(cmd)
@@ -373,7 +417,11 @@ agent reads.`,
 			if format == render.JSON {
 				talk = cmd.ErrOrStderr()
 			}
-			asker := keyAsker{env: env, out: talk, style: render.NewStyler(talk), ctx: cmd.Context()}
+			// A key Tenjin could not check is written all the same, as with
+			// --offline, and the command does not fail for it: the placeholder
+			// is gone, so a script that took a failure to mean nothing was
+			// written would be wrong. The verdict says so instead.
+			asker := keyAsker{env: env, out: talk, style: render.NewStyler(talk), ctx: cmd.Context(), later: writtenUnchecked}
 			if !offline {
 				asker.check = env.trackClient()
 			}
@@ -390,14 +438,18 @@ agent reads.`,
 			result.Unknown = unknown
 			for _, pb := range builds {
 				b, label := pb.build, pb.title
-				if key, ok := given.For(b.ID); ok {
-					verdict := checkGivenKey(cmd.Context(), asker.check, key.Value, b, false)
-					asker.verdict(label+", key "+maskKey(key.Value)+" from "+key.Source, verdict)
+				passedIn, ok, passed := givenFor(given, pb.target, b)
+				if passed != "" {
+					asker.say("%s %s: %s", asker.style.Yellow("!"), render.Clean(label), render.Clean(passed))
+				}
+				if ok {
+					verdict := checkGivenKey(cmd.Context(), asker.check, passedIn.Value, b, false)
+					asker.verdict(label+", key "+maskKey(passedIn.Value)+" from "+passedIn.Source, verdict)
 					if !verdict.ok {
 						result.Refused = append(result.Refused, b.ID)
 						continue
 					}
-					keys[b.SDKKeyPlaceholder] = key.Value
+					keys[b.SDKKeyPlaceholder] = passedIn.Value
 					continue
 				}
 				app := signedInApp(cmd.Context(), env, b)

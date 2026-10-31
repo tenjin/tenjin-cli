@@ -2,6 +2,8 @@ package cli
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -210,6 +212,72 @@ func TestSetKeysPerStoreFromTheEnvironment(t *testing.T) {
 	code, _, stderr = h.run("project", "set-keys", dir, "--sdk-key", "android:galaxy=X")
 	if code != 2 || !strings.Contains(stderr, `no build "android:galaxy"`) {
 		t.Errorf("exit = %d, stderr = %q", code, stderr)
+	}
+}
+
+// A key given without naming a build serves a platform with one build only:
+// written into each of a platform's builds, one store's key would stand in
+// for the other's, and offline nothing would catch it.
+func TestSetKeysWritesNoKeyGivenWithoutABuildIntoSeveral(t *testing.T) {
+	for _, given := range []struct {
+		name string
+		args []string
+		vars map[string]string
+	}{
+		{"flag", []string{"--sdk-key", testproject.PlayKey}, nil},
+		{"environment", nil, map[string]string{"TENJIN_SDK_KEY": testproject.PlayKey}},
+	} {
+		t.Run(given.name, func(t *testing.T) {
+			h, dir := multiStore(t, placeholderStores())
+			for name, value := range given.vars {
+				h.vars[name] = value
+			}
+			code, stdout, stderr := h.run(append([]string{"project", "set-keys", dir, "--offline"}, given.args...)...)
+			if code != 5 || !strings.Contains(stderr, "no SDK key for Android, play (Google Play) and Android, amazon (Amazon Appstore)") {
+				t.Errorf("exit = %d, stderr = %q", code, stderr)
+			}
+			lacks(t, stdout, "Android has 2 builds, each an app of its own in Tenjin with its own key. Give this one's with --sdk-key android:amazon=<key>, or in TENJIN_SDK_KEY_ANDROID_AMAZON.")
+			raw, _ := os.ReadFile(filepath.Join(dir, flavorBuild))
+			if strings.Contains(string(raw), testproject.PlayKey) {
+				t.Errorf("a key given for no build was written:\n%s", raw)
+			}
+		})
+	}
+}
+
+// setup, offline, takes no such key for either store either.
+func TestSetupWritesNoKeyGivenWithoutABuildIntoSeveral(t *testing.T) {
+	h, dir := multiStore(t, placeholderStores())
+	h.signIn()
+	h.fake.addApp("Sample", "com.example.sample", "android")
+	h.fake.addApp("Sample (Amazon)", "com.example.sample", "amazon")
+	_, stdout, _ := h.run("setup", dir, "--offline", "--agent", "none", "--features", "none", "--sdk-key", testproject.PlayKey)
+	lacks(t, stdout, "Android, amazon (Amazon Appstore): the key from --sdk-key is not used for it")
+	raw, _ := os.ReadFile(filepath.Join(dir, flavorBuild))
+	if strings.Contains(string(raw), testproject.PlayKey) {
+		t.Errorf("a key given for no build was written:\n%s", raw)
+	}
+}
+
+// set-keys has no later step to check a key Tenjin could not check now: it
+// says the key is written unchecked, and what checks it.
+func TestSetKeysSaysAKeyItCouldNotCheckIsWrittenUnchecked(t *testing.T) {
+	h, dir := multiStore(t, placeholderStores())
+	// A tracking service with an answer the CLI does not know, which is
+	// not sent again as a failure in transit would be.
+	odd := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	t.Cleanup(odd.Close)
+	h.env.endpoints.Track = odd.URL
+	code, stdout, stderr := h.run("project", "set-keys", dir,
+		"--sdk-key", "android="+testproject.PlayKey, "--sdk-key", "android:amazon="+testproject.AmazonKey)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	lacks(t, stdout, "Tenjin gave an unexpected answer (HTTP 418); it is written unchecked, and 'tenjin doctor' checks it")
+	if strings.Contains(stdout, "last step") {
+		t.Errorf("set-keys promises a step it does not have:\n%s", stdout)
 	}
 }
 

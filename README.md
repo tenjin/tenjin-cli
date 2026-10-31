@@ -271,7 +271,7 @@ Every command except `setup` is built to be driven by a program:
 | Variable | Use |
 | --- | --- |
 | `TENJIN_API_TOKEN` | An access token from the dashboard, used instead of a browser sign-in |
-| `TENJIN_SDK_KEY` | The SDK key, when the project does not contain it |
+| `TENJIN_SDK_KEY` | The SDK key, when the project does not contain it, for each platform with one build |
 | `TENJIN_SDK_KEY_ANDROID`, `TENJIN_SDK_KEY_IOS` | The same, per platform |
 | `TENJIN_SDK_KEY_ANDROID_<VARIANT>` | The same, for another build, such as `TENJIN_SDK_KEY_ANDROID_AMAZON` |
 | `TENJIN_NO_UPDATE_CHECK` | `1` turns off the new-release notice |
