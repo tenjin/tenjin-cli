@@ -26,12 +26,18 @@ func TestCtrlCAtAPromptStopsSetup(t *testing.T) {
 	h.env.stdin = bufio.NewReader(stdin)
 	dir := testproject.Write(t, testproject.AndroidNative())
 
+	var stdout, stderr lockedBuffer
 	done := make(chan int, 1)
 	go func() {
-		code, _, _ := h.run("setup", dir)
-		done <- code
+		done <- execute([]string{"setup", dir}, &stdout, &stderr, h.env)
 	}()
-	time.Sleep(300 * time.Millisecond)
+	// The signal goes once setup is at its first question, waiting for an
+	// answer. setup, a flow for people, asks on stdout.
+	for deadline := time.Now().Add(10 * time.Second); !atPrompt(stdout.String()); time.Sleep(10 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("setup did not reach a prompt in 10 seconds:\n%s%s", stdout.String(), stderr.String())
+		}
+	}
 	if err := syscall.Kill(os.Getpid(), syscall.SIGINT); err != nil {
 		t.Fatal(err)
 	}
@@ -43,6 +49,13 @@ func TestCtrlCAtAPromptStopsSetup(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("setup was still waiting at its prompt 3 seconds after Ctrl-C")
 	}
+}
+
+// atPrompt reports whether output ends at a question waiting for its
+// answer, as the prompts write them: a confirmation's [Y/n] or [y/N], or a
+// line that ends in a colon, with no line break after it.
+func atPrompt(output string) bool {
+	return strings.HasSuffix(output, "] ") || strings.HasSuffix(output, ": ")
 }
 
 // slowAgentScript is a Claude Code that starts a child and works forever,
