@@ -385,10 +385,14 @@ func replaceFile(from, to string) error {
 
 // MemoryStore keeps credentials for the life of the process. Tests use it.
 type MemoryStore struct {
+	mu    sync.Mutex
 	creds map[string]Credentials
+	held  bool
 }
 
 func (m *MemoryStore) Load(environment string) (*Credentials, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	c, ok := m.creds[environment]
 	if !ok {
 		return nil, nil
@@ -397,9 +401,29 @@ func (m *MemoryStore) Load(environment string) (*Credentials, error) {
 }
 
 func (m *MemoryStore) Save(c *Credentials) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if m.creds == nil {
 		m.creds = map[string]Credentials{}
 	}
 	m.creds[c.Environment] = *c
 	return "memory", nil
+}
+
+// Lock takes the sign-in lock at once, unless Hold was called: then it
+// answers as a lock another tenjin has held past the wait.
+func (m *MemoryStore) Lock(context.Context, string) (func(), error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.held {
+		return nil, errLockBusy
+	}
+	return func() {}, nil
+}
+
+// Hold has another tenjin hold the sign-in lock from now on, past any wait.
+func (m *MemoryStore) Hold() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.held = true
 }

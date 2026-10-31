@@ -602,11 +602,7 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 					switched, err := api.UpdateAppCallback(ctx, app, created.Data.ID, tenjinapi.Fields{"active": false})
 					if err != nil {
 						e := clierr.From(err)
-						kind := e.Kind
-						if kind == clierr.Usage {
-							kind = clierr.Upstream
-						}
-						return nil, clierr.Wrap(kind, err, "the callback %s was created on app %s and is active: switching it off failed: %s", id, app, e.Message).
+						return nil, clierr.Wrap(afterChange(e.Kind), err, "the callback %s was created on app %s and is active: switching it off failed: %s", id, app, e.Message).
 							WithHint("Switch it off with 'tenjin apps callbacks update %s --app %s --active=false'. Creating it again would make a second callback.", id, app)
 					}
 					return switched, nil
@@ -802,6 +798,18 @@ func newSavedReportWriteCmds(opts *options, env *environment) []*cobra.Command {
 			},
 		}),
 	}
+}
+
+// afterChange is the kind of a failure that came after an earlier request of
+// the same command changed something. Usage and Busy say that nothing was
+// done and that running the command again is enough, which no longer holds:
+// it could do the change twice. Upstream says only that it did not finish,
+// and the message says what was changed.
+func afterChange(kind clierr.Kind) clierr.Kind {
+	if kind == clierr.Usage || kind == clierr.Busy {
+		return clierr.Upstream
+	}
+	return kind
 }
 
 // withParametersHint points a callback Tenjin refused at where the values it

@@ -46,6 +46,9 @@ type fakeTenjin struct {
 	apps       []tenjinapi.App
 	pageSize   int
 	denyCreate bool
+	// afterCreate runs once an app is created, before the answer is sent:
+	// what happens meanwhile, such as the sign-in running out.
+	afterCreate func()
 	// exchangeExpiresIn is the exchange's expires_in, in seconds; 0 leaves
 	// it out, as an older server does.
 	exchangeExpiresIn int
@@ -453,21 +456,36 @@ func (f *fakeTenjin) createApp(w http.ResponseWriter, r *http.Request) {
 		}
 		in.Name, in.BundleID, in.Platform = "From The Store", u.Query().Get("id"), "android"
 	}
+	status, answer := f.addNewApp(in.Name, in.BundleID, in.Platform)
+	if status == http.StatusCreated && f.afterCreate != nil {
+		f.afterCreate()
+	}
+	writeJSON(w, status, answer)
+}
+
+// addNewApp creates an app as the API does, and returns its answer.
+func (f *fakeTenjin) addNewApp(name, bundleID, platform string) (int, any) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.denyCreate {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "Unauthorized. You do not have proper access. Contact your administrator."})
-		return
+		return http.StatusForbidden, map[string]string{"error": "Unauthorized. You do not have proper access. Contact your administrator."}
 	}
 	for _, a := range f.apps {
-		if a.BundleID == in.BundleID && a.Platform == in.Platform {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "An app already exists with this bundle_id and platform: " + a.ID})
-			return
+		if a.BundleID == bundleID && a.Platform == platform {
+			return http.StatusBadRequest, map[string]string{"error": "An app already exists with this bundle_id and platform: " + a.ID}
 		}
 	}
-	app := tenjinapi.App{ID: fmt.Sprintf("00000000-0000-4000-8000-%012d", len(f.apps)+1), Name: in.Name, BundleID: in.BundleID, Platform: in.Platform}
+	app := tenjinapi.App{ID: fmt.Sprintf("00000000-0000-4000-8000-%012d", len(f.apps)+1), Name: name, BundleID: bundleID, Platform: platform}
 	f.apps = append(f.apps, app)
-	writeJSON(w, http.StatusCreated, map[string]any{"data": appResource(app)})
+	return http.StatusCreated, map[string]any{"data": appResource(app)}
+}
+
+// expireTokens ends every API token issued, as their expiry does: the API
+// refuses them, though the CLI's clock still finds them current.
+func (f *fakeTenjin) expireTokens() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	clear(f.jwts)
 }
 
 func (f *fakeTenjin) addApp(name, bundleID, platform string) tenjinapi.App {

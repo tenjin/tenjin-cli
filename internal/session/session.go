@@ -240,9 +240,12 @@ func (m *Manager) refresh(ctx context.Context, refused string) (string, error) {
 	unlock, err := m.lock(ctx)
 	if errors.Is(err, errLockBusy) {
 		// Spending the refresh token now could spend it twice: the holder may
-		// have spent it and not yet saved the one it got back.
+		// have spent it and not yet saved the one it got back. The request
+		// waiting for the token is not carried out, but whether an earlier
+		// one of the same command changed something only the command knows:
+		// one that did reports it, and not this.
 		return "", lockBusy(err, "this command could not renew it",
-			"Nothing was changed. Run this command again once the other one has finished.")
+			"Run this command again once the other one has finished.")
 	}
 	if err != nil {
 		return "", err

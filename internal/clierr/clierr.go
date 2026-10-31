@@ -28,8 +28,10 @@ const (
 	// value it does not accept: the input is at fault, not the CLI.
 	Refused Kind = "refused"
 	// Busy is a wait for another tenjin command that ran out, such as one
-	// using the sign-in: nothing was done, and running the command again
-	// once the other has finished is enough.
+	// using the sign-in, before the command changed anything: running it
+	// again once the other has finished is enough. A command that had
+	// already changed something reports Upstream instead, saying what it
+	// changed, since running it again could do that twice.
 	Busy Kind = "busy"
 )
 

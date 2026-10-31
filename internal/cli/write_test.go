@@ -145,6 +145,27 @@ func TestInactiveCallbackSaysBothWrites(t *testing.T) {
 	}
 }
 
+// A switch-off that waits too long for the sign-in comes after the callback
+// was created, active: it does not say that nothing was done, which would
+// have a script or an agent create it again.
+func TestASwitchOffThatFindsTheSignInBusySaysTheCallbackExists(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	h.fake.writeAnswers = map[string]func(*http.Request) (int, any){
+		"POST /v2/apps/" + testApp + "/callbacks": func(*http.Request) (int, any) {
+			// Meanwhile the sign-in runs out, and another tenjin is renewing it.
+			h.fake.expireTokens()
+			h.store.Hold()
+			return http.StatusCreated, map[string]any{"data": map[string]any{"id": testOther, "type": "callback", "attributes": map[string]any{"active": true}}}
+		},
+	}
+	code, _, stderr := h.run("apps", "callbacks", "create", "--app", testApp, "--template", testOther, "--active=false", "--yes")
+	if code != 7 || len(h.fake.writes) != 1 || !strings.Contains(stderr, "the callback "+testOther+" was created") || !strings.Contains(stderr, "is active") ||
+		!strings.Contains(stderr, "another tenjin command") || !strings.Contains(stderr, "Creating it again would make a second callback") {
+		t.Errorf("exit = %d, %d writes, stderr = %q", code, len(h.fake.writes), stderr)
+	}
+}
+
 // Tenjin switches a callback on when an update leaves active out, so one
 // without --active sends the callback's current state, and says so.
 func TestChangingACallbackLeavesItAsActiveAsItWas(t *testing.T) {

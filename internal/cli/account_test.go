@@ -469,6 +469,23 @@ func TestSetupDoesNotCreateAppsUnasked(t *testing.T) {
 	}
 }
 
+// A setup that has created an app and then waits too long for the sign-in
+// says what it did: exit status 12 would say that nothing was.
+func TestSetupThatFindsTheSignInBusyAfterCreatingSaysSo(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	h.fake.afterCreate = func() {
+		// The sign-in runs out, and another tenjin is renewing it.
+		h.fake.expireTokens()
+		h.store.Hold()
+	}
+	code, _, stderr := h.run("setup", testproject.Write(t, testproject.Flutter()), "--yes", "--agent", "none")
+	if code != 7 || len(h.fake.apps) != 1 || !strings.Contains(stderr, "another tenjin command") || !strings.Contains(stderr, "setup had created 1 Tenjin app when it stopped: another tenjin command") ||
+		!strings.Contains(stderr, "Run tenjin setup again") || strings.Contains(stderr, "Nothing was changed") {
+		t.Errorf("exit = %d, %d apps, stderr = %q", code, len(h.fake.apps), stderr)
+	}
+}
+
 // fixOnRead repairs the project the moment setup waits for the user, which
 // is what a person does between checks.
 // fixOnRead answers every question with Enter, and makes the fix when the

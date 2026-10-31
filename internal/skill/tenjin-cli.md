@@ -2,7 +2,7 @@
 
 The `tenjin` command-line tool does the Tenjin side of an SDK integration and checks the result. You make the code changes. The CLI tells you what the project is, which Tenjin app it belongs to, what is still missing, and what Tenjin answered when the app ran.
 
-Every command below accepts `--json` and never prompts when it is not run at a terminal, and none of them changes the project's files. A failure prints `{"error": {"code", "message", "hint"}}` on standard error and sets the exit status: 2 usage, 3 not signed in, 4 role not allowed, 5 not found, 9 checks failed, 10 already exists, 11 refused by Tenjin (its message says why, so fix the value it names), 12 another `tenjin` command was using the sign-in (nothing was done: run the same command again).
+Every command below accepts `--json` and never prompts when it is not run at a terminal, and none of them changes the project's files. A failure prints `{"error": {"code", "message", "hint"}}` on standard error and sets the exit status: 2 usage, 3 not signed in, 4 role not allowed, 5 not found, 9 checks failed, 10 already exists, 11 refused by Tenjin (its message says why, so fix the value it names), 12 another `tenjin` command was using the sign-in (nothing was done: run the same command again). A command that had already changed something when it stopped exits 7 instead, and its message says what it changed: do not run it again before checking that.
 
 Do not run `tenjin setup` or `tenjin project set-keys` yourself. `setup` is the same sequence for a person at a terminal: it asks questions, and it is where the developer's SDK keys go in. Both write the real keys into the project, where you would then read them. Tell the developer to run `tenjin setup` when you are done (step 6).
 

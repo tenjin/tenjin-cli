@@ -176,6 +176,9 @@ type setup struct {
 	// dashboard page showing that app's SDK keys.
 	appIDs  map[string]string
 	keyURLs map[string]string
+	// created counts the Tenjin apps this run has created, and agentEdits
+	// the files a coding agent it started has changed.
+	created, agentEdits int
 	// keys are the SDK keys to integrate with, by build ID, and where each
 	// came from. A build with no entry either has its key in the project
 	// already or has none yet.
@@ -212,6 +215,37 @@ func (s *setup) step(n int, title string) error {
 }
 
 func (s *setup) run() error {
+	return s.partWay(s.steps())
+}
+
+// partWay is a failure as it reads once this run has changed something.
+// Exit status 12 says that nothing was done, which no longer holds, so a
+// wait for another tenjin that ran out then says what was done. Running
+// setup again is safe all the same: it finds the apps it created, and the
+// keys it wrote are in the project.
+func (s *setup) partWay(err error) error {
+	if err == nil || s.created == 0 && len(s.filled) == 0 && s.agentEdits == 0 {
+		return err
+	}
+	e := clierr.From(err)
+	if e.Kind != clierr.Busy {
+		return err
+	}
+	var done []string
+	if s.created > 0 {
+		done = append(done, "created "+plural(s.created, "Tenjin app"))
+	}
+	if len(s.filled) > 0 {
+		done = append(done, "written "+plural(len(s.filled), "SDK key")+" into the project")
+	}
+	if s.agentEdits > 0 {
+		done = append(done, "let the coding agent change "+plural(s.agentEdits, "file"))
+	}
+	return clierr.Wrap(afterChange(e.Kind), err, "setup had %s when it stopped: %s", strings.Join(done, " and "), e.Message).
+		WithHint("Run tenjin setup again once the other command has finished: it finds what was done and goes on from there.")
+}
+
+func (s *setup) steps() error {
 	if err := s.step(1, "Your project"); err != nil {
 		return err
 	}
@@ -441,6 +475,7 @@ func (s *setup) apps(p *project.Project) error {
 			verb := "found"
 			if result.Created {
 				verb = "created"
+				s.created++
 			}
 			s.appIDs[b.ID] = result.ID
 			s.keyURLs[b.ID] = s.env.endpoints.SDKKeysURL(result.ID)
@@ -1034,6 +1069,7 @@ func (s *setup) runAgentOn(p *project.Project, prompt, working string, keys bool
 		s.say("  %s %s %s", s.style.Dim("·"), a.Verb, render.Clean(keyLike.ReplaceAllStringFunc(a.Detail, maskKey)))
 	})
 	changed := project.Changed(before, project.Fingerprint(p.Root))
+	s.agentEdits += len(changed)
 
 	if runErr != nil {
 		s.say("%s %s did not finish: %s", s.style.Yellow("!"), s.helper.Name, render.Clean(keyLike.ReplaceAllStringFunc(runErr.Error(), maskKey)))
