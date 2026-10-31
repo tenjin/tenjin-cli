@@ -144,7 +144,7 @@ The Tenjin apps, their SDK keys and the documentation are commands of their own 
 
 | Command | What it does |
 | --- | --- |
-| `tenjin login`, `tenjin logout`, `tenjin auth status` | Sign in through the browser (`--no-browser` over SSH); sign out, which ends the session's API access at once, and that of your other Tenjin CLI sessions still open in the same organization, on any machine; see who is signed in |
+| `tenjin login`, `tenjin logout`, `tenjin auth status` | Sign in through the browser (over SSH, paste back the address it ends on); sign out, which ends the session's API access at once, and that of your other Tenjin CLI sessions still open in the same organization, on any machine; see who is signed in |
 
 `tenjin version` prints the version, commit and build date. `tenjin telemetry off` stops the usage statistics on this machine (see [Privacy and security](#privacy-and-security)); `tenjin telemetry on` and `tenjin telemetry status` turn them back on and say whether they are sent.
 
@@ -155,7 +155,7 @@ The Tenjin apps, their SDK keys and the documentation are commands of their own 
 1. **Your project.** What `project detect` reports, and which Tenjin features to integrate. App opens are always included. Purchases, subscriptions, ad revenue, consent, deep links, SKAdNetwork conversion values, custom events and the customer user ID are offered, and the ones the project shows a reason for are suggested. Move through the list with the arrow keys, tick or untick with space, and press Enter. `--features` chooses without asking.
 
    Only you know which events matter and which value identifies a user, so for those two features `setup` asks, and shows what the app already gives its other analytics SDKs (Firebase Analytics, Amplitude, Mixpanel, AppsFlyer, GameAnalytics, Facebook App Events, Flurry; Adjust's event tokens too, which are not names): Enter takes those. `--events <name,name>` and `--user-id <value>` answer without asking, and choose their features (at a terminal, they start ticked); the value can be code, such as `user.id`, or words, such as "the account ID from the login response". Without a terminal and without the flags, `setup` takes what the app sends already. Where nothing was named or found, none are added: a coding agent doing the rest of the integration proposes events or a user ID in its report, and is never left to invent them. None is started only to propose. Each event named stays to do until the app sends it to Tenjin by that name, and a user ID named as code until it is what the app passes Tenjin, even where the app already sends Tenjin others.
-2. **Sign in**, through the browser, if there is no session.
+2. **Sign in**, through the browser, if there is no session. `--no-browser` prints the address to open instead, for a browser on another machine (see [Troubleshooting](#troubleshooting)).
 3. **Tenjin apps.** Finds the app for each build, or creates it after asking (`--yes` to skip the question), named after the project as its own files name it (Gradle's `rootProject.name`, the Xcode project, a Flutter app's label or display name or else `pubspec.yaml`, Expo's app config or `app.json`, the Capacitor `appName`, Unity's product name) and the platform.
 4. **SDK keys.** Fetches each app's key from Tenjin, or says where to copy it in the dashboard, and checks it at once, so a wrong key, or the other platform's, is caught before a build.
 5. **Add the SDK**, with your coding agent or by hand: `setup` lists each problem left, with its file, then offers the agent or says what to add and where.
@@ -307,7 +307,7 @@ Report a vulnerability privately: see [SECURITY.md](SECURITY.md).
 - **Anything that talks to Tenjin:** run it again with `--verbose` to see each request and its answer.
 - **macOS says the binary cannot be opened** after you downloaded an archive in a browser: run `xattr -d com.apple.quarantine /path/to/tenjin`. Homebrew and `install.sh` do not need this.
 - **Windows PowerShell reports a TLS error** when installing: run `[Net.ServicePointManager]::SecurityProtocol = 'Tls12'` first.
-- **`tenjin login` on a remote machine** (SSH): use `tenjin login --no-browser`, open the address it prints in your local browser, and paste back the address you land on.
+- **`tenjin login` or `tenjin setup` on a remote machine** (SSH, a container): open the address it prints in your local browser, and paste back the address you land on, which starts `http://127.0.0.1` and does not load. The CLI asks for it over SSH, when no browser opens, and with `--no-browser`, which skips opening one. Without a terminal, set `TENJIN_API_TOKEN` instead.
 - **`doctor --device` finds no device:** check that `adb devices` lists it, or that the simulator is booted, and pass `--serial` when there are several.
 - **The SDK skipped its connect:** it sends at most one every 30 seconds, also across launches. Wait 30 seconds, launch the app again, and check again.
 

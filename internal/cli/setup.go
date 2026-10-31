@@ -36,6 +36,7 @@ func newSetupCmd(opts *options, env *environment) *cobra.Command {
 		yes       bool
 		sdkKeys   []string
 		offline   bool
+		noBrowser bool
 		serial    string
 		agentFlag string
 		builds    []string
@@ -49,7 +50,7 @@ func newSetupCmd(opts *options, env *environment) *cobra.Command {
 
   1. work out what the project is, which builds it ships, and which SDK
      features to integrate
-  2. sign in
+  2. sign in, through the browser (--no-browser for one on another machine)
   3. find or create the Tenjin app for each build
   4. get each app's SDK key: fetched from Tenjin where it serves keys, or
      copied from the dashboard, and checked against Tenjin at once
@@ -103,7 +104,7 @@ the rest of the work proposes some).`,
 			if err != nil {
 				return err
 			}
-			s := &setup{cmd: cmd, env: env, args: args, yes: yes, offline: offline, serial: serial, given: given, agentFlag: agentFlag,
+			s := &setup{cmd: cmd, env: env, args: args, yes: yes, offline: offline, noBrowser: noBrowser, serial: serial, given: given, agentFlag: agentFlag,
 				chosen: builds, wantFeatures: features, analyticsFlags: analytics, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
 				appIDs: map[string]string{}, keyURLs: map[string]string{},
 				keys: map[string]verify.GivenKey{}, inProject: projectKeys{}}
@@ -114,6 +115,7 @@ the rest of the work proposes some).`,
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "create missing apps without asking")
 	addSDKKeyFlag(cmd, &sdkKeys)
 	cmd.Flags().BoolVar(&offline, "offline", false, "skip the SDK key check against Tenjin, and the look for newer SDK releases")
+	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, noBrowserHelp)
 	cmd.Flags().StringVar(&agentFlag, "agent", "", "coding agent to integrate with: "+strings.Join(agent.IDs(), ", ")+", or none to do it by hand (default: ask)")
 	cmd.Flags().StringVar(&serial, "serial", "", serialUsage)
 	addBuildFlag(cmd, &builds)
@@ -155,6 +157,8 @@ type setup struct {
 	args    []string
 	yes     bool
 	offline bool
+	// noBrowser shows the sign-in's address rather than opening a browser.
+	noBrowser bool
 	// serial picks the device the launch step reads.
 	serial    string
 	agentFlag string
@@ -351,7 +355,7 @@ func (s *setup) signIn() error {
 		if _, err := s.env.ask(s.out, "Press Enter to sign in through the browser."); err != nil {
 			return err
 		}
-		if status, _, err = login(s.cmd, s.env, false); err != nil {
+		if status, _, err = login(s.cmd, s.env, s.noBrowser); err != nil {
 			return err
 		}
 	}

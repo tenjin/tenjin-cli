@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -77,6 +78,11 @@ type environment struct {
 	endpoints config.Endpoints
 	store     session.Store
 	stdin     *bufio.Reader
+	// lineRead is a read of a line from stdin still under way, left by a
+	// wait that ended first; the next read takes its line (see
+	// readLineUntil). lineMu guards it.
+	lineMu   sync.Mutex
+	lineRead chan lineRead
 	// interactive is true when a person is at the terminal. Commands never
 	// prompt otherwise.
 	interactive bool

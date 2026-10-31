@@ -33,7 +33,7 @@ Read from the result:
 tenjin auth status --json
 ```
 
-Exit status 3 means nobody is signed in. Ask the developer to run `tenjin login` themselves: it opens a browser and waits for them. Ask once. Only step 3 needs it.
+Exit status 3 means nobody is signed in. Ask the developer to run `tenjin login` themselves: it opens a browser and waits for them. On a remote machine, as over SSH, `tenjin login --no-browser` lets them sign in with a browser on their own machine and paste back the address it ends on. Ask once. Only step 3 needs it.
 
 ### 3. Get the Tenjin app for each build
 

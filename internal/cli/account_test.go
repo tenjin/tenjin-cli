@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -794,11 +795,17 @@ type remoteBrowser struct {
 	t      *testing.T
 	stderr *lockedBuffer
 	sent   bool
+	// ends makes the input end after the address; otherwise the user types
+	// nothing more.
+	ends bool
 }
 
 var printedURL = regexp.MustCompile(`https?://\S+/oauth/authorize\S*`)
 
 func (r *remoteBrowser) Read(p []byte) (int, error) {
+	if r.sent && r.ends {
+		return 0, io.EOF
+	}
 	if r.sent {
 		select {} // the user types nothing more
 	}
@@ -837,6 +844,147 @@ func TestLoginNoBrowserTakesThePastedAddress(t *testing.T) {
 	if code, _, _ := h.run("auth", "status"); code != 0 {
 		t.Error("not signed in after pasting the address")
 	}
+}
+
+// Over SSH the browser that opens, if one does, is not the developer's, and
+// the one they use cannot reach this machine: the address it ends on is
+// asked for without --no-browser.
+func TestLoginOverSSHTakesThePastedAddress(t *testing.T) {
+	h := newHarness(t)
+	h.vars["SSH_CONNECTION"] = "203.0.113.7 52114 198.51.100.2 22"
+	stderr := &lockedBuffer{}
+	h.env.interactive = true
+	h.env.stdin = bufio.NewReader(&remoteBrowser{t: t, stderr: stderr})
+	h.env.openBrowser = func(string) error { return nil } // on a screen nobody sees
+
+	var stdout bytes.Buffer
+	if code := execute([]string{"login"}, &stdout, stderr, h.env); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "Opening the browser") || !strings.Contains(stderr.String(), "paste it here") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
+// A browser that cannot be opened, as in a container, leaves the address to
+// be opened elsewhere and pasted back.
+func TestLoginTakesThePastedAddressWhenNoBrowserOpens(t *testing.T) {
+	h := newHarness(t)
+	stderr := &lockedBuffer{}
+	h.env.interactive = true
+	h.env.stdin = bufio.NewReader(&remoteBrowser{t: t, stderr: stderr})
+	h.env.openBrowser = func(string) error { return errors.New(`exec: "xdg-open": executable file not found in $PATH`) }
+
+	var stdout bytes.Buffer
+	if code := execute([]string{"login"}, &stdout, stderr, h.env); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "Could not open a browser") || !strings.Contains(stderr.String(), "paste it here") {
+		t.Errorf("stderr = %q", stderr.String())
+	}
+}
+
+// A sign-in nobody finishes says what else works.
+func TestASignInThatTimesOutSaysWhatElseWorks(t *testing.T) {
+	for _, c := range []struct {
+		name        string
+		interactive bool
+		args        []string
+		want        []string
+		unwanted    string
+	}{
+		{"at a terminal", true, []string{"login"}, []string{"run 'tenjin login --no-browser' and paste", "TENJIN_API_TOKEN"}, ""},
+		{"pasting", true, []string{"login", "--no-browser"}, []string{"paste the address it ends on", "TENJIN_API_TOKEN"}, "run 'tenjin login --no-browser'"},
+		{"without a terminal", false, []string{"login", "--no-browser"}, []string{"on this machine, to sign in", "only a browser on this machine can finish", "TENJIN_API_TOKEN"}, "any other"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.env.loginTimeout = 200 * time.Millisecond
+			h.env.interactive = c.interactive
+			h.env.stdin = bufio.NewReader(&remoteBrowser{t: t, sent: true}) // types nothing
+			h.env.openBrowser = func(string) error { return nil }
+			code, _, stderr := h.run(c.args...)
+			if code != 3 || !strings.Contains(stderr, "timed out") {
+				t.Errorf("exit = %d, stderr = %q", code, stderr)
+			}
+			for _, want := range c.want {
+				if !strings.Contains(stderr, want) {
+					t.Errorf("stderr lacks %q: %q", want, stderr)
+				}
+			}
+			if c.unwanted != "" && strings.Contains(stderr, c.unwanted) {
+				t.Errorf("stderr has %q: %q", c.unwanted, stderr)
+			}
+		})
+	}
+}
+
+// setup signs in as login does, --no-browser included.
+func TestSetupNoBrowserTakesThePastedAddress(t *testing.T) {
+	h := newHarness(t)
+	h.fake.addApp("Sample", "com.example.sample", "android")
+	dir := testproject.Write(t, testproject.AndroidNative())
+	stderr := &lockedBuffer{}
+	h.env.interactive = true
+	// Enter to sign in, then the address the far browser ended on.
+	h.env.stdin = bufio.NewReader(io.MultiReader(strings.NewReader("\n"), &remoteBrowser{t: t, stderr: stderr, ends: true}))
+	h.env.openBrowser = func(string) error { t.Error("a browser was opened"); return nil }
+
+	var stdout bytes.Buffer
+	execute([]string{"setup", dir, "--no-browser", "--features", "none", "--agent", "none"}, &stdout, stderr, h.env)
+	if !strings.Contains(stdout.String(), "Signed in to Acme Games") || !strings.Contains(stderr.String(), "paste it here") {
+		t.Errorf("stdout:\n%s\nstderr = %q", stdout.String(), stderr.String())
+	}
+}
+
+// A paste still being read when the browser's redirect arrived leaves the
+// line typed next to the next question, rather than losing it.
+func TestALineTypedAfterTheSignInAnswersTheNextQuestion(t *testing.T) {
+	h, dir := multiStore(t, placeholderStores())
+	stdout, stderr := &lockedBuffer{}, &lockedBuffer{}
+	h.env.interactive = true
+	// Enter to sign in, and once signed in, a build untied, then Enter.
+	h.env.stdin = bufio.NewReader(io.MultiReader(strings.NewReader("\n"), &afterSignIn{stdout: stdout, lines: "1\n\n"}))
+	// The developer opens the address in a browser on this machine.
+	go func() {
+		for i := 0; i < 500; i++ {
+			if authorize := printedURL.FindString(stderr.String()); authorize != "" {
+				if resp, err := http.Get(authorize); err == nil {
+					_, _ = io.Copy(io.Discard, resp.Body)
+					_ = resp.Body.Close()
+				}
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	execute([]string{"setup", dir, "--no-browser", "--features", "none", "--agent", "none"}, stdout, stderr, h.env)
+	if !strings.Contains(stdout.String(), "Setting up 1 build.") {
+		t.Errorf("stdout:\n%s\nstderr = %q", stdout.String(), stderr.String())
+	}
+}
+
+// afterSignIn is a developer who types only once the terminal says they are
+// signed in.
+type afterSignIn struct {
+	stdout *lockedBuffer
+	lines  string
+	sent   bool
+}
+
+func (a *afterSignIn) Read(p []byte) (int, error) {
+	if a.sent {
+		return 0, io.EOF
+	}
+	a.sent = true
+	for i := 0; !strings.Contains(a.stdout.String(), "Signed in to"); i++ {
+		if i == 1000 {
+			return 0, io.EOF // never signed in: the test fails on its own
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	return copy(p, a.lines), nil
 }
 
 // Input that ends where an answer was due says so, as a usage error.

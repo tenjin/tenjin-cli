@@ -202,7 +202,11 @@ func (p *picker) lines(style render.Styler, f frame) []string {
 }
 
 // canPick reports whether a choice can be made with the arrow keys.
-func (e *environment) canPick() bool { return e.interactive && e.rawInput != nil }
+func (e *environment) canPick() bool {
+	// A line read still under way (lineUnderWay) would take the keys, so
+	// the choice is asked a line at a time, which that read answers.
+	return e.interactive && e.rawInput != nil && !e.lineUnderWay()
+}
 
 // minPickHeight is the fewest rows a terminal needs for a picker: one item
 // between the lines for more above and below, the hint, a note, and the

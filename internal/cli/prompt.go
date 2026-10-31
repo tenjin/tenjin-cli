@@ -16,25 +16,66 @@ import (
 // readLine reads one line of input, without its line ending. Ctrl-C ends
 // the wait.
 func (e *environment) readLine() (string, error) {
-	type read struct {
-		line string
-		err  error
-	}
-	done := make(chan read, 1)
-	go func() {
-		line, err := e.stdin.ReadString('\n')
-		done <- read{line, err}
-	}()
-	var r read
-	select {
-	case r = <-done:
-	case <-e.context().Done():
+	line, err := e.readLineUntil(e.context())
+	if err != nil && e.context().Err() != nil {
 		return "", errInterrupted()
 	}
+	return line, err
+}
+
+// lineRead is one line of input, or why there is none.
+type lineRead struct {
+	line string
+	err  error
+}
+
+// readLineUntil reads one line of input, without its line ending, until ctx
+// ends. A read of a terminal cannot be called off, so one that ctx ends is
+// left under way, and the next read takes its line: what is typed after a
+// wait ended, such as the one for a pasted sign-in address, answers the next
+// question rather than being lost to it.
+func (e *environment) readLineUntil(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	e.lineMu.Lock()
+	read := e.lineRead
+	if read == nil {
+		read = make(chan lineRead, 1)
+		go func() {
+			line, err := e.stdin.ReadString('\n')
+			read <- lineRead{line, err}
+		}()
+		e.lineRead = read
+	}
+	e.lineMu.Unlock()
+	var r lineRead
+	select {
+	case r = <-read:
+	case <-ctx.Done():
+		return "", ctx.Err()
+	}
+	if ctx.Err() != nil {
+		// The wait ended as the line came: it is the next read's.
+		read <- r
+		return "", ctx.Err()
+	}
+	e.lineMu.Lock()
+	e.lineRead = nil
+	e.lineMu.Unlock()
 	if r.err != nil && r.line == "" {
 		return "", r.err
 	}
 	return strings.TrimRight(r.line, "\r\n"), nil
+}
+
+// lineUnderWay reports whether a read of a line is still under way, left by
+// a wait that ended first. Keys cannot be read meanwhile: they would go to
+// that read.
+func (e *environment) lineUnderWay() bool {
+	e.lineMu.Lock()
+	defer e.lineMu.Unlock()
+	return e.lineRead != nil
 }
 
 // context is the run's context, which Ctrl-C cancels.

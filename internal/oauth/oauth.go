@@ -40,6 +40,10 @@ const ClientID = "tenjin-cli"
 // and the user has to sign in again.
 var ErrGrantInvalid = errors.New("the saved sign-in is no longer valid")
 
+// ErrTimedOut means the sign-in in the browser was not finished within
+// LoginOptions.Timeout.
+var ErrTimedOut = errors.New("timed out")
+
 // Client talks to one authorization server.
 type Client struct {
 	Issuer   string
@@ -100,7 +104,10 @@ type LoginOptions struct {
 	// Pasted, when set, reads the address the browser ended on, pasted by
 	// the user. It is for a browser on another machine, as over SSH, whose
 	// redirect to this machine's loopback address cannot arrive. Whichever
-	// comes first, the redirect or the paste, is used.
+	// comes first, the redirect or the paste, is used. It is first called
+	// once Open has returned, so Open can decide whether a paste is to be
+	// read; an error from it ends the reading, and the wait for the redirect
+	// goes on. It may still be under way when Login returns.
 	Pasted func() (string, error)
 	// BeforeRedeem, when set, runs once the browser has answered and before
 	// its code is traded for tokens. An error from it ends the sign-in with
@@ -219,7 +226,7 @@ func (c *Client) Login(ctx context.Context, opts LoginOptions) (Tokens, error) {
 	select {
 	case result = <-done:
 	case <-time.After(timeout):
-		return Tokens{}, fmt.Errorf("timed out after %s waiting for sign-in in the browser", timeout)
+		return Tokens{}, fmt.Errorf("%w after %s waiting for sign-in in the browser", ErrTimedOut, timeout)
 	case <-ctx.Done():
 		return Tokens{}, ctx.Err()
 	}

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -8,6 +10,7 @@ import (
 
 	"github.com/tenjin/tenjin-cli/internal/clierr"
 	"github.com/tenjin/tenjin-cli/internal/config"
+	"github.com/tenjin/tenjin-cli/internal/oauth"
 	"github.com/tenjin/tenjin-cli/internal/render"
 	"github.com/tenjin/tenjin-cli/internal/session"
 )
@@ -28,6 +31,11 @@ func newLoginCmd(opts *options, env *environment) *cobra.Command {
 		Long: `Sign in to Tenjin through the browser and save the session in the system
 keychain. The session is for the organization currently selected in the
 Tenjin dashboard.
+
+The browser ends on an address on this machine (http://127.0.0.1). A browser
+on another machine, as over SSH or in a container, cannot reach it: paste
+that address at the terminal instead. The CLI asks for it with --no-browser,
+over SSH, and when no browser opens.
 
 In CI, skip this command and set TENJIN_API_TOKEN to an access token created
 in the dashboard.`,
@@ -52,36 +60,90 @@ in the dashboard.`,
 			return err
 		},
 	}
-	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "print the sign-in URL instead of opening a browser")
+	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, noBrowserHelp)
 	return cmd
 }
 
+const noBrowserHelp = "print the sign-in URL instead of opening a browser, and at a terminal take the address the browser ends on, pasted, for a browser on another machine"
+
 // login runs the browser sign-in, narrating on stderr so stdout stays clean.
+//
+// The browser's redirect comes back to this machine's loopback address,
+// which a browser on another machine cannot reach. At a terminal, the
+// address it ends on can then be pasted instead: with --no-browser, over
+// SSH, and when no browser could be opened.
 func login(cmd *cobra.Command, env *environment, noBrowser bool) (session.Status, string, error) {
 	stderr := cmd.ErrOrStderr()
 	manager := env.session()
-	var pasted func() (string, error)
-	if noBrowser && env.interactive {
-		pasted = func() (string, error) { return env.stdin.ReadString('\n') }
+	// A paste still being read when the sign-in ends is left to the next
+	// question (readLineUntil).
+	ctx, stop := context.WithCancel(cmd.Context())
+	defer stop()
+	paste := false // decided by open, before the first read
+	pasted := func() (string, error) {
+		if !paste {
+			return "", errNoPaste
+		}
+		return env.readLineUntil(ctx)
 	}
 	open := func(url string) error {
+		// Without a paste, only a browser on this machine can finish.
+		where := " on this machine"
 		if noBrowser {
-			_, _ = fmt.Fprintf(stderr, "Open this URL in a browser, on this machine or any other, to sign in:\n\n  %s\n\n", url)
-			if pasted != nil {
-				_, _ = fmt.Fprintf(stderr, "On another machine, as over SSH, the browser ends on an address starting http://127.0.0.1 that does not load. Copy that address from the address bar and paste it here.\n")
+			if paste = env.interactive; paste {
+				where = " on this machine or any other"
 			}
-			return nil
+			_, _ = fmt.Fprintf(stderr, "Open this URL in a browser,%s, to sign in:\n\n  %s\n\n", where, url)
+		} else if err := env.openBrowser(url); err != nil {
+			if paste = env.interactive; paste {
+				where = ""
+			}
+			_, _ = fmt.Fprintf(stderr, "Could not open a browser (%v). Open this URL in a browser%s to sign in:\n\n  %s\n\n", err, where, url)
+		} else {
+			// The browser may have opened on the far machine's screen, or
+			// on none.
+			paste = env.interactive && overSSH(env.getenv)
+			_, _ = fmt.Fprintf(stderr, "Opening the browser to sign in to Tenjin. If it does not open, visit:\n\n  %s\n\n", url)
 		}
-		_, _ = fmt.Fprintf(stderr, "Opening the browser to sign in to Tenjin. If it does not open, visit:\n\n  %s\n\n", url)
-		// A browser that fails to open is not fatal: the URL is on screen.
-		_ = env.openBrowser(url)
+		if paste {
+			_, _ = fmt.Fprintln(stderr, pasteHelp)
+		}
 		return nil
 	}
-	c, location, err := manager.Login(cmd.Context(), open, pasted)
+	c, location, err := manager.Login(ctx, open, pasted)
+	if errors.Is(err, oauth.ErrTimedOut) {
+		return session.Status{}, "", clierr.From(err).WithHint("%s", timeoutHint(cmd.CommandPath(), env.interactive, paste))
+	}
 	if err != nil {
 		return session.Status{}, "", err
 	}
 	return manager.StatusOf(c), location, nil
+}
+
+// pasteHelp says how to finish a sign-in whose browser cannot reach this
+// machine.
+const pasteHelp = "On another machine, as over SSH, the browser ends on an address starting http://127.0.0.1 that does not load. Copy that address from the address bar and paste it here."
+
+// errNoPaste ends the reading of a paste where none was offered.
+var errNoPaste = errors.New("no paste offered")
+
+// overSSH reports whether the CLI runs in an SSH session, where a browser
+// it opens may be on another machine than the one signing in, or on none.
+func overSSH(getenv func(string) string) bool {
+	return getenv("SSH_CONNECTION") != "" || getenv("SSH_TTY") != ""
+}
+
+// timeoutHint is what to do when nobody finished the sign-in in time.
+// command is the command that signs in, for it to be run again.
+func timeoutHint(command string, interactive, pasteOffered bool) string {
+	const token = "set TENJIN_API_TOKEN to an access token from the Tenjin dashboard"
+	switch {
+	case pasteOffered:
+		return "Where the browser is on another machine, paste the address it ends on, starting http://127.0.0.1, before the wait ends; or " + token + "."
+	case interactive:
+		return fmt.Sprintf("Where the browser cannot reach this machine, as over SSH or in a container, run '%s --no-browser' and paste the address the browser ends on; or %s.", command, token)
+	}
+	return "Without a terminal, only a browser on this machine can finish the sign-in. Elsewhere, as over SSH or in CI, " + token + "."
 }
 
 func newLogoutCmd(opts *options, env *environment) *cobra.Command {
