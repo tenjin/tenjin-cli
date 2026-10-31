@@ -288,6 +288,44 @@ func TestTomlKey(t *testing.T) {
 	}
 }
 
+// `codex features list` prints a feature per line, in columns padded to
+// the longest name and stage (Codex 0.166.0's main.rs), with warnings, if
+// any, on standard error.
+func TestParseCodexFeatures(t *testing.T) {
+	out := "apps                         stable             false\n" +
+		"code_mode                    under development  true\n" +
+		"worktrees                    removed            true\n" +
+		"\n"
+	features, ok := parseCodexFeatures([]byte(out))
+	want := map[string]codexFeature{
+		"apps":      {stage: "stable"},
+		"code_mode": {stage: "under development", enabled: true},
+		"worktrees": {stage: "removed", enabled: true},
+	}
+	if !ok || len(features) != len(want) {
+		t.Fatalf("features = %+v, ok = %v", features, ok)
+	}
+	for name, f := range want {
+		if features[name] != f {
+			t.Errorf("%s = %+v, want %+v", name, features[name], f)
+		}
+	}
+	if _, ok := parseCodexFeatures([]byte("error: no such command\n")); ok {
+		t.Error("an answer with no feature was read as a list")
+	}
+}
+
+// Every feature turned off is named once, in Codex's spelling.
+func TestCodexFeaturesOffAreKeys(t *testing.T) {
+	seen := map[string]bool{}
+	for _, f := range codexFeaturesOff {
+		if seen[f] || !bareKey.MatchString(f) {
+			t.Errorf("%q is repeated or not a bare TOML key", f)
+		}
+		seen[f] = true
+	}
+}
+
 func TestReadEventsReadsOnAfterAnError(t *testing.T) {
 	stream := strings.NewReader(`{"type":"result","is_error":true,"result":"usage limit reached"}` + "\n" + tail)
 	_, finished, err := readEvents(stream, "/work", nil)

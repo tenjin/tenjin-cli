@@ -36,6 +36,12 @@ var codex = driver{
 			"-c", "sandbox_workspace_write.writable_roots=[]",
 			"-c", "sandbox_workspace_write.exclude_slash_tmp=true",
 			"-c", "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+			// codex exec refuses a command that asks to leave the sandbox,
+			// unless the configuration sends approvals to Codex's automatic
+			// reviewer: exec then drops its own approval_policy=never, and a
+			// model decides (exec's build_exec_config, as of 0.166.0).
+			"-c", `approval_policy="never"`,
+			"-c", `approvals_reviewer="user"`,
 			// A project need not be a Git repository to be integrated.
 			"--skip-git-repo-check",
 		}
@@ -52,10 +58,12 @@ var codex = driver{
 }
 
 // confineCodex turns off what would give Codex tools outside its sandbox:
-// the developer's MCP servers, and the features in codexFeaturesOff. An override of mcp_servers is merged with the
-// configuration, not put in its place, so each server Codex lists, here
-// where it will run, is turned off by name; then Codex is asked again, and
-// is not started if any is still on.
+// the developer's MCP servers, and the features in codexFeaturesOff. An
+// override of mcp_servers is merged with the configuration, not put in its
+// place, so each server Codex lists, here where it will run, is turned off
+// by name. Then Codex is asked again, for its servers and its features, and
+// is not started if any is still on: the limits shown before the yes hold
+// only if they are.
 func confineCodex(ctx context.Context, path, dir string, env []string) ([]string, error) {
 	var args []string
 	for _, feature := range codexFeaturesOff {
@@ -63,34 +71,120 @@ func confineCodex(ctx context.Context, path, dir string, env []string) ([]string
 	}
 	servers, err := codexServers(ctx, path, dir, env, args)
 	if err != nil {
-		return nil, unconfined(err)
+		return nil, serversOn(err)
 	}
-	if len(servers) == 0 {
-		return args, nil
-	}
-	off := make([]string, len(servers))
-	for i, s := range servers {
-		off[i] = tomlKey(s.Name) + "={enabled=false}"
-	}
-	args = append(args, "-c", "mcp_servers={"+strings.Join(off, ",")+"}")
-	if servers, err = codexServers(ctx, path, dir, env, args); err != nil {
-		return nil, unconfined(err)
-	}
-	for _, s := range servers {
-		if s.Enabled == nil || *s.Enabled {
-			return nil, unconfined(fmt.Errorf("%q is still on", s.Name))
+	if len(servers) > 0 {
+		off := make([]string, len(servers))
+		for i, s := range servers {
+			off[i] = tomlKey(s.Name) + "={enabled=false}"
 		}
+		args = append(args, "-c", "mcp_servers={"+strings.Join(off, ",")+"}")
+		if servers, err = codexServers(ctx, path, dir, env, args); err != nil {
+			return nil, serversOn(err)
+		}
+		for _, s := range servers {
+			if s.Enabled == nil || *s.Enabled {
+				return nil, serversOn(fmt.Errorf("%q is still on", s.Name))
+			}
+		}
+	}
+	if err := checkCodexFeatures(ctx, path, dir, env, args); err != nil {
+		return nil, err
 	}
 	return args, nil
 }
 
-// codexFeaturesOff are Codex's features that act outside its sandbox or
-// bring tools of their own: connectors, plugins, hooks, the browser and
-// computer use. A -c override of a feature a version does not know is
-// ignored, so naming one is harmless.
-var codexFeaturesOff = []string{"apps", "plugins", "skill_mcp_dependency_install", "hooks", "browser_use", "browser_use_external", "in_app_browser", "computer_use"}
+// codexFeaturesOff are Codex's features that would act outside its sandbox
+// or the project, or bring tools of their own. What each does is as of
+// Codex 0.166.0, from its source.
+var codexFeaturesOff = []string{
+	// Connectors, plugins, and what fetches, shares or installs them: tools
+	// and MCP servers beyond the ones turned off by name.
+	"apps", "plugins", "remote_plugin", "plugin_sharing", "skill_mcp_dependency_install",
+	// The developer's hooks run commands of their own during the run.
+	"hooks",
+	// A browser, the computer and the desktop app's automations act on the
+	// machine, not in the project.
+	"browser_use", "browser_use_external", "browser_use_full_cdp_access", "in_app_browser", "computer_use", "in_app_local_automation",
+	// Sub-agents can take a role whose configuration file sets a sandbox
+	// and servers of its own.
+	"multi_agent", "multi_agent_v2",
+	// The automatic reviewer, which can approve a command that asks to
+	// leave the sandbox (approvals_reviewer is pinned as well, in args).
+	"guardian_approval",
+	// A shared daemon would outlive the run, which Ctrl-C must stop. Only
+	// the interactive Codex starts one today.
+	"daemon_auto_start",
+	// Declared, and not used yet: dependency support would be the
+	// developer's to run, not the agent's.
+	"workspace_dependencies",
+}
 
-func unconfined(reason error) error {
+// worktrees is not among them: as of 0.166.0 it is a removed flag that
+// Codex ignores, and codex exec makes a worktree only when given
+// --worktree, which this package does not pass.
+
+// checkCodexFeatures asks Codex for the state of its features with the
+// overrides of the run, and refuses unless each one in codexFeaturesOff is
+// off. Codex ignores an override of a feature it does not know, so a
+// feature it renamed would stay on under its new name while the override
+// names the old one: a name it does not list, or lists as removed (a flag
+// that no longer controls anything), is refused as well, since whether
+// what it controlled is on cannot be told. Codex keeps a renamed feature's
+// old name as an alias, and a removed one in its list, so this refuses a
+// Codex older than a feature, or a change this package has not caught up
+// with.
+func checkCodexFeatures(ctx context.Context, path, dir string, env, overrides []string) error {
+	cmd := proc.Command(ctx, path, slices.Concat(overrides, []string{"features", "list"})...)
+	cmd.Dir = dir
+	cmd.Env = env
+	out, err := cmd.Output()
+	if err != nil {
+		// What went wrong is not passed on: Codex's errors can quote the
+		// configuration, which may hold tokens.
+		return errors.New("this version of Codex cannot be held to the task: 'codex features list', which shows whether the features that act outside its sandbox are off, failed. Update Codex, then run this again")
+	}
+	features, ok := parseCodexFeatures(out)
+	if !ok {
+		return errors.New("this version of Codex cannot be held to the task: 'codex features list' answered in a form this version of the Tenjin CLI does not know. Update the Tenjin CLI, then run this again")
+	}
+	for _, name := range codexFeaturesOff {
+		f, listed := features[name]
+		switch {
+		case !listed || f.stage == "removed":
+			return fmt.Errorf("this version of Codex cannot be held to the task: it does not have the feature %q, which the Tenjin CLI turns off, so whether what it controlled is off cannot be told. Update Codex; if it is up to date, update the Tenjin CLI, then run this again", name)
+		case f.enabled:
+			return fmt.Errorf("this version of Codex cannot be held to the task: its feature %q, which acts outside its sandbox, stays on although the run turns it off, as a managed configuration can make it. Turn it off, then run this again", name)
+		}
+	}
+	return nil
+}
+
+type codexFeature struct {
+	stage   string
+	enabled bool
+}
+
+// parseCodexFeatures reads `codex features list`: a line per feature, its
+// name, its stage (which can be two words, such as "under development") and
+// whether it is on, in columns.
+func parseCodexFeatures(out []byte) (map[string]codexFeature, bool) {
+	features := map[string]codexFeature{}
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		last := fields[len(fields)-1]
+		if last != "true" && last != "false" {
+			continue
+		}
+		features[fields[0]] = codexFeature{stage: strings.Join(fields[1:len(fields)-1], " "), enabled: last == "true"}
+	}
+	return features, len(features) > 0
+}
+
+func serversOn(reason error) error {
 	return fmt.Errorf("this version of Codex cannot be held to the task: its MCP servers could not be turned off (%w). Update Codex, or turn them off in its configuration, then run this again", reason)
 }
 

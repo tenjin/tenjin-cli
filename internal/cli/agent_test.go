@@ -89,8 +89,27 @@ func (h *harness) onPath(name, path string) {
 // real one was seen to emit: commands wrapped in a login shell, file changes
 // with absolute paths, and the report as the last message. It also answers
 // `codex mcp list --json` with the servers in FAKE_CODEX_MCP, turned off
-// when an override names them, unless FAKE_CODEX_MCP_STAYS is set.
+// when an override names them, unless FAKE_CODEX_MCP_STAYS is set; and
+// `codex features list` in the real one's columns, with each feature an
+// override turns off listed as off, but the one FAKE_CODEX_FEATURE_STAYS
+// names, which stays on, and the one FAKE_CODEX_FEATURE_UNKNOWN names,
+// which this Codex does not have.
 const fakeCodexScript = `#!/bin/sh
+case " $* " in *" features list "*)
+  printf '%s\n' "$@" >> "$FAKE_CODEX_DIR/featureargs"
+  [ -n "$FAKE_CODEX_FEATURES_FAIL" ] && { echo "error: unrecognized subcommand 'features'" >&2; exit 2; }
+  echo "shell_tool                         stable             true"
+  echo "code_mode                          under development  false"
+  for arg in "$@"; do
+    case "$arg" in features.*=false)
+      name=${arg#features.}; name=${name%=false}
+      [ "$name" = "$FAKE_CODEX_FEATURE_UNKNOWN" ] && continue
+      state=false; [ "$name" = "$FAKE_CODEX_FEATURE_STAYS" ] && state=true
+      echo "$name                    stable             $state" ;;
+    esac
+  done
+  exit 0 ;;
+esac
 case " $* " in *" mcp list --json "*)
   printf '%s\n' "$@" >> "$FAKE_CODEX_DIR/mcpargs"
   pwd -P > "$FAKE_CODEX_DIR/mcpdir"
@@ -481,6 +500,56 @@ func TestCodexIsNotStartedWhenItsMCPServersStayOn(t *testing.T) {
 				t.Fatal("Codex was started")
 			}
 			if code != 9 || !strings.Contains(stdout, "its MCP servers could not be turned off") || !strings.Contains(stdout, "No files were changed.") {
+				t.Errorf("exit = %d\n%s", code, stdout)
+			}
+		})
+	}
+}
+
+// Codex's features that act outside its sandbox are turned off, and Codex
+// is asked, with the run's overrides, whether they are.
+func TestCodexRunsWithItsFeaturesCheckedOff(t *testing.T) {
+	h, dir := brokenAndroid(t)
+	codex := h.installCodex()
+	t.Setenv("FAKE_CODEX_MCP", `[{"name":"github","enabled":true}]`)
+	if code, stdout, stderr := h.run("setup", dir, "--agent", "codex"); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	args, listed := codex.read("args"), codex.read("featureargs")
+	for _, feature := range []string{"apps", "plugins", "hooks", "computer_use", "multi_agent", "guardian_approval"} {
+		if want := "-c\nfeatures." + feature + "=false\n"; !strings.Contains(args, want) || !strings.Contains(listed, want) {
+			t.Errorf("%s is not turned off in the run and in the list:\nrun: %q\nlist: %q", feature, args, listed)
+		}
+	}
+	// The list is asked for with every override the run gets, the servers'
+	// included.
+	if !strings.Contains(listed, "mcp_servers={github={enabled=false}}") || !strings.HasSuffix(listed, "\nfeatures\nlist") {
+		t.Errorf("features list args = %q", listed)
+	}
+	// A command that asks to leave the sandbox is refused, whoever the
+	// developer's configuration has review it.
+	for _, want := range []string{"-c\napproval_policy=\"never\"\n", "-c\napprovals_reviewer=\"user\"\n"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("args lack %q", want)
+		}
+	}
+}
+
+func TestCodexIsNotStartedUnlessItsFeaturesAreOff(t *testing.T) {
+	for _, tc := range []struct{ name, variable, value, says string }{
+		{"one stays on", "FAKE_CODEX_FEATURE_STAYS", "computer_use", `its feature "computer_use", which acts outside its sandbox, stays on`},
+		{"one is unknown, as after a rename", "FAKE_CODEX_FEATURE_UNKNOWN", "browser_use", `it does not have the feature "browser_use"`},
+		{"this version cannot list them", "FAKE_CODEX_FEATURES_FAIL", "1", "'codex features list'"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, dir := brokenAndroid(t)
+			codex := h.installCodex()
+			t.Setenv(tc.variable, tc.value)
+			code, stdout, _ := h.run("setup", dir, "--agent", "codex")
+			if codex.read("args") != "" {
+				t.Fatal("Codex was started")
+			}
+			if code != 9 || !strings.Contains(stdout, tc.says) || !strings.Contains(stdout, "No files were changed.") {
 				t.Errorf("exit = %d\n%s", code, stdout)
 			}
 		})
