@@ -100,7 +100,8 @@ A callback group instead:
        tenjin apps callback-groups update <group-id> --app <app-id> --channel <channel-id> --setting key=value
   3. Give the settings the network's groups share:
        tenjin apps callback-settings update --app <app-id> --channel <channel-id> --setting key=value
-  4. Switch the group on once inspect shows it lacks nothing:
+  4. Switch the group on once inspect shows it lacks nothing (unknown is not
+     nothing: it means the group's template could not be read):
        tenjin apps callback-groups update <group-id> --app <app-id> --channel <channel-id> --active
 
 To your own server:

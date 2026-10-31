@@ -16,7 +16,9 @@ import (
 // place: the channel's callback group templates, the app's groups (each with
 // whether it can be activated and the settings it still lacks), the
 // callback settings the groups share, and the app's events. A part that
-// could not be read is empty, with a warning.
+// could not be read is empty, with a warning. A group whose template could
+// not be read has null for what it lacks and whether it can be activated:
+// neither is known.
 type Integration struct {
 	Templates []map[string]any `json:"available_templates"`
 	Groups    []map[string]any `json:"configured_groups"`
@@ -173,10 +175,14 @@ func catchSignIn(f func()) (err error) {
 
 // annotate marks each group with the settings its template requires that
 // neither it nor the shared settings give, and whether it can be activated.
+// Both are null for a group whose template is not among the templates read,
+// as every group's is when they could not be read: that it lacks nothing
+// would be a guess.
 func annotate(in *Integration, settingsKnown bool) {
 	required := map[string][]string{}
 	for _, t := range in.Templates {
 		id, _ := t["id"].(string)
+		required[id] = []string{}
 		for _, s := range asList(t["required_settings"]) {
 			if name, ok := s.(string); ok {
 				required[id] = append(required[id], name)
@@ -184,12 +190,18 @@ func annotate(in *Integration, settingsKnown bool) {
 		}
 	}
 	shared, _ := in.Settings["callback_settings"].(map[string]any)
-	overstated := false
+	overstated, unknown := false, false
 	for _, g := range in.Groups {
 		template, _ := g["callback_group_template_id"].(string)
+		names, known := required[template]
+		if !known {
+			g["missing_settings"], g["activatable"] = nil, nil
+			unknown = true
+			continue
+		}
 		own, _ := g["callback_settings"].(map[string]any)
 		missing := []string{}
-		for _, name := range required[template] {
+		for _, name := range names {
 			if !given(own[name]) && !given(shared[name]) {
 				missing = append(missing, name)
 			}
@@ -206,6 +218,9 @@ func annotate(in *Integration, settingsKnown bool) {
 	}
 	if overstated {
 		in.Warnings = append(in.Warnings, "missing_settings may be overstated: the shared callback settings could not be read")
+	}
+	if unknown {
+		in.Warnings = append(in.Warnings, "missing_settings and activatable are unknown (null) for a group whose template could not be read")
 	}
 }
 

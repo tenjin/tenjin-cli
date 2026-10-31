@@ -408,11 +408,15 @@ func writeIntegration(w, errw io.Writer, in *tenjinapi.Integration) error {
 	} else {
 		rows := [][]string{}
 		for _, g := range in.Groups {
-			activatable := "no"
-			if g["activatable"] == true {
+			activatable, missing := "no", text(g["missing_settings"])
+			switch g["activatable"] {
+			case true:
 				activatable = "yes"
+			case nil:
+				// Its template could not be read.
+				activatable, missing = "unknown", "unknown"
 			}
-			rows = append(rows, []string{text(g["name"]), text(g["event"]), fmt.Sprint(g["active"] == true), activatable, text(g["missing_settings"]), text(g["id"])})
+			rows = append(rows, []string{text(g["name"]), text(g["event"]), fmt.Sprint(g["active"] == true), activatable, missing, text(g["id"])})
 		}
 		if err := render.WriteTable(w, style, []string{"name", "event", "active", "activatable", "missing settings", "id"}, rows); err != nil {
 			return err

@@ -170,6 +170,44 @@ func TestInspectIntegration(t *testing.T) {
 	}
 }
 
+// When the channel's templates cannot be read, what a group lacks is not
+// known: inspect says so rather than that it lacks nothing.
+func TestInspectIntegrationWithoutTheTemplates(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	h.fake.data = map[string]func(*http.Request) (int, any){
+		"/v2/integrations/31/callback_group_templates": func(*http.Request) (int, any) {
+			return http.StatusInternalServerError, map[string]any{"code": 500, "message": "Internal Server Error"}
+		},
+		"/v2/apps/" + testApp + "/integrations/31/callback_groups": func(*http.Request) (int, any) {
+			return http.StatusOK, map[string]any{"data": []any{map[string]any{"id": testOther, "type": "callback_group", "attributes": map[string]any{
+				"name": "My purchases", "active": true, "callback_group_template_id": "00000000-0000-4000-8000-0000000000cc",
+			}}}}
+		},
+	}
+	code, stdout, stderr := h.run("apps", "callback-groups", "inspect", "--app", testApp, "--channel", "31", "--json")
+	var got struct {
+		Groups   []map[string]any `json:"configured_groups"`
+		Warnings []string         `json:"warnings"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil || code != 0 || len(got.Groups) != 1 {
+		t.Fatalf("exit = %d, err = %v, stderr = %q", code, err, stderr)
+	}
+	for _, field := range []string{"missing_settings", "activatable"} {
+		if v, ok := got.Groups[0][field]; !ok || v != nil {
+			t.Errorf("%s = %v, present %v; want null", field, v, ok)
+		}
+	}
+	if !strings.Contains(strings.Join(got.Warnings, "\n"), "missing_settings and activatable are unknown") {
+		t.Errorf("warnings = %q", got.Warnings)
+	}
+
+	code, stdout, stderr = h.run("apps", "callback-groups", "inspect", "--app", testApp, "--channel", "31")
+	if code != 0 || !strings.Contains(stdout, "unknown") || strings.Contains(stdout, "yes") || !strings.Contains(stderr, "missing_settings and activatable are unknown") {
+		t.Errorf("table: exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+}
+
 // When nothing about the app can be read, as for an app that does not
 // exist, inspect fails instead of showing an app with nothing configured.
 func TestInspectIntegrationFailsWhenTheAppCannotBeRead(t *testing.T) {
