@@ -245,6 +245,7 @@ Every command except `setup` is built to be driven by a program:
 - The JSON of `project detect` and `doctor` is stable: fields are added, never renamed or removed.
 - The `apps` commands print the CLI's own JSON, which leaves out the shared secrets the API returns with an app.
 - `TENJIN_API_TOKEN`, an access token from the dashboard, signs in without a browser.
+- Run by Codex in a sandbox without network (Codex sets `CODEX_SANDBOX_NETWORK_DISABLED`), a request that cannot connect fails at once, saying which Codex setting allows it: `network_access = true` under `[sandbox_workspace_write]`, or the network of your permission profile.
 
 | Exit code | Meaning |
 | --- | --- |

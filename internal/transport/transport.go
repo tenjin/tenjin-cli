@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 )
@@ -21,6 +22,10 @@ type Transport struct {
 	Base http.RoundTripper
 	// Log receives a line per request sent. Nil logs nothing.
 	Log io.Writer
+	// Blocked says why connections cannot be made, when that is known, as
+	// in a sandbox without network: a connection that fails then fails
+	// with a *BlockedError that says so, and is not tried again.
+	Blocked string
 	// wait pauses between attempts; tests replace it.
 	wait func(ctx context.Context, d time.Duration) error
 	now  func() time.Time
@@ -69,7 +74,11 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		start := t.clock()
 		resp, err := t.base().RoundTrip(send)
-		again := attempt < tries && worthRetrying(req.Context(), resp, err)
+		if err != nil && t.Blocked != "" && connectionFailed(err) {
+			err = &BlockedError{Reason: t.Blocked, Err: err}
+		}
+		var blocked *BlockedError
+		again := attempt < tries && !errors.As(err, &blocked) && worthRetrying(req.Context(), resp, err)
 		t.log(send, resp, err, t.clock().Sub(start), attempt, tries, again)
 		if !again {
 			return resp, err
@@ -84,6 +93,25 @@ func (t *Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 	}
+}
+
+// BlockedError is a connection that failed where the network is known to
+// be blocked. Its message gives the reason first, since that is what to act
+// on, then the failure itself.
+type BlockedError struct {
+	Reason string
+	Err    error
+}
+
+func (e *BlockedError) Error() string { return e.Reason + " (" + e.Err.Error() + ")" }
+func (e *BlockedError) Unwrap() error { return e.Err }
+
+// connectionFailed reports whether err is a failure to reach the server at
+// all: a name that could not be looked up, or a connection not made.
+func connectionFailed(err error) bool {
+	var op *net.OpError
+	var dns *net.DNSError
+	return errors.As(err, &op) || errors.As(err, &dns)
 }
 
 // worthRetrying reports whether another attempt could succeed: the request

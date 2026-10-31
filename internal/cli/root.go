@@ -143,11 +143,27 @@ type environment struct {
 // for it at most this long, once a day.
 const updateWait = 1500 * time.Millisecond
 
-// transport is what every HTTP client uses: retries where they are safe, and
-// the --verbose log.
+// transport is what every HTTP client uses: retries where they are safe, the
+// --verbose log, and, inside a sandbox known to have no network, failures
+// that say so.
 func (e *environment) transport() *transport.Transport {
-	return transport.New(e.verbose)
+	t := transport.New(e.verbose)
+	if e.getenv(codexNetworkOffVar) != "" {
+		t.Blocked = codexNetworkOff
+	}
+	return t
 }
+
+// Codex sets codexNetworkOffVar, to 1, for the commands it runs in a sandbox
+// without network (core/src/spawn.rs, as of Codex 0.166.0). A developer's
+// own Codex usually runs that way, so a failed connection there says what
+// to change, in Codex's configuration keys as of that version. The Codex
+// setup starts runs the doctor with --offline, which connects to nothing.
+const (
+	codexNetworkOffVar = "CODEX_SANDBOX_NETWORK_DISABLED"
+	codexNetworkOff    = "Codex's sandbox is blocking the network: set network_access = true under [sandbox_workspace_write] in Codex's config.toml, " +
+		"or enable network in your permission profile ([permissions.<name>.network] enabled = true)"
+)
 
 // trackClient returns a client for Tenjin's tracking service.
 func (e *environment) trackClient() *track.Client {

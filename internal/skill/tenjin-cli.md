@@ -6,6 +6,8 @@ Every command below accepts `--json` and never prompts when it is not run at a t
 
 These instructions describe the version of the CLI that installed them. If `tenjin` answers that a command or flag named here does not exist, the error's hint says whether they are from another version: then tell the developer to run `tenjin agent install`, and read the command's `--help` meanwhile. `doctor` lists such a copy as the `info` finding `agent.skill.version`; it needs nothing from you.
 
+In Codex's sandbox without network, every command that reaches Tenjin fails with a message that starts "Codex's sandbox is blocking the network" and names the setting to change. Pass it on to the developer, or ask them to run the command themselves; meanwhile `tenjin doctor --offline --json .` checks everything but the SDK key.
+
 Do not run `tenjin setup` or `tenjin project set-keys` yourself. `setup` is the same sequence for a person at a terminal: it asks questions, and it is where the developer's SDK keys go in. Both write the real keys into the project, where you would then read them. Tell the developer to run `tenjin setup` when you are done (step 6).
 
 ## The sequence

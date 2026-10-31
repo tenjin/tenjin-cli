@@ -28,7 +28,7 @@ func readByTheCLI(name string) bool {
 		return true
 	}
 	switch name {
-	case "NO_COLOR", "CLICOLOR_FORCE", "COLORTERM", "DO_NOT_TRACK", "SSH_CONNECTION", "SSH_TTY":
+	case "NO_COLOR", "CLICOLOR_FORCE", "COLORTERM", "DO_NOT_TRACK", "SSH_CONNECTION", "SSH_TTY", "CODEX_SANDBOX_NETWORK_DISABLED":
 		return true
 	}
 	return false
