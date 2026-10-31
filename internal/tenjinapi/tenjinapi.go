@@ -233,21 +233,26 @@ type NewApp struct {
 	StoreURL string
 }
 
+// Body is the request that creates the app, by the API's field names. It is
+// written here, not from the spec's type: the spec requires a name, bundle
+// ID and platform, and leaves out store_url, which the API accepts instead
+// of them.
+func (in NewApp) Body() map[string]string {
+	body := map[string]string{}
+	for field, value := range map[string]string{"name": in.Name, "bundle_id": in.BundleID, "platform": in.Platform, "store_url": in.StoreURL} {
+		if value != "" {
+			body[field] = value
+		}
+	}
+	return body
+}
+
 // CreateApp creates an app. A bundle ID and platform cannot be changed
 // afterwards. If the app already exists, the existing one is returned with
 // created false: creation is not idempotent on the server, so this makes it
 // so.
 func (c *Client) CreateApp(ctx context.Context, in NewApp) (app *App, created bool, err error) {
-	// The body is written here, not from the spec's type: the spec requires
-	// a name, bundle ID and platform, and leaves out store_url, which the API
-	// accepts instead of them.
-	request := map[string]string{}
-	for field, value := range map[string]string{"name": in.Name, "bundle_id": in.BundleID, "platform": in.Platform, "store_url": in.StoreURL} {
-		if value != "" {
-			request[field] = value
-		}
-	}
-	raw, err := json.Marshal(request)
+	raw, err := json.Marshal(in.Body())
 	if err != nil {
 		return nil, false, err
 	}

@@ -142,8 +142,8 @@ func newAppsGetCmd(opts *options, env *environment) *cobra.Command {
 
 func newAppsCreateCmd(opts *options, env *environment) *cobra.Command {
 	var (
-		in  tenjinapi.NewApp
-		yes bool
+		in          tenjinapi.NewApp
+		yes, dryRun bool
 	)
 	cmd := &cobra.Command{
 		Use:   "create (--name <name> --bundle-id <id> --platform <platform> | --store-url <url>)",
@@ -178,6 +178,9 @@ ensure' to get the app whether or not it exists.`,
 			if in.Platform != "" && !contains(platforms, in.Platform) {
 				return clierr.New(clierr.Usage, "unknown platform %q (use %s)", in.Platform, strings.Join(platforms, ", "))
 			}
+			if dryRun {
+				return dryRunCreateApp(cmd, env, in, what)
+			}
 
 			if !yes {
 				if !env.interactive {
@@ -211,7 +214,21 @@ ensure' to get the app whether or not it exists.`,
 	cmd.Flags().StringVar(&in.Platform, "platform", "", "one of: "+strings.Join(platforms, ", "))
 	cmd.Flags().StringVar(&in.StoreURL, "store-url", "", "the app's App Store or Google Play URL")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "create the app without asking")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the request it would send, with its body, and send nothing")
 	return cmd
+}
+
+// dryRunCreateApp says the request that would create the app, what, and
+// sends nothing.
+func dryRunCreateApp(cmd *cobra.Command, env *environment, in tenjinapi.NewApp, what string) error {
+	planned, err := env.api().Plan(func(api *tenjinapi.Client) error {
+		_, _, err := api.CreateApp(cmd.Context(), in)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return writeDryRun(cmd, "Create "+what, planned, in.Body(), false)
 }
 
 // appKeys is what `apps keys list` reports. Keys is empty where Tenjin's API
@@ -336,7 +353,7 @@ type ensureResult struct {
 func newAppsEnsureCmd(opts *options, env *environment) *cobra.Command {
 	var (
 		bundleID, platform, name string
-		yes                      bool
+		yes, dryRun              bool
 	)
 	cmd := &cobra.Command{
 		Use:   "ensure --bundle-id <id> --platform <platform>",
@@ -346,7 +363,10 @@ is none. Running it again returns the same app.
 
 A Tenjin app is one bundle ID on one platform: a project that ships on iOS and
 Android needs two apps. The bundle ID and platform cannot be changed after
-creation, so creating asks for confirmation unless --yes is given.`,
+creation, so creating asks for confirmation unless --yes is given.
+
+With --dry-run, an app that exists is shown as without it, and one that does
+not is not created: the request that would create it is printed instead.`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			format, err := opts.format(cmd)
@@ -359,9 +379,22 @@ creation, so creating asks for confirmation unless --yes is given.`,
 			if !contains(platforms, platform) {
 				return clierr.New(clierr.Usage, "unknown platform %q (use %s)", platform, strings.Join(platforms, ", "))
 			}
+			if name == "" {
+				name = bundleID
+			}
 
-			result, err := ensureApp(cmd.Context(), env, cmd.ErrOrStderr(), bundleID, platform, name, yes)
-			if err != nil {
+			var result *ensureResult
+			if dryRun {
+				app, err := env.api().FindApp(cmd.Context(), bundleID, platform)
+				if err != nil {
+					return err
+				}
+				if app == nil {
+					in := tenjinapi.NewApp{Name: name, BundleID: bundleID, Platform: platform}
+					return dryRunCreateApp(cmd, env, in, fmt.Sprintf("%q with the bundle ID %s on %s", name, bundleID, platform))
+				}
+				result = &ensureResult{App: *app}
+			} else if result, err = ensureApp(cmd.Context(), env, cmd.ErrOrStderr(), bundleID, platform, name, yes); err != nil {
 				return err
 			}
 			if format == render.JSON {
@@ -380,6 +413,7 @@ creation, so creating asks for confirmation unless --yes is given.`,
 	cmd.Flags().StringVar(&platform, "platform", "", "one of: "+strings.Join(platforms, ", "))
 	cmd.Flags().StringVar(&name, "name", "", "name for a new app (default: the bundle ID)")
 	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "create the app without asking")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "if the app is not there, print the request that would create it, with its body, and send nothing")
 	return cmd
 }
 
@@ -396,9 +430,6 @@ func ensureApp(ctx context.Context, env *environment, prompt io.Writer, bundleID
 		return &ensureResult{App: *app}, nil
 	}
 
-	if name == "" {
-		name = bundleID
-	}
 	if !yes {
 		if !env.interactive {
 			return nil, clierr.New(clierr.NotFound, "no Tenjin app has the bundle ID %s on %s", bundleID, platform).

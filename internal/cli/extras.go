@@ -123,7 +123,7 @@ site ID everywhere unless --app, --campaign or --channel narrows it to one.
 	}
 	addChangeFlags(reinstate, &reinstateYes, &reinstateDry)
 
-	var clearYes bool
+	var clearYes, clearDry bool
 	clear := &cobra.Command{
 		Use:   "clear",
 		Short: "Remove every site ID rule",
@@ -133,14 +133,25 @@ site ID everywhere unless --app, --campaign or --channel narrows it to one.
 			if err != nil {
 				return err
 			}
-			if err := confirmChange(cmd, env, clearYes, "Remove every site ID rule of the organization", true); err != nil {
+			const what = "Remove every site ID rule of the organization"
+			if clearDry {
+				planned, err := env.api().Plan(func(api *tenjinapi.Client) error {
+					_, err := api.ClearSiteIDs(cmd.Context())
+					return err
+				})
+				if err != nil {
+					return err
+				}
+				return writeDryRun(cmd, what, planned, struct{}{}, false)
+			}
+			if err := confirmChange(cmd, env, clearYes, what, true); err != nil {
 				return err
 			}
 			doc, err := env.api().ClearSiteIDs(cmd.Context())
 			return writeSiteIDAnswer(cmd.OutOrStdout(), format, doc, err, "Cleared.")
 		},
 	}
-	clear.Flags().BoolVarP(&clearYes, "yes", "y", false, "do it without asking")
+	addChangeFlags(clear, &clearYes, &clearDry)
 
 	list := &cobra.Command{
 		Use:   "list",

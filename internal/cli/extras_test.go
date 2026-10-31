@@ -53,6 +53,12 @@ func TestSiteIDs(t *testing.T) {
 	if code != 0 || !strings.Contains(stdout, "bad-site") || !strings.Contains(stderr, "POST "+h.fake.srv.URL+"/management.v2.SiteIDFilter/Reinstate with this body") || len(h.fake.siteIDCalls) != calls {
 		t.Errorf("reinstate --dry-run: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
 	}
+	h.fake.siteIDRules = []map[string]any{{"siteId": "bad-site"}}
+	code, stdout, stderr = h.run("site-ids", "clear", "--dry-run")
+	if code != 0 || strings.TrimSpace(stdout) != "{}" || !strings.Contains(stderr, "Would remove every site ID rule of the organization. Nothing was sent: it would send POST "+h.fake.srv.URL+"/management.v2.SiteIDFilter/Clear with this body") ||
+		len(h.fake.siteIDCalls) != calls || len(h.fake.siteIDRules) != 1 {
+		t.Errorf("clear --dry-run: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
 }
 
 // A site ID the service would refuse is refused before the question.

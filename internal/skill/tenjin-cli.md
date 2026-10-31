@@ -43,7 +43,7 @@ A Tenjin app is one bundle ID on one platform, and an Android build for another 
 tenjin apps ensure --bundle-id <bundle_id> --platform <tenjin_platform> --json
 ```
 
-Exit status 5 means there is no such app yet. The bundle ID and platform of an app cannot be changed after it is created, so show the developer what would be created and ask first. Then run the command again with `--yes --name "<app name>"`. Exit status 4 means the developer's role cannot create apps: ask them to pick an existing app from `tenjin apps list --json`, or to ask a manager.
+Exit status 5 means there is no such app yet. The bundle ID and platform of an app cannot be changed after it is created, so show the developer what would be created and ask first: the same command with `--dry-run --name "<app name>"` prints the request that would create it, and creates nothing. Then run the command again with `--yes --name "<app name>"`. Exit status 4 means the developer's role cannot create apps: ask them to pick an existing app from `tenjin apps list --json`, or to ask a manager.
 
 ### 4. Leave a placeholder for each SDK key
 

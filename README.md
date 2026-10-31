@@ -131,10 +131,10 @@ The Tenjin apps, their SDK keys and the documentation are commands of their own 
 
 | Command | What it does |
 | --- | --- |
-| `tenjin apps ensure --bundle-id <id> --platform <platform>` | Find the Tenjin app for a build, or create it. Safe to repeat |
+| `tenjin apps ensure --bundle-id <id> --platform <platform>` | Find the Tenjin app for a build, or create it. Safe to repeat; with `--dry-run`, an app not there yet is not created, and the request that would create it is printed |
 | `tenjin apps keys list --app <id>` | The app's SDK keys, by their last four characters, and where to copy one from |
 | `tenjin apps list`, `tenjin apps get <id>` | The apps in your organization; one app, and whether Tenjin is receiving its events |
-| `tenjin apps create` | Create an app from `--name`, `--bundle-id` and `--platform`, or from `--store-url` |
+| `tenjin apps create` | Create an app from `--name`, `--bundle-id` and `--platform`, or from `--store-url`; `--dry-run` prints the request and sends nothing |
 | `tenjin docs search <words>` | Tenjin's documentation, with links |
 
 #### Your account

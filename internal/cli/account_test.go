@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -339,6 +340,20 @@ func TestAppsEnsure(t *testing.T) {
 		}
 	})
 
+	t.Run("a dry run finds, and creates nothing", func(t *testing.T) {
+		h := newHarness(t)
+		h.signIn()
+		code, stdout, stderr := h.run("apps", "ensure", "--bundle-id", "com.example.sample", "--platform", "android", "--dry-run")
+		if code != 0 || len(h.fake.apps) != 0 || !strings.Contains(stdout, `"name": "com.example.sample"`) ||
+			!strings.Contains(stderr, `Would create "com.example.sample" with the bundle ID com.example.sample on android. Nothing was sent`) {
+			t.Errorf("missing: exit = %d, apps = %d, stdout = %q, stderr = %q", code, len(h.fake.apps), stdout, stderr)
+		}
+		existing := h.fake.addApp("Sample", "com.example.sample", "android")
+		if code, r, stderr := ensure(h, "--dry-run"); code != 0 || r.ID != existing.ID || r.Created || len(h.fake.apps) != 1 {
+			t.Errorf("there: exit = %d, result = %+v, stderr = %q", code, r, stderr)
+		}
+	})
+
 	t.Run("refuses to create without a yes", func(t *testing.T) {
 		h := newHarness(t)
 		h.signIn()
@@ -664,6 +679,17 @@ func TestAppsCreate(t *testing.T) {
 		code, stdout, stderr := h.run(create...)
 		if code != 0 || len(h.fake.apps) != 1 || !strings.Contains(stderr, "cannot be changed later") || !strings.Contains(stdout, "App ID") {
 			t.Errorf("answered yes: exit = %d, apps = %d, stderr = %q", code, len(h.fake.apps), stderr)
+		}
+	})
+
+	t.Run("a dry run sends nothing", func(t *testing.T) {
+		h := newHarness(t)
+		code, stdout, stderr := h.run(append(create, "--dry-run")...)
+		var body map[string]string
+		if err := json.Unmarshal([]byte(stdout), &body); err != nil || code != 0 || len(h.fake.apps) != 0 ||
+			!reflect.DeepEqual(body, map[string]string{"name": "Sample", "bundle_id": "com.example.sample", "platform": "android"}) ||
+			!strings.Contains(stderr, `Would create "Sample" with the bundle ID com.example.sample on android. Nothing was sent: it would send POST `+h.fake.srv.URL+"/v2/apps with this body") {
+			t.Errorf("exit = %d, apps = %d, stdout = %q, stderr = %q", code, len(h.fake.apps), stdout, stderr)
 		}
 	})
 
