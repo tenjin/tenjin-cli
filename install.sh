@@ -28,12 +28,26 @@ need() {
 	command -v "$1" >/dev/null 2>&1 || fail "this script needs $1"
 }
 
-on_path() {
-	case ":$PATH:" in
-	*":$1:"*) return 0 ;;
-	*) return 1 ;;
-	esac
+# Prints a folder without the trailing slashes tab completion leaves, so
+# that ~/bin/ and ~/bin are the same folder. / stays /.
+trimmed() {
+	t="$1"
+	while [ "$t" != / ] && [ "${t%/}" != "$t" ]; do t="${t%/}"; done
+	printf '%s\n' "$t"
 }
+
+# Reports whether the folder is on PATH, with or without a trailing slash on
+# either. In a subshell, so IFS and set -f (no globbing of the entries) stay
+# here.
+on_path() (
+	want=$(trimmed "$1")
+	IFS=:
+	set -f
+	for entry in $PATH; do
+		[ "$(trimmed "$entry")" = "$want" ] && return 0
+	done
+	return 1
+)
 
 # Adds the folder to PATH in a shell startup file, once. A file it was added
 # to is recorded in changed, and one that had it already in present. A file
@@ -68,10 +82,16 @@ main() {
 	*) fail "no installer for $(uname -s). On Windows, download the zip from $releases" ;;
 	esac
 
-	case "$(uname -m)" in
+	machine=$(uname -m)
+	# A shell under Rosetta says x86_64 on Apple silicon, where the arm64
+	# build runs natively. sysctl is in /usr/sbin, which PATH may lack.
+	if [ "$os" = darwin ] && [ "$(/usr/sbin/sysctl -n hw.optional.arm64 2>/dev/null || true)" = 1 ]; then
+		machine=arm64
+	fi
+	case "$machine" in
 	x86_64 | amd64) arch=amd64 ;;
 	arm64 | aarch64) arch=arm64 ;;
-	*) fail "no build for the $(uname -m) processor" ;;
+	*) fail "no build for the $machine processor" ;;
 	esac
 
 	version="${TENJIN_VERSION:-}"
@@ -123,6 +143,7 @@ main() {
 	/*) ;;
 	*) dir="$(pwd)/$dir" ;;
 	esac
+	dir=$(trimmed "$dir")
 
 	archive="tenjin_${version}_${os}_${arch}.tar.gz"
 	url="$releases/download/v$version"
@@ -154,7 +175,9 @@ main() {
 	chmod 0755 "$dir/.tenjin.new"
 	mv -f "$dir/.tenjin.new" "$dir/tenjin" || fail "could not write to $dir; nothing was installed"
 
-	echo "Installed $("$dir/tenjin" version) in $dir"
+	# Neither a usage event nor an update notice: this run of tenjin is the
+	# installer's, not the user's.
+	echo "Installed $(TENJIN_NO_TELEMETRY=1 TENJIN_NO_UPDATE_CHECK=1 "$dir/tenjin" version) in $dir"
 
 	changed=""
 	present=""
@@ -204,8 +227,10 @@ main() {
 
 	# An older copy elsewhere on PATH, such as one in a folder this script could
 	# not write to, may be found before this one, now or in new terminals.
+	# Compared by folder: a PATH entry with a trailing slash finds
+	# .../bin//tenjin, which is this copy.
 	found=$(command -v tenjin 2>/dev/null || true)
-	if [ -n "$found" ] && [ "$found" != "$dir/tenjin" ]; then
+	if [ -n "$found" ] && [ "$(trimmed "$(dirname "$found")")" != "$dir" ]; then
 		echo "Another copy of the Tenjin CLI is at $found, and may run instead of this one. Remove it (sudo rm $found if it needs it), or run $dir/tenjin."
 	fi
 	if on_path "$dir"; then

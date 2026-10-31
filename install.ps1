@@ -21,6 +21,9 @@
 
 	# Failing throws rather than exits: this runs inside the caller's shell.
 	function Fail($message) { throw "Tenjin CLI installer: $message" }
+	# How a folder is compared with PATH's entries: C:\tools\ and C:\tools
+	# are the same folder.
+	function Key($folder) { $folder.TrimEnd('\', '/') }
 
 	$arch = $null
 	try { $arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() } catch { }
@@ -93,6 +96,9 @@
 		if (-not $dir) { $dir = Join-Path $env:LOCALAPPDATA 'Programs\tenjin' }
 		# A relative folder would put a relative entry on PATH.
 		$dir = [System.IO.Path]::GetFullPath($dir)
+		# Without the trailing slash tab completion leaves, unless it is a
+		# drive's root, which needs it.
+		if ($dir -ne [System.IO.Path]::GetPathRoot($dir)) { $dir = $dir.TrimEnd('\', '/') }
 		New-Item -ItemType Directory -Path $dir -Force | Out-Null
 		$target = Join-Path $dir 'tenjin.exe'
 		# Windows cannot overwrite a running program but can rename it, so the
@@ -117,7 +123,7 @@
 		$key = Get-Item -Path 'HKCU:\Environment'
 		$userPath = $key.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
 		$entries = @($userPath -split ';' | Where-Object { $_ })
-		if ($entries -notcontains $dir) {
+		if (@($entries | ForEach-Object { Key $_ }) -notcontains (Key $dir)) {
 			Set-ItemProperty -Path 'HKCU:\Environment' -Name 'Path' -Value (($entries + $dir) -join ';') -Type ExpandString
 			# Setting a variable through .NET tells running programs, Explorer
 			# among them, that the environment changed; the registry alone
@@ -126,13 +132,21 @@
 			[Environment]::SetEnvironmentVariable('TENJIN_INSTALL_PATH_CHANGED', $null, 'User')
 			Write-Host "Added $dir to your PATH. Open a new terminal to use the tenjin command there."
 		}
-		if (($env:Path -split ';') -notcontains $dir) { $env:Path = "$env:Path;$dir" }
+		if (@($env:Path -split ';' | Where-Object { $_ } | ForEach-Object { Key $_ }) -notcontains (Key $dir)) { $env:Path = "$env:Path;$dir" }
 
-		Write-Host "Installed $(& $target version) in $dir"
+		# Neither a usage event nor an update notice: this run of tenjin is
+		# the installer's, not the user's. The variables are put back as they
+		# were, since this runs in the user's own shell.
+		$saved = $env:TENJIN_NO_TELEMETRY, $env:TENJIN_NO_UPDATE_CHECK
+		$env:TENJIN_NO_TELEMETRY, $env:TENJIN_NO_UPDATE_CHECK = '1', '1'
+		try { $installed = & $target version } finally { $env:TENJIN_NO_TELEMETRY, $env:TENJIN_NO_UPDATE_CHECK = $saved }
+		Write-Host "Installed $installed in $dir"
 		# An older copy in a folder of its own, such as one TENJIN_INSTALL_DIR
 		# named before, may come first on PATH and run instead of this one.
 		$found = Get-Command tenjin -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-		if ($found -and -not [string]::Equals($found.Source, $target, [StringComparison]::OrdinalIgnoreCase)) {
+		# Compared as full paths: a PATH entry with a trailing slash may find
+		# C:\tools\\tenjin.exe, which is this copy.
+		if ($found -and -not [string]::Equals([System.IO.Path]::GetFullPath($found.Source), $target, [StringComparison]::OrdinalIgnoreCase)) {
 			Write-Host "Another copy of the Tenjin CLI is at $($found.Source), and runs instead of this one. Remove it, or install over it with TENJIN_INSTALL_DIR set to its folder."
 			Write-Host "Start with: $target setup"
 		} else {

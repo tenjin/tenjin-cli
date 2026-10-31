@@ -148,6 +148,33 @@ jobs:
             done
             echo "$shell: a new terminal finds the tenjin command"
           done
+          # A folder named with a trailing slash, as tab completion leaves it,
+          # is the same folder as on PATH without one, and the other way
+          # round: no startup file is changed, and the copy just installed is
+          # not taken for another one.
+          home="$RUNNER_TEMP/home-slash"
+          mkdir -p "$home/bin"
+          for pair in "$home/bin/ $home/bin" "$home/bin $home/bin/"; do
+            given=${pair% *}
+            entry=${pair#* }
+            out=$(curl -fsSL http://127.0.0.1:8765/install.sh |
+              env -i HOME="$home" PATH="$entry:/usr/bin:/bin" SHELL=/bin/bash \
+                TENJIN_RELEASES_URL="$TENJIN_RELEASES_URL" TENJIN_VERSION="$TENJIN_VERSION" TENJIN_INSTALL_DIR="$given" sh)
+            echo "$out"
+            case "$out" in
+            *"Added "* | *"Another copy"* | *"$home/bin//"*) echo "TENJIN_INSTALL_DIR=$given, PATH=$entry: wrong output"; exit 1 ;;
+            *"Start with: tenjin setup") ;;
+            *) echo "TENJIN_INSTALL_DIR=$given, PATH=$entry: not found on PATH"; exit 1 ;;
+            esac
+            if [ "$(ls -A "$home")" != bin ]; then echo "files were added to $home: $(ls -A "$home")"; exit 1; fi
+          done
+          # A shell under Rosetta says x86_64; Apple silicon still gets the
+          # arm64 build.
+          if [ "$(uname)" = Darwin ] && [ "$(sysctl -n hw.optional.arm64 2> /dev/null)" = 1 ] && arch -x86_64 /usr/bin/true 2> /dev/null; then
+            curl -fsSL http://127.0.0.1:8765/install.sh |
+              TENJIN_INSTALL_DIR="$RUNNER_TEMP/rosetta" TENJIN_NO_MODIFY_PATH=1 arch -x86_64 /bin/sh
+            file "$RUNNER_TEMP/rosetta/tenjin" | grep -q arm64
+          fi
       - name: Homebrew
         if: runner.os != 'Windows'
         env:
@@ -186,6 +213,9 @@ jobs:
           if (-not ((tenjin version) -like "Tenjin CLI $env:TENJIN_VERSION *")) { throw 'wrong version' }
           $saved = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
           if (($saved -split ';') -notcontains $dir) { throw "$dir is not on the saved PATH: $saved" }
+          # The installer's own run of tenjin turns these off, and puts them
+          # back as they were, in this shell.
+          if ($env:TENJIN_NO_TELEMETRY -or $env:TENJIN_NO_UPDATE_CHECK) { throw 'the installer left its variables set' }
       - name: install.ps1 again, PowerShell 7
         # Over the installed copy, and with the other PowerShell.
         if: runner.os == 'Windows'
@@ -206,3 +236,10 @@ jobs:
           if (-not ((& (Join-Path $dir 'tenjin.exe') version) -like "Tenjin CLI $version *")) { throw 'the latest was not installed' }
           if ((@($saved -split ';') | Where-Object { $_ -eq $dir }).Count -ne 1) { throw "PATH should hold $dir once: $saved" }
           & (Join-Path $dir 'tenjin.exe') version
+          # Named with a trailing slash, as tab completion leaves it: the same
+          # folder, still on PATH once.
+          $env:TENJIN_INSTALL_DIR = "$dir\"
+          irm http://127.0.0.1:8765/install.ps1 | iex
+          $env:TENJIN_INSTALL_DIR = $null
+          $saved = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+          if ((@($saved -split ';') | Where-Object { $_.TrimEnd('\') -eq $dir }).Count -ne 1) { throw "PATH should hold $dir once: $saved" }
