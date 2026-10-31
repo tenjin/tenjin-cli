@@ -7,9 +7,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +20,15 @@ import (
 
 // Releases is where the CLI's releases are published.
 const Releases = "https://github.com/tenjin/tenjin-cli/releases"
+
+// Cask is the Homebrew cask in Tenjin's tap, as brew upgrade reads it. A
+// release's cask reaches the tap when its pull request there is merged,
+// some time after the release is published.
+const Cask = "https://raw.githubusercontent.com/tenjin/homebrew-tap/main/Casks/tenjin.rb"
+
+// maxCask bounds how much of the cask is read. The real one is well under
+// a kilobyte.
+const maxCask = 64 << 10
 
 // checkEvery is how long an answer is kept, and how long a failed check
 // waits before the next try, so being offline costs one wait a day.
@@ -29,6 +41,11 @@ type Checker struct {
 	Current string
 	// Releases is the releases page; its /latest redirects to the newest tag.
 	Releases string
+	// Cask, when set, is the Homebrew cask this copy was installed from
+	// (see CaskFor). The newest version is then the one the cask names, not
+	// the newest release: until the cask is updated, brew upgrade has
+	// nothing newer to install.
+	Cask string
 	// Transport sends the request; nil is http.DefaultTransport.
 	Transport http.RoundTripper
 	// State is the file the last answer is kept in.
@@ -44,8 +61,11 @@ type Notice struct {
 }
 
 type state struct {
-	CheckedAt  time.Time `json:"checked_at"`
-	Latest     string    `json:"latest,omitempty"`
+	CheckedAt time.Time `json:"checked_at"`
+	Latest    string    `json:"latest,omitempty"`
+	// Source is where Latest was read: the releases page or the cask. An
+	// answer from the other one is checked again.
+	Source     string    `json:"source,omitempty"`
 	NotifiedAt time.Time `json:"notified_at,omitempty"`
 }
 
@@ -62,11 +82,15 @@ func (c *Checker) Check(ctx context.Context) *Notice {
 		now = c.Now
 	}
 	s := c.load()
-	if now().Sub(s.CheckedAt) >= checkEvery || s.CheckedAt.After(now()) {
+	source := c.source()
+	if now().Sub(s.CheckedAt) >= checkEvery || s.CheckedAt.After(now()) || s.Source != source {
 		// A failed or cut-short check counts too, so a slow or missing
 		// network costs one short wait a day, not one per command.
 		latest, err := c.latest(ctx)
-		s.CheckedAt = now()
+		if s.Source != source {
+			s.Latest = ""
+		}
+		s.CheckedAt, s.Source = now(), source
 		if err == nil {
 			s.Latest = latest
 		}
@@ -88,9 +112,55 @@ func (c *Checker) releases() string {
 	return Releases
 }
 
-// latest reads the version of the newest release from where /latest
-// redirects: .../releases/tag/v1.2.3.
+func (c *Checker) source() string {
+	if c.Cask != "" {
+		return c.Cask
+	}
+	return c.releases()
+}
+
 func (c *Checker) latest(ctx context.Context) (string, error) {
+	if c.Cask != "" {
+		return c.latestInCask(ctx)
+	}
+	return c.latestRelease(ctx)
+}
+
+// caskVersion is the cask's version stanza: version "1.2.3".
+var caskVersion = regexp.MustCompile(`(?m)^\s*version\s+"([^"]*)"`)
+
+// latestInCask reads the version the cask installs.
+func (c *Checker) latestInCask(ctx context.Context) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.Cask, nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := (&http.Client{Transport: c.Transport}).Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("the cask answered %d", resp.StatusCode)
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxCask))
+	if err != nil {
+		return "", err
+	}
+	m := caskVersion.FindSubmatch(raw)
+	if m == nil {
+		return "", errors.New("the cask has no version")
+	}
+	version := string(m[1])
+	if _, ok := parse(version); !ok {
+		return "", errors.New("the cask's version is not a release: " + version)
+	}
+	return version, nil
+}
+
+// latestRelease reads the version of the newest release from where /latest
+// redirects: .../releases/tag/v1.2.3.
+func (c *Checker) latestRelease(ctx context.Context) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, c.releases()+"/latest", nil)
 	if err != nil {
 		return "", err
@@ -181,10 +251,7 @@ func newer(a, b [3]int) bool {
 // Command is how to update a copy of the CLI installed at executable: the
 // way it was installed.
 func Command(executable, goos string, getenv func(string) string) string {
-	path := executable
-	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
-		path = resolved
-	}
+	path := resolve(executable)
 	slashed := filepath.ToSlash(path)
 	switch {
 	case strings.Contains(slashed, "/Caskroom/") || strings.Contains(slashed, "/Cellar/"):
@@ -197,6 +264,24 @@ func Command(executable, goos string, getenv func(string) string) string {
 	default:
 		return "curl -fsSL https://raw.githubusercontent.com/tenjin/tenjin-cli/main/install.sh | sh"
 	}
+}
+
+// CaskFor returns the cask a copy of the CLI installed at executable is
+// updated from, for Checker.Cask: Cask for a copy in Homebrew's Caskroom,
+// otherwise "".
+func CaskFor(executable string) string {
+	if strings.Contains(filepath.ToSlash(resolve(executable)), "/Caskroom/") {
+		return Cask
+	}
+	return ""
+}
+
+// resolve follows the links to executable, as Homebrew's bin/tenjin is one.
+func resolve(executable string) string {
+	if resolved, err := filepath.EvalSymlinks(executable); err == nil {
+		return resolved
+	}
+	return executable
 }
 
 // inGoBin reports whether path is in the folder go install writes to.

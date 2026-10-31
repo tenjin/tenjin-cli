@@ -217,7 +217,18 @@ func rawInput(interactive bool) func() (func(), error) {
 // updateChecker returns the update check for a person at a terminal, or nil.
 // The notice goes to stderr, so that is the terminal that matters.
 func updateChecker(getenv func(string) string) *update.Checker {
-	if !term.IsTerminal(int(os.Stderr.Fd())) || getenv("CI") != "" || getenv("TENJIN_NO_UPDATE_CHECK") != "" {
+	if !term.IsTerminal(int(os.Stderr.Fd())) {
+		return nil
+	}
+	return newUpdateChecker(getenv, os.Executable)
+}
+
+// newUpdateChecker is the update check once a person is known to be at the
+// terminal: nil in CI, when turned off, or without a folder to keep its
+// answer in. A copy installed from the Homebrew cask is told of a version
+// once the cask has it, which is when brew upgrade can install it.
+func newUpdateChecker(getenv func(string) string, executable func() (string, error)) *update.Checker {
+	if getenv("CI") != "" || getenv("TENJIN_NO_UPDATE_CHECK") != "" {
 		return nil
 	}
 	dir, err := os.UserConfigDir()
@@ -228,11 +239,15 @@ func updateChecker(getenv func(string) string) *update.Checker {
 	if releases == "" {
 		releases = update.Releases
 	}
-	return &update.Checker{
+	c := &update.Checker{
 		Current:  buildinfo.Get().Version,
 		Releases: releases,
 		State:    filepath.Join(dir, "tenjin", "update-check.json"),
 	}
+	if exe, err := executable(); err == nil {
+		c.Cask = update.CaskFor(exe)
+	}
+	return c
 }
 
 // sdkReleases returns the lookup of SDK releases, or nil without a folder to

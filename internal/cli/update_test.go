@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -8,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tenjin/tenjin-cli/internal/testproject"
 	"github.com/tenjin/tenjin-cli/internal/update"
@@ -56,6 +58,57 @@ func TestANewerReleaseIsMentionedAfterTheCommand(t *testing.T) {
 	_, _, stderr = h.run("project", "detect", dir)
 	if strings.Contains(stderr, "new version") {
 		t.Errorf("told twice:\n%s", stderr)
+	}
+}
+
+// A copy installed from the Homebrew cask is told of a version once the
+// tap's cask names it, which is when brew upgrade can install it, and only
+// then; and it is told to update with brew.
+func TestAHomebrewCopyIsToldOnceTheCaskHasIt(t *testing.T) {
+	h := newHarness(t)
+	withRelease(t, h, "v0.2.0")
+	h.env.executable = func() (string, error) { return "/opt/homebrew/Caskroom/tenjin/0.1.0/tenjin", nil }
+	version := "0.1.0"
+	tap := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprintf(w, "cask \"tenjin\" do\n  version \"%s\"\nend\n", version)
+	}))
+	t.Cleanup(tap.Close)
+	now := time.Now()
+	h.env.updates.Cask = tap.URL + "/Casks/tenjin.rb"
+	h.env.updates.Now = func() time.Time { return now }
+	dir := testproject.Write(t, testproject.AndroidNative())
+
+	if _, _, stderr := h.run("project", "detect", dir); strings.Contains(stderr, "new version") {
+		t.Errorf("told before the cask has it:\n%s", stderr)
+	}
+	version = "0.2.0"
+	now = now.Add(25 * time.Hour)
+	_, _, stderr := h.run("project", "detect", dir)
+	for _, want := range []string{"A new version of the Tenjin CLI is available: 0.1.0 → 0.2.0", "Update with: brew upgrade tenjin"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, stderr)
+		}
+	}
+}
+
+// Which copy reads the cask is decided by where it is installed.
+func TestOnlyAHomebrewCopysCheckReadsTheCask(t *testing.T) {
+	none := func(string) string { return "" }
+	at := func(path string) func() (string, error) { return func() (string, error) { return path, nil } }
+	if c := newUpdateChecker(none, at("/opt/homebrew/Caskroom/tenjin/0.1.0/tenjin")); c == nil || c.Cask != update.Cask {
+		t.Errorf("Homebrew: %+v", c)
+	}
+	if c := newUpdateChecker(none, at("/home/dev/.local/bin/tenjin")); c == nil || c.Cask != "" || c.Releases != update.Releases {
+		t.Errorf("install script: %+v", c)
+	}
+	ci := func(name string) string {
+		if name == "CI" {
+			return "true"
+		}
+		return ""
+	}
+	if c := newUpdateChecker(ci, at("/opt/homebrew/Caskroom/tenjin/0.1.0/tenjin")); c != nil {
+		t.Errorf("CI: %+v", c)
 	}
 }
 
