@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -196,8 +195,11 @@ var claude = driver{
 	resume: func(sessionID string) string { return "claude --resume " + sessionID },
 	inside: []string{"CLAUDECODE"},
 	confine: func(ctx context.Context, path, _ string, _ []string) ([]string, error) {
-		help, _ := exec.CommandContext(ctx, path, "--help").CombinedOutput()
-		if !strings.Contains(string(help), "--restricted") {
+		cmd := proc.Command(ctx, path, "--help")
+		var help bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &help, &help
+		_ = cmd.Run()
+		if !strings.Contains(help.String(), "--restricted") {
 			return nil, errors.New("this version of Claude Code cannot be held to the task (it has no --restricted mode). Update it with 'claude update', then run this again")
 		}
 		return nil, nil

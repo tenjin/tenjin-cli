@@ -249,6 +249,22 @@ func TestAClaudeCodeWithoutRestrictedModeIsRefused(t *testing.T) {
 	}
 }
 
+func TestTheHelpCheckReadsTheErrorOutput(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake agent is a shell script")
+	}
+	dir := t.TempDir()
+	script := filepath.Join(dir, "claude")
+	body := "#!/bin/sh\nif [ \"$1\" = --help ]; then echo '  --restricted' >&2; exit 0; fi\ncat > /dev/null\necho '{\"type\":\"result\",\"result\":\"Done.\"}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := Find(func(string) (string, error) { return script, nil })[0]
+	if result, err := a.Run(context.Background(), Task{Dir: dir, Prompt: "x"}, nil); err != nil || result.Summary != "Done." {
+		t.Errorf("result = %+v, err = %v", result, err)
+	}
+}
+
 // tail is output that follows an agent's error, long enough to fill a pipe
 // that nobody reads.
 var tail = strings.Repeat(`{"type":"item.completed","item":{"type":"reasoning","text":"`+strings.Repeat("x", 1000)+`"}}`+"\n", 3000)

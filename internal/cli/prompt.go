@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/tenjin/tenjin-cli/internal/clierr"
+	"github.com/tenjin/tenjin-cli/internal/proc"
 )
 
 // readLine reads one line of input, without its line ending. Ctrl-C ends
@@ -150,16 +150,16 @@ func (e *environment) ask(w io.Writer, question string) (string, error) {
 	return strings.TrimSpace(answer), err
 }
 
-// openBrowser opens a URL in the user's default browser.
+// openBrowser opens a URL in the user's default browser. The opener hands
+// the URL to the desktop and is not waited for, and the browser it may
+// start is the user's, not the CLI's: it is detached, so Ctrl-C does not
+// close the browser, and nothing is left for this process to reap.
 func openBrowser(url string) error {
-	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", url)
+		return proc.Detach("open", []string{url}, nil)
 	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
+		return proc.Detach("rundll32", []string{"url.dll,FileProtocolHandler", url}, nil)
 	}
-	return cmd.Start()
+	return proc.Detach("xdg-open", []string{url}, nil)
 }
