@@ -80,6 +80,8 @@ go install github.com/tenjin/tenjin-cli/cmd/tenjin@latest   # Go
 
 It checks at most once a day, and only when a person is at the terminal: never with `--json`, in CI, or when stderr is not a terminal. `TENJIN_NO_UPDATE_CHECK=1` turns it off. A copy installed with Homebrew is told of a release once the cask in `tenjin/homebrew-tap` has it, which can be a while after the release is published; until then `brew upgrade` has nothing newer to install.
 
+`go install …@latest` takes the highest version tag, and a tag exists from the moment its release is drafted, before the release workflow has tested and published it. To install only a published release, name its version: `go install github.com/tenjin/tenjin-cli/cmd/tenjin@v1.2.3`.
+
 ### Uninstall
 
 ```sh
