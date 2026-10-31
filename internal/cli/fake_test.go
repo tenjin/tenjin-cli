@@ -23,6 +23,7 @@ import (
 
 	"github.com/tenjin/tenjin-cli/internal/config"
 	"github.com/tenjin/tenjin-cli/internal/session"
+	"github.com/tenjin/tenjin-cli/internal/telemetry"
 	"github.com/tenjin/tenjin-cli/internal/tenjinapi"
 )
 
@@ -626,7 +627,7 @@ func newHarness(t *testing.T) *harness {
 		executable: func() (string, error) { return "/usr/local/bin/tenjin", nil },
 		wait:       func(time.Duration) {},
 		// Never the real configuration folder's.
-		telemetryState: filepath.Join(t.TempDir(), "tenjin", "telemetry.json"),
+		telemetryState: filepath.Join(t.TempDir(), "tenjin", telemetry.StateFile),
 		// No adb either, unless a test connects a device.
 		run: func(_ context.Context, name string, _ ...string) ([]byte, error) {
 			return nil, fmt.Errorf("%s: not found", name)

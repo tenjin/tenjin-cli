@@ -2,7 +2,12 @@
 // command ran, the names of the flags given, how it ended and how long it
 // took, and a few facts about the project it ran on, such as its framework.
 // Never a flag's value, a path, a bundle ID, a key or anything the project
-// contains. A random ID, kept in a small state file, tells installs apart.
+// contains.
+//
+// No identifier is kept on the machine: each event carries random IDs made
+// for it alone and never stored, so nothing ties one event to another, or to
+// the machine. The only state is when a send last failed, which pauses the
+// next ones.
 //
 // It is off in builds without an Amplitude key (any build but a release), in
 // CI, with TENJIN_NO_TELEMETRY or DO_NOT_TRACK set, and once turned off with
@@ -37,6 +42,14 @@ const Endpoint = "https://api2.amplitude.com/2/httpapi"
 // one per command.
 const retryAfter = time.Hour
 
+// StateFile is the name of the state file in the CLI's configuration
+// folder: the time of the last failed send, and nothing else.
+const StateFile = "telemetry-pause.json"
+
+// installIDFile is where versions before this one kept an ID for the
+// install, beside the state file. RemoveInstallID deletes it.
+const installIDFile = "telemetry.json"
+
 // OffVar turns telemetry off.
 const OffVar = "TENJIN_NO_TELEMETRY"
 
@@ -69,20 +82,12 @@ func TurnedOff(state string) bool {
 	return err == nil
 }
 
-// TurnOff records that nothing is to be sent from this machine, and forgets
-// the install's ID, so that turning it on again counts a new install that
-// nothing ties to this one.
+// TurnOff records that nothing is to be sent from this machine.
 func TurnOff(state string) error {
 	if err := os.MkdirAll(filepath.Dir(state), 0o700); err != nil {
 		return err
 	}
-	if err := os.WriteFile(offPath(state), []byte("Usage statistics are off: tenjin telemetry on turns them on.\n"), 0o600); err != nil {
-		return err
-	}
-	if err := os.Remove(state); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return err
-	}
-	return nil
+	return os.WriteFile(offPath(state), []byte("Usage statistics are off: tenjin telemetry on turns them on.\n"), 0o600)
 }
 
 // TurnOn undoes TurnOff.
@@ -93,6 +98,14 @@ func TurnOn(state string) error {
 	return nil
 }
 
+// RemoveInstallID deletes the ID earlier versions kept for the install,
+// beside the state file state, so a machine that ran one keeps no identifier
+// once it runs this one. Every command calls it, whether telemetry is on or
+// not; one that cannot leaves it to the next.
+func RemoveInstallID(state string) {
+	_ = os.Remove(filepath.Join(filepath.Dir(state), installIDFile))
+}
+
 // Key returns the key the build was stamped with, or "".
 func Key() string { return apiKey }
 
@@ -100,7 +113,7 @@ func Key() string { return apiKey }
 type Client struct {
 	Key      string
 	Endpoint string
-	// State is the file the install's ID is kept in.
+	// State is the file the time of the last failed send is kept in.
 	State string
 	// Transport sends the request; nil is http.DefaultTransport.
 	Transport http.RoundTripper
@@ -126,9 +139,9 @@ type Event struct {
 	Facts map[string]any
 }
 
+// state is what is kept between commands. It must never hold an identifier.
 type state struct {
-	InstallID string    `json:"install_id"`
-	FailedAt  time.Time `json:"failed_at,omitzero"`
+	FailedAt time.Time `json:"failed_at,omitzero"`
 }
 
 // Send sends ev, unless telemetry was turned off since the command started.
@@ -142,20 +155,14 @@ func (c *Client) Send(ctx context.Context, ev Event) {
 		now = c.Now
 	}
 	s := c.load()
-	if s.InstallID == "" {
-		// An ID that cannot be kept would count each command as an install.
-		s.InstallID = randomID()
-		if c.save(s) != nil {
-			return
-		}
-	}
 	if since := now().Sub(s.FailedAt); since >= 0 && since < retryAfter {
 		return
 	}
 	// Only a failure to reach Amplitude, or its asking to wait, pauses the
 	// next sends. An event it refused is dropped alone, and a send cut short
-	// by the wait was only slow.
-	err := c.post(ctx, s.InstallID, ev, now())
+	// by the wait was only slow. A pause that cannot be saved is not kept:
+	// the next command tries again.
+	err := c.post(ctx, ev, now())
 	var refused refusal
 	if err != nil && ctx.Err() == nil && (!errors.As(err, &refused) || refused.retry()) {
 		s.FailedAt = now()
@@ -170,7 +177,7 @@ func (r refusal) Error() string { return fmt.Sprintf("amplitude answered %d", in
 
 func (r refusal) retry() bool { return r == http.StatusTooManyRequests || r >= 500 }
 
-func (c *Client) post(ctx context.Context, installID string, ev Event, at time.Time) error {
+func (c *Client) post(ctx context.Context, ev Event, at time.Time) error {
 	props := map[string]any{
 		"command":     ev.Command,
 		"set_flags":   ev.Flags,
@@ -195,7 +202,13 @@ func (c *Client) post(ctx context.Context, installID string, ev Event, at time.T
 	body, err := json.Marshal(map[string]any{
 		"api_key": c.Key,
 		"events": []map[string]any{{
-			"device_id":        installID,
+			// Amplitude needs a device or user ID of at least 5 characters
+			// on every event. This one is the event's own, so Amplitude
+			// counts each event as a device of its own, and no two events
+			// can be put together. insert_id, which Amplitude deduplicates
+			// on together with device_id, makes a request sent twice count
+			// once.
+			"device_id":        randomID(),
 			"event_type":       "cli_command",
 			"time":             at.UnixMilli(),
 			"insert_id":        randomID(),
@@ -230,8 +243,6 @@ func randomID() string {
 	return hex.EncodeToString(b)
 }
 
-var errTurnedOff = errors.New("telemetry was turned off")
-
 func (c *Client) load() state {
 	var s state
 	if raw, err := os.ReadFile(c.State); err == nil {
@@ -265,11 +276,6 @@ func (c *Client) save(s state) error {
 	}
 	if err := tmp.Close(); err != nil {
 		return err
-	}
-	// Turned off while this send was on its way: the state, with the
-	// install's ID, was deleted, and is not brought back.
-	if TurnedOff(c.State) {
-		return errTurnedOff
 	}
 	return os.Rename(tmp.Name(), c.State)
 }

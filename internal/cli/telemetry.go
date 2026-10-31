@@ -70,14 +70,15 @@ func sendHandedEvent(raw string) {
 	c.Send(ctx, ev)
 }
 
-// telemetryState returns the file the install's ID is kept in, or "" where
-// there is no configuration folder.
+// telemetryState returns the usage statistics' state file, beside which
+// tenjin telemetry off is recorded, or "" where there is no configuration
+// folder.
 func telemetryState() string {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(dir, "tenjin", "telemetry.json")
+	return filepath.Join(dir, "tenjin", telemetry.StateFile)
 }
 
 // telemetryClient returns the client that sends each command's event, or
@@ -98,7 +99,9 @@ func telemetryUnsent(endpoints config.Endpoints, state string) string {
 	case endpoints.Name != config.ProductionName:
 		return "the CLI is pointed at another copy of Tenjin"
 	case state == "":
-		return "there is no configuration folder to keep the install's ID in"
+		// Neither 'tenjin telemetry off' nor the pause after a failed send
+		// could be kept there, so nothing is sent.
+		return "there is no configuration folder to keep 'tenjin telemetry off' in"
 	}
 	return ""
 }

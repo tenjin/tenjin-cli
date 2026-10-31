@@ -32,12 +32,13 @@ func newTelemetryCmd(opts *options, env *environment) *cobra.Command {
 	cmd.Long = `A release of the CLI sends Tenjin one anonymous event per command: the
 command, the names of the flags given (never their values), how it ended,
 and the shape of the project, such as its framework. Never a path, a bundle
-ID, a key or anything from your code. The README lists every field:
+ID, a key or anything from your code. No ID is kept on your machine: each
+event has a random one of its own, so no two can be tied together. The
+README lists every field:
 ` + privacyURL + `
 
-'tenjin telemetry off' turns them off on this machine and deletes the random
-ID that tells installs apart. TENJIN_NO_TELEMETRY=1 or DO_NOT_TRACK=1 turns
-them off too, and nothing is sent in CI.`
+'tenjin telemetry off' turns them off on this machine. TENJIN_NO_TELEMETRY=1
+or DO_NOT_TRACK=1 turns them off too, and nothing is sent in CI.`
 	return cmd
 }
 
@@ -75,7 +76,7 @@ func newTelemetrySetCmd(opts *options, env *environment, setting string) *cobra.
 			w := cmd.OutOrStdout()
 			switch {
 			case setting == "off":
-				_, err = fmt.Fprintln(w, "Usage statistics are off. Nothing more is sent from this machine, and its random ID was deleted.")
+				_, err = fmt.Fprintln(w, "Usage statistics are off. Nothing more is sent from this machine.")
 			case status.Enabled:
 				_, err = fmt.Fprintf(w, "Usage statistics are on. What they hold: %s\n", privacyURL)
 			default:

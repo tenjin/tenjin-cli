@@ -32,9 +32,11 @@ func server(t *testing.T, status int) (*httptest.Server, *[]received) {
 	return srv, &got
 }
 
+func stateIn(dir string) string { return filepath.Join(dir, "tenjin", StateFile) }
+
 func TestAnEventIsTheCommandsShape(t *testing.T) {
 	srv, got := server(t, http.StatusOK)
-	c := &Client{Key: "k", Endpoint: srv.URL, State: filepath.Join(t.TempDir(), "telemetry.json")}
+	c := &Client{Key: "k", Endpoint: srv.URL, State: stateIn(t.TempDir())}
 	c.Send(context.Background(), Event{
 		Command: "tenjin doctor", Flags: []string{"offline"}, ExitCode: 9, Error: "checks_failed",
 		Duration: 1500 * time.Millisecond, Version: "0.1.0", OS: "darwin", Arch: "arm64",
@@ -45,8 +47,13 @@ func TestAnEventIsTheCommandsShape(t *testing.T) {
 	}
 	ev := (*got)[0].Events[0]
 	props := ev["event_properties"].(map[string]any)
+	// Amplitude drops a device ID shorter than 5 characters, and an event
+	// with neither a device nor a user ID.
 	if ev["event_type"] != "cli_command" || ev["app_version"] != "0.1.0" || ev["os_name"] != "darwin" || len(ev["device_id"].(string)) != 32 {
 		t.Errorf("event = %v", ev)
+	}
+	if _, ok := ev["user_id"]; ok {
+		t.Errorf("event has a user ID: %v", ev)
 	}
 	if props["command"] != "tenjin doctor" || props["status"] != "error" || props["error_class"] != "checks_failed" ||
 		props["exit_code"] != float64(9) || props["latency_ms"] != float64(1500) || props["framework"] != "native" {
@@ -54,17 +61,42 @@ func TestAnEventIsTheCommandsShape(t *testing.T) {
 	}
 }
 
-// The install keeps its ID from one command to the next.
-func TestTheInstallKeepsItsID(t *testing.T) {
-	srv, got := server(t, http.StatusOK)
-	c := &Client{Key: "k", Endpoint: srv.URL, State: filepath.Join(t.TempDir(), "telemetry.json")}
-	c.Send(context.Background(), Event{Command: "tenjin"})
-	c.Send(context.Background(), Event{Command: "tenjin version"})
-	if len(*got) != 2 || (*got)[0].Events[0]["device_id"] != (*got)[1].Events[0]["device_id"] {
-		t.Errorf("received %+v", *got)
-	}
-	if raw, err := os.ReadFile(c.State); err != nil || len(raw) == 0 {
-		t.Errorf("state: %q, %v", raw, err)
+// No identifier is kept: each event has IDs of its own, and nothing on disk
+// holds them, whether the send went through or not.
+func TestNoTwoEventsShareAnID(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusServiceUnavailable} {
+		srv, got := server(t, status)
+		now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+		dir := t.TempDir()
+		c := &Client{Key: "k", Endpoint: srv.URL, State: stateIn(dir), Now: func() time.Time { return now }}
+		c.Send(context.Background(), Event{Command: "tenjin"})
+		now = now.Add(retryAfter)
+		c.Send(context.Background(), Event{Command: "tenjin version"})
+		if len(*got) != 2 {
+			t.Fatalf("%d: received %+v", status, *got)
+		}
+		first, second := (*got)[0].Events[0], (*got)[1].Events[0]
+		if first["device_id"] == second["device_id"] || first["insert_id"] == second["insert_id"] || first["device_id"] == first["insert_id"] {
+			t.Errorf("%d: IDs are shared: %v, %v", status, first, second)
+		}
+		var kept strings.Builder
+		_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				raw, _ := os.ReadFile(path)
+				kept.Write(raw)
+			}
+			return nil
+		})
+		for _, ev := range []map[string]any{first, second} {
+			for _, id := range []string{ev["device_id"].(string), ev["insert_id"].(string)} {
+				if strings.Contains(kept.String(), id) {
+					t.Errorf("%d: an ID is kept on disk: %s", status, kept.String())
+				}
+			}
+		}
+		if status == http.StatusOK && kept.Len() != 0 {
+			t.Errorf("a send that went through left %q", kept.String())
+		}
 	}
 }
 
@@ -73,7 +105,7 @@ func TestTheInstallKeepsItsID(t *testing.T) {
 func TestAFailedSendWaitsAnHour(t *testing.T) {
 	srv, got := server(t, http.StatusServiceUnavailable)
 	now := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
-	c := &Client{Key: "k", Endpoint: srv.URL, State: filepath.Join(t.TempDir(), "telemetry.json"), Now: func() time.Time { return now }}
+	c := &Client{Key: "k", Endpoint: srv.URL, State: stateIn(t.TempDir()), Now: func() time.Time { return now }}
 	c.Send(context.Background(), Event{})
 	now = now.Add(59 * time.Minute)
 	c.Send(context.Background(), Event{})
@@ -110,11 +142,11 @@ func TestOff(t *testing.T) {
 	}
 }
 
-// Turned off, nothing is sent, not even by a client made before, and the
-// install's ID is forgotten: turned on again, it is a new install.
-func TestTurningItOffSendsNothingAndForgetsTheInstall(t *testing.T) {
+// Turned off, nothing is sent, not even by a client made before; turned on
+// again, events are sent again.
+func TestTurningItOffSendsNothing(t *testing.T) {
 	srv, got := server(t, http.StatusOK)
-	c := &Client{Key: "k", Endpoint: srv.URL, State: filepath.Join(t.TempDir(), "tenjin", "telemetry.json")}
+	c := &Client{Key: "k", Endpoint: srv.URL, State: stateIn(t.TempDir())}
 	c.Send(context.Background(), Event{Command: "tenjin"})
 	if TurnedOff(c.State) {
 		t.Fatal("off before it was turned off")
@@ -126,9 +158,6 @@ func TestTurningItOffSendsNothingAndForgetsTheInstall(t *testing.T) {
 	if !TurnedOff(c.State) || len(*got) != 1 {
 		t.Fatalf("turned off = %v, sent %d", TurnedOff(c.State), len(*got))
 	}
-	if _, err := os.Stat(c.State); !os.IsNotExist(err) {
-		t.Errorf("the install's ID is kept: %v", err)
-	}
 	if err := TurnOff(c.State); err != nil {
 		t.Errorf("again: %v", err)
 	}
@@ -140,15 +169,14 @@ func TestTurningItOffSendsNothingAndForgetsTheInstall(t *testing.T) {
 		t.Errorf("again: %v", err)
 	}
 	c.Send(context.Background(), Event{Command: "tenjin"})
-	if len(*got) != 2 || (*got)[0].Events[0]["device_id"] == (*got)[1].Events[0]["device_id"] {
+	if len(*got) != 2 {
 		t.Errorf("received %+v", *got)
 	}
 }
 
-// A send on its way when telemetry is turned off does not save the state
-// again, so the install's ID stays deleted.
-func TestASendUnderWayDoesNotBringTheIDBack(t *testing.T) {
-	state := filepath.Join(t.TempDir(), "tenjin", "telemetry.json")
+// A send on its way when telemetry is turned off does not undo the choice.
+func TestASendUnderWayDoesNotTurnItBackOn(t *testing.T) {
+	state := stateIn(t.TempDir())
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if err := TurnOff(state); err != nil {
 			t.Error(err)
@@ -158,8 +186,8 @@ func TestASendUnderWayDoesNotBringTheIDBack(t *testing.T) {
 	t.Cleanup(srv.Close)
 	c := &Client{Key: "k", Endpoint: srv.URL, State: state}
 	c.Send(context.Background(), Event{Command: "tenjin doctor"})
-	if _, err := os.Stat(state); !os.IsNotExist(err) {
-		t.Errorf("the state is back: %v", err)
+	if !TurnedOff(state) {
+		t.Error("the send turned it back on")
 	}
 }
 
@@ -169,7 +197,7 @@ func TestTurningItOffWhereNothingCanBeWritten(t *testing.T) {
 	if err := os.WriteFile(blocked, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := TurnOff(filepath.Join(blocked, "tenjin", "telemetry.json")); err == nil {
+	if err := TurnOff(stateIn(blocked)); err == nil {
 		t.Error("TurnOff succeeded under a file")
 	}
 }
@@ -179,7 +207,7 @@ func TestTurningItOffWhereNothingCanBeWritten(t *testing.T) {
 func TestOnlyAnUnreachableAmplitudePausesSending(t *testing.T) {
 	for status, pauses := range map[int]bool{http.StatusBadRequest: false, http.StatusRequestEntityTooLarge: false, http.StatusTooManyRequests: true, http.StatusBadGateway: true} {
 		srv, got := server(t, status)
-		c := &Client{Key: "k", Endpoint: srv.URL, State: filepath.Join(t.TempDir(), "telemetry.json")}
+		c := &Client{Key: "k", Endpoint: srv.URL, State: stateIn(t.TempDir())}
 		c.Send(context.Background(), Event{})
 		c.Send(context.Background(), Event{})
 		if sent := len(*got); (sent == 1) != pauses {
@@ -189,23 +217,56 @@ func TestOnlyAnUnreachableAmplitudePausesSending(t *testing.T) {
 	// Nothing listening: paused.
 	srv, _ := server(t, http.StatusOK)
 	srv.Close()
-	c := &Client{Key: "k", Endpoint: srv.URL, State: filepath.Join(t.TempDir(), "telemetry.json")}
+	c := &Client{Key: "k", Endpoint: srv.URL, State: stateIn(t.TempDir())}
 	c.Send(context.Background(), Event{})
 	if c.load().FailedAt.IsZero() {
 		t.Error("an unreachable Amplitude did not pause sending")
 	}
 }
 
-// An install ID that cannot be kept would make each command a new install.
-func TestNothingIsSentWithoutAPlaceForTheInstallID(t *testing.T) {
-	srv, got := server(t, http.StatusOK)
+// Nothing has to be written for an event to be sent. A pause that cannot be
+// written is not kept, and the next command tries again.
+func TestAPauseThatCannotBeWrittenIsNotKept(t *testing.T) {
 	blocked := filepath.Join(t.TempDir(), "file")
 	if err := os.WriteFile(blocked, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	c := &Client{Key: "k", Endpoint: srv.URL, State: filepath.Join(blocked, "telemetry.json")}
-	c.Send(context.Background(), Event{})
-	if len(*got) != 0 {
-		t.Errorf("sent %d events", len(*got))
+	for _, status := range []int{http.StatusOK, http.StatusServiceUnavailable} {
+		srv, got := server(t, status)
+		c := &Client{Key: "k", Endpoint: srv.URL, State: stateIn(blocked)}
+		c.Send(context.Background(), Event{})
+		c.Send(context.Background(), Event{})
+		if len(*got) != 2 {
+			t.Errorf("%d: sent %d events", status, len(*got))
+		}
 	}
+}
+
+// The ID earlier versions kept for the install is deleted, and nothing else
+// beside it.
+func TestTheInstallIDOfAnEarlierVersionIsRemoved(t *testing.T) {
+	state := stateIn(t.TempDir())
+	dir := filepath.Dir(state)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacy := filepath.Join(dir, "telemetry.json")
+	for name, content := range map[string]string{legacy: `{"install_id":"0123456789abcdef0123456789abcdef"}`, state: `{}`} {
+		if err := os.WriteFile(name, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := TurnOff(state); err != nil {
+		t.Fatal(err)
+	}
+	RemoveInstallID(state)
+	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+		t.Errorf("the install's ID is kept: %v", err)
+	}
+	if _, err := os.Stat(state); err != nil || !TurnedOff(state) {
+		t.Errorf("more was removed: %v, turned off = %v", err, TurnedOff(state))
+	}
+	// Nothing to remove: nothing happens.
+	RemoveInstallID(state)
+	RemoveInstallID(stateIn(filepath.Join(dir, "missing")))
 }

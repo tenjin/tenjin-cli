@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -144,6 +146,12 @@ func TestOfflineSendsNoEvent(t *testing.T) {
 // The variable that hands an event over does nothing without the argument
 // only the CLI passes: a command run with it set still runs.
 func TestTheHandOverVariableAloneChangesNothing(t *testing.T) {
+	// Execute finds the configuration folder itself: this one is the test's,
+	// never that of whoever runs it.
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("AppData", filepath.Join(home, "AppData"))
 	t.Setenv(telemetryEventVar, "{}")
 	var out, errOut bytes.Buffer
 	if code := Execute([]string{"version"}, &out, &errOut); code != 0 || !strings.Contains(out.String(), "Tenjin CLI") {
@@ -240,7 +248,7 @@ func TestTelemetryOffAndOn(t *testing.T) {
 	sent := len(*bodies)
 
 	code, stdout, stderr := h.run("telemetry", "off")
-	if code != 0 || stdout != "Usage statistics are off. Nothing more is sent from this machine, and its random ID was deleted.\n" || stderr != "" {
+	if code != 0 || stdout != "Usage statistics are off. Nothing more is sent from this machine.\n" || stderr != "" {
 		t.Fatalf("off: exit = %d\n%s%s", code, stdout, stderr)
 	}
 	// A client made before the choice sends nothing either.
@@ -262,6 +270,52 @@ func TestTelemetryOffAndOn(t *testing.T) {
 	h.run("version")
 	if s := telemetryStatusOf(t, h); !s.Enabled || s.Setting != "on" || len(*bodies) == 0 {
 		t.Errorf("status = %+v, sent %v", s, *bodies)
+	}
+}
+
+// No ID is kept: each command's event has its own, and the ID an earlier
+// version kept for the install is deleted by the next run, whether usage
+// statistics are on, off in the environment or turned off.
+func TestNoIDIsKeptForTheInstall(t *testing.T) {
+	h := newHarness(t)
+	bodies := h.telemetry()
+	h.run("version")
+	h.run("version")
+	var ids []string
+	for _, body := range *bodies {
+		var sent struct {
+			Events []struct {
+				DeviceID string `json:"device_id"`
+			} `json:"events"`
+		}
+		if err := json.Unmarshal([]byte(body), &sent); err != nil || len(sent.Events) != 1 || len(sent.Events[0].DeviceID) < 5 {
+			t.Fatalf("body %s: %v", body, err)
+		}
+		ids = append(ids, sent.Events[0].DeviceID)
+	}
+	if len(ids) != 2 || ids[0] == ids[1] {
+		t.Errorf("device IDs %v", ids)
+	}
+
+	legacy := filepath.Join(filepath.Dir(h.env.telemetryState), "telemetry.json")
+	for _, setup := range []func(){
+		func() {},
+		func() { h.vars[telemetry.OffVar] = "1" },
+		func() { h.run("telemetry", "off") },
+	} {
+		setup()
+		if err := os.MkdirAll(filepath.Dir(legacy), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(legacy, []byte(`{"install_id":"0123456789abcdef0123456789abcdef"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if code, _, stderr := h.run("version"); code != 0 {
+			t.Fatalf("exit = %d: %s", code, stderr)
+		}
+		if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+			t.Errorf("the install's ID is kept (%s): %v", telemetryStatusOf(t, h).Reason, err)
+		}
 	}
 }
 

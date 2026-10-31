@@ -122,8 +122,8 @@ type environment struct {
 	// telemetryClient), and facts are what the command adds to its event.
 	telemetry *telemetry.Client
 	facts     map[string]any
-	// telemetryState is the file the install's ID is kept in, beside which
-	// tenjin telemetry off is recorded. Empty where there is no
+	// telemetryState is the file that keeps when a send last failed, beside
+	// which tenjin telemetry off is recorded. Empty where there is no
 	// configuration folder. telemetryUnsent is why this build sends no
 	// event whatever anyone chose, or "" (see telemetryUnsent).
 	telemetryState  string
@@ -408,6 +408,11 @@ func Execute(args []string, stdout, stderr io.Writer) int {
 
 func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	start := time.Now()
+	// Earlier versions kept an ID for the install; none is kept any more,
+	// and every run deletes one left behind, whatever telemetry is set to.
+	if env.telemetryState != "" {
+		telemetry.RemoveInstallID(env.telemetryState)
+	}
 	// Ctrl-C cancels the command's context, which stops anything it started,
 	// such as a coding agent. So do SIGTERM and SIGHUP, with the same exit
 	// status, 130 (interrupted): one code says the run was stopped from
