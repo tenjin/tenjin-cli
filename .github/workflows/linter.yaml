@@ -41,6 +41,10 @@ jobs:
           go-version-file: go.mod
       - name: Format check
         run: make fmt-check
+      - name: go.mod and go.sum are tidy
+        # A module imported directly but marked indirect, or one no longer
+        # used, fails here with the change `go mod tidy` would make.
+        run: go mod tidy -diff
       - name: Generated clients match the specs
         run: |
           make generate
