@@ -611,38 +611,17 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 			writeCmd(opts, env, writeSpec{
 				use: "update <callback-id> --app <app-id>", short: "Change a callback", update: true,
 				long: `Change a callback: only the flags given. Tenjin switches a callback on when
-an update does not say whether it is active, so without --active the callback
-is read first and its current state sent with the change.`,
+an update does not say whether it is active, and replaces the callback's own
+parameters with the ones an update sends. So without --active the callback is
+read first and its current state sent with the change, and with --param its
+other parameters are read and sent with the ones given.`,
 				args:   exactArgs(1, "the callback's ID, from 'tenjin apps callbacks list'"),
 				fields: callbackFields(false), flags: needApp,
 				prepare: func(args []string, body tenjinapi.Fields, said string) (string, error) {
 					return "Change the callback " + args[0] + ": " + said, checkApp()
 				},
 				keep: func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (string, error) {
-					if _, given := body["active"]; given {
-						return "", nil
-					}
-					active, err := api.CallbackActive(ctx, app, args[0])
-					if err != nil {
-						e := clierr.From(err)
-						failed := clierr.Wrap(e.Kind, err, "could not read whether the callback %s is active, which the change must send to leave it so: %s", render.Clean(args[0]), e.Message)
-						switch {
-						case e.Kind == clierr.NotSignedIn || e.Kind == clierr.Permission || e.Kind == clierr.NotFound || e.Kind == clierr.Busy:
-							// The change would fail the same way: only what
-							// fixes the read helps.
-							failed.Hint = e.Hint
-						case e.Hint != "":
-							failed.Hint = e.Hint + " Or say it with --active or --active=false, and nothing is read."
-						default:
-							failed.Hint = "Say it with --active or --active=false, and nothing is read."
-						}
-						return "", failed
-					}
-					body["active"] = active
-					if active {
-						return "; it stays active", nil
-					}
-					return "; it stays switched off (--active=false is sent, since Tenjin would otherwise switch it on)", nil
+					return keepCallback(ctx, api, app, args[0], body)
 				},
 				send: func(ctx context.Context, api *tenjinapi.Client, args []string, body tenjinapi.Fields) (tenjinapi.Document, error) {
 					doc, err := api.UpdateAppCallback(ctx, app, args[0], body)
@@ -798,6 +777,91 @@ func newSavedReportWriteCmds(opts *options, env *environment) []*cobra.Command {
 			},
 		}),
 	}
+}
+
+// keepCallback adds to a callback update what the API would otherwise change
+// unasked, read from the callback, and says it for the question: whether it
+// is active, when the update does not say, and its other parameters, when the
+// update sends some. A callback that cannot be read is not guessed at.
+func keepCallback(ctx context.Context, api *tenjinapi.Client, app, callback string, body tenjinapi.Fields) (string, error) {
+	_, activeGiven := body["active"]
+	given, paramsGiven := body["customer_parameters"].(map[string]string)
+	if activeGiven && !paramsGiven {
+		return "", nil
+	}
+	id := render.Clean(callback)
+	var needs []string
+	if !activeGiven {
+		needs = append(needs, "whether it is active")
+	}
+	if paramsGiven {
+		needs = append(needs, "its other parameters")
+	}
+	need := strings.Join(needs, " and ")
+	state, err := api.ReadCallbackState(ctx, app, callback)
+	if err != nil {
+		e := clierr.From(err)
+		failed := clierr.Wrap(e.Kind, err, "could not read the callback %s, so the change cannot send %s, as it must to leave the callback as it is: %s", id, need, e.Message)
+		switch {
+		case e.Kind == clierr.NotSignedIn || e.Kind == clierr.Permission || e.Kind == clierr.NotFound || e.Kind == clierr.Busy || paramsGiven:
+			// The change would fail the same way, or needs the read
+			// whatever else is said: only what fixes the read helps.
+			failed.Hint = e.Hint
+		case e.Hint != "":
+			failed.Hint = e.Hint + " Or say it with --active or --active=false, and nothing is read."
+		default:
+			failed.Hint = "Say it with --active or --active=false, and nothing is read."
+		}
+		return "", failed
+	}
+	if !activeGiven && state.Active == nil || paramsGiven && state.Parameters == nil {
+		return "", clierr.New(clierr.Upstream, "the Tenjin API's answer for the callback %s does not say %s, which the change must send to leave the callback as it is", id, need)
+	}
+	var said string
+	if !activeGiven {
+		body["active"] = *state.Active
+		if *state.Active {
+			said = "; it stays active"
+		} else {
+			said = "; it stays switched off (--active=false is sent, since Tenjin would otherwise switch it on)"
+		}
+	}
+	if paramsGiven {
+		merged := make(map[string]any, len(state.Parameters)+len(given))
+		var kept []string
+		for k, v := range state.Parameters {
+			merged[k] = v
+			if _, replaced := given[k]; !replaced {
+				kept = append(kept, k)
+			}
+		}
+		for k, v := range given {
+			merged[k] = v
+		}
+		body["customer_parameters"] = merged
+		if len(kept) > 0 {
+			sort.Strings(kept)
+			pairs := make([]string, len(kept))
+			for i, k := range kept {
+				pairs[i] = "--param " + k + "=" + parameterValue(merged[k])
+			}
+			sent, them := "are", "them"
+			if len(kept) == 1 {
+				sent, them = "is", "it"
+			}
+			said += fmt.Sprintf("; its other parameters stay (%s %s sent too, since Tenjin would otherwise drop %s)", strings.Join(pairs, " "), sent, them)
+		}
+	}
+	return said, nil
+}
+
+// parameterValue is a callback parameter's value as a flag gives it.
+func parameterValue(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	raw, _ := json.Marshal(v)
+	return string(raw)
 }
 
 // afterChange is the kind of a failure that came after an earlier request of

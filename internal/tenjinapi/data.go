@@ -1,6 +1,7 @@
 package tenjinapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -259,23 +260,45 @@ func (c *Client) AppCallback(ctx context.Context, app, callback string) (Documen
 	return c.fetch(ctx, func(cl clients) (*http.Response, error) { return cl.cma.GetAppsAppIdCallbacksId(ctx, appID, id) })
 }
 
-// CallbackActive reads whether one of an app's callbacks is active.
-func (c *Client) CallbackActive(ctx context.Context, app, callback string) (bool, error) {
+// CallbackState is what an update must send again to leave a callback as it
+// is: the API switches a callback on when an update leaves active out, and
+// replaces its customer parameters with those an update sends.
+type CallbackState struct {
+	// Active is nil when the answer does not say.
+	Active *bool
+	// Parameters are the callback's customer parameters, as the API returns
+	// them; nil when the answer does not list them.
+	Parameters map[string]any
+}
+
+// ReadCallbackState reads what of one of an app's callbacks an update must
+// send again to leave it as it is.
+func (c *Client) ReadCallbackState(ctx context.Context, app, callback string) (*CallbackState, error) {
 	doc, err := c.AppCallback(ctx, app, callback)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	var read struct {
 		Data struct {
 			Attributes struct {
-				Active *bool `json:"active"`
+				Active     *bool           `json:"active"`
+				Parameters json.RawMessage `json:"customer_parameters"`
 			} `json:"attributes"`
 		} `json:"data"`
 	}
-	if json.Unmarshal(doc, &read) != nil || read.Data.Attributes.Active == nil {
-		return false, clierr.New(clierr.Upstream, "the Tenjin API's answer for the callback does not say whether it is active")
+	if err := json.Unmarshal(doc, &read); err != nil {
+		return nil, clierr.Wrap(clierr.Upstream, err, "the Tenjin API answered with something that is not a callback")
 	}
-	return *read.Data.Attributes.Active, nil
+	state := &CallbackState{Active: read.Data.Attributes.Active}
+	switch raw := bytes.TrimSpace(read.Data.Attributes.Parameters); {
+	case len(raw) == 0:
+	case bytes.Equal(raw, []byte("null")):
+		state.Parameters = map[string]any{}
+	default:
+		// Anything but an object leaves them unlisted.
+		_ = json.Unmarshal(raw, &state.Parameters)
+	}
+	return state, nil
 }
 
 // AppS2SCallbacks lists an app's server-to-server callbacks.

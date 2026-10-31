@@ -226,6 +226,50 @@ func TestChangingACallbackLeavesItAsActiveAsItWas(t *testing.T) {
 	}
 }
 
+// Tenjin replaces a callback's own parameters with those an update sends, so
+// --param sends the callback's other parameters too, and says so.
+func TestChangingACallbacksParameterKeepsTheOthers(t *testing.T) {
+	update := []string{"apps", "callbacks", "update", testOther, "--app", testApp, "--param", "pixel=42", "--active"}
+	want := map[string]any{"pixel": "42", "remote_app_id": "test", "level": float64(3)}
+	setUp := func() *harness {
+		h := newHarness(t)
+		h.signIn()
+		h.fake.callbackParameters = map[string]map[string]any{testOther: {"pixel": "1", "remote_app_id": "test", "level": 3}}
+		return h
+	}
+
+	h := setUp()
+	code, stdout, stderr := h.run(append(update, "--dry-run")...)
+	var body map[string]any
+	if err := json.Unmarshal([]byte(stdout), &body); err != nil || code != 0 || !reflect.DeepEqual(body["customer_parameters"], want) ||
+		!strings.Contains(stderr, "its other parameters stay (--param level=3 --param remote_app_id=test are sent too") {
+		t.Errorf("dry run: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+	h.typing("n")
+	if _, _, stderr := h.run(update...); !strings.Contains(stderr, "--param remote_app_id=test") || len(h.fake.writes) != 0 {
+		t.Errorf("question: stderr = %q", stderr)
+	}
+	h.env.interactive = false
+	if code, _, stderr := h.run(append(update, "--yes")...); code != 0 || len(h.fake.writes) != 1 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	if got := h.fake.callbackParameters[testOther]; !reflect.DeepEqual(got, want) {
+		t.Errorf("the callback's parameters are now %v, want %v", got, want)
+	}
+
+	// Parameters that cannot be read are not guessed, and --active does not
+	// stand in for the read.
+	h = setUp()
+	h.fake.data = map[string]func(*http.Request) (int, any){
+		"/v2/apps/" + testApp + "/callbacks/" + testOther: func(*http.Request) (int, any) {
+			return http.StatusInternalServerError, map[string]string{"error": "boom"}
+		},
+	}
+	if code, _, stderr := h.run(append(update, "--yes")...); code != 7 || len(h.fake.writes) != 0 || !strings.Contains(stderr, "its other parameters") || strings.Contains(stderr, "nothing is read") {
+		t.Errorf("unreadable: exit = %d, %d writes, stderr = %q", code, len(h.fake.writes), stderr)
+	}
+}
+
 // IDs are checked before the question and the dry run.
 func TestWriteChecksIDsBeforeAsking(t *testing.T) {
 	h := newHarness(t)

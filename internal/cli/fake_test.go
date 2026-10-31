@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -78,6 +79,10 @@ type fakeTenjin struct {
 	// listed is. As the API does, an update that does not send active
 	// switches the callback on.
 	callbacks map[string]bool
+	// callbackParameters are each app callback's own customer parameters,
+	// by ID. As the API does, an update that sends customer_parameters
+	// replaces them with those it sends.
+	callbackParameters map[string]map[string]any
 	// siteIDRules are the Site ID Optimization rules; siteIDCalls records
 	// each call as "Method body".
 	siteIDRules []map[string]any
@@ -248,9 +253,15 @@ func (f *fakeTenjin) dataRead(w http.ResponseWriter, r *http.Request) {
 	f.dataAsked = append(f.dataAsked, r.URL)
 	answer := f.data[r.URL.Path]
 	id, active, isCallback := f.callback(r.URL.Path)
+	parameters := maps.Clone(f.callbackParameters[id])
 	f.mu.Unlock()
 	if answer == nil && isCallback {
-		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"id": id, "type": "callback", "attributes": map[string]any{"name": "First", "active": active}}})
+		if parameters == nil {
+			parameters = map[string]any{}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"id": id, "type": "callback", "attributes": map[string]any{
+			"name": "First", "active": active, "customer_parameters": parameters,
+		}}})
 		return
 	}
 	if answer == nil {
@@ -344,6 +355,12 @@ func (f *fakeTenjin) dataWrite(w http.ResponseWriter, r *http.Request) {
 			f.callbacks = map[string]bool{}
 		}
 		f.callbacks[id] = active || !sent
+		if parameters, sent := body["customer_parameters"].(map[string]any); sent {
+			if f.callbackParameters == nil {
+				f.callbackParameters = map[string]map[string]any{}
+			}
+			f.callbackParameters[id] = parameters
+		}
 	}
 	f.mu.Unlock()
 	switch {
