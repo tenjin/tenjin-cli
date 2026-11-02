@@ -327,3 +327,7 @@ make lint
 ## License
 
 [MIT](LICENSE). The SDK integration guides embedded under `internal/guides/data` come from [tenjin/sdk-llm-guides](https://github.com/tenjin/sdk-llm-guides), under the same license. Release archives include the licenses of the software compiled into the binary, in `THIRD_PARTY_NOTICES.md`.
+
+Use of the Tenjin service is subject to Tenjin's [Terms of Service](https://tenjin.com/terms/) and [Data Processing Addendum](https://tenjin.com/tenjin-inc-data-processing-addendum/).
+
+The license does not cover the Tenjin name or logo.
