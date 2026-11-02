@@ -9,7 +9,6 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
 	"github.com/tenjin/tenjin-cli/internal/project"
 	"github.com/tenjin/tenjin-cli/internal/testproject"
-	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/verify"
 )
 
@@ -35,15 +34,15 @@ func withDevice(t *testing.T, text string, lookup verify.DeviceLookup) *verify.R
 }
 
 type fakeLookup struct {
-	known map[string]track.Attribution // by installation ID
+	known map[string]bool // by installation ID
 	err   error
 	asked []string
 }
 
-func (f *fakeLookup) LookupDevice(_ context.Context, key, bundleID, platform, installationID string) (track.Attribution, error) {
+func (f *fakeLookup) LookupDevice(_ context.Context, key, bundleID, platform, installationID string) (bool, error) {
 	f.asked = append(f.asked, key+"|"+bundleID+"|"+platform+"|"+installationID)
 	if f.err != nil {
-		return track.Attribution{}, f.err
+		return false, f.err
 	}
 	return f.known[installationID], nil
 }
@@ -77,12 +76,9 @@ func TestDeviceConnectAnswers(t *testing.T) {
 func TestDeviceProcessedByTenjin(t *testing.T) {
 	accepted := deviceLog(connectURL, connectParams, `{"code":200,"success":true}`)
 
-	lookup := &fakeLookup{known: map[string]track.Attribution{"install-1": {Known: true, CampaignName: "Organic"}}}
+	lookup := &fakeLookup{known: map[string]bool{"install-1": true}}
 	r := withDevice(t, accepted, lookup)
-	f := expect(t, r, "device.processed", project.Android, verify.Pass)
-	if !strings.Contains(f.Title, "attributed to Organic") {
-		t.Errorf("title = %q", f.Title)
-	}
+	expect(t, r, "device.processed", project.Android, verify.Pass)
 	// The lookup uses the key from the source and the IDs from the log.
 	if want := testproject.Key + "|com.example.sample|android|install-1"; len(lookup.asked) != 1 || lookup.asked[0] != want {
 		t.Errorf("asked = %q", lookup.asked)

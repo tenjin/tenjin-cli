@@ -135,7 +135,7 @@ func TestDoctorLaunchesTheAppOnAConnectedIPhone(t *testing.T) {
 	}
 	lacks(t, stdout,
 		"Tenjin accepted the app's connect request (SDK 1.19.1)",
-		"Tenjin has processed this device's install, attributed to Organic",
+		"Tenjin has processed this device's install",
 	)
 	if len(*launches) != 1 || strings.Join((*launches)[0], " ") != "devicectl device process launch --device 00008130-000000000000000A --terminate-existing --console com.example.sample" {
 		t.Errorf("launches = %q", *launches)

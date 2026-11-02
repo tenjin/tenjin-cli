@@ -40,7 +40,7 @@ func TestDoctorReadsAConnectedDevice(t *testing.T) {
 	for _, want := range []string{
 		"On the device",
 		"Tenjin accepted the app's connect request (SDK 1.23.0)",
-		"Tenjin has processed this device's install, attributed to Organic",
+		"Tenjin has processed this device's install",
 		"4 other requests were accepted",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -226,5 +226,21 @@ func TestDoctorOnAMarkedEmulator(t *testing.T) {
 	lacks(t, stdout, "Tenjin does not process installs from a simulator or emulator", "a physical Android device")
 	if len(h.fake.installsAsked) != 0 {
 		t.Errorf("an emulator's install was looked up: %q", h.fake.installsAsked)
+	}
+}
+
+// Tenjin's answer about a device names what it was attributed to. The CLI
+// asks only whether the install was processed, so none of that is shown.
+func TestADevicesAttributionIsNotShown(t *testing.T) {
+	const campaign = "Campaign-Of-One-Device"
+	h := newHarness(t)
+	h.fake.installs[capturedInstall] = campaign
+	h.connectDevice(readCapturedLog(t))
+	dir := testproject.Write(t, testproject.AndroidNative())
+	for _, args := range [][]string{{"doctor", dir, "--device"}, {"doctor", dir, "--device", "--json"}} {
+		_, stdout, stderr := h.run(args...)
+		if !strings.Contains(stdout, "Tenjin has processed this device's install") || strings.Contains(stdout+stderr, campaign) || strings.Contains(stdout+stderr, "organic") {
+			t.Errorf("%q:\nstdout:\n%s\nstderr:\n%s", args, stdout, stderr)
+		}
 	}
 }

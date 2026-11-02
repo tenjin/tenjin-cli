@@ -62,7 +62,7 @@ func TestAnAmazonInstallIsLookedUpOnTheAmazonApp(t *testing.T) {
 10-02 15:07:34.121 D/HttpConnection(1): Tenjin::connect params: {bundle_id=com.example.sample, platform=android, source_app_store=amazon, analytics_installation_id=I1, advertising_id=A1, sdk_version=1.24.0}
 10-02 15:07:34.300 D/HttpConnection(1): Tenjin::connect response: {"code":200,"success":true}
 `))
-	lookup := &fakeLookup{known: map[string]track.Attribution{"I1": {Known: true, CampaignName: "Organic"}}}
+	lookup := &fakeLookup{known: map[string]bool{"I1": true}}
 	r := run(t, testproject.AndroidMultiStore(), verify.Options{Device: &verify.DeviceInput{Log: log, Lookup: lookup, Platform: project.Android}})
 	expect(t, r, "device.processed", project.Android, verify.Pass)
 	if len(lookup.asked) == 0 || !strings.HasSuffix(lookup.asked[0], "|com.example.sample|amazon|I1") {

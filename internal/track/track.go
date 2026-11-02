@@ -104,29 +104,22 @@ func (c *Client) CheckKey(ctx context.Context, key, bundleID, platform string) (
 	return KeyCheck{Status: status, Detail: detail}, nil
 }
 
-// Attribution is what Tenjin has recorded about a device's install.
-type Attribution struct {
-	// Known is false when Tenjin has not processed an install for the device.
-	Known        bool
-	AdNetwork    string
-	CampaignName string
-}
-
 // LookupDevice asks whether Tenjin has processed an install for a device,
 // identified by the installation ID the SDK generates. It uses the same
-// endpoint the SDK calls to read its own attribution.
-func (c *Client) LookupDevice(ctx context.Context, key, bundleID, platform, installationID string) (Attribution, error) {
+// endpoint the SDK calls to read its own attribution, and keeps only the
+// yes or no: what is attributed to one device is not for the CLI to show.
+func (c *Client) LookupDevice(ctx context.Context, key, bundleID, platform, installationID string) (bool, error) {
 	query := url.Values{"bundle_id": {bundleID}, "platform": {platform}, "analytics_installation_id": {installationID}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.BaseURL+"/v0/user?"+query.Encode(), nil)
 	if err != nil {
-		return Attribution{}, err
+		return false, err
 	}
 	req.SetBasicAuth(key, "")
 	req.Header.Set("User-Agent", c.UserAgent)
 
 	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return Attribution{}, fmt.Errorf("could not reach Tenjin: %w", err)
+		return false, fmt.Errorf("could not reach Tenjin: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
@@ -134,34 +127,32 @@ func (c *Client) LookupDevice(ctx context.Context, key, bundleID, platform, inst
 	switch resp.StatusCode {
 	case http.StatusOK:
 		var body struct {
-			AdNetwork    string `json:"ad_network"`
-			CampaignName string `json:"campaign_name"`
 			// Present in an install's attribution, empty or not.
 			InstallationID *string `json:"analytics_installation_id"`
 		}
 		// Anything but Tenjin's JSON, such as a captive portal's page,
 		// says nothing about the install.
 		if err := json.Unmarshal(raw, &body); err != nil {
-			return Attribution{}, fmt.Errorf("the install lookup's answer could not be read: %s", truncate(string(raw), 80))
+			return false, fmt.Errorf("the install lookup's answer could not be read: %s", truncate(string(raw), 80))
 		}
 		if body.InstallationID == nil {
-			return Attribution{}, fmt.Errorf("the install lookup answered HTTP 200 without an attribution")
+			return false, fmt.Errorf("the install lookup answered HTTP 200 without an attribution")
 		}
-		return Attribution{Known: true, AdNetwork: body.AdNetwork, CampaignName: body.CampaignName}, nil
+		return true, nil
 	case http.StatusNotFound:
 		// A 404 with an empty object is a device not processed yet; any
 		// other 404 is a failed lookup.
 		if strings.TrimSpace(string(raw)) == "{}" {
-			return Attribution{}, nil
+			return false, nil
 		}
 	}
 	var answer struct {
 		Message string `json:"message"`
 	}
 	if json.Unmarshal(raw, &answer) == nil && answer.Message != "" {
-		return Attribution{}, fmt.Errorf("the install lookup answered HTTP %d %q", resp.StatusCode, answer.Message)
+		return false, fmt.Errorf("the install lookup answered HTTP %d %q", resp.StatusCode, answer.Message)
 	}
-	return Attribution{}, fmt.Errorf("the install lookup answered HTTP %d", resp.StatusCode)
+	return false, fmt.Errorf("the install lookup answered HTTP %d", resp.StatusCode)
 }
 
 func truncate(s string, n int) string {

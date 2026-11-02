@@ -8,12 +8,11 @@ import (
 
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
 	"github.com/tenjin/tenjin-cli/internal/project"
-	"github.com/tenjin/tenjin-cli/internal/track"
 )
 
 // DeviceLookup asks Tenjin whether it has processed a device's install.
 type DeviceLookup interface {
-	LookupDevice(ctx context.Context, key, bundleID, platform, installationID string) (track.Attribution, error)
+	LookupDevice(ctx context.Context, key, bundleID, platform, installationID string) (bool, error)
 }
 
 // DeviceInput is what a connected device, or a saved log, says about the
@@ -369,7 +368,7 @@ func (r *runner) checkProcessed(t *project.Target, src source, c *devicelog.Requ
 	var failed error
 	answered := false
 	for _, k := range keys {
-		attribution, err := lookup.LookupDevice(r.ctx, k.Value, bundle, platform, installationID)
+		processed, err := lookup.LookupDevice(r.ctx, k.Value, bundle, platform, installationID)
 		if err != nil {
 			// A key for another platform, or a hiccup: another
 			// key may still answer.
@@ -377,12 +376,8 @@ func (r *runner) checkProcessed(t *project.Target, src source, c *devicelog.Requ
 			continue
 		}
 		answered = true
-		if attribution.Known {
-			title := "Tenjin has processed this device's install"
-			if source := firstNonEmpty(attribution.CampaignName, attribution.AdNetwork); source != "" {
-				title += ", attributed to " + source
-			}
-			r.pass("device.processed", t.Platform, title, "", 0)
+		if processed {
+			r.pass("device.processed", t.Platform, "Tenjin has processed this device's install", "", 0)
 			return
 		}
 	}
@@ -496,15 +491,6 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, v := range values {
-		if v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 // hasUnread reports whether the log has requests whose contents were not

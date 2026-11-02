@@ -109,12 +109,9 @@ func TestLookupDevice(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			attribution, err := New(srv.URL, "test").LookupDevice(context.Background(), "MYKEY", "com.example.app", "android", "install-1")
-			if (err != nil) != tc.wantErr || attribution.Known != tc.known {
-				t.Fatalf("attribution = %+v, err = %v", attribution, err)
-			}
-			if tc.known && attribution.CampaignName != "Organic" {
-				t.Errorf("attribution = %+v", attribution)
+			processed, err := New(srv.URL, "test").LookupDevice(context.Background(), "MYKEY", "com.example.app", "android", "install-1")
+			if (err != nil) != tc.wantErr || processed != tc.known {
+				t.Fatalf("processed = %v, err = %v", processed, err)
 			}
 			q := got.URL.Query()
 			if user, _, _ := got.BasicAuth(); user != "MYKEY" || got.URL.Path != "/v0/user" ||
@@ -133,7 +130,7 @@ func TestAnUnreadableAnswerIsNotAnInstall(t *testing.T) {
 	}))
 	defer srv.Close()
 	got, err := New(srv.URL, "test").LookupDevice(context.Background(), "KEY", "com.example", "android", "install-1")
-	if err == nil || got.Known {
-		t.Errorf("got %+v, %v", got, err)
+	if err == nil || got {
+		t.Errorf("got %v, %v", got, err)
 	}
 }
