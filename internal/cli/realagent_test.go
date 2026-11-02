@@ -215,7 +215,8 @@ func skillRun(t *testing.T, bin, claude string, served bool) {
 	if strings.Contains(transcript, testproject.Key) {
 		t.Error("the whole SDK key reached the agent")
 	}
-	if build, _ := os.ReadFile(filepath.Join(dir, "app/build.gradle.kts")); !strings.Contains(string(build), "com.tenjin:android-sdk:2.0.0") {
+	// The doctor names the newest release of the major version it knows.
+	if build, _ := os.ReadFile(filepath.Join(dir, "app/build.gradle.kts")); !regexp.MustCompile(`com\.tenjin:android-sdk:2\.\d+\.\d+`).Match(build) {
 		t.Errorf("the SDK was not added at the version the doctor named:\n%s", build)
 	}
 
@@ -266,10 +267,12 @@ func TestSetupWithTheRealCodex(t *testing.T) {
 
 	h := newHarness(t)
 	isolate(t, h)
-	h.fake.addApp("Sample", "com.example.sample", "android")
+	// Served by Tenjin, not given to this run: a key the run was given is
+	// readable from Codex's sandbox, so setup would refuse to start it.
+	app := h.fake.addApp("Sample", "com.example.sample", "android")
+	h.fake.serveKeys(app.ID, testproject.Key)
 	h.signIn()
 	h.env.executable = func() (string, error) { return bin, nil }
-	h.vars["TENJIN_SDK_KEY"] = testproject.Key
 	defaults := ""
 	if os.Getenv("TENJIN_REALAGENT_CODEX_DEFAULTS") != "" {
 		// A stand-in named codex that adds one option and hands over to the

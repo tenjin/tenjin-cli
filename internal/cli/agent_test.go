@@ -409,6 +409,18 @@ func TestSetupSurvivesAFailingAgent(t *testing.T) {
 	}
 }
 
+// Codex's sandbox can read the arguments and environment of the run, so a
+// key given there is refused. A key setup fetches from Tenjin is in neither.
+func TestAKeyTenjinServesDoesNotStopCodex(t *testing.T) {
+	h, dir := brokenAndroid(t)
+	h.fake.serveKeys(h.fake.apps[0].ID, testproject.Key)
+	h.installCodex()
+	code, stdout, stderr := h.run("setup", dir, "--agent", "codex")
+	if !strings.Contains(stdout, "Codex is working on the integration") {
+		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+}
+
 func TestSetupIntegratesUsingCodex(t *testing.T) {
 	h, dir := brokenAndroid(t)
 	codex := h.installCodex()
