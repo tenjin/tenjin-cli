@@ -55,4 +55,3 @@ jobs:
       tag: ${{ needs.release-please.outputs.tag_name }}
     secrets:
       CODE_OPS_APP_PRIVATE_KEY: ${{ secrets.CODE_OPS_APP_PRIVATE_KEY }}
-      AMPLITUDE_API_KEY: ${{ secrets.AMPLITUDE_API_KEY }}

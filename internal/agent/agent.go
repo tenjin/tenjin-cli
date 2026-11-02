@@ -83,19 +83,14 @@ func Find(lookPath func(string) (string, error)) []Agent {
 // agent. Starting a second one from inside the first helps nobody: the agent
 // already at work should make the changes.
 func InsideAgent(getenv func(string) string) bool {
-	return Inside(getenv) != ""
-}
-
-// Inside returns the ID of the coding agent that started this process, or "".
-func Inside(getenv func(string) string) string {
 	for _, d := range drivers {
 		for _, name := range d.inside {
 			if getenv(name) != "" {
-				return d.id
+				return true
 			}
 		}
 	}
-	return ""
+	return false
 }
 
 // Limits says what the agent is and is not able to do while it works.
@@ -126,9 +121,6 @@ type Task struct {
 	// ToolDir is put on the agent's PATH so it can run `tenjin doctor` and
 	// `tenjin sdk guide`, the commands it is allowed to run.
 	ToolDir string
-	// Env is added to the agent's environment, such as TENJIN_NO_TELEMETRY
-	// for a run that was asked to stay offline.
-	Env []string
 }
 
 // Action is one thing the agent did, for showing progress.
@@ -217,7 +209,7 @@ func (a Agent) Run(ctx context.Context, task Task, progress func(Action)) (Resul
 		}
 		sessionID = id
 	}
-	env := append(withPath(withoutKeys(os.Environ(), foldEnv), task.ToolDir, foldEnv), task.Env...)
+	env := withPath(withoutKeys(os.Environ(), foldEnv), task.ToolDir, foldEnv)
 	var confinement []string
 	if a.confine != nil {
 		var err error
@@ -392,9 +384,6 @@ func withoutKeys(env []string, fold bool) []string {
 	}
 	return out
 }
-
-// WithoutKeys is env without the variables that carry Tenjin secrets.
-func WithoutKeys(env []string) []string { return withoutKeys(env, foldEnv) }
 
 // withPath returns env with dir placed first on PATH, keeping the name the
 // entry already has.

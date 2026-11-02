@@ -146,7 +146,7 @@ The Tenjin apps, their SDK keys and the documentation are commands of their own 
 | --- | --- |
 | `tenjin login`, `tenjin logout`, `tenjin auth status` | Sign in through the browser (over SSH, paste back the address it ends on); sign out, which ends the session's API access at once, and that of your other Tenjin CLI sessions still open in the same organization, on any machine; see who is signed in |
 
-`tenjin version` prints the version, commit and build date. `tenjin telemetry off` stops the usage statistics on this machine (see [Privacy and security](#privacy-and-security)); `tenjin telemetry on` and `tenjin telemetry status` turn them back on and say whether they are sent.
+`tenjin version` prints the version, commit and build date.
 
 `tenjin <command> --help` describes every flag, with examples. `tenjin help integration` and `tenjin help scripting` walk through the commands, step by step.
 
@@ -276,7 +276,6 @@ Every command except `setup` is built to be driven by a program:
 | `TENJIN_SDK_KEY_ANDROID`, `TENJIN_SDK_KEY_IOS` | The same, per platform |
 | `TENJIN_SDK_KEY_ANDROID_<VARIANT>` | The same, for another build, such as `TENJIN_SDK_KEY_ANDROID_AMAZON` |
 | `TENJIN_NO_UPDATE_CHECK` | `1` turns off the new-release notice |
-| `TENJIN_NO_TELEMETRY`, `DO_NOT_TRACK` | `1` turns off usage statistics (see [Privacy and security](#privacy-and-security)) |
 | `TENJIN_DASHBOARD_URL`, `TENJIN_API_URL`, `TENJIN_TRACK_URL`, `TENJIN_RESOURCE_URL`, `TENJIN_SITE_IDS_URL`, `TENJIN_DOCS_URL` | Point at another copy of a Tenjin service. Each must be `https`, except on this machine |
 | `NO_COLOR` | Turn off color |
 | `CLICOLOR_FORCE` | Keep color when output is piped, for example into `less -R` |
@@ -291,12 +290,12 @@ The CLI keeps a few small files in a `tenjin` folder in your user configuration 
 | Linux | `$XDG_CONFIG_HOME/tenjin`, or `~/.config/tenjin` |
 | Windows | `%AppData%\tenjin` |
 
-It holds the time of the last update check, the version that last ran, and the newest SDK releases it found, whether you turned the usage statistics off and when one last failed to send (no identifier), and a lock file that keeps two `tenjin` commands from renewing the sign-in at once. Your session is kept in the system keychain (macOS Keychain, Windows Credential Manager, the Secret Service on Linux), or in this folder, readable only by you, where there is no keychain.
+It holds the time of the last update check, the version that last ran, the newest SDK releases it found, and a lock file that keeps two `tenjin` commands from renewing the sign-in at once. Your session is kept in the system keychain (macOS Keychain, Windows Credential Manager, the Secret Service on Linux), or in this folder, readable only by you, where there is no keychain.
 
 ## Privacy and security
 
-- **Usage statistics.** After each command, a release of the CLI sends Tenjin one event, through Amplitude: the command, the names of the flags given (never their values), its exit code, error kind and duration, whether a question was answered no, the CLI's version, the operating system and architecture, whether you were at a terminal, and which coding agent started it, if one did. Commands that read a project add its framework, platforms, ad SDKs, whether it has the Tenjin SDK, and the IDs of the checks that failed or warned; `setup` adds the last step reached, the coding agent it ran, and how the launch check ended. Never a path, a bundle ID, an app or event name, a key, a token, or anything from your code. No identifier is kept on this machine: each event carries a random ID of its own, made for it and never stored, so no two events can be tied together, to this machine, or to your Tenjin account. Amplitude, like any server, sees the IP address the event comes from. Nothing is sent in CI, against another copy of Tenjin, with `--offline`, with `TENJIN_NO_TELEMETRY=1` or `DO_NOT_TRACK=1`, or where there is no configuration folder (see [Files](#files)) to keep `tenjin telemetry off` in. `tenjin telemetry off` stops it on this machine for good; `tenjin telemetry status` says whether events are sent, and if not, why. `--verbose` shows the request. Tenjin's API, like any server, also records the requests it gets, with the CLI's version in the User-Agent.
-- **What it contacts:** Tenjin's dashboard, API and tracking service (where the SDK sends) for the commands you run; Amplitude, for the usage statistics; Tenjin's documentation site for `docs search`; GitHub, once a day, for the newest release of the CLI (for a copy installed with Homebrew, the cask in `tenjin/homebrew-tap`); and, once a day for `doctor`, the public registries of the Tenjin SDKs (Maven Central, pub.dev, npm, GitHub). `--offline` keeps `doctor` from contacting Tenjin, the registries and Amplitude.
+- **No statistics on how you use it.** The CLI sends no statistics about its use, to Tenjin or to anyone else. Tenjin's API, like any server, records the requests it gets, with the CLI's version in the User-Agent.
+- **What it contacts:** Tenjin's dashboard, API and tracking service (where the SDK sends) for the commands you run; Tenjin's documentation site for `docs search`; GitHub, once a day, for the newest release of the CLI (for a copy installed with Homebrew, the cask in `tenjin/homebrew-tap`); and, once a day for `doctor`, the public registries of the Tenjin SDKs (Maven Central, pub.dev, npm, GitHub). `--offline` keeps `doctor` from contacting Tenjin and the registries.
 - **Credentials and SDK keys are never printed.** Keys are shown by their last four characters, in tables, JSON, `--verbose` and an agent's report.
 - **Downloads can be verified.** Each release's archives carry build provenance, signed by GitHub: `gh attestation verify tenjin_<version>_<os>_<arch>.tar.gz --repo tenjin/tenjin-cli --signer-workflow tenjin/tenjin-cli/.github/workflows/release.yaml` shows an archive was built by this repository's release workflow, and names the commit. The install scripts and Homebrew check each archive against the `checksums.txt` of the same release, so they catch a damaged download, not a release replaced as a whole.
 - **It changes your project only to write an SDK key** where a placeholder was left for it. Code changes are yours or your agent's.

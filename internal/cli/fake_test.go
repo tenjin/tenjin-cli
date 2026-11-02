@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -23,7 +22,6 @@ import (
 
 	"github.com/tenjin/tenjin-cli/internal/config"
 	"github.com/tenjin/tenjin-cli/internal/session"
-	"github.com/tenjin/tenjin-cli/internal/telemetry"
 	"github.com/tenjin/tenjin-cli/internal/tenjinapi"
 )
 
@@ -626,8 +624,6 @@ func newHarness(t *testing.T) *harness {
 		lookPath:   func(name string) (string, error) { return "", fmt.Errorf("%s: not found", name) },
 		executable: func() (string, error) { return "/usr/local/bin/tenjin", nil },
 		wait:       func(time.Duration) {},
-		// Never the real configuration folder's.
-		telemetryState: filepath.Join(t.TempDir(), "tenjin", telemetry.StateFile),
 		// No adb either, unless a test connects a device.
 		run: func(_ context.Context, name string, _ ...string) ([]byte, error) {
 			return nil, fmt.Errorf("%s: not found", name)
@@ -644,8 +640,6 @@ func newHarness(t *testing.T) *harness {
 			return nil
 		},
 	}
-	// What this build sends, as for any build but a release; telemetry turns it on.
-	h.env.telemetryUnsent = telemetryUnsent(h.env.endpoints, h.env.telemetryState)
 	return h
 }
 

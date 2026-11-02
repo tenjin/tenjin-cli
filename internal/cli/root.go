@@ -31,7 +31,6 @@ import (
 	"github.com/tenjin/tenjin-cli/internal/render"
 	"github.com/tenjin/tenjin-cli/internal/sdkrelease"
 	"github.com/tenjin/tenjin-cli/internal/session"
-	"github.com/tenjin/tenjin-cli/internal/telemetry"
 	"github.com/tenjin/tenjin-cli/internal/tenjinapi"
 	"github.com/tenjin/tenjin-cli/internal/track"
 	"github.com/tenjin/tenjin-cli/internal/transport"
@@ -124,19 +123,6 @@ type environment struct {
 	updates *update.Checker
 	// updateNotice receives the check's answer once it was started.
 	updateNotice chan *update.Notice
-	// telemetry sends each command's event. Nil sends none (see
-	// telemetryClient), and facts are what the command adds to its event.
-	telemetry *telemetry.Client
-	facts     map[string]any
-	// telemetryState is the file that keeps when a send last failed, beside
-	// which tenjin telemetry off is recorded. Empty where there is no
-	// configuration folder. telemetryUnsent is why this build sends no
-	// event whatever anyone chose, or "" (see telemetryUnsent).
-	telemetryState  string
-	telemetryUnsent string
-	// detach hands an event to a copy of the CLI that sends it on its own.
-	// Nil sends it from this process.
-	detach func(telemetry.Event) error
 }
 
 // updateWait bounds the update check. A command that finishes first waits
@@ -189,24 +175,18 @@ func defaultEnvironment() (*environment, error) {
 		return nil, clierr.Wrap(clierr.Usage, err, "%v", err)
 	}
 	interactive := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
-	state := telemetryState()
-	unsent := telemetryUnsent(endpoints, state)
 	return &environment{
-		getenv:          os.Getenv,
-		updates:         updateChecker(os.Getenv),
-		telemetry:       telemetryClient(os.Getenv, state, unsent),
-		telemetryState:  state,
-		telemetryUnsent: unsent,
-		detach:          sendDetached,
-		sdkReleases:     sdkReleases(),
-		endpoints:       endpoints,
-		store:           session.NewStore(),
-		stdin:           bufio.NewReader(os.Stdin),
-		interactive:     interactive,
-		rawInput:        rawInput(interactive),
-		openBrowser:     openBrowser,
-		lookPath:        exec.LookPath,
-		executable:      os.Executable,
+		getenv:      os.Getenv,
+		updates:     updateChecker(os.Getenv),
+		sdkReleases: sdkReleases(),
+		endpoints:   endpoints,
+		store:       session.NewStore(),
+		stdin:       bufio.NewReader(os.Stdin),
+		interactive: interactive,
+		rawInput:    rawInput(interactive),
+		openBrowser: openBrowser,
+		lookPath:    exec.LookPath,
+		executable:  os.Executable,
 		run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			// A device tool that hangs, such as adb with a wedged server,
 			// must not hold the command forever.
@@ -431,10 +411,6 @@ func (e *environment) api() *tenjinapi.Client {
 // Execute runs the CLI and returns the process exit code. The result goes to
 // stdout; everything else, including errors, goes to stderr.
 func Execute(args []string, stdout, stderr io.Writer) int {
-	if raw := os.Getenv(telemetryEventVar); raw != "" && len(args) == 1 && args[0] == telemetrySendArg {
-		sendHandedEvent(raw)
-		return 0
-	}
 	defer render.PrepareConsole()()
 	env, err := defaultEnvironment()
 	if err != nil {
@@ -446,12 +422,6 @@ func Execute(args []string, stdout, stderr io.Writer) int {
 }
 
 func execute(args []string, stdout, stderr io.Writer, env *environment) int {
-	start := time.Now()
-	// Earlier versions kept an ID for the install; none is kept any more,
-	// and every run deletes one left behind, whatever telemetry is set to.
-	if env.telemetryState != "" {
-		telemetry.RemoveInstallID(env.telemetryState)
-	}
 	// Ctrl-C cancels the command's context, which stops anything it started,
 	// such as a coding agent. So do SIGTERM and SIGHUP, with the same exit
 	// status, 130 (interrupted): one code says the run was stopped from
@@ -466,22 +436,15 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	root.SetErr(stderr)
 
 	ran, err := root.ExecuteContextC(ctx)
-	var no declined
-	if errors.As(err, &no) {
-		env.note("declined", true)
-	}
 	e := outcome(ctx, err, ran, root)
-	code, kind := 0, ""
+	code := 0
 	if e != nil {
 		env.hintOtherSkill(e)
 		writeError(stderr, e, wantsJSON(args))
-		code, kind = e.Kind.ExitCode(), string(e.Kind)
+		code = e.Kind.ExitCode()
 	}
 	// From here, a second Ctrl-C ends the process at once.
 	stop()
-	// Sent first: with --verbose its request is logged, and that line must
-	// not land inside the update notice.
-	env.sendTelemetry(ran, code, kind, time.Since(start))()
 	env.reportUpdate(stderr)
 	return code
 }
@@ -652,7 +615,7 @@ Details: 'tenjin help scripting'.`
 			root.AddCommand(c)
 		}
 	}
-	root.AddCommand(newDocsCmd(opts, env), newTelemetryCmd(opts, env), newVersionCmd(opts))
+	root.AddCommand(newDocsCmd(opts, env), newVersionCmd(opts))
 	root.AddCommand(newGuideCmds(opts.data)...)
 	root.SetUsageTemplate(rootUsageTemplate)
 	root.SetHelpCommand(newHelpCmd(root))

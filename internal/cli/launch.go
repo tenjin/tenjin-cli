@@ -35,11 +35,6 @@ func (s *setup) launch(p *project.Project) error {
 	return nil
 }
 
-// noteLaunch notes how the launch on a platform ended.
-func (s *setup) noteLaunch(platform project.Platform, outcome string) {
-	s.env.note("launch_"+string(platform), outcome)
-}
-
 // deviceNoun is what the developer launches the app on, for a platform.
 func deviceNoun(platform project.Platform) string {
 	if platform == project.IOS {
@@ -60,7 +55,6 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		_, available = devicelog.FindADB(s.env.lookPath, s.env.getenv)
 	}
 	if !available || !s.env.interactive {
-		s.noteLaunch(platform, "not_read")
 		switch {
 		case !available && platform == project.IOS:
 			s.say("Xcode was not found, so the simulator cannot be read from here.")
@@ -91,7 +85,6 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 			return err
 		}
 		if strings.EqualFold(answer, "s") {
-			s.noteLaunch(platform, "skipped")
 			s.say("Skipped. After launching the app, run %s to see Tenjin's answer.", s.style.Accent("tenjin doctor --device"))
 			if refused {
 				return clierr.New(clierr.ChecksFailed, "Tenjin refused the app's last connect request")
@@ -134,12 +127,10 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 
 		switch {
 		case installProcessed(report):
-			s.noteLaunch(platform, "processed")
 			s.say("\n%s Tenjin received this device's install and processed it. The integration works end to end.", s.style.Green("✓"))
 			s.testDevicePages(report)
 			return nil
 		case connectAccepted(report) && (from == fromSimulator || deviceFinding(report, "device.simulator") != nil):
-			s.noteLaunch(platform, "simulator")
 			physical := "an iPhone connected by cable"
 			if platform == project.Android {
 				physical = "a physical Android device"
@@ -147,7 +138,6 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 			s.say("\nTenjin accepted the app's request. That is as far as a simulator or emulator goes: the SDK marks its installs, and Tenjin leaves them out of attribution by design. To see an install processed, run a debug build on %s, then %s.", physical, s.style.Accent("tenjin doctor --device"))
 			return nil
 		case connectAccepted(report):
-			s.noteLaunch(platform, "accepted")
 			s.say("\nTenjin accepted the app's request, and has not processed the install yet. Run %s again in a minute.", s.style.Accent("tenjin doctor --device"))
 			s.testDevicePages(report)
 			return nil

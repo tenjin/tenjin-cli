@@ -213,9 +213,9 @@ jobs:
           if (-not ((tenjin version) -like "Tenjin CLI $env:TENJIN_VERSION *")) { throw 'wrong version' }
           $saved = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
           if (($saved -split ';') -notcontains $dir) { throw "$dir is not on the saved PATH: $saved" }
-          # The installer's own run of tenjin turns these off, and puts them
-          # back as they were, in this shell.
-          if ($env:TENJIN_NO_TELEMETRY -or $env:TENJIN_NO_UPDATE_CHECK) { throw 'the installer left its variables set' }
+          # The installer's own run of tenjin turns this off, and puts it
+          # back as it was, in this shell.
+          if ($env:TENJIN_NO_UPDATE_CHECK) { throw 'the installer left its variable set' }
       - name: install.ps1 again, PowerShell 7
         # Over the installed copy, and with the other PowerShell.
         if: runner.os == 'Windows'

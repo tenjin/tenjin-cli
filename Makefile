@@ -5,9 +5,7 @@ COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE    ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
 BUILDINFO := github.com/tenjin/tenjin-cli/internal/buildinfo
-# TENJIN_AMPLITUDE_KEY is set only for a release; without it the build sends no telemetry.
-LDFLAGS   := -s -w -X $(BUILDINFO).version=$(VERSION) -X $(BUILDINFO).commit=$(COMMIT) -X $(BUILDINFO).date=$(DATE) \
-	-X github.com/tenjin/tenjin-cli/internal/telemetry.apiKey=$(TENJIN_AMPLITUDE_KEY)
+LDFLAGS   := -s -w -X $(BUILDINFO).version=$(VERSION) -X $(BUILDINFO).commit=$(COMMIT) -X $(BUILDINFO).date=$(DATE)
 
 build:
 	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/tenjin ./cmd/tenjin
