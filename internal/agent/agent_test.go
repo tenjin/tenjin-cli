@@ -265,6 +265,42 @@ func TestTheHelpCheckReadsTheErrorOutput(t *testing.T) {
 	}
 }
 
+// Claude Code's help is read as the run itself is started: in the project,
+// without the Tenjin secrets in its environment.
+func TestTheHelpCheckGetsNoKey(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake agent is a shell script")
+	}
+	t.Setenv("TENJIN_API_TOKEN", "tok")
+	t.Setenv("TENJIN_SDK_KEY", "KEY")
+	dir, project := t.TempDir(), t.TempDir()
+	script := filepath.Join(dir, "claude")
+	help := filepath.Join(dir, "help-env")
+	body := "#!/bin/sh\nif [ \"$1\" = --help ]; then { pwd -P; env; } > " + help + "; echo '  --restricted'; exit 0; fi\ncat > /dev/null\necho '{\"type\":\"result\",\"result\":\"Done.\"}'\n"
+	if err := os.WriteFile(script, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := Find(func(string) (string, error) { return script, nil })[0]
+	if _, err := a.Run(context.Background(), Task{Dir: project, Prompt: "x", ToolDir: "/opt/tenjin"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(help)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The environment is not printed: it is the test's own.
+	got := string(raw)
+	if strings.Contains(got, "TENJIN_API_TOKEN") || strings.Contains(got, "TENJIN_SDK_KEY") {
+		t.Error("the help check got a Tenjin secret")
+	}
+	if !strings.Contains(got, "\nPATH=/opt/tenjin"+string(os.PathListSeparator)) {
+		t.Error("the help check did not get the agent's PATH")
+	}
+	if real, _ := filepath.EvalSymlinks(project); !strings.HasPrefix(got, real+"\n") {
+		t.Errorf("the help check ran in %q, not in the project", strings.SplitN(got, "\n", 2)[0])
+	}
+}
+
 // tail is output that follows an agent's error, long enough to fill a pipe
 // that nobody reads.
 var tail = strings.Repeat(`{"type":"item.completed","item":{"type":"reasoning","text":"`+strings.Repeat("x", 1000)+`"}}`+"\n", 3000)

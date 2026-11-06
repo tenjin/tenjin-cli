@@ -194,8 +194,12 @@ var claude = driver{
 	read:   readEvents,
 	resume: func(sessionID string) string { return "claude --resume " + sessionID },
 	inside: []string{"CLAUDECODE"},
-	confine: func(ctx context.Context, path, _ string, _ []string) ([]string, error) {
+	confine: func(ctx context.Context, path, dir string, env []string) ([]string, error) {
+		// Run as the agent will be: in the project, without the Tenjin
+		// secrets in its environment.
 		cmd := proc.Command(ctx, path, "--help")
+		cmd.Dir = dir
+		cmd.Env = env
 		var help bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &help, &help
 		_ = cmd.Run()
