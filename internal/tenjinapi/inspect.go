@@ -179,9 +179,12 @@ func catchSignIn(f func()) (err error) {
 // as every group's is when they could not be read: that it lacks nothing
 // would be a guess.
 func annotate(in *Integration, settingsKnown bool) {
+	// By template ID, in lower case: IDs are matched in any case, as
+	// GroupCreateWouldChange does.
 	required := map[string][]string{}
 	for _, t := range in.Templates {
 		id, _ := t["id"].(string)
+		id = strings.ToLower(id)
 		required[id] = []string{}
 		for _, s := range asList(t["required_settings"]) {
 			if name, ok := s.(string); ok {
@@ -193,7 +196,7 @@ func annotate(in *Integration, settingsKnown bool) {
 	overstated, unknown := false, false
 	for _, g := range in.Groups {
 		template, _ := g["callback_group_template_id"].(string)
-		names, known := required[template]
+		names, known := required[strings.ToLower(template)]
 		if !known {
 			g["missing_settings"], g["activatable"] = nil, nil
 			unknown = true

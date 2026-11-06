@@ -176,6 +176,38 @@ func TestInspectIntegration(t *testing.T) {
 	}
 }
 
+// A group names its template's ID in any case, as a create that would change
+// a group matches it: what it lacks is still known.
+func TestInspectIntegrationMatchesTemplateIDsInAnyCase(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	h.fake.data = map[string]func(*http.Request) (int, any){
+		"/v2/integrations/31/callback_group_templates": func(*http.Request) (int, any) {
+			return http.StatusOK, map[string]any{"data": []any{map[string]any{"id": "00000000-0000-4000-8000-0000000000CC", "type": "callback_group_template", "attributes": map[string]any{
+				"name": "Purchases", "event": "purchase", "required_settings": []string{"event_type"},
+			}}}}
+		},
+		"/v2/apps/" + testApp + "/integrations/31/callback_groups": func(*http.Request) (int, any) {
+			return http.StatusOK, map[string]any{"data": []any{map[string]any{"id": testOther, "type": "callback_group", "attributes": map[string]any{
+				"name": "My purchases", "active": false, "callback_group_template_id": "00000000-0000-4000-8000-0000000000cc",
+			}}}}
+		},
+		"/v2/apps/" + testApp + "/integrations/31/callback_settings": func(*http.Request) (int, any) {
+			return http.StatusOK, map[string]any{"data": map[string]any{"id": "s", "type": "callback_settings", "attributes": map[string]any{"callback_settings": map[string]any{}}}}
+		},
+	}
+	code, stdout, stderr := h.run("apps", "callback-groups", "inspect", "--app", testApp, "--channel", "31", "--json")
+	var got struct {
+		Groups []map[string]any `json:"configured_groups"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &got); err != nil || code != 0 || len(got.Groups) != 1 {
+		t.Fatalf("exit = %d, err = %v, stderr = %q", code, err, stderr)
+	}
+	if missing, _ := got.Groups[0]["missing_settings"].([]any); len(missing) != 1 || missing[0] != "event_type" {
+		t.Errorf("group = %v", got.Groups[0])
+	}
+}
+
 // When the channel's templates cannot be read, what a group lacks is not
 // known: inspect says so rather than that it lacks nothing.
 func TestInspectIntegrationWithoutTheTemplates(t *testing.T) {
