@@ -152,6 +152,7 @@ var Registries = map[string]Source{
 	"react-native-tenjin":    NPM("https://registry.npmjs.org/react-native-tenjin/latest"),
 	"ionic-capacitor-tenjin": NPM("https://registry.npmjs.org/ionic-capacitor-tenjin/latest"),
 	"com.tenjin.sdk":         GitHubLatest("https://github.com/tenjin/tenjin-unity-sdk/releases"),
+	"tenjin-godot-sdk":       GitHubLatest("https://github.com/tenjin/tenjin-godot-sdk/releases"),
 }
 
 // MavenCentral reads the release a Maven repository's metadata names.

@@ -27,6 +27,7 @@ var guideURLs = map[project.Framework]string{
 	project.Capacitor:   "https://github.com/tenjin/tenjin-ionic-sdk",
 	project.Unity:       "https://github.com/tenjin/tenjin-unity-sdk",
 	project.Unreal:      "https://github.com/tenjin/tenjin-unreal-sdk",
+	project.Godot:       "https://github.com/tenjin/tenjin-godot-sdk",
 }
 
 var platformNames = map[project.Platform]string{project.Android: "Android", project.IOS: "iOS"}

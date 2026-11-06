@@ -21,54 +21,54 @@ import (
 // setter pair, set on a Tenjin receiver: tenjin.customerUserId = id.
 var featureCalls = map[string]struct{ distinct, generic, property []string }{
 	project.FeaturePurchases: {
-		distinct: []string{"transactionWithReceipt", "transactionWithDataSignature", "transactionAmazon", "transactionWithProductName", "enableAutoPurchaseTracking"},
+		distinct: []string{"transactionWithReceipt", "transactionWithDataSignature", "transactionAmazon", "transactionWithProductName", "enableAutoPurchaseTracking", "transaction_with_receipt", "transaction_with_data_signature"},
 		generic:  []string{"transaction", "Transaction"},
 	},
 	project.FeatureSubscriptions: {
-		distinct: []string{"subscriptionWithStoreKit", "subscriptionWithStoreKitForProductId", "subscriptionWithProductName", "SubscriptionWithStoreKit", "enableAutoSubscriptionTracking", "handleSubscriptionPurchase"},
+		distinct: []string{"subscriptionWithStoreKit", "subscriptionWithStoreKitForProductId", "subscriptionWithProductName", "SubscriptionWithStoreKit", "enableAutoSubscriptionTracking", "handleSubscriptionPurchase", "subscription_with_storekit"},
 		generic:  []string{"subscription", "Subscription"},
 	},
 	project.FeatureConsent: {
-		distinct: []string{"optInParams", "optOutParams", "optInGoogleDMA", "optOutGoogleDMA", "optInOutUsingCMP", "setGoogleDMAParameters", "setGoogleDMAParametersWithAdPersonalization", "OptInParams", "OptOutParams", "OptInGoogleDMA", "OptOutGoogleDMA", "OptInOutUsingCMP", "SetGoogleDMAParameters"},
-		generic:  []string{"optIn", "optOut", "OptIn", "OptOut"},
+		distinct: []string{"optInParams", "optOutParams", "optInGoogleDMA", "optOutGoogleDMA", "optInOutUsingCMP", "setGoogleDMAParameters", "setGoogleDMAParametersWithAdPersonalization", "OptInParams", "OptOutParams", "OptInGoogleDMA", "OptOutGoogleDMA", "OptInOutUsingCMP", "SetGoogleDMAParameters", "opt_in_params", "opt_out_params", "opt_in_google_dma", "opt_out_google_dma", "opt_in_out_using_cmp", "set_google_dma_parameters"},
+		generic:  []string{"optIn", "optOut", "OptIn", "OptOut", "opt_in", "opt_out"},
 	},
 	project.FeatureDeepLinks: {
-		distinct: []string{"registerDeepLinkHandler", "getAttributionInfo", "GetAttributionInfo", "connectWithDeferredDeeplink", "handleOpenURL", "handleOpenURLString", "handleOpenIntent", "handleOpenUrl"},
+		distinct: []string{"registerDeepLinkHandler", "getAttributionInfo", "GetAttributionInfo", "connectWithDeferredDeeplink", "handleOpenURL", "handleOpenURLString", "handleOpenIntent", "handleOpenUrl", "register_deep_link_handler", "get_attribution_info", "connect_sdk_with_deferred_deeplink"},
 		generic:  []string{"getDeeplink", "GetDeeplink"},
 	},
 	project.FeatureSKAN: {
-		distinct: []string{"updatePostbackConversionValue", "UpdatePostbackConversionValue", "updateSkAdNetworkConversionValue"},
+		distinct: []string{"updatePostbackConversionValue", "UpdatePostbackConversionValue", "updateSkAdNetworkConversionValue", "update_postback_conversion_value"},
 		generic:  []string{"updateConversionValue"},
 	},
 	project.FeatureCustomEvents: {
-		distinct: []string{"eventWithNameAndValue", "sendEventWithName"},
-		generic:  []string{"eventWithName", "sendEvent", "SendEvent"},
+		distinct: []string{"eventWithNameAndValue", "sendEventWithName", "event_with_name_and_value"},
+		generic:  []string{"eventWithName", "sendEvent", "SendEvent", "event_with_name"},
 	},
 	// Other SDKs (AppsFlyer, for one) have a setCustomerUserId too: it
 	// counts only on a Tenjin receiver.
 	project.FeatureUserID: {
-		generic:  []string{"setCustomerUserId", "SetCustomerUserId"},
+		generic:  []string{"setCustomerUserId", "SetCustomerUserId", "set_customer_user_id"},
 		property: []string{"customerUserId"},
 	},
 }
 
 // adRevenueCalls are the calls that pass one ad network's impressions to
 // Tenjin, by the name project detection gives the network. They are taken
-// from the SDKs' sources (Android, iOS, Unity, and the wrappers), not only
+// from the SDKs' sources (Android, iOS, Unity, Godot, and the wrappers), not only
 // the guides: the iOS SDK's handleAdMobILRD:, for one, is in no guide.
 var adRevenueCalls = map[string][]string{
 	"AppLovin MAX": {"eventAdImpressionAppLovin", "eventAdImpressionDataAppLovin", "subscribeAppLovinImpressions", "SubscribeAppLovinImpressions",
-		"appLovinImpressionFromJSON", "AppLovinImpressionFromJSON"},
+		"appLovinImpressionFromJSON", "AppLovinImpressionFromJSON", "event_ad_impression_applovin"},
 	"Google AdMob": {"eventAdImpressionAdMob", "eventAdImpressionAdMobNextGen", "eventAdImpressionDataAdMob", "adMobImpressionFromJSON", "AdMobImpressionFromJSON",
-		"handleAdMobILRD", "SubscribeAdMobBannerViewImpressions", "SubscribeAdMobInterstitialAdImpressions", "SubscribeAdMobRewardedAdImpressions", "SubscribeAdMobRewardedInterstitialAdImpressions"},
+		"handleAdMobILRD", "SubscribeAdMobBannerViewImpressions", "SubscribeAdMobInterstitialAdImpressions", "SubscribeAdMobRewardedAdImpressions", "SubscribeAdMobRewardedInterstitialAdImpressions", "event_ad_impression_admob"},
 	"ironSource LevelPlay": {"eventAdImpressionIronSource", "eventAdImpressionDataIronSource", "subscribeIronSourceImpressions", "SubscribeIronSourceImpressions",
 		"ironSourceImpressionFromJSON", "IronSourceImpressionFromJSON", "SubscribeLevelPlayBannerAdImpressions", "SubscribeLevelPlayBannerImpressions",
-		"SubscribeLevelPlayInterstitialAdImpressions", "SubscribeLevelPlayInterstitialImpressions", "SubscribeLevelPlayRewardedAdImpressions", "SubscribeLevelPlayRewardedImpressions"},
-	"TopOn": {"eventAdImpressionTopOn", "eventAdImpressionDataTopOn", "topOnImpressionFromDict", "topOnImpressionFromJSON", "TopOnImpressionFromJSON", "SubscribeTopOnImpressions"},
+		"SubscribeLevelPlayInterstitialAdImpressions", "SubscribeLevelPlayInterstitialImpressions", "SubscribeLevelPlayRewardedAdImpressions", "SubscribeLevelPlayRewardedImpressions", "event_ad_impression_ironsource"},
+	"TopOn": {"eventAdImpressionTopOn", "eventAdImpressionDataTopOn", "topOnImpressionFromDict", "topOnImpressionFromJSON", "TopOnImpressionFromJSON", "SubscribeTopOnImpressions", "event_ad_impression_topon"},
 	"TradPlus": {"eventAdImpressionTradPlus", "eventAdImpressionTradPlusAdInfo", "eventAdImpressionDataTradPlus", "subscribeTradPlusImpressions", "SubscribeTradPlusImpressions",
-		"tradPlusImpressionFromJSON", "TradPlusImpressionFromJSON", "handleTradPlusILRD"},
+		"tradPlusImpressionFromJSON", "TradPlusImpressionFromJSON", "handleTradPlusILRD", "event_ad_impression_tradplus"},
 	"CAS": {"eventAdImpressionCAS", "eventAdImpressionDataCAS", "subscribeCASImpressions", "subscribeCASBannerImpressions", "SubscribeCASImpressions", "SubscribeCASBannerImpressions",
-		"casImpressionFromJSON", "CASImpressionFromJSON", "handleCASILRD"},
+		"casImpressionFromJSON", "CASImpressionFromJSON", "handleCASILRD", "event_ad_impression_cas"},
 }
 
 // featureSent says, for each feature, that the project sends it.
@@ -96,7 +96,7 @@ var featureTopics = map[string]string{
 
 var (
 	tenjinReceiverVar = regexp.MustCompile(`\b(\w+)\s*(?::\s*[\w?]+\s*)?=\s*(?:TenjinSDK|Tenjin)\s*\.\s*(?:getInstance|instance|sharedInstance)\b|\b(?:TenjinSDK|BaseTenjin)\s+(\w+)\s*=`)
-	featureSourceExts = []string{".kt", ".java", ".swift", ".m", ".mm", ".dart", ".js", ".jsx", ".ts", ".tsx", ".cs"}
+	featureSourceExts = []string{".kt", ".java", ".swift", ".m", ".mm", ".dart", ".js", ".jsx", ".ts", ".tsx", ".cs", ".gd"}
 )
 
 // tenjinCode is the text of every source file that mentions Tenjin.
@@ -116,7 +116,7 @@ func (r *runner) tenjinCode() *tenjinCode {
 	}
 	r.code = &tenjinCode{}
 	for _, rel := range project.SourceFiles(r.p.Root, ".", featureSourceExts...) {
-		if testSource(rel) || r.p.Framework == project.Unity && project.UnitySDKFile(rel) {
+		if testSource(rel) || r.p.Framework == project.Unity && project.UnitySDKFile(rel) || r.p.Framework == project.Godot && project.GodotSDKFile(rel) {
 			continue
 		}
 		path := filepath.Join(r.p.Root, filepath.FromSlash(rel))
@@ -128,6 +128,9 @@ func (r *runner) tenjinCode() *tenjinCode {
 			continue
 		}
 		text := blankComments(project.Text(raw))
+		if strings.HasSuffix(rel, ".gd") {
+			text = project.BlankHashComments(text)
+		}
 		// Another SDK's getInstance() is not Tenjin's, nor is Other.instance,
 		// nor an instance the file sets from something else.
 		receivers := []string{`TenjinSDK\s*\.\s*instance`, "TenjinSDK", "Tenjin", "tenjin", "tenjinSDK", `(?:TenjinSDK|Tenjin)\s*\.\s*getInstance\w*\([^()]*(?:\([^()]*\)[^()]*)*\)`}
@@ -287,6 +290,8 @@ func featureFix(p *project.Project, id string) string {
 		return "Follow the section on " + topic + " in tenjin sdk guide " + name + "."
 	case p.Framework == project.Native:
 		return "Follow the section on " + topic + " in tenjin sdk guide android and tenjin sdk guide ios."
+	case p.Framework == project.Godot:
+		return "Follow the section on " + topic + " in the Godot SDK's README, https://github.com/tenjin/tenjin-godot-sdk#usage."
 	}
 	return "Follow the section on " + topic + " in the Tenjin SDK guide for this platform."
 }
