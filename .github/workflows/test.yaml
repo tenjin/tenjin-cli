@@ -74,7 +74,16 @@ jobs:
       - name: Check the configuration
         run: make release-check
       - name: Build
-        run: make release-snapshot
+        # An Amplitude key in the environment reaches a release only: a
+        # snapshot, like make build, has none and sends no usage statistics.
+        env:
+          TENJIN_AMPLITUDE_KEY: not-a-release-key
+        run: |
+          make release-snapshot
+          make build
+          found=$(find dist bin -type f \( -name tenjin -o -name tenjin.exe \) -print0 | xargs -0 grep -alF not-a-release-key || true)
+          if [ -n "$found" ]; then echo "these builds hold the Amplitude key: $found"; exit 1; fi
+          test -x bin/tenjin
       - name: Keep
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
