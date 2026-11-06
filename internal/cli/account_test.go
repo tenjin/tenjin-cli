@@ -349,9 +349,28 @@ func TestAppsEnsure(t *testing.T) {
 			!strings.Contains(stderr, `Would create "com.example.sample" with the bundle ID com.example.sample on android. Nothing was sent`) {
 			t.Errorf("missing: exit = %d, apps = %d, stdout = %q, stderr = %q", code, len(h.fake.apps), stdout, stderr)
 		}
+		// With --json, both answers have the result's shape: one that would
+		// be created says so, with the body that would create it.
+		type dryRun struct {
+			ID          *string           `json:"id"`
+			BundleID    string            `json:"bundle_id"`
+			Created     *bool             `json:"created"`
+			WouldCreate map[string]string `json:"would_create"`
+		}
+		code, stdout, stderr = h.run("apps", "ensure", "--bundle-id", "com.example.sample", "--platform", "android", "--dry-run", "--json")
+		var missing dryRun
+		if err := json.Unmarshal([]byte(stdout), &missing); err != nil || code != 0 || missing.ID == nil || *missing.ID != "" || missing.Created == nil || *missing.Created ||
+			missing.BundleID != "com.example.sample" || missing.WouldCreate["bundle_id"] != "com.example.sample" || missing.WouldCreate["platform"] != "android" ||
+			!strings.Contains(stderr, "Nothing was sent") || len(h.fake.apps) != 0 {
+			t.Errorf("missing, --json: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+		}
 		existing := h.fake.addApp("Sample", "com.example.sample", "android")
 		if code, r, stderr := ensure(h, "--dry-run"); code != 0 || r.ID != existing.ID || r.Created || len(h.fake.apps) != 1 {
 			t.Errorf("there: exit = %d, result = %+v, stderr = %q", code, r, stderr)
+		}
+		_, stdout, _ = h.run("apps", "ensure", "--bundle-id", "com.example.sample", "--platform", "android", "--dry-run", "--json")
+		if strings.Contains(stdout, "would_create") {
+			t.Errorf("there, --json: stdout = %q", stdout)
 		}
 	})
 

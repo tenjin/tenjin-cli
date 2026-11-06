@@ -179,7 +179,7 @@ ensure' to get the app whether or not it exists.`,
 				return clierr.New(clierr.Usage, "unknown platform %q (use %s)", in.Platform, strings.Join(platforms, ", "))
 			}
 			if dryRun {
-				return dryRunCreateApp(cmd, env, in, what)
+				return dryRunCreateApp(cmd, env, in, what, false)
 			}
 
 			if !yes {
@@ -219,8 +219,10 @@ ensure' to get the app whether or not it exists.`,
 }
 
 // dryRunCreateApp says the request that would create the app, what, and
-// sends nothing.
-func dryRunCreateApp(cmd *cobra.Command, env *environment, in tenjinapi.NewApp, what string) error {
+// sends nothing. asResult writes, instead of the body, the result of `apps
+// ensure` with the app as it would be and the body in would_create, so that
+// a script reads one shape whether the app is there or not.
+func dryRunCreateApp(cmd *cobra.Command, env *environment, in tenjinapi.NewApp, what string, asResult bool) error {
 	planned, err := env.api().Plan(func(api *tenjinapi.Client) error {
 		_, _, err := api.CreateApp(cmd.Context(), in)
 		return err
@@ -228,7 +230,14 @@ func dryRunCreateApp(cmd *cobra.Command, env *environment, in tenjinapi.NewApp, 
 	if err != nil {
 		return err
 	}
-	return writeDryRun(cmd, "Create "+what, planned, in.Body(), false)
+	if !asResult {
+		return writeDryRun(cmd, "Create "+what, planned, in.Body(), false)
+	}
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Would create %s. Nothing was sent: it would send %s with the body in would_create.\n", render.Clean(what), render.Clean(planned.Method+" "+planned.URL))
+	return render.WriteJSON(cmd.OutOrStdout(), ensureResult{
+		App:         tenjinapi.App{Name: in.Name, BundleID: in.BundleID, Platform: in.Platform},
+		WouldCreate: in.Body(),
+	})
 }
 
 // appKeys is what `apps keys list` reports. Keys is empty where Tenjin's API
@@ -348,6 +357,10 @@ func writeApps(w io.Writer, apps []tenjinapi.App) error {
 type ensureResult struct {
 	tenjinapi.App
 	Created bool `json:"created"`
+	// WouldCreate, only in a dry run that found no app, is the body of the
+	// request that would create it; the app is then as it would be, with
+	// no ID.
+	WouldCreate map[string]string `json:"would_create,omitempty"`
 }
 
 func newAppsEnsureCmd(opts *options, env *environment) *cobra.Command {
@@ -366,7 +379,9 @@ Android needs two apps. The bundle ID and platform cannot be changed after
 creation, so creating asks for confirmation unless --yes is given.
 
 With --dry-run, an app that exists is shown as without it, and one that does
-not is not created: the request that would create it is printed instead.`,
+not is not created: the request that would create it is printed instead. With
+--json too, that app is shown as it would be, with an empty id, created false,
+and the request's body as would_create, which an app that exists never has.`,
 		Args: noArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			format, err := opts.format(cmd)
@@ -391,7 +406,7 @@ not is not created: the request that would create it is printed instead.`,
 				}
 				if app == nil {
 					in := tenjinapi.NewApp{Name: name, BundleID: bundleID, Platform: platform}
-					return dryRunCreateApp(cmd, env, in, fmt.Sprintf("%q with the bundle ID %s on %s", name, bundleID, platform))
+					return dryRunCreateApp(cmd, env, in, fmt.Sprintf("%q with the bundle ID %s on %s", name, bundleID, platform), format == render.JSON)
 				}
 				result = &ensureResult{App: *app}
 			} else if result, err = ensureApp(cmd.Context(), env, cmd.ErrOrStderr(), bundleID, platform, name, yes); err != nil {
