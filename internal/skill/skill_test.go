@@ -495,6 +495,26 @@ func TestOtherVersionsFindsTheCopiesAnotherVersionWrote(t *testing.T) {
 	}
 }
 
+// go install names a release v1.2.3, and GoReleaser 1.2.3: the same
+// release either way.
+func TestOtherVersionsIgnoresTheLeadingV(t *testing.T) {
+	project := t.TempDir()
+	path := install(t, target(t, "claude"), Location{ProjectDir: project}).Path
+	current := buildinfo.Get().Version
+	for _, pair := range [][2]string{{"1.2.3", "v1.2.3"}, {"v1.2.3", "1.2.3"}} {
+		content := strings.Replace(skillFile(), "(Tenjin CLI "+current+")", "(Tenjin CLI "+pair[0]+")", 1)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if copies := OtherVersions(project, "", pair[1]); len(copies) != 0 {
+			t.Errorf("written by %s, read by %s: %+v", pair[0], pair[1], copies)
+		}
+		if copies := OtherVersions(project, "", "1.2.4"); len(copies) != 1 || copies[0].Version != pair[0] {
+			t.Errorf("written by %s, read by 1.2.4: %+v", pair[0], copies)
+		}
+	}
+}
+
 // Run from the home folder, the copy there is the user-wide one, which
 // 'tenjin agent install --global' updates, wherever a link to a dotfiles
 // folder puts it.

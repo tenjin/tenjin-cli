@@ -249,7 +249,8 @@ func OtherVersions(projectDir, home, current string) []Copy {
 				continue
 			}
 			if content, ok, _ := read(skillPath); ok {
-				if version := recorded(content); version != current {
+				// go install names a release v1.2.3, GoReleaser 1.2.3.
+				if version := recorded(content); strings.TrimPrefix(version, "v") != strings.TrimPrefix(current, "v") {
 					copies = append(copies, Copy{Path: skillPath, Global: global, Version: version})
 				}
 			}
