@@ -216,15 +216,18 @@ jobs:
           for ($i = 0; $i -lt 30; $i++) {
             try { Invoke-WebRequest -Uri 'http://127.0.0.1:8765/install.ps1' -UseBasicParsing | Out-Null; break } catch { Start-Sleep -Seconds 1 }
           }
+          # The installer's own run of tenjin turns these off, and puts them
+          # back as they were in this shell: one set, one not.
+          $env:TENJIN_NO_UPDATE_CHECK = 'kept'
           irm http://127.0.0.1:8765/install.ps1 | iex
+          if ($env:TENJIN_NO_UPDATE_CHECK -ne 'kept') { throw "TENJIN_NO_UPDATE_CHECK is now '$env:TENJIN_NO_UPDATE_CHECK'" }
+          if (Test-Path env:TENJIN_NO_TELEMETRY) { throw 'the installer left TENJIN_NO_TELEMETRY set' }
+          $env:TENJIN_NO_UPDATE_CHECK = $null
           $dir = Join-Path $env:LOCALAPPDATA 'Programs\tenjin'
           tenjin version
           if (-not ((tenjin version) -like "Tenjin CLI $env:TENJIN_VERSION *")) { throw 'wrong version' }
           $saved = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
           if (($saved -split ';') -notcontains $dir) { throw "$dir is not on the saved PATH: $saved" }
-          # The installer's own run of tenjin turns these off, and puts them
-          # back as they were, in this shell.
-          if ($env:TENJIN_NO_TELEMETRY -or $env:TENJIN_NO_UPDATE_CHECK) { throw 'the installer left its variables set' }
       - name: install.ps1 again, PowerShell 7
         # Over the installed copy, and with the other PowerShell.
         if: runner.os == 'Windows'
@@ -252,3 +255,58 @@ jobs:
           $env:TENJIN_INSTALL_DIR = $null
           $saved = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
           if ((@($saved -split ';') | Where-Object { $_.TrimEnd('\') -eq $dir }).Count -ne 1) { throw "PATH should hold $dir once: $saved" }
+      - name: Setup Go
+        # For the stand-in tenjin.exe below.
+        if: runner.os == 'Windows'
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: install.ps1 runs its tenjin with no usage event or update notice
+        # A stand-in tenjin.exe, released as the real one is, writes down the
+        # variables the installer runs it with. The last step: it leaves its
+        # folder on the saved PATH.
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $stub = Join-Path $env:RUNNER_TEMP 'stub'
+          New-Item -ItemType Directory -Path "$stub\src", "$stub\site" -Force | Out-Null
+          Set-Content -Path "$stub\src\main.go" -Value @'
+          package main
+
+          import "os"
+
+          func main() {
+            seen := "TENJIN_NO_TELEMETRY=" + os.Getenv("TENJIN_NO_TELEMETRY") + " TENJIN_NO_UPDATE_CHECK=" + os.Getenv("TENJIN_NO_UPDATE_CHECK")
+            _ = os.WriteFile(os.Getenv("TENJIN_STUB_SEEN"), []byte(seen), 0o644)
+            _, _ = os.Stdout.WriteString("Tenjin CLI 0.0.0-stub\n")
+          }
+          '@
+          Push-Location "$stub\src"
+          try {
+            $arch = go env GOARCH
+            go build -o tenjin.exe main.go
+            if ($LASTEXITCODE -ne 0) { throw 'the stand-in did not build' }
+          } finally { Pop-Location }
+          $archive = "tenjin_0.0.0-stub_windows_$arch.zip"
+          Compress-Archive -Path "$stub\src\tenjin.exe" -DestinationPath "$stub\site\$archive"
+          $sum = (Get-FileHash -Algorithm SHA256 -Path "$stub\site\$archive").Hash.ToLower()
+          Set-Content -Path "$stub\site\checksums.txt" -Value "$sum  $archive"
+          Copy-Item install.ps1 "$stub\site\"
+          Start-Process -FilePath python -ArgumentList 'scripts/serve-release.py', "$stub\site", '0.0.0-stub', '8766' -WindowStyle Hidden
+          for ($i = 0; $i -lt 30; $i++) {
+            try { Invoke-WebRequest -Uri 'http://127.0.0.1:8766/install.ps1' -UseBasicParsing | Out-Null; break } catch { Start-Sleep -Seconds 1 }
+          }
+          $env:TENJIN_RELEASES_URL = 'http://127.0.0.1:8766'
+          $env:TENJIN_VERSION = '0.0.0-stub'
+          $env:TENJIN_INSTALL_DIR = "$stub\bin"
+          $env:TENJIN_STUB_SEEN = "$stub\seen.txt"
+          # The other way round from the first install: this one set, the
+          # other not.
+          $env:TENJIN_NO_TELEMETRY = 'kept'
+          if (Test-Path env:TENJIN_NO_UPDATE_CHECK) { throw 'TENJIN_NO_UPDATE_CHECK is set before the install' }
+          irm http://127.0.0.1:8766/install.ps1 | iex
+          $seen = Get-Content -Path "$stub\seen.txt" -Raw
+          if ($seen -ne 'TENJIN_NO_TELEMETRY=1 TENJIN_NO_UPDATE_CHECK=1') { throw "the installer ran tenjin with $seen" }
+          if ($env:TENJIN_NO_TELEMETRY -ne 'kept') { throw "TENJIN_NO_TELEMETRY is now '$env:TENJIN_NO_TELEMETRY'" }
+          if (Test-Path env:TENJIN_NO_UPDATE_CHECK) { throw 'the installer left TENJIN_NO_UPDATE_CHECK set' }
