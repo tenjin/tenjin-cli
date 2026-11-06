@@ -108,6 +108,7 @@ Homebrew installs completions for bash, zsh and fish. Otherwise, `tenjin complet
 | Capacitor | ✓ | ✓ | ✓ |
 | Unity | ✓ | ✓ | ✓ |
 | Unreal | ✓ | | |
+| Godot | ✓ | ✓ | Android |
 
 ## Usage
 
@@ -154,7 +155,7 @@ The Tenjin apps, their SDK keys and the documentation are commands of their own 
 
    Only you know which events matter and which value identifies a user, so for those two features `setup` asks, and shows what the app already gives its other analytics SDKs (Firebase Analytics, Amplitude, Mixpanel, AppsFlyer, GameAnalytics, Facebook App Events, Flurry; Adjust's event tokens too, which are not names): Enter takes those. `--events <name,name>` and `--user-id <value>` answer without asking, and choose their features (at a terminal, they start ticked); the value can be code, such as `user.id`, or words, such as "the account ID from the login response". Without a terminal and without the flags, `setup` takes what the app sends already. Where nothing was named or found, none are added: a coding agent doing the rest of the integration proposes events or a user ID in its report, and is never left to invent them. None is started only to propose. Each event named stays to do until the app sends it to Tenjin by that name, and a user ID named as code until it is what the app passes Tenjin, even where the app already sends Tenjin others.
 2. **Sign in**, through the browser, if there is no session. `--no-browser` prints the address to open instead, for a browser on another machine (see [Troubleshooting](#troubleshooting)).
-3. **Tenjin apps.** Finds the app for each build, or creates it after asking (`--yes` to skip the question), named after the project as its own files name it (Gradle's `rootProject.name`, the Xcode project, a Flutter app's label or display name or else `pubspec.yaml`, Expo's app config or `app.json`, the Capacitor `appName`, Unity's product name) and the platform.
+3. **Tenjin apps.** Finds the app for each build, or creates it after asking (`--yes` to skip the question), named after the project as its own files name it (Gradle's `rootProject.name`, the Xcode project, a Flutter app's label or display name or else `pubspec.yaml`, Expo's app config or `app.json`, the Capacitor `appName`, Unity's product name, Godot's `config/name`) and the platform.
 4. **SDK keys.** Fetches each app's key from Tenjin, or says where to copy it in the dashboard, and checks it at once, so a wrong key, or the other platform's, is caught before a build.
 5. **Add the SDK**, with your coding agent or by hand: `setup` lists each problem left, with its file, then offers the agent or says what to add and where.
 6. **Check.** Runs `doctor`, and again after each change, until it is clean.
@@ -162,13 +163,14 @@ The Tenjin apps, their SDK keys and the documentation are commands of their own 
 
 ### Checking a project
 
-`tenjin doctor` checks native Android, native iOS, Flutter, React Native, Capacitor and Unity projects:
+`tenjin doctor` checks native Android, native iOS, Flutter, React Native, Capacitor, Unity and Godot projects:
 
 - the SDK dependency, and whether it is an old release;
 - the initialize and connect calls, and the features you chose (purchases, ad revenue per ad network, and so on);
 - Android permissions, Play Services libraries and ProGuard rules;
 - the iOS tracking and SKAdNetwork `Info.plist` keys;
 - for Unity, the External Dependency Manager, the `TenjinObject` component and SKAdNetwork postbacks;
+- for Godot, that the Tenjin plugin is enabled, the Android export uses a Gradle build, and the iOS export preset points SKAdNetwork postbacks at Tenjin;
 - whether Tenjin accepts each SDK key for its build's bundle ID.
 
 Every problem comes with a fix that names the file, the line and the version. The key check sends one request to Tenjin and no event; `--offline` skips it, along with the once-a-day lookup of the newest SDK releases. `--strict` also fails on warnings.
@@ -184,7 +186,7 @@ tenjin doctor --logs logcat.txt   # a saved log; - reads standard input
 
 Launch a debug build first. `doctor` reports what Tenjin answered to the SDK, why a request was refused, whether the build that ran has the application ID the project declares, and whether Tenjin has processed the install. Other apps on the device with the Tenjin SDK log the same way; their requests are left out. `--serial` picks a device when several are connected.
 
-On iOS, the SDK logs its requests only when the build calls `TenjinSDK.debugLogs()`; `doctor` checks that debug builds do and release builds don't. It also warns when release builds would log: from Unity's `DebugLogs()` outside a development build or the TenjinObject's Debug Logs box, and from a native call in a Flutter, React Native or Capacitor app's `ios/` folder. The Android SDK has no such switch. Tenjin accepts a simulator's requests but leaves its installs out of attribution by design: the SDK marks them, and Android emulators it recognizes too. A physical device is what confirms the install.
+On iOS, the SDK logs its requests only when the build calls `TenjinSDK.debugLogs()`; `doctor` checks that debug builds do and release builds don't. It also warns when release builds would log: from Unity's `DebugLogs()` outside a development build or the TenjinObject's Debug Logs box, and from a native call in a Flutter, React Native or Capacitor app's `ios/` folder. The Android SDK has no such switch. Tenjin accepts a simulator's requests but leaves its installs out of attribution by design: the SDK marks them, and Android emulators it recognizes too. A physical device is what confirms the install. The Godot SDK cannot turn on the iOS SDK's logs yet, so a Godot app's launch is verified on Android.
 
 ### Builds and SDK keys
 
