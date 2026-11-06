@@ -385,17 +385,13 @@ func (s *setup) writeGivenKeys(p *project.Project) error {
 	keys := map[string]string{}
 	for _, pb := range builds {
 		b := pb.build
-		given, ok := s.given.ByBuild[b.ID]
-		if !ok || given.Value == "" {
-			given = s.given.All
-			if given.Value == "" {
-				continue
-			}
-			if pb.target != nil && len(pb.target.Builds) > 1 {
+		given, ok := s.given.For(pb.target, b.ID)
+		if !ok {
+			if s.given.PassedOver(pb.target) {
 				s.say("  %s %s: the key from %s was not written: it is not given for this build, and %s has %d. Run tenjin setup, or tenjin project set-keys, to write this build's own key.",
-					s.style.Yellow("!"), pb.title, given.Source, platformNames[pb.target.Platform], len(pb.target.Builds))
-				continue
+					s.style.Yellow("!"), pb.title, s.given.All.Source, platformNames[pb.target.Platform], len(pb.target.Builds))
 			}
+			continue
 		}
 		label := pb.title + ", key " + maskKey(given.Value) + " from " + given.Source
 		if s.offline {

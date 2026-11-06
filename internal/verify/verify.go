@@ -106,8 +106,8 @@ type GivenKey struct {
 
 // GivenKeys are the SDK keys supplied from outside the project. Each build is
 // its own Tenjin app with its own key, so they are kept by build ID ("ios",
-// "android", "android:amazon"); All serves a project with one build, or is
-// an organization-wide key.
+// "android", "android:amazon"); All is given without naming a build, and
+// serves each platform with one build (see For).
 type GivenKeys struct {
 	All     GivenKey
 	ByBuild map[string]GivenKey
@@ -117,14 +117,28 @@ type GivenKeys struct {
 	PreferSource bool
 }
 
-// For returns the key given for a build, if there is one. A key given for
-// the platform's main build never stands in for another build's: using one
-// app's key in another app's build is the mistake to catch.
-func (g GivenKeys) For(build string) (GivenKey, bool) {
+// For returns the key given for build, one of t's, if there is one. A key
+// given without naming a build serves a platform with one build only: where
+// t has several, each is an app of its own in Tenjin with its own key, and
+// using one app's key in another app's build is the mistake to catch. A key
+// given for the platform's main build never stands in for another build's
+// either. It is the one rule for checking a given key and for writing it. t
+// is nil for a platform whose builds could not be read, which stands for
+// its one app.
+func (g GivenKeys) For(t *project.Target, build string) (GivenKey, bool) {
 	if k, ok := g.ByBuild[build]; ok && k.Value != "" {
 		return k, true
 	}
-	return g.All, g.All.Value != ""
+	if g.All.Value == "" || g.PassedOver(t) {
+		return GivenKey{}, false
+	}
+	return g.All, true
+}
+
+// PassedOver says whether a key given without naming a build is left unused
+// for t's builds because t has several, so that a command can say why.
+func (g GivenKeys) PassedOver(t *project.Target) bool {
+	return g.All.Value != "" && t != nil && len(t.Builds) > 1
 }
 
 // Run checks the project and returns what it found. Frameworks that are not

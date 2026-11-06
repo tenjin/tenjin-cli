@@ -31,7 +31,7 @@ import (
 // A key is never given to a coding agent. The agent writes a placeholder and
 // the CLI fills it (internal/keyfill).
 
-const sdkKeyFlagHelp = "the app's SDK key; for a project with several apps, give it per build: android=<key>, ios=<key>, android:<variant>=<key> as tenjin project detect lists them (or set TENJIN_SDK_KEY, TENJIN_SDK_KEY_ANDROID, TENJIN_SDK_KEY_IOS, TENJIN_SDK_KEY_ANDROID_<VARIANT>)"
+const sdkKeyFlagHelp = "the app's SDK key; <key> alone is used for each platform with one build, Android's and iOS's alike, and checked against each one's app; where a platform has several builds, give one per build: android=<key>, ios=<key>, android:<variant>=<key> as tenjin project detect lists them (or set TENJIN_SDK_KEY, TENJIN_SDK_KEY_ANDROID, TENJIN_SDK_KEY_IOS, TENJIN_SDK_KEY_ANDROID_<VARIANT>)"
 
 func addSDKKeyFlag(cmd *cobra.Command, into *[]string) {
 	cmd.Flags().StringArrayVar(into, "sdk-key", nil, sdkKeyFlagHelp)
@@ -71,7 +71,7 @@ func givenKeys(flags []string, getenv func(string) string) (verify.GivenKeys, er
 		platform = strings.ToLower(platform)
 		if platform != string(project.Android) && platform != string(project.IOS) {
 			return given, clierr.New(clierr.Usage, "--sdk-key %s=…: unknown platform %q", name, platform).
-				WithHint("Use --sdk-key android=<key>, --sdk-key ios=<key>, --sdk-key android:<variant>=<key>, or --sdk-key <key> for a key that serves every app.")
+				WithHint("Use --sdk-key android=<key>, --sdk-key ios=<key>, --sdk-key android:<variant>=<key>, or --sdk-key <key> for each platform with one build.")
 		}
 		id := platform
 		if variant != "" {
@@ -128,25 +128,21 @@ func resolveGiven(given *verify.GivenKeys, p *project.Project, getenv func(strin
 	return nil
 }
 
-// givenFor returns the key given for a build. A key given without naming a
-// build (--sdk-key <key>, TENJIN_SDK_KEY) serves a platform with one build
-// only: where the platform has several, each is an app of its own in Tenjin
-// with its own key, and one app's key never stands in for another's. note
-// is then why that key was passed over, for the developer; otherwise "".
+// givenFor returns the key given for a build, by the rule the checks use
+// too (verify.GivenKeys.For): a key given without naming a build
+// (--sdk-key <key>, TENJIN_SDK_KEY) serves a platform with one build only.
+// note is why such a key was passed over, for the developer; otherwise "".
 // target is nil for a platform whose builds could not be read, which stands
 // for its one app.
 func givenFor(given verify.GivenKeys, target *project.Target, b project.Build) (key verify.GivenKey, ok bool, note string) {
-	if k, ok := given.ByBuild[b.ID]; ok && k.Value != "" {
-		return k, true, ""
+	if key, ok := given.For(target, b.ID); ok {
+		return key, true, ""
 	}
-	if given.All.Value == "" {
+	if !given.PassedOver(target) {
 		return verify.GivenKey{}, false, ""
 	}
-	if target != nil && len(target.Builds) > 1 {
-		return verify.GivenKey{}, false, fmt.Sprintf("the key from %s is not used for it: %s has %d builds, each an app of its own in Tenjin with its own key. Give this one's with --sdk-key %s=<key>, or in %s.",
-			given.All.Source, platformNames[target.Platform], len(target.Builds), b.ID, verify.KeyVariable(b.ID))
-	}
-	return given.All, true, ""
+	return verify.GivenKey{}, false, fmt.Sprintf("the key from %s is not used for it: %s has %d builds, each an app of its own in Tenjin with its own key. Give this one's with --sdk-key %s=<key>, or in %s.",
+		given.All.Source, platformNames[target.Platform], len(target.Builds), b.ID, verify.KeyVariable(b.ID))
 }
 
 // cleanKey removes what comes along when a key is copied: surrounding space
@@ -378,9 +374,10 @@ Each key comes from, in this order:
   2. Tenjin, when you are signed in
   3. at a terminal, pasted after the CLI says where to copy it from
 
-A key given without naming a build (--sdk-key <key>, TENJIN_SDK_KEY) serves
-a platform with one build only: where it has several, each is an app of its
-own with its own key.
+A key given without naming a build (--sdk-key <key>, TENJIN_SDK_KEY) is
+used for each platform with one build, Android's and iOS's alike, and checked
+against each one's app. Where a platform has several builds, it is used for
+none of them: each is an app of its own with its own key.
 
 It is checked with Tenjin first, against that build's own app, and a key
 Tenjin refuses is not written. One Tenjin cannot check, with --offline or

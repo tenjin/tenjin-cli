@@ -195,10 +195,12 @@ A Tenjin app is one bundle ID on one platform, with its own SDK key. A project f
 `project detect` lists these builds, each with an ID (`android`, `ios`, `android:<variant>`). `setup` and `doctor` check each build's key against its own app, so the Google Play key in the Amazon build is caught. A key can be passed instead of pasted:
 
 ```sh
-tenjin doctor --sdk-key <key>                              # one build
+tenjin doctor --sdk-key <key>                              # each platform with one build
 tenjin doctor --sdk-key android=<key> --sdk-key ios=<key>  # one per build
 tenjin doctor --sdk-key android:amazon=<key> --build android:amazon
 ```
+
+A key given without naming a build (`--sdk-key <key>`, `TENJIN_SDK_KEY`) is used for each platform with one build, Android's and iOS's alike, and checked against each one's app; where a platform has several builds, it is used for none of them, in the checks as in what is written, and each needs its own.
 
 Once the key is in the source, `doctor` reads it from there.
 

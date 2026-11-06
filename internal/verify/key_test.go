@@ -197,3 +197,32 @@ func TestAGivenKeyPassesOnlyWhereItIsWhatTheAppSends(t *testing.T) {
 	noCall := base.With(testproject.Files{activity: "package com.example.sample\n\nclass MainActivity\n"})
 	expect(t, run(t, noCall, opts()), "key.valid", project.Android, verify.Pass)
 }
+
+// A key given without naming a build serves each platform with one build,
+// and none of a platform's several: each of those is an app of its own.
+func TestAKeyGivenWithoutABuildServesOnlyAPlatformWithOneBuild(t *testing.T) {
+	one := &project.Target{Platform: project.IOS, Builds: []project.Build{{ID: "ios"}}}
+	several := &project.Target{Platform: project.Android, Builds: []project.Build{{ID: "android"}, {ID: "android:amazon"}}}
+	given := verify.GivenKeys{
+		All:     verify.GivenKey{Value: "ALL"},
+		ByBuild: map[string]verify.GivenKey{"android:amazon": {Value: "AMAZON"}},
+	}
+	for _, c := range []struct {
+		target *project.Target
+		build  string
+		want   string
+	}{
+		{one, "ios", "ALL"},
+		{nil, "android", "ALL"}, // builds unread: the platform's one app
+		{several, "android", ""},
+		{several, "android:amazon", "AMAZON"},
+	} {
+		key, ok := given.For(c.target, c.build)
+		if key.Value != c.want || ok != (c.want != "") {
+			t.Errorf("For(%s) = %q, %v; want %q", c.build, key.Value, ok, c.want)
+		}
+	}
+	if !given.PassedOver(several) || given.PassedOver(one) || given.PassedOver(nil) {
+		t.Error("PassedOver is not where For passes the key over")
+	}
+}

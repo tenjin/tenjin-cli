@@ -16,6 +16,7 @@ import (
 // it accepts, for that build's bundle ID and platform. Findings never
 // contain a key itself, only its last four characters.
 func (r *runner) checkKey(t *project.Target, src source) {
+	r.givenPassedOver(t)
 	if r.opts.Keys == nil {
 		r.offlineKeys(t, src)
 		return
@@ -33,6 +34,26 @@ func (r *runner) checkKey(t *project.Target, src source) {
 			return // Tenjin could not be reached; once is enough to say so
 		}
 	}
+}
+
+// givenPassedOver says that a key given without naming a build was not
+// checked for a target with several builds (GivenKeys.For), and how to give
+// each build's. When the source is preferred the caller has said so itself.
+func (r *runner) givenPassedOver(t *project.Target) {
+	if !r.opts.Given.PassedOver(t) || r.opts.Given.PreferSource {
+		return
+	}
+	var flags, variables []string
+	for _, b := range t.Builds {
+		flags = append(flags, "--sdk-key "+b.ID+"=<key>")
+		variables = append(variables, KeyVariable(b.ID))
+	}
+	r.add(Finding{
+		ID: "key.unchecked", Severity: Info, Platform: t.Platform,
+		Title:  "The SDK key from " + r.opts.Given.All.Source + " was not checked: this project's " + platformName(t.Platform) + " builds are each an app of its own in Tenjin, with its own key",
+		Detail: "A key given without naming a build serves a platform with one build only.",
+		Fix:    "Give each build's key: " + strings.Join(flags, " ") + ", or in " + strings.Join(variables, " and ") + ".",
+	})
 }
 
 // offlineKeys says, without asking Tenjin, which builds have a key written
@@ -207,7 +228,7 @@ func (r *runner) candidateKeys(t *project.Target, src source, build string, wide
 		}
 		keys, unsure = r.buildsOwnKeys(t, build, all)
 	}
-	given, ok := r.opts.Given.For(build)
+	given, ok := r.opts.Given.For(t, build)
 	if !ok || (r.opts.Given.PreferSource && len(keys) > 0) {
 		return keys, unsure, ""
 	}

@@ -259,6 +259,36 @@ func TestSetupWritesNoKeyGivenWithoutABuildIntoSeveral(t *testing.T) {
 	}
 }
 
+// The checks take a key given without naming a build where writing does,
+// and nowhere else: a key Tenjin accepts for every app of the organization
+// still passes for neither store, since it is not what either build sends.
+func TestSetupChecksNoKeyGivenWithoutABuildForSeveral(t *testing.T) {
+	h := newHarness(t)
+	dir := testproject.Write(t, placeholderStores())
+	h.signIn()
+	_, stdout, _ := h.run("setup", dir, "--yes", "--sdk-key", testproject.PlayKey)
+	lacks(t, stdout, "Android, amazon (Amazon Appstore): the key from --sdk-key is not used for it")
+	if strings.Contains(stdout, "Tenjin accepts the SDK key …PLAY (from --sdk-key)") {
+		t.Errorf("a key not used for a build passed its check:\n%s", stdout)
+	}
+}
+
+// doctor checks each store's key in the project, not the one given without
+// a build, and says why it was not checked.
+func TestDoctorChecksNoKeyGivenWithoutABuildForSeveral(t *testing.T) {
+	h, dir := multiStore(t, testproject.AndroidMultiStore())
+	code, stdout, _ := h.run("doctor", dir, "--sdk-key", testproject.PlayKey)
+	if code != 0 {
+		t.Errorf("exit = %d", code)
+	}
+	lacks(t, stdout,
+		"The SDK key from --sdk-key was not checked: this project's Android builds are each an app of its own in Tenjin, with its own key",
+		"Fix: Give each build's key: --sdk-key android=<key> --sdk-key android:amazon=<key>, or in TENJIN_SDK_KEY_ANDROID and TENJIN_SDK_KEY_ANDROID_AMAZON.",
+		"Tenjin accepts the SDK key …PLAY for com.example.sample (the main build, Google Play)",
+		"Tenjin accepts the SDK key …AMZN for com.example.sample (the amazon build, Amazon Appstore)",
+	)
+}
+
 // set-keys has no later step to check a key Tenjin could not check now: it
 // says the key is written unchecked, and what checks it.
 func TestSetKeysSaysAKeyItCouldNotCheckIsWrittenUnchecked(t *testing.T) {
