@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please do not open a public issue for a security problem. Email [support@tenjin.com](mailto:support@tenjin.com) with "Security: tenjin-cli" in the subject, and include:
+Please do not open a public issue for a security problem. Email [security@tenjin.com](mailto:security@tenjin.com) with "Security: tenjin-cli" in the subject, and include:
 
 - what the problem is, and what an attacker could do with it;
 - the steps to reproduce it, and the version (`tenjin version`);

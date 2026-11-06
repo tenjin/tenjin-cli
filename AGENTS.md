@@ -98,7 +98,6 @@ docs/adr              architecture decisions
 - A release proposes its cask to `tenjin/homebrew-tap` as a pull request, with a token from the organization's Code Ops GitHub App limited to the tap; someone merges it. Pin every action by commit SHA: the release job holds that token.
 - The cask removes macOS's quarantine mark after install, because the binaries are not notarized yet. Drop that step once they are. It is a `postflight_steps` block in `custom_block` (Homebrew deprecated `postflight`); move it to `hooks.post.install_steps` with GoReleaser v2.19.
 - Release archives get build provenance (`actions/attest-build-provenance` in `release.yaml`; verify with `gh attestation verify`). Dependabot proposes Go module and action updates weekly; `security.yaml` runs govulncheck on changes and weekly. A stdlib vulnerability is fixed by moving the `toolchain` line of `go.mod` to the patched Go release.
-- The README's "Pre-release" note goes in a `docs:` pull request merged just before the first release's.
 - A local snapshot shows `commit none` and a `v0.0.0` download address while the repository has no tag. A release in CI fills both in.
 
 ## Tests

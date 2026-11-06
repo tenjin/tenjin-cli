@@ -17,8 +17,6 @@ The Tenjin CLI covers the parts of SDK onboarding that happen on your machine:
 
 It does not write your integration. You do, or your own coding agent does: `tenjin setup` can hand the work to Claude Code or Codex, and checks the result itself.
 
-> **Pre-release.** The first release is in preparation. Until it is published, [build from source](CONTRIBUTING.md#developing).
-
 ## Contents
 
 - [Quick start](#quick-start)
