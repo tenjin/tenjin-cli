@@ -137,11 +137,25 @@ func TestInactiveCallbackSaysBothWrites(t *testing.T) {
 	if _, _, stderr := h.run(create...); !strings.Contains(stderr, "then switch it off with a second request") || len(h.fake.writes) != 0 {
 		t.Errorf("question: stderr = %q", stderr)
 	}
-	h.env.interactive = false
-	code, _, stderr := h.run(append(create, "--yes")...)
+
+	// Whatever stops the switch-off, the callback was created: every failure
+	// says so with 7, never a code that invites running the command again.
 	want := "tenjin apps callbacks update " + testOther + " --app " + testApp + " --active=false"
-	if code != 7 || !strings.Contains(stderr, "the callback "+testOther+" was created") || !strings.Contains(stderr, "is active") || !strings.Contains(stderr, want) {
-		t.Errorf("failed switch-off: exit = %d, stderr = %q", code, stderr)
+	for _, status := range []int{http.StatusInternalServerError, http.StatusTooManyRequests, http.StatusUnprocessableEntity, http.StatusForbidden, http.StatusNotFound} {
+		h := newHarness(t)
+		h.signIn()
+		h.fake.writeAnswers = map[string]func(*http.Request) (int, any){
+			"POST /v2/apps/" + testApp + "/callbacks": func(*http.Request) (int, any) {
+				return http.StatusCreated, map[string]any{"data": map[string]any{"id": testOther, "type": "callback", "attributes": map[string]any{"active": true}}}
+			},
+			"PATCH /v2/apps/" + testApp + "/callbacks/" + testOther: func(*http.Request) (int, any) {
+				return status, map[string]string{"error": "boom"}
+			},
+		}
+		code, _, stderr := h.run(append(create, "--yes")...)
+		if code != 7 || !strings.Contains(stderr, "the callback "+testOther+" was created") || !strings.Contains(stderr, "is active") || !strings.Contains(stderr, want) {
+			t.Errorf("switch-off answered %d: exit = %d, stderr = %q", status, code, stderr)
+		}
 	}
 }
 

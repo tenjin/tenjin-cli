@@ -179,7 +179,9 @@ The exit status says what happened:
   4     your role does not allow it
   5     not found
   6     rate limited
-  7     Tenjin is unavailable
+  7     Tenjin is unavailable, or a command stopped after it had
+        changed something: its message says what, so check that
+        before running it again
   9     doctor found problems
   10    already exists
   11    Tenjin refused the request, such as a value it does not accept

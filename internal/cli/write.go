@@ -870,15 +870,15 @@ func parameterValue(v any) string {
 }
 
 // afterChange is the kind of a failure that came after an earlier request of
-// the same command changed something. Usage and Busy say that nothing was
-// done and that running the command again is enough, which no longer holds:
-// it could do the change twice. Upstream says only that it did not finish,
-// and the message says what was changed.
+// the same command changed something. Every other kind reads as a request to
+// fix and send again, which no longer holds: it could do the change twice.
+// Upstream says only that it did not finish, and the message says what was
+// changed. A run stopped from outside stays Interrupted.
 func afterChange(kind clierr.Kind) clierr.Kind {
-	if kind == clierr.Usage || kind == clierr.Busy {
-		return clierr.Upstream
+	if kind == clierr.Interrupted {
+		return kind
 	}
-	return kind
+	return clierr.Upstream
 }
 
 // withParametersHint points a callback Tenjin refused at where the values it

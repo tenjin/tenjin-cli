@@ -224,9 +224,10 @@ func (s *setup) run() error {
 
 // partWay is a failure as it reads once this run has changed something.
 // Exit status 12 says that nothing was done, which no longer holds, so a
-// wait for another tenjin that ran out then says what was done. Running
-// setup again is safe all the same: it finds the apps it created, and the
-// keys it wrote are in the project.
+// wait for another tenjin that ran out then says what was done. Other
+// failures keep their kind, unlike a data command's (afterChange): running
+// setup again is safe, since it finds the apps it created, and the keys it
+// wrote are in the project.
 func (s *setup) partWay(err error) error {
 	if err == nil || s.created == 0 && len(s.filled) == 0 && s.agentEdits == 0 {
 		return err

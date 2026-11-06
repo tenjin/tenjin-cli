@@ -256,7 +256,7 @@ Every command except `setup` is built to be driven by a program:
 | 4 | Your role does not allow it |
 | 5 | Not found |
 | 6 | Rate limited |
-| 7 | Tenjin is unavailable |
+| 7 | Tenjin is unavailable, or a command stopped after it had already changed something, whatever stopped it: its message says what it changed, so check that before running it again. `setup` keeps its other codes, since running it again is safe: it finds what it did |
 | 9 | `doctor` found problems |
 | 10 | Already exists |
 | 11 | Tenjin refused the request, such as a value it does not accept; its message says why |
