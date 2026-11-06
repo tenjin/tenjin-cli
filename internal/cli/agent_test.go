@@ -433,7 +433,7 @@ func TestSetupIntegratesUsingCodex(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Codex is installed on this machine and can do the integration for you",
-		"it runs in Codex's sandbox: it can change files in this project only and has no network access, but it can read files elsewhere on this machine",
+		"it runs in Codex's sandbox: it can change files in this project only and has no network access, web search included, but it can read files elsewhere on this machine",
 		"Integrate the Tenjin SDK using Codex? [Y/n]",
 		"· edit app/src/main/AndroidManifest.xml",
 		"· run tenjin doctor --offline --json .",
@@ -544,6 +544,29 @@ func TestCodexRunsWithItsFeaturesCheckedOff(t *testing.T) {
 		if !strings.Contains(args, want) {
 			t.Errorf("args lack %q", want)
 		}
+	}
+}
+
+// Web search reaches the network outside the sandbox, on by default: the
+// mode is pinned off, and the standalone search tool is a feature, checked
+// with the others.
+func TestCodexRunsWithoutWebSearch(t *testing.T) {
+	h, dir := brokenAndroid(t)
+	codex := h.installCodex()
+	if code, stdout, stderr := h.run("setup", dir, "--agent", "codex"); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	args, listed := codex.read("args"), codex.read("featureargs")
+	if !strings.Contains(args, "-c\nweb_search=\"disabled\"\n") {
+		t.Errorf("web search is not pinned off: %q", args)
+	}
+	if want := "-c\nfeatures.standalone_web_search=false\n"; !strings.Contains(args, want) || !strings.Contains(listed, want) {
+		t.Errorf("the standalone search is not turned off in the run and in the list:\nrun: %q\nlist: %q", args, listed)
+	}
+	// The sandbox is chosen with --sandbox, which has Codex ignore a
+	// permission profile its configuration selects, and so its network.
+	if !strings.Contains(args, "--sandbox\nworkspace-write\n") || strings.Contains(args, "default_permissions") {
+		t.Errorf("args = %q", args)
 	}
 }
 

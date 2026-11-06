@@ -72,8 +72,8 @@ setup checks its work afterwards. Claude Code may edit files in this
 project and run 'tenjin doctor' and 'tenjin sdk guide', and nothing else;
 it is started in its restricted mode, so the project's and your own Claude
 Code settings do not apply. Codex runs in its own sandbox: it can
-change files in this project only and has no network access. Decline, or
-pass --agent none, to do it by hand.
+change files in this project only and has no network access, web search
+included. Decline, or pass --agent none, to do it by hand.
 
 Each step is also a command of its own (project detect, login, apps ensure,
 doctor) for scripts and agents.

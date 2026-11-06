@@ -22,12 +22,17 @@ import (
 // Tenjin sign-in is kept in a file (see the CLI's runAgent).
 var codex = driver{
 	id: "codex", name: "Codex", binary: "codex",
-	limits:       "it runs in Codex's sandbox: it can change files in this project only and has no network access, but it can read files elsewhere on this machine; it is told not to commit",
+	limits:       "it runs in Codex's sandbox: it can change files in this project only and has no network access, web search included, but it can read files elsewhere on this machine; it is told not to commit",
 	readsOutside: true,
 	doctor:       offlineDoctor,
 	args: func(task Task, _ string, confinement []string) []string {
 		args := []string{
 			"exec", "--json",
+			// Given as a flag, the sandbox has Codex use the settings below
+			// and ignore a permission profile its configuration selects
+			// (default_permissions), whose network could be on; only an
+			// administrator's requirements can select one still (core's
+			// resolve_permission_config_syntax, as of 0.166.0).
 			"--sandbox", "workspace-write",
 			// Pinned here, so that the developer's own Codex configuration
 			// cannot open the sandbox to the network or to other folders.
@@ -36,6 +41,11 @@ var codex = driver{
 			"-c", "sandbox_workspace_write.writable_roots=[]",
 			"-c", "sandbox_workspace_write.exclude_slash_tmp=true",
 			"-c", "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+			// Web search is on by default, and searches from outside the
+			// sandbox. This mode takes precedence over the deprecated
+			// web_search_request and web_search_cached features, and an
+			// administrator's requirements always allow it.
+			"-c", `web_search="disabled"`,
 			// codex exec refuses a command that asks to leave the sandbox,
 			// unless the configuration sends approvals to Codex's automatic
 			// reviewer: exec then drops its own approval_policy=never, and a
@@ -106,6 +116,9 @@ var codexFeaturesOff = []string{
 	// A browser, the computer and the desktop app's automations act on the
 	// machine, not in the project.
 	"browser_use", "browser_use_external", "browser_use_full_cdp_access", "in_app_browser", "computer_use", "in_app_local_automation",
+	// The standalone web search tool, which a disabled web_search keeps
+	// out as well (see args).
+	"standalone_web_search",
 	// Sub-agents can take a role whose configuration file sets a sandbox
 	// and servers of its own.
 	"multi_agent", "multi_agent_v2",
