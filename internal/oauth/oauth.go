@@ -107,8 +107,11 @@ type LoginOptions struct {
 	// comes first, the redirect or the paste, is used. It is first called
 	// once Open has returned, so Open can decide whether a paste is to be
 	// read; an error from it ends the reading, and the wait for the redirect
-	// goes on. It may still be under way when Login returns.
-	Pasted func() (string, error)
+	// goes on. ctx ends as soon as the answer has come, either way, before
+	// its code is traded for tokens: a read it ends leaves what is typed
+	// from then on to whatever reads next. It may still be under way when
+	// Login returns.
+	Pasted func(ctx context.Context) (string, error)
 	// BeforeRedeem, when set, runs once the browser has answered and before
 	// its code is traded for tokens. An error from it ends the sign-in with
 	// the code unspent, so no grant was issued and none is left to end.
@@ -135,6 +138,17 @@ func (c *Client) Login(ctx context.Context, opts LoginOptions) (Tokens, error) {
 		err  error
 	}
 	done := make(chan callback, 1)
+	// pasting is the reading of a paste, which ends as soon as the answer
+	// has come.
+	pasting, stopPasting := context.WithCancel(ctx)
+	defer stopPasting()
+	answered := func(result callback) {
+		stopPasting()
+		select {
+		case done <- result:
+		default:
+		}
+	}
 	// check reads the authorization server's answer, however it arrived.
 	check := func(q url.Values) callback {
 		result := callback{code: q.Get("code")}
@@ -167,10 +181,7 @@ func (c *Client) Login(ctx context.Context, opts LoginOptions) (Tokens, error) {
 			// still to come, and may fail.
 			_, _ = io.WriteString(w, "Tenjin CLI: sign-in received. You can close this tab; the terminal says when you are signed in.")
 		}
-		select {
-		case done <- result:
-		default:
-		}
+		answered(result)
 	})
 	server := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() { _ = server.Serve(listener) }()
@@ -201,7 +212,7 @@ func (c *Client) Login(ctx context.Context, opts LoginOptions) (Tokens, error) {
 	if opts.Pasted != nil {
 		go func() {
 			for {
-				line, err := opts.Pasted()
+				line, err := opts.Pasted(pasting)
 				if err != nil {
 					return
 				}
@@ -209,10 +220,7 @@ func (c *Client) Login(ctx context.Context, opts LoginOptions) (Tokens, error) {
 				if perr != nil || !strings.HasSuffix(u.Path, "/callback") {
 					continue // not the address; wait for the next line
 				}
-				select {
-				case done <- check(u.Query()):
-				default:
-				}
+				answered(check(u.Query()))
 				return
 			}
 		}()

@@ -51,6 +51,9 @@ type fakeTenjin struct {
 	// afterCreate runs once an app is created, before the answer is sent:
 	// what happens meanwhile, such as the sign-in running out.
 	afterCreate func()
+	// redeeming runs when a sign-in's code is traded for tokens, before the
+	// answer is sent: what the developer does meanwhile.
+	redeeming func()
 	// exchangeExpiresIn is the exchange's expires_in, in seconds; 0 leaves
 	// it out, as an older server does.
 	exchangeExpiresIn int
@@ -167,6 +170,9 @@ func (f *fakeTenjin) issue(client string) (access, refresh string) {
 
 func (f *fakeTenjin) token(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
+	if r.PostForm.Get("grant_type") == "authorization_code" && f.redeeming != nil {
+		f.redeeming()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	invalid := func(description string) {

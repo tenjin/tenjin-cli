@@ -75,12 +75,10 @@ const noBrowserHelp = "print the sign-in URL instead of opening a browser, and a
 func login(cmd *cobra.Command, env *environment, noBrowser bool) (session.Status, string, error) {
 	stderr := cmd.ErrOrStderr()
 	manager := env.session()
-	// A paste still being read when the sign-in ends is left to the next
-	// question (readLineUntil).
-	ctx, stop := context.WithCancel(cmd.Context())
-	defer stop()
 	paste := false // decided by open, before the first read
-	pasted := func() (string, error) {
+	// The paste is read until the browser's answer has come: a line still
+	// being read then is left to the next question (readLineUntil).
+	pasted := func(ctx context.Context) (string, error) {
 		if !paste {
 			return "", errNoPaste
 		}
@@ -110,7 +108,7 @@ func login(cmd *cobra.Command, env *environment, noBrowser bool) (session.Status
 		}
 		return nil
 	}
-	c, location, err := manager.Login(ctx, open, pasted)
+	c, location, err := manager.Login(cmd.Context(), open, pasted)
 	if errors.Is(err, oauth.ErrTimedOut) {
 		return session.Status{}, "", clierr.From(err).WithHint("%s", timeoutHint(cmd.CommandPath(), env.interactive, paste))
 	}

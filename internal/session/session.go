@@ -95,7 +95,7 @@ func (m *Manager) StatusOf(c *Credentials) Status {
 // returns the credentials and where they were stored. pasted, when not nil,
 // reads the address a browser on another machine ended on (see
 // oauth.LoginOptions).
-func (m *Manager) Login(ctx context.Context, open func(url string) error, pasted func() (string, error)) (*Credentials, string, error) {
+func (m *Manager) Login(ctx context.Context, open func(url string) error, pasted func(context.Context) (string, error)) (*Credentials, string, error) {
 	// The browser's code is redeemed under the refresh lock, so that the
 	// session replaced is the current one: another tenjin may have refreshed
 	// it while the browser was open. The lock is taken before the code is

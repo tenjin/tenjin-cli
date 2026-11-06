@@ -984,6 +984,62 @@ func TestALineTypedAfterTheSignInAnswersTheNextQuestion(t *testing.T) {
 	}
 }
 
+// A line typed once the browser's redirect has arrived, while its code is
+// still being traded for tokens, answers the next question too: the paste
+// is no longer read from the moment the redirect came.
+func TestALineTypedWhileTheSignInEndsAnswersTheNextQuestion(t *testing.T) {
+	h, dir := multiStore(t, placeholderStores())
+	stdout, stderr := &lockedBuffer{}, &lockedBuffer{}
+	h.env.interactive = true
+	typed := make(chan struct{})
+	h.fake.redeeming = func() {
+		close(typed)
+		// Time for a paste reader still under way to take the line.
+		time.Sleep(200 * time.Millisecond)
+	}
+	// Enter to sign in, and while the sign-in ends, a build untied, then
+	// Enter.
+	h.env.stdin = bufio.NewReader(io.MultiReader(strings.NewReader("\n"), &typedOn{signal: typed, lines: "1\n\n"}))
+	// The developer opens the address in a browser on this machine.
+	go func() {
+		for i := 0; i < 500; i++ {
+			if authorize := printedURL.FindString(stderr.String()); authorize != "" {
+				if resp, err := http.Get(authorize); err == nil {
+					_, _ = io.Copy(io.Discard, resp.Body)
+					_ = resp.Body.Close()
+				}
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	execute([]string{"setup", dir, "--no-browser", "--features", "none", "--agent", "none"}, stdout, stderr, h.env)
+	if !strings.Contains(stdout.String(), "Signed in to") || !strings.Contains(stdout.String(), "Setting up 1 build.") {
+		t.Errorf("stdout:\n%s\nstderr = %q", stdout.String(), stderr.String())
+	}
+}
+
+// typedOn is a developer who types lines once signal is closed.
+type typedOn struct {
+	signal <-chan struct{}
+	lines  string
+	sent   bool
+}
+
+func (r *typedOn) Read(p []byte) (int, error) {
+	if r.sent {
+		return 0, io.EOF
+	}
+	r.sent = true
+	select {
+	case <-r.signal:
+	case <-time.After(10 * time.Second):
+		return 0, io.EOF // never signed in: the test fails on its own
+	}
+	return copy(p, r.lines), nil
+}
+
 // afterSignIn is a developer who types only once the terminal says they are
 // signed in.
 type afterSignIn struct {

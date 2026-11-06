@@ -99,6 +99,30 @@ func TestBeforeRedeemComesBeforeTheCodeIsSpent(t *testing.T) {
 	}
 }
 
+// The reading of a paste ends as soon as the browser's redirect has come,
+// before its code is spent: a line typed from then on is not the paste's.
+func TestThePasteEndsWhenTheRedirectComes(t *testing.T) {
+	c, redeemed := redeeming(t)
+	ended := make(chan struct{})
+	_, err := c.Login(context.Background(), LoginOptions{ClientID: ClientID, Open: approving(t), Timeout: 5 * time.Second,
+		Pasted: func(ctx context.Context) (string, error) {
+			<-ctx.Done()
+			close(ended)
+			return "", ctx.Err()
+		},
+		BeforeRedeem: func(context.Context) error {
+			select {
+			case <-ended:
+				return nil
+			case <-time.After(2 * time.Second):
+				return errors.New("the paste was still being read as the code was spent")
+			}
+		}})
+	if err != nil || redeemed.Load() != 1 {
+		t.Errorf("Login = %v, with the code redeemed %d times", err, redeemed.Load())
+	}
+}
+
 // answer is the address the sign-in ends on, with a code and the request's
 // state, as edit changes it.
 func answer(authorizeURL string, edit func(url.Values)) (string, error) {
@@ -133,7 +157,7 @@ func TestAnAnswerToAnotherSignInIsRefused(t *testing.T) {
 			pasted := false
 			_, err := client.Login(context.Background(), LoginOptions{ClientID: ClientID, Timeout: 5 * time.Second,
 				Open: func(authorizeURL string) error { opened <- authorizeURL; return nil },
-				Pasted: func() (string, error) {
+				Pasted: func(context.Context) (string, error) {
 					if pasted {
 						return "", io.EOF
 					}
