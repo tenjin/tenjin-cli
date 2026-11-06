@@ -453,6 +453,31 @@ func TestInstallRefusesALinkedAgentsFolder(t *testing.T) {
 	}
 }
 
+// On Windows, Lstat reports a junction, a link to a folder, as irregular
+// rather than as a symbolic link; it leads out of the project all the same.
+func TestInstallRefusesAJunction(t *testing.T) {
+	project := t.TempDir()
+	if err := os.Mkdir(filepath.Join(project, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	junction := filepath.Join(project, ".claude")
+	lstat = func(path string) (os.FileInfo, error) {
+		info, err := os.Lstat(path)
+		if path == junction && err == nil {
+			return irregular{info}, nil
+		}
+		return info, err
+	}
+	t.Cleanup(func() { lstat = os.Lstat })
+	if _, err := PlanInstall(target(t, "claude"), Location{ProjectDir: project}); err == nil || !strings.Contains(err.Error(), junction+" is a link") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+type irregular struct{ os.FileInfo }
+
+func (irregular) Mode() os.FileMode { return os.ModeIrregular }
+
 // A skill file names the version that wrote it, and the copies another
 // version wrote are found in the project and in the home folder.
 func TestOtherVersionsFindsTheCopiesAnotherVersionWrote(t *testing.T) {

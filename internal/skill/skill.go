@@ -196,19 +196,24 @@ func noLinks(base, path string) error {
 	current := base
 	for _, part := range strings.Split(rel, string(filepath.Separator)) {
 		current = filepath.Join(current, part)
-		info, err := os.Lstat(current)
+		info, err := lstat(current)
 		if errors.Is(err, os.ErrNotExist) {
 			return nil
 		}
 		if err != nil {
 			return err
 		}
-		if info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("%s is a symbolic link; the Tenjin CLI writes only files that are in the project itself. Replace the link with a file, or add the instructions by hand (tenjin agent skill prints them)", current)
+		// On Windows, a junction is irregular, not a symbolic link (as of
+		// Go 1.23), and leads elsewhere all the same.
+		if info.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
+			return fmt.Errorf("%s is a link (a symbolic link or a junction); the Tenjin CLI writes only files that are in the project itself. Replace the link with a file, or add the instructions by hand (tenjin agent skill prints them)", current)
 		}
 	}
 	return nil
 }
+
+// lstat is os.Lstat, which tests replace to stand in for a junction.
+var lstat = os.Lstat
 
 // skillFile is the whole file a skill-aware agent reads. It says which
 // version of the CLI wrote it, since it describes that version's commands.
