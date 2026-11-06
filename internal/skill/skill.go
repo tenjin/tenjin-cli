@@ -258,13 +258,28 @@ func OtherVersions(projectDir, home, current string) []Copy {
 			}
 		}
 	}
-	if projectDir != "" {
+	// Run from the home folder, the copies there are the user-wide ones,
+	// read through any link a dotfiles manager made.
+	if projectDir != "" && (home == "" || !sameDir(projectDir, home)) {
 		look(projectDir, false)
 	}
-	if home != "" && home != projectDir {
+	if home != "" {
 		look(home, true)
 	}
 	return copies
+}
+
+// sameDir reports whether two paths name the same folder.
+func sameDir(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	ai, err := os.Stat(a)
+	if err != nil {
+		return false
+	}
+	bi, err := os.Stat(b)
+	return err == nil && os.SameFile(ai, bi)
 }
 
 // recorded returns the version a skill file says wrote it, or "".

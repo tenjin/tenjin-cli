@@ -494,3 +494,32 @@ func TestOtherVersionsFindsTheCopiesAnotherVersionWrote(t *testing.T) {
 		t.Errorf("copies = %+v, want %+v", copies, want)
 	}
 }
+
+// Run from the home folder, the copy there is the user-wide one, which
+// 'tenjin agent install --global' updates, wherever a link to a dotfiles
+// folder puts it.
+func TestOtherVersionsInTheHomeFolderAreGlobal(t *testing.T) {
+	home := t.TempDir()
+	global := filepath.Join(home, ".claude", "skills", Name, "SKILL.md")
+	install(t, target(t, "claude"), Location{Home: home, Global: true})
+	for _, dir := range []string{home, home + string(filepath.Separator)} {
+		if copies := OtherVersions(dir, home, "9.9.9"); !slices.Equal(copies, []Copy{{Path: global, Global: true, Version: buildinfo.Get().Version}}) {
+			t.Errorf("from %s: copies = %+v", dir, copies)
+		}
+	}
+
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need privileges on Windows")
+	}
+	dotfiles, linked := t.TempDir(), t.TempDir()
+	if err := os.Rename(filepath.Join(home, ".claude"), filepath.Join(dotfiles, ".claude")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(dotfiles, ".claude"), filepath.Join(linked, ".claude")); err != nil {
+		t.Fatal(err)
+	}
+	global = filepath.Join(linked, ".claude", "skills", Name, "SKILL.md")
+	if copies := OtherVersions(linked, linked, "9.9.9"); len(copies) != 1 || copies[0].Path != global || !copies[0].Global {
+		t.Errorf("through a link: copies = %+v", copies)
+	}
+}
