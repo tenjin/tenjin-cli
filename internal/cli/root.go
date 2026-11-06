@@ -22,6 +22,7 @@ import (
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 
+	"github.com/tenjin/tenjin-cli/internal/agent"
 	"github.com/tenjin/tenjin-cli/internal/buildinfo"
 	"github.com/tenjin/tenjin-cli/internal/clierr"
 	"github.com/tenjin/tenjin-cli/internal/config"
@@ -299,6 +300,14 @@ func (e *environment) latestSDKs(ctx context.Context) map[string]string {
 // startUpdateCheck begins the update check alongside the command.
 func (e *environment) startUpdateCheck(cmd *cobra.Command, asJSON bool) {
 	if e.updates == nil || e.updateNotice != nil || asJSON {
+		return
+	}
+	// The notices are for a person, and said once: in a coding agent's
+	// terminal they would be used up unread. --offline asks for no network.
+	if agent.InsideAgent(e.getenv) {
+		return
+	}
+	if f := cmd.Flags().Lookup("offline"); f != nil && f.Value.String() == "true" {
 		return
 	}
 	// Shell completion runs inside the shell, for which a notice is noise.

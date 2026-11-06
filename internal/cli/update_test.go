@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -109,6 +111,30 @@ func TestOnlyAHomebrewCopysCheckReadsTheCask(t *testing.T) {
 	}
 	if c := newUpdateChecker(ci, at("/opt/homebrew/Caskroom/tenjin/0.1.0/tenjin")); c != nil {
 		t.Errorf("CI: %+v", c)
+	}
+}
+
+// An agent at work is not a person: a notice in its terminal would be used
+// up there, and the person told nothing. --offline asks for no network, so
+// the check is not made. Either way the notice is left for a later run.
+func TestNoUpdateNoticeInsideAnAgentOrOffline(t *testing.T) {
+	h := newHarness(t)
+	withRelease(t, h, "v0.2.0")
+	dir := testproject.Write(t, testproject.AndroidNative())
+
+	h.vars["CLAUDECODE"] = "1"
+	if _, _, stderr := h.run("project", "detect", dir); strings.Contains(stderr, "new version") {
+		t.Errorf("told inside an agent:\n%s", stderr)
+	}
+	delete(h.vars, "CLAUDECODE")
+	if _, _, stderr := h.run("doctor", dir, "--offline"); strings.Contains(stderr, "new version") {
+		t.Errorf("told with --offline:\n%s", stderr)
+	}
+	if _, err := os.Stat(h.env.updates.State); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the check was made: %v", err)
+	}
+	if _, _, stderr := h.run("project", "detect", dir); !strings.Contains(stderr, "A new version of the Tenjin CLI is available") {
+		t.Errorf("the person was not told:\n%s", stderr)
 	}
 }
 
