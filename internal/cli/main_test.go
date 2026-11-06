@@ -7,7 +7,7 @@ import (
 )
 
 // TestMain runs the tests in an environment of their own: what the shell of
-// whoever runs them sets, such as NO_COLOR or TENJIN_NO_UPDATE_CHECK, must not
+// whoever runs them sets, such as NO_COLOR or TENJIN_NO_TELEMETRY, must not
 // change what a test sees, here or in the programs it starts. A test sets
 // the variables it is about. The opt-in tests' own settings stay.
 func TestMain(m *testing.M) {
@@ -28,7 +28,7 @@ func readByTheCLI(name string) bool {
 		return true
 	}
 	switch name {
-	case "NO_COLOR", "CLICOLOR_FORCE", "COLORTERM", "SSH_CONNECTION", "SSH_TTY", "CODEX_SANDBOX_NETWORK_DISABLED":
+	case "NO_COLOR", "CLICOLOR_FORCE", "COLORTERM", "DO_NOT_TRACK", "SSH_CONNECTION", "SSH_TTY", "CODEX_SANDBOX_NETWORK_DISABLED":
 		return true
 	}
 	return false

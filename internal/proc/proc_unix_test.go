@@ -45,7 +45,7 @@ func TestStopContextLeavesAnIgnoredSignalIgnored(t *testing.T) {
 // A detached program runs on its own, after Detach has returned.
 func TestDetach(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "ran")
-	if err := Detach("/bin/sh", []string{"-c", "echo ok > " + out}); err != nil {
+	if err := Detach("/bin/sh", []string{"-c", "echo ok > " + out}, nil); err != nil {
 		t.Fatal(err)
 	}
 	for range 250 {

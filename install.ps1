@@ -134,12 +134,12 @@
 		}
 		if (@($env:Path -split ';' | Where-Object { $_ } | ForEach-Object { Key $_ }) -notcontains (Key $dir)) { $env:Path = "$env:Path;$dir" }
 
-		# No update notice: this run of tenjin is the installer's, not the
-		# user's. The variable is put back as it was, since this runs in the
-		# user's own shell.
-		$saved = $env:TENJIN_NO_UPDATE_CHECK
-		$env:TENJIN_NO_UPDATE_CHECK = '1'
-		try { $installed = & $target version } finally { $env:TENJIN_NO_UPDATE_CHECK = $saved }
+		# Neither a usage event nor an update notice: this run of tenjin is
+		# the installer's, not the user's. The variables are put back as they
+		# were, since this runs in the user's own shell.
+		$saved = $env:TENJIN_NO_TELEMETRY, $env:TENJIN_NO_UPDATE_CHECK
+		$env:TENJIN_NO_TELEMETRY, $env:TENJIN_NO_UPDATE_CHECK = '1', '1'
+		try { $installed = & $target version } finally { $env:TENJIN_NO_TELEMETRY, $env:TENJIN_NO_UPDATE_CHECK = $saved }
 		Write-Host "Installed $installed in $dir"
 		# An older copy in a folder of its own, such as one TENJIN_INSTALL_DIR
 		# named before, may come first on PATH and run instead of this one.

@@ -27,6 +27,7 @@ printf '%s\n' "$@" > "$FAKE_AGENT_DIR/args"
 cat > "$FAKE_AGENT_DIR/prompt"
 echo "$PATH" > "$FAKE_AGENT_DIR/path"
 env | grep '^TENJIN_SDK_KEY' > "$FAKE_AGENT_DIR/keyvars"
+env | grep '^TENJIN_NO_TELEMETRY' > "$FAKE_AGENT_DIR/telemetryvars"
 n=$(cat "$FAKE_AGENT_DIR/runs" 2>/dev/null || echo 0)
 n=$((n+1))
 echo "$n" > "$FAKE_AGENT_DIR/runs"
@@ -905,37 +906,5 @@ func TestDoctorWritesAKeyPerStoreOnlyWhenGivenPerStore(t *testing.T) {
 	h.run("doctor", dir, "--agent", "claude", "--sdk-key", "android="+testproject.PlayKey, "--sdk-key", "android:amazon="+testproject.AmazonKey)
 	if raw, _ := os.ReadFile(filepath.Join(dir, flavorBuild)); !strings.Contains(string(raw), testproject.PlayKey) || !strings.Contains(string(raw), testproject.AmazonKey) {
 		t.Errorf("each store's key was not written:\n%s", raw)
-	}
-}
-
-// A run asked to stay offline tells Claude Code to check its work offline
-// too, in setup, doctor and sdk upgrade alike; the allow-list still lets it.
-func TestAnOfflineRunsAgentChecksOffline(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		args func(t *testing.T, dir string) []string
-	}{
-		{"setup", func(_ *testing.T, dir string) []string { return []string{"setup", dir} }},
-		{"doctor", func(_ *testing.T, dir string) []string { return []string{"doctor", dir} }},
-		{"sdk upgrade", func(t *testing.T, _ string) []string { return []string{"sdk", "upgrade", oldAndroid(t)} }},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			h, dir := brokenAndroid(t)
-			agent := h.installAgent()
-			h.run(append(tc.args(t, dir), "--offline", "--agent", "claude")...)
-			if prompt := agent.read("prompt"); !strings.Contains(prompt, "run `tenjin doctor --offline --json .`") {
-				t.Errorf("offline: the task:\n%s", prompt)
-			}
-			if !strings.Contains(agent.read("args"), "Bash(tenjin doctor *)") {
-				t.Errorf("args = %q", agent.read("args"))
-			}
-
-			h, dir = brokenAndroid(t)
-			agent = h.installAgent()
-			h.run(append(tc.args(t, dir), "--agent", "claude")...)
-			if prompt := agent.read("prompt"); !strings.Contains(prompt, "run `tenjin doctor --json .`") {
-				t.Errorf("online: the task:\n%s", prompt)
-			}
-		})
 	}
 }

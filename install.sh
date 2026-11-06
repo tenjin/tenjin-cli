@@ -175,8 +175,9 @@ main() {
 	chmod 0755 "$dir/.tenjin.new"
 	mv -f "$dir/.tenjin.new" "$dir/tenjin" || fail "could not write to $dir; nothing was installed"
 
-	# No update notice: this run of tenjin is the installer's, not the user's.
-	echo "Installed $(TENJIN_NO_UPDATE_CHECK=1 "$dir/tenjin" version) in $dir"
+	# Neither a usage event nor an update notice: this run of tenjin is the
+	# installer's, not the user's.
+	echo "Installed $(TENJIN_NO_TELEMETRY=1 TENJIN_NO_UPDATE_CHECK=1 "$dir/tenjin" version) in $dir"
 
 	changed=""
 	present=""

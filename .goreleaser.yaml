@@ -26,6 +26,8 @@ builds:
       - -X github.com/tenjin/tenjin-cli/internal/buildinfo.version={{ .Version }}
       - -X github.com/tenjin/tenjin-cli/internal/buildinfo.commit={{ .ShortCommit }}
       - -X github.com/tenjin/tenjin-cli/internal/buildinfo.date={{ .CommitDate }}
+      # The AMPLITUDE_API_KEY secret, in a release; empty elsewhere, which sends no telemetry.
+      - -X github.com/tenjin/tenjin-cli/internal/telemetry.apiKey={{ index .Env "TENJIN_AMPLITUDE_KEY" }}
     # Builds of one commit are byte for byte the same, wherever they are made.
     mod_timestamp: "{{ .CommitTimestamp }}"
 

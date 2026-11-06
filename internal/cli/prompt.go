@@ -157,9 +157,9 @@ func (e *environment) ask(w io.Writer, question string) (string, error) {
 func openBrowser(url string) error {
 	switch runtime.GOOS {
 	case "darwin":
-		return proc.Detach("open", []string{url})
+		return proc.Detach("open", []string{url}, nil)
 	case "windows":
-		return proc.Detach("rundll32", []string{"url.dll,FileProtocolHandler", url})
+		return proc.Detach("rundll32", []string{"url.dll,FileProtocolHandler", url}, nil)
 	}
-	return proc.Detach("xdg-open", []string{url})
+	return proc.Detach("xdg-open", []string{url}, nil)
 }
