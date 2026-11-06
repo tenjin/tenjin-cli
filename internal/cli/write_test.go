@@ -282,6 +282,21 @@ func TestChangingACallbacksParameterKeepsTheOthers(t *testing.T) {
 	if code, _, stderr := h.run(append(update, "--yes")...); code != 7 || len(h.fake.writes) != 0 || !strings.Contains(stderr, "its other parameters") || strings.Contains(stderr, "nothing is read") {
 		t.Errorf("unreadable: exit = %d, %d writes, stderr = %q", code, len(h.fake.writes), stderr)
 	}
+
+	// A callback with none may list them as null or as an empty array.
+	for _, none := range []any{nil, []any{}} {
+		h = setUp()
+		h.fake.data = map[string]func(*http.Request) (int, any){
+			"/v2/apps/" + testApp + "/callbacks/" + testOther: func(*http.Request) (int, any) {
+				return http.StatusOK, map[string]any{"data": map[string]any{"id": testOther, "type": "callback", "attributes": map[string]any{"active": true, "customer_parameters": none}}}
+			},
+		}
+		code, stdout, stderr := h.run(append(update, "--dry-run")...)
+		var body map[string]any
+		if err := json.Unmarshal([]byte(stdout), &body); err != nil || code != 0 || !reflect.DeepEqual(body["customer_parameters"], map[string]any{"pixel": "42"}) {
+			t.Errorf("parameters %v: exit = %d, stdout = %q, stderr = %q", none, code, stdout, stderr)
+		}
+	}
 }
 
 // IDs are checked before the question and the dry run.

@@ -290,9 +290,11 @@ func (c *Client) ReadCallbackState(ctx context.Context, app, callback string) (*
 		return nil, clierr.Wrap(clierr.Upstream, err, "the Tenjin API answered with something that is not a callback")
 	}
 	state := &CallbackState{Active: read.Data.Attributes.Active}
+	var list []json.RawMessage
 	switch raw := bytes.TrimSpace(read.Data.Attributes.Parameters); {
 	case len(raw) == 0:
-	case bytes.Equal(raw, []byte("null")):
+	case bytes.Equal(raw, []byte("null")), json.Unmarshal(raw, &list) == nil && len(list) == 0:
+		// None, said as null or as an empty array, as an empty map often is.
 		state.Parameters = map[string]any{}
 	default:
 		// Anything but an object leaves them unlisted.
