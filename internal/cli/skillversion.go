@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"github.com/tenjin/tenjin-cli/internal/agent"
@@ -85,19 +86,39 @@ func skillFindings(copies []skill.Copy, root, current string) []verify.Finding {
 	return findings
 }
 
+// skillDir is the folder whose copies of the instructions a notice names:
+// the project the command ran on or was given, else the working folder.
+func (e *environment) skillDir(ran *cobra.Command) string {
+	if e.projectRoot != "" {
+		return e.projectRoot
+	}
+	// A command stopped by a flag it does not have still read the
+	// arguments before that flag.
+	if ran != nil {
+		if args := ran.Flags().Args(); len(args) > 0 {
+			if info, err := os.Stat(args[0]); err == nil && info.IsDir() {
+				if dir, err := filepath.Abs(args[0]); err == nil {
+					return dir
+				}
+			}
+		}
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return dir
+}
+
 // hintOtherSkill points an agent that used a command or flag this version
 // does not have at the instructions it most likely took it from.
-func (e *environment) hintOtherSkill(err *clierr.Error) {
+func (e *environment) hintOtherSkill(err *clierr.Error, ran *cobra.Command) {
 	var flag *pflag.NotExistError
 	if err.Kind != clierr.Usage || !agent.InsideAgent(e.getenv) || !errors.Is(err, errUnknownName) && !errors.As(err, &flag) {
 		return
 	}
-	dir, wdErr := os.Getwd()
-	if wdErr != nil {
-		dir = ""
-	}
 	current := buildinfo.Get().Version
-	copies := e.otherSkills(dir, current)
+	copies := e.otherSkills(e.skillDir(ran), current)
 	if len(copies) == 0 {
 		return
 	}
@@ -110,18 +131,14 @@ func (e *environment) hintOtherSkill(err *clierr.Error) {
 }
 
 // reportOtherSkills tells a person, on the first run after an update, about
-// the copies of the instructions the update left behind: in the folder the
-// command ran in, and in the home folder.
-func (e *environment) reportOtherSkills(w io.Writer) {
+// the copies of the instructions the update left behind: in the project
+// the command ran on, or the folder it ran in, and in the home folder.
+func (e *environment) reportOtherSkills(w io.Writer, ran *cobra.Command) {
 	if !e.updates.Upgraded() {
 		return
 	}
-	dir, err := os.Getwd()
-	if err != nil {
-		dir = ""
-	}
 	style := render.NewStyler(w)
-	for _, c := range e.otherSkills(dir, e.updates.Current) {
+	for _, c := range e.otherSkills(e.skillDir(ran), e.updates.Current) {
 		_, _ = fmt.Fprintf(w, "\nThe tenjin-cli skill in %s was written by %s. %s %s\n",
 			render.Clean(c.Path), writtenBy(c, e.updates.Current), style.Dim("Update it with:"), reinstall(c))
 	}

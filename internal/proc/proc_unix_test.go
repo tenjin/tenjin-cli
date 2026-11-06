@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -55,4 +57,27 @@ func TestDetach(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Error("the detached program did not run")
+}
+
+// A detached program that ends while the CLI still runs is reaped, not
+// left a zombie until the CLI exits.
+func TestDetachReaps(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "pid")
+	if err := Detach("/bin/sh", []string{"-c", "echo $$ > " + out + ".tmp; mv " + out + ".tmp " + out}, nil); err != nil {
+		t.Fatal(err)
+	}
+	var pid int
+	for deadline := time.Now().Add(5 * time.Second); pid == 0; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatal("the detached program did not run")
+		}
+		raw, _ := os.ReadFile(out)
+		pid, _ = strconv.Atoi(strings.TrimSpace(string(raw)))
+	}
+	// Signal 0 reaches a zombie too: it fails only once the process is gone.
+	for deadline := time.Now().Add(5 * time.Second); syscall.Kill(pid, 0) == nil; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("process %d is still there after it ended", pid)
+		}
+	}
 }

@@ -125,6 +125,9 @@ type environment struct {
 	updates *update.Checker
 	// updateNotice receives the check's answer once it was started.
 	updateNotice chan *update.Notice
+	// projectRoot is the project the command ran on, once it is read, for
+	// the notices about the skill installed there.
+	projectRoot string
 	// telemetry sends each command's event. Nil sends none (see
 	// telemetryClient), and facts are what the command adds to its event.
 	telemetry *telemetry.Client
@@ -328,14 +331,14 @@ func (e *environment) startUpdateCheck(cmd *cobra.Command, asJSON bool) {
 
 // reportUpdate tells the user about a newer release, after the command's
 // own output.
-func (e *environment) reportUpdate(w io.Writer) {
+func (e *environment) reportUpdate(w io.Writer, ran *cobra.Command) {
 	if e.updateNotice == nil {
 		return
 	}
 	n := <-e.updateNotice
 	e.updateNotice = nil
 	// Once the check is done: the two share its state file.
-	e.reportOtherSkills(w)
+	e.reportOtherSkills(w, ran)
 	if n == nil {
 		return
 	}
@@ -469,6 +472,7 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	defer stop()
 
 	env.ctx = ctx
+	env.projectRoot = ""
 	root := newRootCmd(env)
 	root.SetArgs(args)
 	root.SetOut(stdout)
@@ -482,7 +486,7 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	e := outcome(ctx, err, ran, root)
 	code, kind := 0, ""
 	if e != nil {
-		env.hintOtherSkill(e)
+		env.hintOtherSkill(e, ran)
 		writeError(stderr, e, wantsJSON(args))
 		code, kind = e.Kind.ExitCode(), string(e.Kind)
 	}
@@ -491,7 +495,7 @@ func execute(args []string, stdout, stderr io.Writer, env *environment) int {
 	// Sent first: with --verbose its request is logged, and that line must
 	// not land inside the update notice.
 	env.sendTelemetry(ran, code, kind, time.Since(start))()
-	env.reportUpdate(stderr)
+	env.reportUpdate(stderr, ran)
 	return code
 }
 

@@ -153,7 +153,7 @@ func (e *environment) ask(w io.Writer, question string) (string, error) {
 // openBrowser opens a URL in the user's default browser. The opener hands
 // the URL to the desktop and is not waited for, and the browser it may
 // start is the user's, not the CLI's: it is detached, so Ctrl-C does not
-// close the browser, and nothing is left for this process to reap.
+// close the browser, and the opener is reaped once it ends.
 func openBrowser(url string) error {
 	switch runtime.GOOS {
 	case "darwin":

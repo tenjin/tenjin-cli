@@ -51,11 +51,18 @@ func TestCtrlCAtAPromptStopsSetup(t *testing.T) {
 	}
 }
 
-// atPrompt reports whether output ends at a question waiting for its
-// answer, as the prompts write them: a confirmation's [Y/n] or [y/N], or a
-// line that ends in a colon, with no line break after it.
+// atPrompt reports whether output ends at setup's first question, the
+// choice of features asked a line at a time, waiting for its answer. The
+// tick may be coloured.
 func atPrompt(output string) bool {
-	return strings.HasSuffix(output, "] ") || strings.HasSuffix(output, ": ")
+	return strings.HasSuffix(output, " list is right: ")
+}
+
+// A line that only says what setup is doing is not a question.
+func TestAtPromptWaitsForTheQuestion(t *testing.T) {
+	if atPrompt("Step 1 of 7 · Your project\nReading: ") || !atPrompt("all or none. Press Enter when the ✓ list is right: ") {
+		t.Error("atPrompt")
+	}
 }
 
 // slowAgentScript is a Claude Code that starts a child and works forever,

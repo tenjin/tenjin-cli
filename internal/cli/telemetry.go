@@ -127,8 +127,9 @@ func (e *environment) note(key string, value any) {
 	e.facts[key] = value
 }
 
-// noteProject notes what kind of project the command ran on.
+// noteProject notes what kind of project the command ran on, and where.
 func (e *environment) noteProject(p *project.Project) {
+	e.projectRoot = p.Root
 	e.note("framework", string(p.Framework))
 	var platforms []string
 	for _, t := range p.Targets {

@@ -122,6 +122,28 @@ func TestAnUnknownNameFromInsideAnAgentPointsAtAnOlderSkill(t *testing.T) {
 	}
 }
 
+// The skill named is the one in the project the command was given, not in
+// the folder it was run from.
+func TestTheSkillNamedIsTheProjectsWhereverTheCommandRuns(t *testing.T) {
+	h, dir := newHarness(t), testproject.Write(t, testproject.AndroidNative())
+	withRelease(t, h, "v0.1.0")
+	path := writeOldSkill(t, dir, "0.0.9")
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile(h.env.updates.State, []byte(`{"ran":"0.0.9"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if code, _, stderr := h.run("project", "detect", dir); code != 0 || !strings.Contains(stderr, "The tenjin-cli skill in "+path+" was written by") {
+		t.Errorf("after an update: exit = %d, stderr:\n%s", code, stderr)
+	}
+
+	// The path is known when it comes before the flag that does not exist:
+	// the arguments after it are not read.
+	h.vars["CODEX_THREAD_ID"] = "thread-1"
+	if code, _, stderr := h.run("doctor", dir, "--fix-it"); code != 2 || !strings.Contains(stderr, "The installed tenjin-cli skill, "+path+",") {
+		t.Errorf("from an agent: exit = %d, stderr = %q", code, stderr)
+	}
+}
+
 // The first run after an update names, once, the copies of the skill the
 // update left behind; never with --json.
 func TestTheFirstRunAfterAnUpdateNamesAnOlderSkill(t *testing.T) {
