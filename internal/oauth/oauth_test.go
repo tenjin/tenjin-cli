@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -59,9 +60,10 @@ func approving(t *testing.T) func(string) error {
 	}
 }
 
-// BeforeRedeem runs once the browser has answered and before the code is
-// spent; when it refuses, the code is never traded for tokens.
-func TestBeforeRedeemComesBeforeTheCodeIsSpent(t *testing.T) {
+// redeeming is an authorization server that counts the codes traded at its
+// token endpoint.
+func redeeming(t *testing.T) (*Client, *atomic.Int32) {
+	t.Helper()
 	var redeemed atomic.Int32
 	mux := http.NewServeMux()
 	var srv *httptest.Server
@@ -74,7 +76,13 @@ func TestBeforeRedeemComesBeforeTheCodeIsSpent(t *testing.T) {
 	})
 	srv = httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	c := New(srv.URL, "https://resource.test")
+	return New(srv.URL, "https://resource.test"), &redeemed
+}
+
+// BeforeRedeem runs once the browser has answered and before the code is
+// spent; when it refuses, the code is never traded for tokens.
+func TestBeforeRedeemComesBeforeTheCodeIsSpent(t *testing.T) {
+	c, redeemed := redeeming(t)
 
 	refused := errors.New("not now")
 	_, err := c.Login(context.Background(), LoginOptions{ClientID: ClientID, Open: approving(t), Timeout: 5 * time.Second,
@@ -88,6 +96,82 @@ func TestBeforeRedeemComesBeforeTheCodeIsSpent(t *testing.T) {
 		BeforeRedeem: func(context.Context) error { before = redeemed.Load(); return nil }})
 	if err != nil || tokens.RefreshToken != "refresh" || before != 0 || redeemed.Load() != 1 {
 		t.Errorf("Login = %+v, %v; redeemed %d times, %d before BeforeRedeem", tokens, err, redeemed.Load(), before)
+	}
+}
+
+// answer is the address the sign-in ends on, with a code and the request's
+// state, as edit changes it.
+func answer(authorizeURL string, edit func(url.Values)) (string, error) {
+	u, err := url.Parse(authorizeURL)
+	if err != nil {
+		return "", err
+	}
+	q := url.Values{"code": {"code-1"}, "state": {u.Query().Get("state")}}
+	edit(q)
+	return u.Query().Get("redirect_uri") + "?" + q.Encode(), nil
+}
+
+// An answer that is not to this sign-in, with another request's state or
+// from another authorization server, is refused, however it arrives, and its
+// code is never traded for tokens. A redirect with another state is not even
+// taken as the answer: anything on this machine can reach the port, so the
+// wait goes on.
+func TestAnAnswerToAnotherSignInIsRefused(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		edit func(url.Values)
+		// want is the error when the answer is pasted, and redirected
+		// when it arrives at the loopback address.
+		want, redirected string
+	}{
+		{"another state", func(q url.Values) { q.Set("state", "another-request") }, "did not match this request", "timed out"},
+		{"another issuer", func(q url.Values) { q.Set("iss", "https://elsewhere.test") }, "came from https://elsewhere.test", "came from https://elsewhere.test"},
+	} {
+		t.Run(c.name+", pasted", func(t *testing.T) {
+			client, redeemed := redeeming(t)
+			opened := make(chan string, 1)
+			pasted := false
+			_, err := client.Login(context.Background(), LoginOptions{ClientID: ClientID, Timeout: 5 * time.Second,
+				Open: func(authorizeURL string) error { opened <- authorizeURL; return nil },
+				Pasted: func() (string, error) {
+					if pasted {
+						return "", io.EOF
+					}
+					pasted = true
+					return answer(<-opened, c.edit)
+				}})
+			if err == nil || !strings.Contains(err.Error(), c.want) || redeemed.Load() != 0 {
+				t.Errorf("Login = %v, with the code redeemed %d times", err, redeemed.Load())
+			}
+		})
+		t.Run(c.name+", redirected", func(t *testing.T) {
+			client, redeemed := redeeming(t)
+			status := make(chan int, 1)
+			_, err := client.Login(context.Background(), LoginOptions{ClientID: ClientID, Timeout: 500 * time.Millisecond,
+				Open: func(authorizeURL string) error {
+					address, err := answer(authorizeURL, c.edit)
+					if err != nil {
+						return err
+					}
+					go func() {
+						resp, err := http.Get(address)
+						if err != nil {
+							t.Errorf("callback: %v", err)
+							status <- 0
+							return
+						}
+						_ = resp.Body.Close()
+						status <- resp.StatusCode
+					}()
+					return nil
+				}})
+			if err == nil || !strings.Contains(err.Error(), c.redirected) || redeemed.Load() != 0 {
+				t.Errorf("Login = %v, with the code redeemed %d times", err, redeemed.Load())
+			}
+			if got := <-status; got != http.StatusBadRequest {
+				t.Errorf("the callback answered HTTP %d", got)
+			}
+		})
 	}
 }
 
