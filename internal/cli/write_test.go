@@ -299,6 +299,37 @@ func TestChangingACallbacksParameterKeepsTheOthers(t *testing.T) {
 	}
 }
 
+// Since an update sends the callback's other parameters, --param key= is
+// how one is removed: it is left out of what is sent, and said so.
+func TestAnEmptyParamRemovesTheParameter(t *testing.T) {
+	update := []string{"apps", "callbacks", "update", testOther, "--app", testApp, "--param", "pixel=", "--param", "level=4", "--active"}
+	want := map[string]any{"remote_app_id": "test", "level": "4"}
+	h := newHarness(t)
+	h.signIn()
+	h.fake.callbackParameters = map[string]map[string]any{testOther: {"pixel": "1", "remote_app_id": "test", "level": 3}}
+
+	code, stdout, stderr := h.run(append(update, "--dry-run")...)
+	var body map[string]any
+	if err := json.Unmarshal([]byte(stdout), &body); err != nil || code != 0 || !reflect.DeepEqual(body["customer_parameters"], want) ||
+		!strings.Contains(stderr, "pixel is removed, left out of the parameters sent") {
+		t.Errorf("dry run: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+	h.typing("n")
+	if _, _, stderr := h.run(update...); !strings.Contains(stderr, "pixel is removed") || len(h.fake.writes) != 0 {
+		t.Errorf("question: stderr = %q", stderr)
+	}
+	h.env.interactive = false
+	if code, _, stderr := h.run(append(update, "--yes")...); code != 0 || len(h.fake.writes) != 1 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	if got := h.fake.callbackParameters[testOther]; !reflect.DeepEqual(got, want) {
+		t.Errorf("the callback's parameters are now %v, want %v", got, want)
+	}
+	if _, stdout, _ := h.run("apps", "callbacks", "update", "--help"); !strings.Contains(stdout, "--param key=") {
+		t.Errorf("the help does not say how to remove a parameter: %q", stdout)
+	}
+}
+
 // IDs are checked before the question and the dry run.
 func TestWriteChecksIDsBeforeAsking(t *testing.T) {
 	h := newHarness(t)

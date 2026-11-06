@@ -619,7 +619,8 @@ func appWriteCmds(opts *options, env *environment) map[string][]*cobra.Command {
 an update does not say whether it is active, and replaces the callback's own
 parameters with the ones an update sends. So without --active the callback is
 read first and its current state sent with the change, and with --param its
-other parameters are read and sent with the ones given.`,
+other parameters are read and sent with the ones given. --param key= (an
+empty value) removes that parameter: it is left out of what is sent.`,
 				args:   exactArgs(1, "the callback's ID, from 'tenjin apps callbacks list'"),
 				fields: callbackFields(false), flags: needApp,
 				prepare: func(args []string, body tenjinapi.Fields, said string) (string, error) {
@@ -787,7 +788,8 @@ func newSavedReportWriteCmds(opts *options, env *environment) []*cobra.Command {
 // keepCallback adds to a callback update what the API would otherwise change
 // unasked, read from the callback, and says it for the question: whether it
 // is active, when the update does not say, and its other parameters, when the
-// update sends some. A callback that cannot be read is not guessed at.
+// update sends some; one given an empty value is left out, which removes it.
+// A callback that cannot be read is not guessed at.
 func keepCallback(ctx context.Context, api *tenjinapi.Client, app, callback string, body tenjinapi.Fields) (string, error) {
 	_, activeGiven := body["active"]
 	given, paramsGiven := body["customer_parameters"].(map[string]string)
@@ -833,7 +835,7 @@ func keepCallback(ctx context.Context, api *tenjinapi.Client, app, callback stri
 	}
 	if paramsGiven {
 		merged := make(map[string]any, len(state.Parameters)+len(given))
-		var kept []string
+		var kept, removed []string
 		for k, v := range state.Parameters {
 			merged[k] = v
 			if _, replaced := given[k]; !replaced {
@@ -841,6 +843,13 @@ func keepCallback(ctx context.Context, api *tenjinapi.Client, app, callback stri
 			}
 		}
 		for k, v := range given {
+			// An empty value removes the parameter: what is sent replaces
+			// them all, so it is left out.
+			if v == "" {
+				delete(merged, k)
+				removed = append(removed, k)
+				continue
+			}
 			merged[k] = v
 		}
 		body["customer_parameters"] = merged
@@ -855,6 +864,14 @@ func keepCallback(ctx context.Context, api *tenjinapi.Client, app, callback stri
 				sent, them = "is", "it"
 			}
 			said += fmt.Sprintf("; its other parameters stay (%s %s sent too, since Tenjin would otherwise drop %s)", strings.Join(pairs, " "), sent, them)
+		}
+		if len(removed) > 0 {
+			sort.Strings(removed)
+			verb := "are"
+			if len(removed) == 1 {
+				verb = "is"
+			}
+			said += fmt.Sprintf("; %s %s removed, left out of the parameters sent", strings.Join(removed, ", "), verb)
 		}
 	}
 	return said, nil
