@@ -302,11 +302,17 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 	} else {
 		r.pass("sdk.init", platform, "The SDK is initialized", src.inits[0].File, src.inits[0].Line)
 	}
+	deprecatedFix := spec.deprecatedFix
+	if i := r.integration(spec); i != nil {
+		if since := initializeSince[i.Package]; since != "" && olderThan(i.Version, since) {
+			deprecatedFix = "First update " + i.Package + " to " + latestVersion(i.Package, r.opts.Latest) + ": " + i.Version + " is older than " + since + ", which brought the replacement. " + deprecatedFix
+		}
+	}
 	for _, c := range src.deprecated {
 		r.add(Finding{
 			ID: "sdk.init.deprecated", Severity: Warning, Platform: platform,
 			Title: "A deprecated initializer is used",
-			File:  c.File, Line: c.Line, Fix: spec.deprecatedFix,
+			File:  c.File, Line: c.Line, Fix: deprecatedFix,
 		})
 	}
 

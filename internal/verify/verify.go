@@ -313,12 +313,18 @@ func (r *runner) checkPlatform(spec frameworkSpec, t *project.Target, src source
 // community Flutter plugin counts as Flutter's: it is checked as one, and
 // named.
 func (r *runner) declares(spec frameworkSpec) bool {
-	for _, i := range r.p.Tenjin {
-		if spec.ownsPackage(i.Package) || (i.Package == project.CommunityFlutterPackage && spec.ownsPackage("tenjin_plugin")) {
-			return true
+	return r.integration(spec) != nil
+}
+
+// integration is the project's declaration of the framework's SDK, or nil.
+func (r *runner) integration(spec frameworkSpec) *project.Integration {
+	for i := range r.p.Tenjin {
+		pkg := r.p.Tenjin[i].Package
+		if spec.ownsPackage(pkg) || (pkg == project.CommunityFlutterPackage && spec.ownsPackage("tenjin_plugin")) {
+			return &r.p.Tenjin[i]
 		}
 	}
-	return false
+	return nil
 }
 
 // declaresNative reports whether the project's native projects declare a

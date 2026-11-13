@@ -339,8 +339,22 @@ func TestFlutterDeprecatedInitialiser(t *testing.T) {
 	r := run(t, base.With(testproject.Files{
 		"lib/main.dart": strings.Replace(base["lib/main.dart"], "initialize(sdkKey:", "init(apiKey:", 1),
 	}), verify.Options{})
-	expect(t, r, "sdk.init.deprecated", "", verify.Warning)
+	if f := expect(t, r, "sdk.init.deprecated", "", verify.Warning); strings.Contains(f.Fix, "First update") {
+		t.Errorf("1.5.0 has initialize, yet the fix says to update: %s", f.Fix)
+	}
 	expect(t, r, "sdk.init", "", verify.Pass)
+
+	// initialize came in 1.3.0: an older plugin is updated first, or the fix
+	// does not compile.
+	r = run(t, base.With(testproject.Files{
+		"lib/main.dart": strings.Replace(base["lib/main.dart"], "initialize(sdkKey:", "init(apiKey:", 1),
+		"pubspec.yaml":  strings.Replace(base["pubspec.yaml"], "^1.5.0", "1.2.8", 1),
+		"pubspec.lock":  strings.Replace(base["pubspec.lock"], `"1.5.0"`, `"1.2.8"`, 1),
+	}), verify.Options{})
+	f := expect(t, r, "sdk.init.deprecated", "", verify.Warning)
+	if !strings.HasPrefix(f.Fix, "First update tenjin_plugin to ") || !strings.Contains(f.Fix, "1.2.8 is older than 1.3.0, which brought the replacement. Replace TenjinSDK.instance.init(apiKey: ...)") {
+		t.Errorf("fix = %s", f.Fix)
+	}
 }
 
 // Flutter's plugin ships the Play Services libraries, so the app does not

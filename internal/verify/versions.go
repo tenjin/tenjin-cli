@@ -22,6 +22,14 @@ var latestSDK = []struct{ packagePrefix, version string }{
 	{"com.tenjin.sdk", "1.22.1"}, // Unity, from the GitHub releases
 }
 
+// initializeSince is the release of each SDK that brought the initializer
+// replacing its deprecated one (frameworkSpec.deprecatedInit): an older
+// one has to be updated before the replacement compiles.
+var initializeSince = map[string]string{
+	"TenjinSDK":     "1.12.0", // initialize: and initialize(_:)
+	"tenjin_plugin": "1.3.0",  // initialize(sdkKey:)
+}
+
 // The Play Services libraries the Android SDK reads identifiers through,
 // and the Play Billing library its automatic purchase tracking reads
 // purchases through: the version the SDK's own test apps use (it is built
