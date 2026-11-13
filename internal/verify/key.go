@@ -93,7 +93,10 @@ func (r *runner) checkBuildKey(t *project.Target, b project.Build, src source, m
 		f := scope
 		f.ID, f.Severity = "key.unchecked", Info
 		f.Title = "The SDK key was not checked" + label
-		f.Detail = "It is not written as a string literal in the source."
+		f.Detail = "The key is not passed to the initializer as a string literal (it may be in a constant or a variable), so it could not be read."
+		if len(src.inits) == 0 {
+			f.Detail = "The SDK is never initialized, so no key is passed to it."
+		}
 		f.Fix = "To check it against Tenjin, give the key with --sdk-key <key> or TENJIN_SDK_KEY."
 		if r.builds() > 1 {
 			// One key without a build would be checked against every app.

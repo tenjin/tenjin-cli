@@ -452,9 +452,19 @@ func TestKeyCheckSkipsPlaceholdersAndMissingKeys(t *testing.T) {
 	r := run(t, base.With(testproject.Files{
 		activity: strings.Replace(base[activity], `"`+testproject.Key+`"`, "BuildConfig.TENJIN_KEY", 1),
 	}), verify.Options{Keys: keys})
-	expect(t, r, "key.unchecked", project.Android, verify.Info)
+	if f := expect(t, r, "key.unchecked", project.Android, verify.Info); !strings.HasPrefix(f.Detail, "The key is not passed to the initializer as a string literal") {
+		t.Errorf("detail = %q", f.Detail)
+	}
 	if len(keys.asked) != 0 {
 		t.Errorf("asked Tenjin about %q", keys.asked)
+	}
+
+	// With no initialization at all, there is no key to read.
+	r = run(t, base.With(testproject.Files{
+		activity: strings.Replace(base[activity], `TenjinSDK.getInstance(this, "`+testproject.Key+`")`, "null", 1),
+	}), verify.Options{Keys: keys})
+	if f := expect(t, r, "key.unchecked", project.Android, verify.Info); !strings.HasPrefix(f.Detail, "The SDK is never initialized") {
+		t.Errorf("without an initialization, detail = %q", f.Detail)
 	}
 }
 
