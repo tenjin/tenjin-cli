@@ -227,7 +227,7 @@ func defaultEnvironment() (*environment, error) {
 // on the console's escape sequences for input, so the arrow keys arrive as
 // they do elsewhere.
 func rawInput(interactive bool) func() (func(), error) {
-	if !interactive || os.Getenv("TERM") == "dumb" || !render.CursorControl(os.Stdout) {
+	if !interactive || !render.CursorControl(os.Stdout) {
 		return nil
 	}
 	fd := int(os.Stdin.Fd())

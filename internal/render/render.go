@@ -159,8 +159,11 @@ func Indent(text string, indent, width int) string {
 // Styler colours text for a terminal and leaves it plain everywhere else.
 type Styler struct{ enabled, truecolor bool }
 
-// NewStyler enables colour when w is a terminal. NO_COLOR turns it off
-// everywhere; CLICOLOR_FORCE keeps it on when the output is piped, for
+// isTerminal is term.IsTerminal, replaced in tests.
+var isTerminal = term.IsTerminal
+
+// NewStyler enables colour when w is a terminal that handles escape codes.
+// NO_COLOR turns it off everywhere; CLICOLOR_FORCE keeps it on when the output is piped, for
 // example into `less -R`.
 func NewStyler(w io.Writer) Styler {
 	if os.Getenv("NO_COLOR") != "" {
@@ -172,7 +175,7 @@ func NewStyler(w io.Writer) Styler {
 		return Styler{enabled: true, truecolor: truecolor}
 	}
 	f, ok := w.(*os.File)
-	return Styler{enabled: ok && term.IsTerminal(int(f.Fd())) && colourSupported(f), truecolor: truecolor}
+	return Styler{enabled: ok && isTerminal(int(f.Fd())) && escapeCodes(f), truecolor: truecolor}
 }
 
 // Enabled reports whether the styler colours anything.

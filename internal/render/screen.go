@@ -26,7 +26,11 @@ func LinesUp(n int) string {
 // CursorControl turns on, where it must be asked for (a Windows console),
 // the terminal's handling of escape codes, and reports whether f handles
 // them.
-func CursorControl(f *os.File) bool { return colourSupported(f) }
+func CursorControl(f *os.File) bool { return escapeCodes(f) }
+
+// escapeCodes reports whether the terminal f writes to handles escape
+// codes: not one with TERM=dumb, which prints them as they are.
+func escapeCodes(f *os.File) bool { return os.Getenv("TERM") != "dumb" && colourSupported(f) }
 
 // Truncate shortens text to at most width columns, ending it with … where
 // it is cut, so that a line never wraps. Escape codes take no column and are

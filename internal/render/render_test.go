@@ -2,8 +2,11 @@ package render
 
 import (
 	"bytes"
+	"os"
 	"strings"
 	"testing"
+
+	"golang.org/x/term"
 )
 
 func TestParseFormat(t *testing.T) {
@@ -79,6 +82,25 @@ func TestStylerEnvironment(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	if s := NewStyler(&buf); s.Enabled() || s.Accent("x") != "x" {
 		t.Error("NO_COLOR did not turn colour off")
+	}
+}
+
+// A dumb terminal prints escape codes as they are.
+func TestNoColourOnADumbTerminal(t *testing.T) {
+	isTerminal = func(int) bool { return true }
+	t.Cleanup(func() { isTerminal = term.IsTerminal })
+	t.Setenv("TERM", "xterm-256color")
+	if !NewStyler(os.Stdout).Enabled() {
+		t.Fatal("no colour on a terminal")
+	}
+	t.Setenv("TERM", "dumb")
+	if s := NewStyler(os.Stdout); s.Enabled() || Banner(os.Stdout, "tagline") != "" {
+		t.Error("colour on a dumb terminal")
+	}
+	// Asked for, it is on all the same.
+	t.Setenv("CLICOLOR_FORCE", "1")
+	if !NewStyler(os.Stdout).Enabled() {
+		t.Error("CLICOLOR_FORCE did not keep colour on")
 	}
 }
 
