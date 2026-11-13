@@ -11,14 +11,17 @@ import (
 func TestSourceFilesLeaveOutAWebBuild(t *testing.T) {
 	deep := "feature/home/src/main/kotlin/com/company/app/feature/home/ui/screen/HomeScreen.kt"
 	files := testproject.Files{
-		"package.json":        `{"scripts": {"build": "ng build"}}`,
+		"package.json":        `{"scripts": {"build": "ng build", "build:web": "vite build --outDir public-build"}}`,
 		"capacitor.config.ts": `const config = { webDir: 'www/browser' };`,
 		"angular.json":        `{"projects": {"app": {"architect": {"build": {"options": {"outputPath": "out/app"}}}}}}`,
 		"src/app.ts":          "",
 		"www/browser/main.js": "",
 		"out/app/main.js":     "",
 		"dist/main.js":        "",
-		deep:                  "",
+		// Builds for another target or for tests, beside dist.
+		"dist-staging/assets/index.js": "",
+		"public-build/main.js":         "",
+		deep:                           "",
 	}
 	got := strings.Join(project.SourceFiles(testproject.Write(t, files), ".", ".ts", ".js", ".kt"), ",")
 	if got != "capacitor.config.ts,"+deep+",src/app.ts" {
@@ -29,7 +32,7 @@ func TestSourceFilesLeaveOutAWebBuild(t *testing.T) {
 	files["package.json"] = `{}`
 	delete(files, "angular.json")
 	got = strings.Join(project.SourceFiles(testproject.Write(t, files), ".", ".js"), ",")
-	if got != "dist/main.js,out/app/main.js,www/browser/main.js" {
+	if got != "dist/main.js,dist-staging/assets/index.js,out/app/main.js,public-build/main.js,www/browser/main.js" {
 		t.Errorf("source files without a build = %s", got)
 	}
 }

@@ -93,12 +93,15 @@ var (
 	buildScript  = regexp.MustCompile(`"build"\s*:\s*"`)
 	webDir       = regexp.MustCompile(`["']?webDir["']?\s*:\s*["']([^"']+)["']`)
 	outputPath   = regexp.MustCompile(`"outputPath"\s*:\s*(?:\{[^{}]*"base"\s*:\s*)?"([^"]+)"`)
+	outDirFlag   = regexp.MustCompile(`--out-?[dD]ir[= ]+['"]?([\w./-]+)`)
+	distFolder   = regexp.MustCompile(`^dist[-_]`)
 	bundlerFiles = []string{"angular.json", "ionic.config.json", "vite.config.ts", "vite.config.js", "vite.config.mjs", "webpack.config.js",
 		"rollup.config.js", "rollup.config.mjs", "next.config.js", "next.config.mjs", "nuxt.config.ts", "svelte.config.js", "vue.config.js"}
 )
 
 // webOutput lists the folders, relative to root, that a web app's build
-// writes: Capacitor's webDir, Angular's outputPath, www and dist. Only when
+// writes: Capacitor's webDir, Angular's outputPath, a --outDir in
+// package.json, www, dist and dist-*. Only when
 // the project builds its web app, with a build script or a bundler: without
 // one, webDir holds the web app as written, and is read.
 func webOutput(root string) map[string]bool {
@@ -136,6 +139,17 @@ func webOutput(root string) map[string]bool {
 	}
 	for _, m := range outputPath.FindAllStringSubmatch(read("angular.json"), -1) {
 		add(m[1])
+	}
+	// A build for another target or for tests often writes beside dist:
+	// vite build --outDir dist-staging.
+	for _, m := range outDirFlag.FindAllStringSubmatch(pkg, -1) {
+		add(m[1])
+	}
+	entries, _ := os.ReadDir(root)
+	for _, e := range entries {
+		if e.IsDir() && distFolder.MatchString(e.Name()) {
+			out[e.Name()] = true
+		}
 	}
 	return out
 }
