@@ -504,6 +504,25 @@ func TestSetupDoesNotCreateAppsUnasked(t *testing.T) {
 	}
 }
 
+// An app declined at step 3 has no key: step 4 neither asks for one nor
+// sends the developer to a dashboard page that does not exist.
+func TestSetupAsksNoKeyForAnAppNotCreated(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	base := testproject.AndroidNative()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	dir := testproject.Write(t, base.With(testproject.Files{activity: strings.Replace(base[activity], testproject.Key, "__TENJIN_ANDROID_SDK_KEY__", 1)}))
+
+	_, stdout, _ := h.typing("", "n", "", "", "").run("setup", dir, "--agent", "none")
+	if len(h.fake.apps) != 0 {
+		t.Fatalf("created %d apps after a no", len(h.fake.apps))
+	}
+	if !strings.Contains(stdout, "Android: no key to get, since it has no Tenjin app. Running tenjin setup again creates the app and gets its key.") ||
+		strings.Contains(stdout, "Paste the Android SDK key") || strings.Contains(stdout, "SDK Keys") {
+		t.Errorf("stdout:\n%s", stdout)
+	}
+}
+
 // A setup that has created an app and then waits too long for the sign-in
 // says what it did: exit status 12 would say that nothing was.
 func TestSetupThatFindsTheSignInBusyAfterCreatingSaysSo(t *testing.T) {

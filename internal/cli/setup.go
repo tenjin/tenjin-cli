@@ -106,7 +106,7 @@ the rest of the work proposes some).`,
 			}
 			s := &setup{cmd: cmd, env: env, args: args, yes: yes, offline: offline, noBrowser: noBrowser, serial: serial, given: given, agentFlag: agentFlag,
 				chosen: builds, wantFeatures: features, analyticsFlags: analytics, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
-				appIDs: map[string]string{}, keyURLs: map[string]string{},
+				appIDs: map[string]string{}, keyURLs: map[string]string{}, noApp: map[string]bool{},
 				keys: map[string]verify.GivenKey{}, inProject: projectKeys{}}
 			_, _ = io.WriteString(s.out, render.Banner(s.out, tagline))
 			return s.run()
@@ -180,6 +180,9 @@ type setup struct {
 	// dashboard page showing that app's SDK keys.
 	appIDs  map[string]string
 	keyURLs map[string]string
+	// noApp marks the builds whose app is not in Tenjin and was not
+	// created: declined, or not allowed. Such a build has no key yet.
+	noApp map[string]bool
 	// created counts the Tenjin apps this run has created, and agentEdits
 	// the files a coding agent it started has changed.
 	created, agentEdits int
@@ -475,6 +478,7 @@ func (s *setup) apps(p *project.Project) error {
 				if e.Hint != "" {
 					s.say("      %s", render.Clean(e.Hint))
 				}
+				s.noApp[b.ID] = true
 				continue
 			}
 			verb := "found"
@@ -604,6 +608,11 @@ func (s *setup) buildKey(t *project.Target, b project.Build, report *verify.Repo
 		}
 	}
 
+	// No app, no key to copy: the dashboard has nothing to show.
+	if s.noApp[b.ID] {
+		s.say("  %s %s: no key to get, since it has no Tenjin app. Running tenjin setup again creates the app and gets its key.", s.style.Yellow("!"), label)
+		return nil
+	}
 	asker := s.asker()
 	asker.written = written
 	asker.instructions(label, b, s.keyURLs[b.ID])
@@ -1134,7 +1143,8 @@ func (s *setup) fillKeys(p *project.Project, ask bool) error {
 	}
 	if ask && s.env.interactive {
 		for _, pb := range builds {
-			if keys[pb.build.SDKKeyPlaceholder] != "" {
+			// A build with no app has no key; step 4 said so.
+			if keys[pb.build.SDKKeyPlaceholder] != "" || s.noApp[pb.build.ID] {
 				continue
 			}
 			asker := s.asker()
