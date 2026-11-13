@@ -131,8 +131,9 @@ func TestDataTables(t *testing.T) {
 	h.signIn()
 	h.fake.data = map[string]func(*http.Request) (int, any){
 		"/v2/campaigns": func(*http.Request) (int, any) {
+			// As the API answers: no platform, which its spec lists.
 			return http.StatusOK, map[string]any{"data": []any{map[string]any{"id": testOther, "type": "campaign", "attributes": map[string]any{
-				"name": "Summer", "platform": "ios", "channel_id": 5, "app_id": testApp, "click_tracking_url": "https://track.example/c",
+				"name": "Summer", "channel_id": 5, "app_id": testApp, "click_tracking_url": "https://track.example/c",
 			}}}}
 		},
 		"/v2/reports/spend": func(*http.Request) (int, any) {
@@ -145,7 +146,7 @@ func TestDataTables(t *testing.T) {
 	}
 
 	_, stdout, _ := h.run("campaigns", "list")
-	if !strings.Contains(stdout, "NAME") || !strings.Contains(stdout, "CHANNEL ID") || !strings.Contains(stdout, "Summer") || strings.Contains(stdout, "track.example") {
+	if header := strings.SplitN(stdout, "\n", 2)[0]; strings.Join(strings.Fields(header), " ") != "NAME CHANNEL ID APP ID ID" || !strings.Contains(stdout, "Summer") || strings.Contains(stdout, "track.example") {
 		t.Errorf("campaigns table:\n%s", stdout)
 	}
 	_, stdout, _ = h.run("reports", "spend", "--from", "2026-10-01", "--to", "2026-10-01")

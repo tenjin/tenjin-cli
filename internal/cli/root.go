@@ -723,7 +723,13 @@ func (d declined) Error() string { return string(d) }
 // noArgs rejects positional arguments as a usage error.
 func noArgs(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
-		return clierr.New(clierr.Usage, "%q takes no arguments, got %q", cmd.CommandPath(), args[0])
+		err := clierr.New(clierr.Usage, "%q takes no arguments, got %q", cmd.CommandPath(), args[0])
+		// apps get takes the ID as an argument; the commands under an app
+		// take it as a flag.
+		if cmd.Flags().Lookup("app") != nil && len(args) == 1 {
+			err.Hint = "If that is the app's ID, give it with --app: " + cmd.CommandPath() + " --app " + args[0]
+		}
+		return err
 	}
 	return nil
 }

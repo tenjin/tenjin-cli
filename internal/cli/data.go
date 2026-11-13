@@ -391,7 +391,9 @@ func newCampaignsCmd(opts *options, env *environment) *cobra.Command {
 	cmd := group("campaigns", "List and change campaigns",
 		dataCmd(opts, env, dataSpec{
 			use: "list", short: "List campaigns", paged: true,
-			view: view{noun: "campaigns", columns: []string{"name", "platform", "channel_id", "app_id"}, hidden: "hidden"},
+			// No platform column: the API filters by it but does not send
+			// it, whatever its spec says.
+			view: view{noun: "campaigns", columns: []string{"name", "channel_id", "app_id"}, hidden: "hidden"},
 			flags: func(f *pflag.FlagSet) {
 				f.StringVar(&q.App, "app", "", "only this app's campaigns, by its ID")
 				optionalChannel(f, &channel, "campaigns")

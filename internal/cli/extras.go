@@ -236,7 +236,7 @@ func newDocsCmd(opts *options, env *environment) *cobra.Command {
 		Use:   "search <words>...",
 		Short: "Search Tenjin's documentation",
 		Args: func(cmd *cobra.Command, args []string) error {
-			if len(args) == 0 {
+			if strings.TrimSpace(strings.Join(args, "")) == "" {
 				return clierr.New(clierr.Usage, "%q takes what to search for", cmd.CommandPath())
 			}
 			return nil

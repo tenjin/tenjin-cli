@@ -116,6 +116,9 @@ func TestDocsSearch(t *testing.T) {
 	if code, _, _ := h.run("docs", "search"); code != 2 {
 		t.Errorf("no words: exit = %d", code)
 	}
+	if code, _, _ := h.run("docs", "search", " ", ""); code != 2 {
+		t.Errorf("blank words: exit = %d", code)
+	}
 }
 
 func TestMetricsAndMacros(t *testing.T) {

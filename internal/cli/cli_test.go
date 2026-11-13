@@ -90,6 +90,7 @@ func TestUsageErrors(t *testing.T) {
 		{"unknown format", []string{"version", "-o", "yaml"}, `unknown output format "yaml"`},
 		{"conflicting formats", []string{"version", "--json", "-o", "table"}, "--json conflicts with --output table"},
 		{"unexpected argument", []string{"version", "extra"}, `takes no arguments, got "extra"`},
+		{"app ID as an argument", []string{"apps", "events", "list", "abc"}, "If that is the app's ID, give it with --app: tenjin apps events list --app abc"},
 		{"too many arguments", []string{"doctor", "a", "b"}, "takes at most 1 argument"},
 	}
 	for _, tc := range cases {
