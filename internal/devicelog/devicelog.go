@@ -43,7 +43,12 @@ const (
 //
 // Every line carries the "[Tenjin]" tag, wherever the log comes from.
 const (
-	iosTag          = "[Tenjin]"
+	iosTag = "[Tenjin]"
+	// iosSDKTag is the tag as the SDK writes it, followed by the level. The
+	// tag alone may be another program's: the log tool logs each search,
+	// predicate and all.
+	iosSDKTag = iosTag + " - "
+
 	iosMarkURL      = "Sending request - "
 	iosMarkParams   = "request body "
 	iosMarkStatus   = "Got http response "
@@ -199,7 +204,7 @@ func Parse(r io.Reader) (*Log, error) {
 	}
 	for i, line := range lines {
 		n := i + 1
-		if strings.Contains(line, iosTag) {
+		if strings.Contains(line, iosSDKTag) {
 			log.SawSDK, log.Platform = true, "ios"
 			parseIOSLine(log, iosWaiting, line, n)
 			continue

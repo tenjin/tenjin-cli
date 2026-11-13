@@ -76,7 +76,9 @@ func ReadIOSSimulatorSince(ctx context.Context, run Runner, xcrun, udid string, 
 		window = []string{"--start", since.Format("2006-01-02 15:04:05")}
 	}
 	args := append([]string{"simctl", "spawn", udid, "log", "show"}, window...)
-	args = append(args, "--style", "compact", "--predicate", `eventMessage CONTAINS "`+iosTag+`"`)
+	// The log tool logs each search it runs, the predicate included: its
+	// own entries are left out.
+	args = append(args, "--style", "compact", "--predicate", `eventMessage CONTAINS "`+iosTag+`" AND process != "log"`)
 	log, err := run(ctx, xcrun, args...)
 	if err != nil {
 		return nil, &Unavailable{Reason: fmt.Sprintf("Could not read the log of the simulator %s: %s", udid, describe(err))}

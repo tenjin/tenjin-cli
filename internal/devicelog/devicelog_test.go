@@ -342,6 +342,17 @@ func TestParseIOSWithoutDebugLogs(t *testing.T) {
 	}
 }
 
+// The log tool logs each search it runs, and a search for the SDK's lines
+// names their tag: such a line is not the SDK's.
+func TestParseIOSLeavesOutTheLogToolsOwnEntries(t *testing.T) {
+	log, _ := Parse(strings.NewReader(`Timestamp               Ty Process[PID:TID]
+2026-11-12 22:40:11.849 Df log[70740:0] [com.apple.log:] log run noninteractively, parent: 14929 (launchd_sim), args: 'log' 'show' '--last' '10m' '--style' 'compact' '--predicate' 'eventMessage CONTAINS "[Tenjin]"'
+`))
+	if log.SawSDK || log.Platform != "" || len(log.Requests) != 0 {
+		t.Fatalf("log = %+v", log)
+	}
+}
+
 func TestParseIOSKeepsEachProcessesLinesTogether(t *testing.T) {
 	log, err := Parse(strings.NewReader(`2026-10-06 10:04:49.416 Df Other[3956:b3ce6f] (TenjinSDK) [Tenjin] - LOG: Sending request - https://track.tenjin.com/v0/event
 2026-10-06 10:04:49.416 Df Other[3956:b3ce6f] (TenjinSDK) [Tenjin] - DEBUG: request body bundle_id=com.other.app&platform=ios
@@ -397,7 +408,7 @@ func TestReadIOSSimulator(t *testing.T) {
 		t.Fatalf("out = %q, err = %v", out, err)
 	}
 	read := strings.Join((*calls)[1], " ")
-	if !strings.Contains(read, "spawn 00000001-0000-0000-0000-000000000000 log show --last 10m") || !strings.Contains(read, `eventMessage CONTAINS "[Tenjin]"`) {
+	if !strings.Contains(read, "spawn 00000001-0000-0000-0000-000000000000 log show --last 10m") || !strings.Contains(read, `eventMessage CONTAINS "[Tenjin]" AND process != "log"`) {
 		t.Errorf("read with %q", read)
 	}
 
