@@ -112,6 +112,25 @@ func TestIOSNative(t *testing.T) {
 	}
 }
 
+// An SDK's repository holds its framework's project beside a demo app's;
+// only the app has a bundle ID for Tenjin, whatever the names' order.
+func TestIOSProjectWithAnAppTargetWins(t *testing.T) {
+	files := testproject.Files{}
+	for path, content := range testproject.IOSNative() {
+		files["Sample/"+path] = content
+	}
+	app := files["Sample/Sample.xcodeproj/project.pbxproj"]
+	files["Framework/Framework.xcodeproj/project.pbxproj"] = strings.ReplaceAll(strings.ReplaceAll(app, "com.apple.product-type.application", "com.apple.product-type.framework"), "com.example.sample", "com.example.library")
+	p := detect(t, files)
+	target := p.Target(project.IOS)
+	if target == nil || target.IOS.Xcodeproj != "Sample/Sample.xcodeproj" || target.BundleID != "com.example.sample" {
+		t.Fatalf("target = %+v", target)
+	}
+	if !strings.Contains(strings.Join(p.Notes, "\n"), "Found 2 Xcode projects; using Sample/Sample.xcodeproj.") {
+		t.Errorf("notes = %q", p.Notes)
+	}
+}
+
 func TestNativeBothPlatformsSideBySide(t *testing.T) {
 	files := testproject.Files{}
 	for path, content := range testproject.AndroidNative() {

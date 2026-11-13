@@ -444,9 +444,17 @@ func (d *detector) iosTarget(rel string) (Target, bool) {
 	if len(projects) == 0 {
 		return Target{}, false
 	}
-	// Shallowest first, then by name, so the app project wins over samples
-	// nested deeper in the tree.
+	// A project with an app target first: an SDK's or a framework's own
+	// project has no bundle ID to give Tenjin. Then shallowest, then by
+	// name, so the app project wins over samples nested deeper in the tree.
+	app := map[string]bool{}
+	for _, p := range projects {
+		app[p] = strings.Contains(d.read(path.Join(p, "project.pbxproj")), appProductType)
+	}
 	sort.Slice(projects, func(i, j int) bool {
+		if app[projects[i]] != app[projects[j]] {
+			return app[projects[i]]
+		}
 		di, dj := strings.Count(projects[i], "/"), strings.Count(projects[j], "/")
 		if di != dj {
 			return di < dj
