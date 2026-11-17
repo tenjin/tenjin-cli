@@ -157,6 +157,41 @@ object Other {
 	)
 }
 
+// A constant imported by name resolves whether it is a Kotlin top-level
+// constant, whose import names only its package, or a companion object's,
+// whose import goes through Companion.
+func TestAnalyticsConstantsImportedByName(t *testing.T) {
+	p := analyze(t, testproject.AndroidNative().With(testproject.Files{
+		androidDir + "analytics/Names.kt": `package com.example.sample.analytics
+
+const val LEVEL_UP = "level_up"
+
+class Events {
+    companion object {
+        const val SHOP_OPENED = "shop_opened"
+    }
+}
+`,
+		androidDir + "Game.kt": `package com.example.sample
+
+import com.example.sample.analytics.Events.Companion.SHOP_OPENED
+import com.example.sample.analytics.LEVEL_UP
+import com.google.firebase.analytics.FirebaseAnalytics
+
+class Game(private val analytics: FirebaseAnalytics) {
+    fun play() {
+        analytics.logEvent(LEVEL_UP, null)
+        analytics.logEvent(SHOP_OPENED, null)
+    }
+}
+`,
+	}))
+	wantLines(t, "events", events(p),
+		"Firebase Analytics name=level_up (LEVEL_UP) @"+androidDir+"Game.kt:9 x1",
+		"Firebase Analytics name=shop_opened (SHOP_OPENED) @"+androidDir+"Game.kt:10 x1",
+	)
+}
+
 // Event is Firebase's only where the file imports Firebase's.
 func TestAnalyticsEventIsFirebasesOnlyWhenImported(t *testing.T) {
 	p := analyze(t, testproject.AndroidNative().With(testproject.Files{

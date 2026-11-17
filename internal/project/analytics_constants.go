@@ -137,9 +137,21 @@ func (s *analyticsScan) constant(expr string, f *sourceFile, at int) string {
 			return only(values)
 		}
 	}
+	// An import names the constant's container (import com.app.Events.LEVEL_UP,
+	// or import com.app.Events.Companion.LEVEL_UP for a Kotlin companion's)
+	// or, for a Kotlin top-level constant, only its package: then the
+	// constant is looked for outside any container.
 	for _, imp := range f.imports() {
-		if segments := strings.Split(imp, "."); len(segments) > 2 && segments[len(segments)-1] == last {
-			return only(t.qualified[segments[len(segments)-2]+"."+last])
+		segments := strings.Split(imp, ".")
+		if len(segments) < 3 || segments[len(segments)-1] != last {
+			continue
+		}
+		container := segments[len(segments)-2]
+		if container == "Companion" && len(segments) > 3 {
+			container = segments[len(segments)-3]
+		}
+		if values := t.qualified[container+"."+last]; len(values) > 0 {
+			return only(values)
 		}
 	}
 	if values := t.topLevel[last]; len(values) > 0 {
