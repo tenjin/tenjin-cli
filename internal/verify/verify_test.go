@@ -949,7 +949,41 @@ func TestSharedInstanceWithTokenIsDeprecated(t *testing.T) {
 	r := run(t, ios.With(testproject.Files{delegate: "", "Sample/AppDelegate.m": objc}), verify.Options{})
 	expect(t, r, "sdk.init", project.IOS, verify.Pass)
 	expect(t, r, "sdk.connect", project.IOS, verify.Pass)
-	expect(t, r, "sdk.init.deprecated", project.IOS, verify.Warning)
+	if f := expect(t, r, "sdk.init.deprecated", project.IOS, verify.Warning); strings.Contains(f.Fix, "First update") {
+		t.Errorf("1.20.0 has initialize:, yet the fix says to update: %s", f.Fix)
+	}
+}
+
+// initialize: came in 1.12.0 of the iOS SDK: on an older one, declared as a
+// pod or as a Swift package, the fixes that name it say to update first.
+func TestAnOldIOSSDKIsUpdatedBeforeTheInitializerIsNamed(t *testing.T) {
+	ios := testproject.IOSNative()
+	const delegate = "Sample/AppDelegate.swift"
+	objc := "#import <TenjinSDK/TenjinSDK.h>\n@implementation AppDelegate\n- (void)applicationDidBecomeActive:(UIApplication *)application {\n  [TenjinSDK sharedInstanceWithToken:@\"" + testproject.Key + "\"];\n}\n@end\n"
+	const prefix = "First update TenjinSDK (CocoaPods) to 1.20.0: 1.11.0 is older than 1.12.0, which brought "
+	old := ios.With(testproject.Files{"Podfile.lock": strings.ReplaceAll(ios["Podfile.lock"], "1.20.0", "1.11.0")})
+	r := run(t, old.With(testproject.Files{delegate: "", "Sample/AppDelegate.m": objc}), verify.Options{})
+	if f := expect(t, r, "sdk.init.deprecated", project.IOS, verify.Warning); !strings.HasPrefix(f.Fix, prefix+"the replacement. Replace it with TenjinSDK.initialize(") {
+		t.Errorf("fix = %s", f.Fix)
+	}
+	// Never initialized: the fix names [TenjinSDK initialize:] for Objective-C.
+	r = run(t, old.With(testproject.Files{delegate: "import TenjinSDK\nfunc start() {\n  TenjinSDK.connect()\n}\n"}), verify.Options{})
+	if f := expect(t, r, "sdk.init", project.IOS, verify.Error); !strings.HasPrefix(f.Fix, prefix+"the initializer this fix names. At launch, call TenjinSDK.getInstance(") {
+		t.Errorf("fix = %s", f.Fix)
+	}
+
+	// As a Swift package, resolved to the old release.
+	const pbxproj = "Sample.xcodeproj/project.pbxproj"
+	reference := "/* XCRemoteSwiftPackageReference \"tenjin-ios-spm\" */ = { repositoryURL = \"https://github.com/tenjin/tenjin-ios-spm\"; requirement = { kind = upToNextMajorVersion; minimumVersion = 1.11.0; }; };\n\trootObject = ROOT"
+	spm := ios.Without("Podfile", "Podfile.lock").With(testproject.Files{
+		pbxproj:  strings.Replace(ios[pbxproj], "rootObject = ROOT", reference, 1),
+		delegate: "", "Sample/AppDelegate.m": objc,
+		"Sample.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved": `{"pins": [{"identity": "tenjin-ios-spm", "location": "https://github.com/tenjin/tenjin-ios-spm", "state": {"version": "1.11.0"}}]}`,
+	})
+	r = run(t, spm, verify.Options{})
+	if f := expect(t, r, "sdk.init.deprecated", project.IOS, verify.Warning); !strings.HasPrefix(f.Fix, "First update TenjinSDK (Swift Package) to 1.20.0: 1.11.0 is older than 1.12.0") {
+		t.Errorf("fix = %s", f.Fix)
+	}
 }
 
 // An Expo project whose native folders are generated at build time, and

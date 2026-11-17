@@ -298,17 +298,12 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 			ID: "sdk.init", Severity: Error, Platform: platform,
 			Title:  "The SDK is never initialized",
 			Detail: "No call to " + spec.initName + " was found.",
-			Fix:    spec.initFix,
+			Fix:    r.updateFirst(spec, "the initializer this fix names") + spec.initFix,
 		})
 	} else {
 		r.pass("sdk.init", platform, "The SDK is initialized", src.inits[0].File, src.inits[0].Line)
 	}
-	deprecatedFix := spec.deprecatedFix
-	if i := r.integration(spec); i != nil {
-		if since := initializeSince[i.Package]; since != "" && olderThan(i.Version, since) {
-			deprecatedFix = "First update " + i.Package + " to " + latestVersion(i.Package, r.opts.Latest) + ": " + i.Version + " is older than " + since + ", which brought the replacement. " + deprecatedFix
-		}
-	}
+	deprecatedFix := r.updateFirst(spec, "the replacement") + spec.deprecatedFix
 	for _, c := range src.deprecated {
 		r.add(Finding{
 			ID: "sdk.init.deprecated", Severity: Warning, Platform: platform,
@@ -365,6 +360,23 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 			})
 		}
 	}
+}
+
+// updateFirst goes before a fix that names the initializer the SDK brought
+// in initializeSince (frameworkSpec.initFix and deprecatedFix), where the
+// SDK declared is older than that: the fix does not compile until it is
+// updated. what is the fix's word for the initializer. "" where the SDK has
+// it, or its version is not declared.
+func (r *runner) updateFirst(spec frameworkSpec, what string) string {
+	i := r.integration(spec)
+	if i == nil {
+		return ""
+	}
+	since := initializeSinceFor(i.Package)
+	if since == "" || !olderThan(i.Version, since) {
+		return ""
+	}
+	return "First update " + i.Package + " to " + latestVersion(i.Package, r.opts.Latest) + ": " + i.Version + " is older than " + since + ", which brought " + what + ". "
 }
 
 // placeholderFor names the placeholder to write for the builds of a

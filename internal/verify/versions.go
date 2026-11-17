@@ -30,6 +30,18 @@ var initializeSince = map[string]string{
 	"tenjin_plugin": "1.3.0",  // initialize(sdkKey:)
 }
 
+// initializeSinceFor is initializeSince for a declared package, whatever
+// form the declaration takes: TenjinSDK (CocoaPods), TenjinSDK (Swift
+// Package). "" for a package whose initializer never changed.
+func initializeSinceFor(pkg string) string {
+	for prefix, since := range initializeSince {
+		if strings.HasPrefix(pkg, prefix) {
+			return since
+		}
+	}
+	return ""
+}
+
 // The Play Services libraries the Android SDK reads identifiers through,
 // and the Play Billing library its automatic purchase tracking reads
 // purchases through: the version the SDK's own test apps use (it is built
