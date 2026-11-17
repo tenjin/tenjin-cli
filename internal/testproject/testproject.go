@@ -204,11 +204,23 @@ func PBXProj(targets ...PBXTarget) string {
 			objects.WriteString("\t\t" + n + config + " /* " + config + " */ = {\n\t\t\tisa = XCBuildConfiguration;\n\t\t\tbuildSettings = {\n" + settings + "\t\t\t};\n\t\t\tname = " + config + ";\n\t\t};\n")
 		}
 		objects.WriteString("\t\t" + n + "List /* Build configuration list for PBXNativeTarget \"" + t.Name + "\" */ = {\n\t\t\tisa = XCConfigurationList;\n\t\t\tbuildConfigurations = (\n\t\t\t\t" + n + "Debug /* Debug */,\n\t\t\t\t" + n + "Release /* Release */,\n\t\t\t);\n\t\t\tdefaultConfigurationName = Release;\n\t\t};\n")
-		objects.WriteString("\t\t" + n + "Target /* " + t.Name + " */ = {\n\t\t\tisa = PBXNativeTarget;\n\t\t\tbuildConfigurationList = " + n + "List;\n\t\t\tname = " + t.Name + ";\n\t\t\tproductName = " + t.Name + ";\n\t\t\tproductType = \"" + t.ProductType + "\";\n\t\t};\n")
+		objects.WriteString("\t\t" + n + "Target /* " + t.Name + " */ = {\n\t\t\tisa = PBXNativeTarget;\n\t\t\tbuildConfigurationList = " + n + "List;\n\t\t\tname = " + pbxString(t.Name) + ";\n\t\t\tproductName = " + pbxString(t.Name) + ";\n\t\t\tproductType = \"" + t.ProductType + "\";\n\t\t};\n")
 		ids.WriteString("\t\t\t\t" + n + "Target /* " + t.Name + " */,\n")
 	}
 	return "// !$*UTF8*$!\n{\n\tarchiveVersion = 1;\n\tobjectVersion = 56;\n\tobjects = {\n" + objects.String() +
 		"\t\tROOT /* Project object */ = {\n\t\t\tisa = PBXProject;\n\t\t\ttargets = (\n" + ids.String() + "\t\t\t);\n\t\t};\n\t};\n\trootObject = ROOT /* Project object */;\n}\n"
+}
+
+// pbxString writes a string as Xcode does: bare when it is one word, in
+// quotes when it holds a space or punctuation, as "Sample Watch App" does.
+func pbxString(s string) string {
+	bare := func(r rune) bool {
+		return r == '_' || r == '.' || r == '/' || r >= '0' && r <= '9' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z'
+	}
+	if strings.ContainsFunc(s, func(r rune) bool { return !bare(r) }) {
+		return `"` + s + `"`
+	}
+	return s
 }
 
 // IOSNative is a native iOS app using CocoaPods, with Tenjin integrated.

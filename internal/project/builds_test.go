@@ -311,6 +311,46 @@ func TestTheBundleIDIsTheAppTargets(t *testing.T) {
 	}
 }
 
+// A watch or macOS companion is an application too, in its target's product
+// type or in a project of its own, but it is not the iOS app.
+func TestACompanionAppIsNotTheIOSApp(t *testing.T) {
+	base := testproject.IOSNative()
+	const pbx = "Sample.xcodeproj/project.pbxproj"
+	application := "com.apple.product-type.application"
+	// Xcode's multiplatform layout: the companions are application targets
+	// built for their own platform.
+	pbxText := testproject.PBXProj(
+		testproject.PBXTarget{Name: "Sample (iOS)", ProductType: application, BundleID: "com.example.sample", InfoPlist: "Sample/Info.plist"},
+		testproject.PBXTarget{Name: "Sample (macOS)", ProductType: application, BundleID: "com.example.sample.mac"},
+		testproject.PBXTarget{Name: "Sample Watch App", ProductType: application, BundleID: "com.example.sample.watchkitapp"},
+	)
+	pbxText = strings.ReplaceAll(pbxText, "PRODUCT_BUNDLE_IDENTIFIER = com.example.sample.mac;", "PRODUCT_BUNDLE_IDENTIFIER = com.example.sample.mac;\n\t\t\t\tSDKROOT = macosx;")
+	pbxText = strings.ReplaceAll(pbxText, "PRODUCT_BUNDLE_IDENTIFIER = com.example.sample.watchkitapp;", "PRODUCT_BUNDLE_IDENTIFIER = com.example.sample.watchkitapp;\n\t\t\t\tSDKROOT = watchos;")
+	if strings.Count(pbxText, "SDKROOT") != 4 {
+		t.Fatal("the fixture's companions were not given their platforms")
+	}
+	p := detect(t, base.With(testproject.Files{pbx: pbxText}))
+	target := p.Target(project.IOS)
+	if target.BundleID != "com.example.sample" || len(target.OtherBundleIDs) != 0 || target.IOS.InfoPlist != "Sample/Info.plist" {
+		t.Errorf("bundle ID = %q, others = %q, Info.plist = %q", target.BundleID, target.OtherBundleIDs, target.IOS.InfoPlist)
+	}
+	if hasNote(p, "iOS app targets") {
+		t.Errorf("notes = %q", p.Notes)
+	}
+
+	// A companion in a project of its own, whose name sorts first: the
+	// project with the iOS app is still the one read.
+	p = detect(t, base.With(testproject.Files{
+		"Sample Watch.xcodeproj/project.pbxproj": testproject.PBXProj(
+			testproject.PBXTarget{Name: "Sample Watch", ProductType: "com.apple.product-type.application.watchapp2", BundleID: "com.example.sample.watchkitapp"},
+		),
+	}))
+	target = p.Target(project.IOS)
+	if target.IOS.Xcodeproj != "Sample.xcodeproj" || target.BundleID != "com.example.sample" || !hasNote(p, "Found 2 Xcode projects; using Sample.xcodeproj.") {
+		t.Errorf("project = %q, bundle ID = %q, notes = %q", target.IOS.Xcodeproj, target.BundleID, p.Notes)
+	}
+}
+
 // With several application modules, the one with Tenjin is the one checked.
 func TestTheModuleWithTenjinIsChosen(t *testing.T) {
 	base := testproject.AndroidNative()

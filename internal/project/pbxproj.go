@@ -2,6 +2,7 @@ package project
 
 import (
 	"errors"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -288,8 +289,40 @@ func (t xcodeTarget) configOrder() []string {
 	return dedupe(append(order, names...))
 }
 
-// iosApp reports whether a target builds an iOS app: an application that is
-// not built for macOS alone.
+// iosApp reports whether a target builds an iOS app: an application whose
+// product type is exactly that (a watch app's or an App Clip's extends it),
+// not built for another platform alone, as a macOS, watchOS, tvOS or
+// visionOS companion is.
 func (t xcodeTarget) iosApp() bool {
-	return t.productType == appProductType && t.setting("SDKROOT") != "macosx"
+	if t.productType != appProductType {
+		return false
+	}
+	switch t.setting("SDKROOT") {
+	case "macosx", "watchos", "appletvos", "xros":
+		return false
+	}
+	if platforms := t.setting("SUPPORTED_PLATFORMS"); platforms != "" && !strings.Contains(platforms, "iphoneos") {
+		return false
+	}
+	return true
+}
+
+// pbxAppProduct is an app target's product type written whole in a
+// project.pbxproj.
+var pbxAppProduct = regexp.MustCompile(`productType = "?` + regexp.QuoteMeta(appProductType) + `"?;`)
+
+// hasIOSApp reports whether a project.pbxproj has an iOS app target. Where
+// the file cannot be read as a project, a product type written whole stands
+// in for one; a watch app's, which extends it, does not.
+func hasIOSApp(pbx string) bool {
+	targets, err := xcodeTargets(pbx)
+	if err != nil {
+		return pbxAppProduct.MatchString(pbx)
+	}
+	for _, t := range targets {
+		if t.iosApp() {
+			return true
+		}
+	}
+	return false
 }
