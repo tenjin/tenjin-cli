@@ -73,6 +73,14 @@ jobs:
           if [ "$drafts" != 1 ]; then
             echo "Expected one draft release named $TAG, with that tag, and found $drafts. Release Please makes it when its pull request is merged."; exit 1
           fi
+          # GitHub makes a release the latest when it is published, whatever
+          # its version, and the install scripts and the update notice take
+          # the latest. A draft left behind by an abandoned release is
+          # withdrawn, as AGENTS.md says, never published after a newer one.
+          newest=$(jq -s -r '[add[] | select((.draft or .prerelease) | not) | .tag_name] | .[]' "$releases" | sort -V | tail -n 1)
+          if [ -n "$newest" ] && [ "$(printf '%s\n%s\n' "$newest" "$TAG" | sort -V | tail -n 1)" != "$TAG" ]; then
+            echo "$TAG is older than $newest, the latest release, and would replace it as the latest. An abandoned release is withdrawn, not published."; exit 1
+          fi
         env:
           TAG: ${{ inputs.tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
