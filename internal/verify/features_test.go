@@ -1,6 +1,8 @@
 package verify_test
 
 import (
+	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -79,6 +81,32 @@ func TestFeaturesSentFromVueComponents(t *testing.T) {
 	})
 	chosen := verify.Options{Features: []string{project.FeatureCustomEvents}}
 	if f := featureFinding(t, run(t, files, chosen), "feature.custom_events"); f == nil || f.Severity != verify.Pass || f.File != "src/views/Level.vue" || f.Line != 7 {
+		t.Fatalf("finding = %+v", f)
+	}
+}
+
+// The app gets the SDK through a package of its own, taken from a folder
+// beside the app, above its root: that package's code is the app's, for the
+// features as for the calls that start the SDK.
+func TestFeaturesSentFromALibraryAboveTheRoot(t *testing.T) {
+	flutter := testproject.Flutter()
+	files := testproject.Files{
+		"shared/pubspec.yaml":       "name: shared\nenvironment:\n  sdk: ^3.7.2\ndependencies:\n  tenjin_plugin: ^1.5.0\n",
+		"shared/lib/analytics.dart": "import 'package:tenjin_plugin/tenjin_sdk.dart';\n\nvoid level() {\n  TenjinSDK.instance.eventWithName('level');\n}\n",
+	}
+	for rel, content := range flutter {
+		files["app/"+rel] = content
+	}
+	files["app/pubspec.yaml"] = strings.Replace(flutter["pubspec.yaml"], "  tenjin_plugin: ^1.5.0\n", "  shared:\n    path: ../shared\n", 1)
+	p, err := project.Detect(filepath.Join(testproject.Write(t, files), "app"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.LibraryCode) != 1 || p.LibraryCode[0] != "../shared/lib" {
+		t.Fatalf("library code = %q", p.LibraryCode)
+	}
+	r := verify.Run(context.Background(), p, verify.Options{Features: []string{project.FeatureCustomEvents}})
+	if f := featureFinding(t, r, "feature.custom_events"); f == nil || f.Severity != verify.Pass || f.File != "../shared/lib/analytics.dart" || f.Line != 4 {
 		t.Fatalf("finding = %+v", f)
 	}
 }

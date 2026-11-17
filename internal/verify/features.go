@@ -116,12 +116,25 @@ type codeFile struct {
 	receivers []string
 }
 
+// tenjinCode reads the project's code, and that of the local libraries the
+// app gets the SDK through (project.LibraryCode, declared as dependencies
+// and possibly above the root), whose calls are the app's too.
 func (r *runner) tenjinCode() *tenjinCode {
 	if r.code != nil {
 		return r.code
 	}
 	r.code = &tenjinCode{}
-	for _, rel := range project.SourceFiles(r.p.Root, ".", featureSourceExts...) {
+	seen := map[string]bool{}
+	var files []string
+	for _, dir := range append([]string{"."}, r.p.LibraryCode...) {
+		for _, rel := range project.SourceFiles(r.p.Root, dir, featureSourceExts...) {
+			if !seen[rel] {
+				seen[rel] = true
+				files = append(files, rel)
+			}
+		}
+	}
+	for _, rel := range files {
 		if testSource(rel) || r.p.Framework == project.Unity && project.UnitySDKFile(rel) {
 			continue
 		}
