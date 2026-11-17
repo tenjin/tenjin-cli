@@ -176,6 +176,14 @@ func (e *environment) trackClient() *track.Client {
 	return c
 }
 
+// logf writes a line to the --verbose log, where there is one: what a
+// command passed over, and why.
+func (e *environment) logf(format string, a ...any) {
+	if e.verbose != nil {
+		_, _ = fmt.Fprintf(e.verbose, "tenjin: "+format+"\n", a...)
+	}
+}
+
 // runner is env.run, logged with --verbose.
 func (e *environment) runner() devicelog.Runner {
 	if e.verbose == nil {

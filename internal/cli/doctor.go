@@ -121,7 +121,7 @@ otherwise. With --strict, warnings count too.`,
 			if err != nil {
 				return err
 			}
-			if err := resolveGiven(&given, p, env.getenv); err != nil {
+			if err := resolveGiven(&given, p, env); err != nil {
 				return err
 			}
 			if err := narrowBuilds(p, builds); err != nil {

@@ -316,6 +316,37 @@ func TestSetupFillsAPlaceholderAnAgentLeft(t *testing.T) {
 	}
 }
 
+// A key exported in the shell for another project is not a mistake in this
+// one: a variable for a platform the project does not build for is left
+// unused, said only with --verbose. A flag for that platform is a mistake,
+// and the error names the flag, not a variable.
+func TestAnEnvironmentKeyForAPlatformTheProjectLacksIsNotUsed(t *testing.T) {
+	h := newHarness(t)
+	dir := testproject.Write(t, testproject.AndroidNative())
+	h.vars["TENJIN_SDK_KEY_IOS"] = "IOSKEYOFANOTHERPROJECT0123456789"
+	for _, args := range [][]string{{"doctor", dir, "--offline"}, {"setup", dir}, {"project", "set-keys", dir}} {
+		code, _, stderr := h.run(args...)
+		if code == 2 || strings.Contains(stderr, "does not build for iOS") {
+			t.Errorf("%v: exit = %d, stderr = %q", args, code, stderr)
+		}
+	}
+	_, _, stderr := h.run("doctor", dir, "--offline", "--verbose")
+	if !strings.Contains(stderr, "TENJIN_SDK_KEY_IOS is not used: this project does not build for iOS") {
+		t.Errorf("--verbose does not say the variable was passed over:\n%s", stderr)
+	}
+	if len(h.fake.keysAsked) != 0 {
+		t.Errorf("Tenjin was asked about %q", h.fake.keysAsked)
+	}
+
+	code, _, stderr := h.run("doctor", dir, "--sdk-key", "ios=IOSKEYOFANOTHERPROJECT0123456789")
+	if code != 2 || !strings.Contains(stderr, "--sdk-key ios=…: this project does not build for iOS") {
+		t.Errorf("flag: exit = %d, stderr = %q", code, stderr)
+	}
+	if strings.Contains(stderr, "TENJIN_SDK_KEY") {
+		t.Errorf("the error about a flag names a variable:\n%s", stderr)
+	}
+}
+
 // Something that cannot be a key is not sent to Tenjin to check.
 func TestPastedTextThatIsNotAKey(t *testing.T) {
 	h, dir := placeholderAndroid(t)

@@ -275,7 +275,7 @@ func (s *setup) steps() error {
 	if !p.Supported {
 		return clierr.New(clierr.NotFound, "%s", strings.Join(p.Notes, " "))
 	}
-	if err := resolveGiven(&s.given, p, s.env.getenv); err != nil {
+	if err := resolveGiven(&s.given, p, s.env); err != nil {
 		return err
 	}
 	if err := narrowBuilds(p, s.chosen); err != nil {

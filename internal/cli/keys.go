@@ -63,7 +63,7 @@ func givenKeys(flags []string, getenv func(string) string) (verify.GivenKeys, er
 	for _, value := range flags {
 		name, key, perBuild := strings.Cut(value, "=")
 		if !perBuild {
-			given.All = verify.GivenKey{Value: cleanKey(value), Source: "--sdk-key"}
+			given.All = verify.GivenKey{Value: cleanKey(value), Source: sdkKeyFlag}
 			continue
 		}
 		name = strings.TrimSpace(name)
@@ -77,16 +77,18 @@ func givenKeys(flags []string, getenv func(string) string) (verify.GivenKeys, er
 		if variant != "" {
 			id += ":" + variant
 		}
-		given.ByBuild[id] = verify.GivenKey{Value: cleanKey(key), Source: "--sdk-key"}
+		given.ByBuild[id] = verify.GivenKey{Value: cleanKey(key), Source: sdkKeyFlag}
 	}
 	return given, nil
 }
 
 // resolveGiven matches the keys given for builds to the project's builds,
 // and adds the environment variables of builds other than the main ones. A
-// key given for a build the project does not have is a usage error: it
-// would otherwise be ignored without a word.
-func resolveGiven(given *verify.GivenKeys, p *project.Project, getenv func(string) string) error {
+// key given with --sdk-key for a build the project does not have is a usage
+// error: it would otherwise be ignored without a word. One from the
+// environment is simply not used, and said so with --verbose: a variable
+// exported for another project is no mistake in this one.
+func resolveGiven(given *verify.GivenKeys, p *project.Project, env *environment) error {
 	known := map[string]string{}
 	var names []string
 	for _, b := range p.Builds() {
@@ -96,22 +98,31 @@ func resolveGiven(given *verify.GivenKeys, p *project.Project, getenv func(strin
 	resolved := map[string]verify.GivenKey{}
 	for id, key := range given.ByBuild {
 		canonical, ok := known[project.Shout(id)]
+		platform, main := project.Platform(id), !strings.Contains(id, ":")
+		var why, hint string
 		switch {
 		case ok:
 			resolved[canonical] = key
-		case !strings.Contains(id, ":") && buildsUnread(p, project.Platform(id)) && p.Target(project.Platform(id)) != nil:
+			continue
+		case main && buildsUnread(p, platform) && p.Target(platform) != nil:
 			resolved[id] = key // a platform's main build, unread
-		case !strings.Contains(id, ":") && p.Target(project.Platform(id)) != nil:
+			continue
+		case main && p.Target(platform) != nil:
 			// Several builds, none of them the main one: a key for each.
-			return clierr.New(clierr.Usage, "--sdk-key %s=…: this project's %s builds are separate apps in Tenjin, each with its own key", id, platformNames[project.Platform(id)]).
-				WithHint("Give one per build: %s.", strings.Join(names, ", "))
-		case !strings.Contains(id, ":"):
-			return clierr.New(clierr.Usage, "--sdk-key %s=…: this project does not build for %s", id, platformNames[project.Platform(id)]).
-				WithHint("Its builds: %s.", strings.Join(names, ", "))
+			why = fmt.Sprintf("this project's %s builds are separate apps in Tenjin, each with its own key", platformNames[platform])
+			hint = "Give one per build: " + strings.Join(names, ", ") + "."
+		case main:
+			why = "this project does not build for " + platformNames[platform]
+			hint = "Its builds: " + strings.Join(names, ", ") + "."
 		default:
-			return clierr.New(clierr.Usage, "--sdk-key %s=…: this project has no build %q", id, id).
-				WithHint("Its builds: %s.", strings.Join(names, ", "))
+			why = fmt.Sprintf("this project has no build %q", id)
+			hint = "Its builds: " + strings.Join(names, ", ") + "."
 		}
+		if key.Source != sdkKeyFlag {
+			env.logf("%s is not used: %s", key.Source, why)
+			continue
+		}
+		return clierr.New(clierr.Usage, "%s: %s", givenName(id, key), why).WithHint("%s", hint)
 	}
 	for _, b := range p.Builds() {
 		if b.Main() {
@@ -120,12 +131,24 @@ func resolveGiven(given *verify.GivenKeys, p *project.Project, getenv func(strin
 		if _, ok := resolved[b.ID]; ok {
 			continue
 		}
-		if key := getenv(verify.KeyVariable(b.ID)); key != "" {
+		if key := env.getenv(verify.KeyVariable(b.ID)); key != "" {
 			resolved[b.ID] = verify.GivenKey{Value: key, Source: verify.KeyVariable(b.ID)}
 		}
 	}
 	given.ByBuild = resolved
 	return nil
+}
+
+// sdkKeyFlag is the source of a key given with the flag.
+const sdkKeyFlag = "--sdk-key"
+
+// givenName names a key given for a build by where it came from, for an
+// error about it: the flag as it was written, or the variable.
+func givenName(id string, key verify.GivenKey) string {
+	if key.Source == sdkKeyFlag {
+		return sdkKeyFlag + " " + id + "=…"
+	}
+	return key.Source
 }
 
 // givenFor returns the key given for a build, by the rule the checks use
@@ -404,7 +427,7 @@ reads.`,
 			if err != nil {
 				return err
 			}
-			if err := resolveGiven(&given, p, env.getenv); err != nil {
+			if err := resolveGiven(&given, p, env); err != nil {
 				return err
 			}
 			out := cmd.OutOrStdout()
