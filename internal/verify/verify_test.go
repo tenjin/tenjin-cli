@@ -634,6 +634,27 @@ func TestAnUnfilledPlaceholderIsNamed(t *testing.T) {
 	}
 }
 
+// A placeholder for a platform the project does not build for names no
+// build, as the one for a build the project does not have does: the
+// platform's key is not waiting to be written.
+func TestAPlaceholderForAPlatformTheProjectLacks(t *testing.T) {
+	base := testproject.Flutter().Without("android/build.gradle.kts", "android/app/build.gradle.kts", "android/app/src/main/AndroidManifest.xml", "android/app/proguard-rules.pro")
+	const main = "lib/main.dart"
+	r := run(t, base.With(testproject.Files{
+		main: strings.Replace(base[main], "  TenjinSDK.instance.initialize(sdkKey: '"+testproject.Key+"');",
+			"  if (Platform.isIOS) {\n    TenjinSDK.instance.initialize(sdkKey: '__TENJIN_IOS_SDK_KEY__');\n  } else {\n    TenjinSDK.instance.initialize(sdkKey: '__TENJIN_ANDROID_SDK_KEY__');\n  }", 1),
+	}), verify.Options{})
+	if r.Project.Target(project.Android) != nil {
+		t.Fatal("the fixture still has an Android project")
+	}
+	if f := expect(t, r, "sdk.key.unfilled", project.IOS, verify.Error); !strings.HasPrefix(f.Title, "The iOS SDK key is still the placeholder") {
+		t.Errorf("iOS: %+v", f)
+	}
+	if f := expect(t, r, "sdk.key.unfilled", project.Android, verify.Error); f.Title != "The placeholder __TENJIN_ANDROID_SDK_KEY__ names no build of this project" || f.Line != 10 {
+		t.Errorf("Android: %+v", f)
+	}
+}
+
 // An iOS launch can only be checked from the device log when debug builds
 // turn the SDK's logs on, and release builds must not.
 func TestIOSDebugLogs(t *testing.T) {

@@ -429,10 +429,11 @@ func (r *runner) checkUnfilledKeys() {
 }
 
 // buildsUnread reports whether the platform's builds could not be read,
-// where its main placeholder still stands for its one key.
+// where its main placeholder still stands for its one key. A platform the
+// project does not build for has no key to stand for.
 func (r *runner) buildsUnread(platform project.Platform) bool {
 	t := r.p.Target(platform)
-	return t == nil || len(t.Builds) == 0
+	return t != nil && len(t.Builds) == 0
 }
 
 // placeholdersOf lists the platform's builds' placeholders, for a fix.
