@@ -105,7 +105,7 @@ func resolveGiven(given *verify.GivenKeys, p *project.Project, env *environment)
 		case ok:
 			resolved[canonical] = key
 			continue
-		case main && buildsUnread(p, platform) && p.Target(platform) != nil:
+		case main && buildsUnread(p, platform):
 			resolved[id] = key // a platform's main build, unread
 			continue
 		case main && p.Target(platform) != nil:
@@ -532,11 +532,13 @@ type placeholderBuild struct {
 	title  string
 }
 
-// buildsUnread reports whether the platform's builds could not be read, so
-// that its main placeholder and an unqualified key stand for its one app.
+// buildsUnread reports whether the project builds for the platform but its
+// builds could not be read, so that its main placeholder and an unqualified
+// key stand for its one app. A platform the project does not build for has
+// no build to stand for.
 func buildsUnread(p *project.Project, platform project.Platform) bool {
 	t := p.Target(platform)
-	return t == nil || len(t.Builds) == 0
+	return t != nil && len(t.Builds) == 0
 }
 
 // placeholderBuilds returns the builds whose placeholders are in the
@@ -563,7 +565,7 @@ func placeholderBuilds(p *project.Project, spots []keyfill.Spot) (found []placeh
 		matched[s.Placeholder] = true
 		// A platform's main placeholder in a project whose builds could not
 		// be read: its key can still be written. Where they were, it names
-		// none of them.
+		// none of them; nor does one for a platform the project lacks.
 		if s.Placeholder == keyfill.Placeholder(s.Platform) && buildsUnread(p, s.Platform) {
 			id := string(s.Platform)
 			b := project.Build{ID: id, TenjinPlatform: id, SDKKeyPlaceholder: s.Placeholder}

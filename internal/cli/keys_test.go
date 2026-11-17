@@ -374,6 +374,51 @@ func TestEnvironmentKeysAreCleanedLikeTheFlag(t *testing.T) {
 	}
 }
 
+// iosOnlyFlutterWithPlaceholders is a signed-in harness, with the iOS app,
+// and a Flutter project without android/ whose code holds a placeholder for
+// each platform, as a guide's sample does.
+func iosOnlyFlutterWithPlaceholders(t *testing.T) (*harness, string) {
+	t.Helper()
+	h := newHarness(t)
+	h.fake.addApp("Sample", "com.example.sample", "ios")
+	h.signIn()
+	base := testproject.Flutter()
+	main := strings.Replace(base["lib/main.dart"], "'"+testproject.Key+"'",
+		"Platform.isIOS ? '"+keyfill.Placeholder(project.IOS)+"' : '"+keyfill.Placeholder(project.Android)+"'", 1)
+	files := base.With(testproject.Files{"lib/main.dart": main})
+	for path := range base {
+		if strings.HasPrefix(path, "android/") {
+			files = files.Without(path)
+		}
+	}
+	return h, testproject.Write(t, files)
+}
+
+// A placeholder for a platform the project does not build for names no
+// build: no key is written over it, and none is asked for it. Only a
+// platform the project has, whose builds could not be read, has a build to
+// stand in for.
+func TestAPlaceholderForAPlatformWithoutATargetNamesNoBuild(t *testing.T) {
+	h, dir := iosOnlyFlutterWithPlaceholders(t)
+	code, stdout, _ := h.run("project", "set-keys", dir, "--sdk-key", goodKey)
+	source, _ := os.ReadFile(filepath.Join(dir, "lib/main.dart"))
+	if code != 2 || !strings.Contains(string(source), "'"+goodKey+"'") || !strings.Contains(string(source), keyfill.Placeholder(project.Android)) {
+		t.Errorf("exit = %d\n%s\n%s", code, stdout, source)
+	}
+	lacks(t, stdout, "✓ Wrote the iOS SDK key at lib/main.dart", keyfill.Placeholder(project.Android)+" names no build of this project")
+	if got := strings.Join(h.fake.keysAsked, ","); got != goodKey {
+		t.Errorf("keys checked = %q, want the iOS build's only", got)
+	}
+
+	// setup asks for the iOS key, and never for an Android one.
+	h, dir = iosOnlyFlutterWithPlaceholders(t)
+	_, stdout, _ = h.typing("", goodKey, "", "q").run("setup", dir)
+	lacks(t, stdout, "Paste the iOS SDK key")
+	if strings.Contains(stdout, "Paste the Android SDK key") || strings.Contains(stdout, "Android SDK key, for") {
+		t.Errorf("setup asked for a key of a platform the project does not build for:\n%s", stdout)
+	}
+}
+
 // Something that cannot be a key is not sent to Tenjin to check.
 func TestPastedTextThatIsNotAKey(t *testing.T) {
 	h, dir := placeholderAndroid(t)
