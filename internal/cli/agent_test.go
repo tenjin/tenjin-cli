@@ -230,7 +230,7 @@ func TestSetupIntegratesUsingTheAgent(t *testing.T) {
 		t.Errorf("the task or the key was passed as an argument: %q", args)
 	}
 	// The agent is confined to file edits and the doctor.
-	if !strings.Contains(args, "Bash(tenjin doctor *)") || !strings.Contains(args, "acceptEdits") {
+	if !strings.Contains(args, "Bash(tenjin doctor *)") || !strings.Contains(args, "dontAsk") {
 		t.Errorf("args = %q", args)
 	}
 	if !strings.HasPrefix(agent.read("path"), "/usr/local/bin:") {
@@ -713,7 +713,7 @@ func TestSetupAsksWhichAgentWhenThereAreTwo(t *testing.T) {
 			_, stdout, _ := h.typing("", tc.typed, "q").run("setup", dir)
 			for _, want := range []string{
 				"Claude Code and Codex are installed on this machine",
-				"1) Claude Code: it may edit files and run 'tenjin doctor'",
+				"1) Claude Code: it may edit files, run 'tenjin doctor'",
 				"2) Codex: it runs in Codex's sandbox",
 				"Either uses tokens from your own account and edits files in this project: commit or stash your work first",
 				"Integrate the Tenjin SDK using Claude Code (1), Codex (2), or neither (n)? [1]",

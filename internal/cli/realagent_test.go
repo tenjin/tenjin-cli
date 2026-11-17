@@ -162,7 +162,7 @@ func skillRun(t *testing.T, bin, claude string, served bool) {
 
 	cmd := exec.Command(claude,
 		"--print", "--output-format", "stream-json", "--verbose",
-		"--permission-mode", "acceptEdits",
+		"--permission-mode", "dontAsk",
 		"--tools", "Read,Edit,Write,Glob,Grep,Bash,Skill",
 		"--allowedTools", "Read,Edit,Write,Glob,Grep,Skill,Bash(tenjin *)",
 		"--strict-mcp-config", "--no-session-persistence",

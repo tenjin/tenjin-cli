@@ -69,9 +69,9 @@ where a placeholder stands for it. In step 5, if Claude Code or Codex is
 installed, setup offers to have it make the changes; with both, it asks
 which. The agent runs under your own account, in this project only, and
 setup checks its work afterwards. Claude Code may edit files in this
-project and run 'tenjin doctor' and 'tenjin sdk guide', and nothing else;
-it is started in its restricted mode, so the project's and your own Claude
-Code settings do not apply. Codex runs in its own sandbox: it can
+project, run 'tenjin doctor' and 'tenjin sdk guide', and read-only commands
+such as ls, and nothing else; it is started in its restricted mode, so the
+project's and your own Claude Code settings do not apply. Codex runs in its own sandbox: it can
 change files in this project only and has no network access, web search
 included. Decline, or pass --agent none, to do it by hand.
 

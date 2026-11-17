@@ -158,7 +158,10 @@ func (a Agent) ResumeCommand(sessionID string) string {
 const sessionName = "Tenjin SDK integration"
 
 // allowedTools lets Claude Code read and edit files, run the doctor and read
-// the SDK guide, and nothing else: no other shell command, no network.
+// the SDK guide. In print mode a call that needs approval is denied, and
+// dontAsk denies the file commands acceptEdits would wave through (rm, mv,
+// sed); the read-only commands Claude Code never asks about (ls, git status)
+// still run.
 const (
 	tools        = "Read,Edit,Write,Glob,Grep,Bash"
 	allowedTools = "Read,Edit,Write,Glob,Grep,Bash(tenjin doctor *),Bash(tenjin sdk guide *)"
@@ -166,7 +169,7 @@ const (
 
 var claude = driver{
 	id: "claude", name: "Claude Code", binary: "claude",
-	limits:     "it may edit files and run 'tenjin doctor' and 'tenjin sdk guide', and nothing else; it commits nothing",
+	limits:     "it may edit files, run 'tenjin doctor' and 'tenjin sdk guide', and read-only commands such as ls, and nothing else; it commits nothing",
 	doctor:     "tenjin doctor --json .",
 	ownSession: true,
 	args: func(_ Task, sessionID string, _ []string) []string {
@@ -178,7 +181,7 @@ var claude = driver{
 			// cannot bring hooks or permissions of its own, and it keeps the
 			// file tools inside the project.
 			"--restricted",
-			"--permission-mode", "acceptEdits",
+			"--permission-mode", "dontAsk",
 			"--tools", tools,
 			"--allowedTools", allowedTools,
 			// The developer's connectors have no part in this task; leaving
