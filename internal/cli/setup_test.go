@@ -1,11 +1,50 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/tenjin/tenjin-cli/internal/keyfill"
+	"github.com/tenjin/tenjin-cli/internal/project"
 	"github.com/tenjin/tenjin-cli/internal/testproject"
 )
+
+// unreadAndroidWithPlaceholder is an Android project whose applicationId is
+// a setting the CLI cannot resolve, so its bundle ID is not read and the
+// platform has no builds, with the key placeholder a coding agent left.
+func unreadAndroidWithPlaceholder() testproject.Files {
+	base := testproject.AndroidNative()
+	return base.With(testproject.Files{
+		"app/build.gradle.kts": strings.Replace(base["app/build.gradle.kts"], `applicationId = "com.example.sample"`, "applicationId = appId", 1),
+		androidActivity:        strings.Replace(base[androidActivity], testproject.Key, keyfill.Placeholder(project.Android), 1),
+	})
+}
+
+// A platform whose bundle ID could not be read has one app all the same, and
+// the key given for it goes where its placeholder is, as set-keys and doctor
+// write it: unchecked, for want of a bundle ID to check it against, and said
+// so. Step 4 settles it, and steps 5 and 6 find it written.
+func TestSetupWritesTheKeyGivenForAPlatformWhoseBundleIDIsUnread(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	dir := testproject.Write(t, unreadAndroidWithPlaceholder())
+
+	code, stdout, stderr := h.run("setup", dir, "--yes", "--agent", "none", "--sdk-key", "android="+goodKey)
+	source, _ := os.ReadFile(filepath.Join(dir, androidActivity))
+	if code != 0 || !strings.Contains(string(source), `"`+goodKey+`"`) {
+		t.Errorf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	lacks(t, stdout,
+		"Android: the bundle ID could not be read, so its app was not looked up.",
+		"! Android, key …GOOD from --sdk-key: not checked: the bundle ID could not be read",
+		"✓ Wrote the Android SDK key at "+androidActivity,
+	)
+	if strings.Contains(stdout, "still the placeholder") || strings.Contains(stdout, goodKey) {
+		t.Errorf("the placeholder was left, or the key printed:\n%s", stdout)
+	}
+}
 
 // unreal is an Unreal Engine project for Android, without the Tenjin plugin.
 // This version detects it and checks nothing in it.

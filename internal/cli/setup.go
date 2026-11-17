@@ -549,6 +549,10 @@ func (s *setup) sdkKeys(p *project.Project) error {
 	report := s.verify(p)
 	for i := range p.Targets {
 		t := &p.Targets[i]
+		if len(t.Builds) == 0 {
+			s.unreadKey(t)
+			continue
+		}
 		for _, b := range t.Builds {
 			if err := s.buildKey(t, b, report); err != nil {
 				return err
@@ -557,6 +561,22 @@ func (s *setup) sdkKeys(p *project.Project) error {
 	}
 	// A coding agent may have left placeholders in an earlier run.
 	return s.fillKeys(p, false)
+}
+
+// unreadKey settles the key of a platform whose builds could not be read,
+// which stands for its one app: the key given for it is taken as set-keys
+// and doctor take it, unchecked, since there is no bundle ID to check it
+// against, so that fillKeys writes it over the placeholder. With none given
+// there is nothing to settle; step 3 said the app was not looked up.
+func (s *setup) unreadKey(t *project.Target) {
+	b := unreadBuild(t.Platform)
+	given, ok, _ := givenFor(s.given, nil, b)
+	if !ok {
+		return
+	}
+	verdict := checkGivenKey(s.cmd.Context(), s.keyCheck(), given.Value, b, false)
+	s.asker().verdict(platformNames[t.Platform]+", key "+maskKey(given.Value)+" from "+given.Source, verdict)
+	s.keys[b.ID] = given
 }
 
 // buildKey settles one build's key.

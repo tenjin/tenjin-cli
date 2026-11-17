@@ -567,14 +567,20 @@ func placeholderBuilds(p *project.Project, spots []keyfill.Spot) (found []placeh
 		// be read: its key can still be written. Where they were, it names
 		// none of them; nor does one for a platform the project lacks.
 		if s.Placeholder == keyfill.Placeholder(s.Platform) && buildsUnread(p, s.Platform) {
-			id := string(s.Platform)
-			b := project.Build{ID: id, TenjinPlatform: id, SDKKeyPlaceholder: s.Placeholder}
-			found = append(found, placeholderBuild{build: b, title: platformNames[s.Platform]})
+			found = append(found, placeholderBuild{build: unreadBuild(s.Platform), title: platformNames[s.Platform]})
 			continue
 		}
 		unknown = append(unknown, s.Placeholder)
 	}
 	return found, unknown
+}
+
+// unreadBuild is the one app of a platform whose builds could not be read,
+// for its key: the platform's main placeholder, and no bundle ID to check a
+// key against.
+func unreadBuild(platform project.Platform) project.Build {
+	id := string(platform)
+	return project.Build{ID: id, TenjinPlatform: id, SDKKeyPlaceholder: keyfill.Placeholder(platform)}
 }
 
 // buildTitle names a build for people: "Android" for a target's only build,
