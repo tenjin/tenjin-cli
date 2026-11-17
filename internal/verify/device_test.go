@@ -252,13 +252,17 @@ func TestTheConnectThatCountsIsThisApps(t *testing.T) {
 	}
 }
 
-// unknownIDAndroid is AndroidNative with an applicationId that is not a
-// string, so the project's ID cannot be read.
+// unknownIDAndroid is AndroidNative with an applicationId and a namespace
+// that are variables, not strings, so the project's ID cannot be read from
+// either.
 func unknownIDAndroid() testproject.Files {
 	base := testproject.AndroidNative()
-	return base.With(testproject.Files{
-		"app/build.gradle.kts": strings.Replace(base["app/build.gradle.kts"], `applicationId = "com.example.sample"`, `applicationId = appId`, 1),
-	})
+	build := strings.Replace(base["app/build.gradle.kts"], `applicationId = "com.example.sample"`, `applicationId = appId`, 1)
+	build = strings.Replace(build, `namespace = "com.example.sample"`, `namespace = appId`, 1)
+	if !strings.Contains(build, "applicationId = appId") || !strings.Contains(build, "namespace = appId") {
+		panic("the Android fixture's build file changed shape")
+	}
+	return base.With(testproject.Files{"app/build.gradle.kts": build})
 }
 
 // When the project's application ID could not be read, no app on the device
