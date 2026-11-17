@@ -3,6 +3,7 @@ package verify_test
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -246,6 +247,98 @@ func TestTheConnectThatCountsIsThisApps(t *testing.T) {
 				t.Errorf("title = %q", f.Title)
 			}
 		})
+	}
+}
+
+// unknownIDAndroid is AndroidNative with an applicationId that is not a
+// string, so the project's ID cannot be read.
+func unknownIDAndroid() testproject.Files {
+	base := testproject.AndroidNative()
+	return base.With(testproject.Files{
+		"app/build.gradle.kts": strings.Replace(base["app/build.gradle.kts"], `applicationId = "com.example.sample"`, `applicationId = appId`, 1),
+	})
+}
+
+// When the project's application ID could not be read, no app on the device
+// can be told to be this one: another app's accepted connect, identifiers
+// and purchases do not pass as this app's, Tenjin is not asked about its
+// device, and the report says why.
+func TestADeviceLogIsNotThisAppsWhenTheProjectsIDIsUnknown(t *testing.T) {
+	other := strings.Replace(connectParams, "bundle_id=com.example.sample", "bundle_id=com.other.game", 1)
+	text := "10-02 15:07:34.121 " + deviceLog(connectURL, other, `{"code":200,"success":true}`) +
+		deviceLog("https://track.tenjin.com/v0/purchase", "event=purchase, bundle_id=com.other.game", `{"code":200}`)
+	log, err := devicelog.Parse(strings.NewReader(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lookup := &fakeLookup{known: map[string]bool{"install-1": true}}
+	r := run(t, unknownIDAndroid(), verify.Options{Device: &verify.DeviceInput{Log: log, Lookup: lookup, Platform: project.Android}})
+
+	f := expect(t, r, "device.connect", project.Android, verify.Info)
+	if f.Title != "The log shows a connect from com.other.game, but whether that is this project's app could not be told" ||
+		f.Detail != "The project's application ID could not be read, so the app cannot be told from other apps with the Tenjin SDK on this device. Tenjin answered 200. Sent at 10-02 15:07:34.121." ||
+		f.Fix != "Write applicationId as a string in app/build.gradle.kts, then run this again." {
+		t.Errorf("finding = %+v", f)
+	}
+	for _, id := range []string{"device.identifiers", "device.advertising_id", "device.requests", "device.processed", "device.processed.unchecked", "device.bundle_id"} {
+		if found := find(r, id, project.Android); found != nil {
+			t.Errorf("%s was reported for an app that may be another's: %+v", id, found)
+		}
+	}
+	if len(lookup.asked) != 0 {
+		t.Errorf("Tenjin was asked about a device that may be another app's: %q", lookup.asked)
+	}
+}
+
+// iosRequest is one request as the iOS SDK logs it with debug logs on, from
+// the process pid: the body names the key the app sends.
+func iosRequest(pid int, bundle, key, path, body, response string) string {
+	p := "Sample[" + strconv.Itoa(pid) + ":a1] [Tenjin] - "
+	return p + "LOG: Sending request - https://track.tenjin.com/v0/" + path + "\n" +
+		p + "DEBUG: request body bundle_id=" + bundle + "&platform=ios&api_key=" + key + "&" + body + "\n" +
+		p + "LOG: Got http response 200\n" +
+		p + "DEBUG: Response body " + response + "\n"
+}
+
+// The iOS SDK logs the key with each request. When the project's bundle ID
+// could not be read, the app whose key the project holds is this one, and
+// one sending another key cannot be told; neither is another app's for sure.
+func TestTheKeyTellsThisAppWhenTheProjectsBundleIDIsUnknown(t *testing.T) {
+	base := testproject.IOSNative()
+	files := base.With(testproject.Files{
+		"Sample.xcodeproj/project.pbxproj": testproject.PBXProj(testproject.PBXTarget{
+			Name: "Sample", ProductType: "com.apple.product-type.application", BundleID: `"$(APP_BUNDLE_ID)"`, InfoPlist: "Sample/Info.plist",
+		}),
+	})
+	ours := iosRequest(1, "com.example.shipped", testproject.Key, "event", "advertising_id=A1&developer_device_id=V1&tracking_status=3&analytics_installation_id=install-1", `{"code":200,"success":true}`)
+	theirs := iosRequest(2, "com.other.game", "OTHERKEY1234567890ABCDEFGHIJKLMNOP", "event", "advertising_id=A2&developer_device_id=V2&tracking_status=3&analytics_installation_id=install-2", `{"code":200,"success":true}`) +
+		iosRequest(2, "com.other.game", "OTHERKEY1234567890ABCDEFGHIJKLMNOP", "purchase", "event=purchase", `{"code":200}`)
+	check := func(text string) *verify.Report {
+		log, err := devicelog.Parse(strings.NewReader(text))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return run(t, files, verify.Options{Device: &verify.DeviceInput{Log: log, Platform: project.IOS}})
+	}
+
+	r := check(theirs)
+	f := expect(t, r, "device.connect", project.IOS, verify.Info)
+	if !strings.Contains(f.Title, "a connect from com.other.game, but whether that is this project's app could not be told") ||
+		!strings.Contains(f.Detail, "The project's bundle ID could not be read, so the app cannot be told from other apps with the Tenjin SDK on this device, and the connect carries a key the project does not hold (…MNOP).") ||
+		f.Fix != "Set PRODUCT_BUNDLE_IDENTIFIER to the bundle ID itself in Sample.xcodeproj, then run this again." {
+		t.Errorf("finding = %+v", f)
+	}
+	if find(r, "device.requests", project.IOS) != nil || find(r, "device.identifiers", project.IOS) != nil {
+		t.Errorf("another key's requests were reported as this app's: %s", ids(r))
+	}
+
+	r = check(theirs + ours)
+	expect(t, r, "device.connect", project.IOS, verify.Pass)
+	if f := expect(t, r, "device.identifiers", project.IOS, verify.Info); f.Detail != "IDFA A1, IDFV V1." {
+		t.Errorf("identifiers = %q", f.Detail)
+	}
+	if find(r, "device.requests", project.IOS) != nil || find(r, "device.bundle_id", project.IOS) != nil {
+		t.Errorf("the other key's purchase, or a bundle ID that could not be compared, was reported: %s", ids(r))
 	}
 }
 

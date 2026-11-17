@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/tenjin/tenjin-cli/internal/devicelog"
@@ -63,14 +64,17 @@ func (r *runner) checkDevice(t *project.Target, src source) {
 		return
 	}
 
-	connect, ours := lastConnectOf(d.Log, t)
+	isOurs := r.appMatcher(t, src)
+	connect, whose := lastConnectOf(d.Log, isOurs)
 	// A connect skipped under the 30-second rule after the last one sent
 	// is what the newest launch did.
 	if connect != nil && d.Log.DedupedLine > connect.Line {
 		connect = nil
 	}
 	switch {
-	case connect != nil && !ours:
+	case connect != nil && whose == unknownApp:
+		r.add(unknownAppFinding(connect, t))
+	case connect != nil && whose == otherApp:
 		r.add(Finding{
 			ID: "device.connect", Severity: Warning, Platform: platform,
 			Title:  "The log shows connects only from other apps (" + connect.Params["bundle_id"] + "), none from this project's",
@@ -119,29 +123,59 @@ func (r *runner) checkDevice(t *project.Target, src source) {
 			Fix:    "Check that connect() runs on every launch, then launch the app and run this again.",
 		})
 	}
-	r.checkOtherRequests(d.Log, t)
+	r.checkOtherRequests(d.Log, t, isOurs)
 }
 
-// lastConnectOf picks the newest connect from the target's own app: one of
-// its builds' IDs, or one of them with a suffix such as .debug, or a connect
-// that does not say (an iOS log without debug logs). ours is false when the
-// log has connects only from other apps, and the newest of them is returned.
-func lastConnectOf(log *devicelog.Log, t *project.Target) (connect *devicelog.Request, ours bool) {
-	isOurs := ownApp(t)
-	var other *devicelog.Request
+// lastConnectOf picks the newest connect from the target's own app, as
+// isOurs tells it. When the log has none, the newest connect is returned
+// with whose it is: another app's, or one that cannot be told.
+func lastConnectOf(log *devicelog.Log, isOurs func(*devicelog.Request) appMatch) (connect *devicelog.Request, whose appMatch) {
+	var newest *devicelog.Request
+	newestMatch := otherApp
 	for i := len(log.Requests) - 1; i >= 0; i-- {
 		c := &log.Requests[i]
 		if !c.IsConnect() {
 			continue
 		}
-		if isOurs(c.Params["bundle_id"]) {
-			return c, true
+		m := isOurs(c)
+		if m == thisApp {
+			return c, thisApp
 		}
-		if other == nil {
-			other = c
+		if newest == nil {
+			newest, newestMatch = c, m
 		}
 	}
-	return other, false
+	return newest, newestMatch
+}
+
+// unknownAppFinding says that a connect could be this project's app's or
+// another's: the project's ID could not be read, and the log names no key
+// of the project's. Nothing the request carries is reported as the app's.
+func unknownAppFinding(c *devicelog.Request, t *project.Target) Finding {
+	idName, fix := "application ID", "Write applicationId as a string in the app module's build file, then run this again."
+	if t.Android != nil {
+		fix = "Write applicationId as a string in " + t.Android.BuildFile + ", then run this again."
+	}
+	if t.Platform == project.IOS {
+		idName, fix = "bundle ID", "Set PRODUCT_BUNDLE_IDENTIFIER to the bundle ID itself in the Xcode project, then run this again."
+		if t.IOS != nil {
+			fix = "Set PRODUCT_BUNDLE_IDENTIFIER to the bundle ID itself in " + t.IOS.Xcodeproj + ", then run this again."
+		}
+	}
+	why := "The project's " + idName + " could not be read, so the app cannot be told from other apps with the Tenjin SDK on this device"
+	if key := c.Params["api_key"]; key != "" {
+		why += ", and the connect carries a key the project does not hold (" + mask(key) + ")"
+	}
+	detail := why + ". Tenjin answered " + strconv.Itoa(c.Code) + "."
+	if c.Time != "" {
+		detail += " Sent at " + c.Time + "."
+	}
+	return Finding{
+		ID: "device.connect", Severity: Info, Platform: t.Platform,
+		Title:  "The log shows a connect from " + c.Params["bundle_id"] + ", but whether that is this project's app could not be told",
+		Detail: detail,
+		Fix:    fix,
+	}
 }
 
 // connectFinding explains Tenjin's answer to the connect request.
@@ -208,7 +242,7 @@ func (r *runner) checkRunningBuild(t *project.Target, c *devicelog.Request) {
 		}
 		return id == t.BundleID
 	}
-	if running := c.Params["bundle_id"]; running != "" && t.BundleID != "" && !shipped(running) {
+	if running := c.Params["bundle_id"]; running != "" && project.Resolved(t.BundleID) && !shipped(running) {
 		f := Finding{
 			ID: "device.bundle_id", Severity: Warning, Platform: t.Platform,
 			Title:  "The build that ran is " + running + ", but the project's application ID is " + t.BundleID,
@@ -329,20 +363,7 @@ func (r *runner) checkProcessed(t *project.Target, src source, c *devicelog.Requ
 	if platform == "" {
 		platform = string(t.Platform)
 	}
-	var keys []keyLiteral
-	seen := map[string]bool{}
-	for _, b := range t.Builds {
-		candidates, _, _ := r.candidateKeys(t, src, b.ID, t.SeveralBuilds())
-		for _, k := range candidates {
-			if !seen[k.Value] {
-				seen[k.Value] = true
-				keys = append(keys, k)
-			}
-		}
-	}
-	if len(t.Builds) == 0 {
-		keys, _, _ = r.candidateKeys(t, src, string(t.Platform), false)
-	}
+	keys := r.deviceKeys(t, src)
 	unchecked := func(why string) {
 		r.add(Finding{
 			ID: "device.processed.unchecked", Severity: Info, Platform: t.Platform,
@@ -414,37 +435,99 @@ func requestPlatform(sent, store string) string {
 	return ""
 }
 
-// ownApp reports whether a request's bundle ID is the target's own app: one
-// of its builds' IDs, or one of them with a suffix such as .debug. A request
-// that does not say (an iOS log without debug logs) counts as the app's.
-func ownApp(t *project.Target) func(bundleID string) bool {
-	ids := []string{t.BundleID}
+// deviceKeys are the SDK keys the project holds for the target's builds,
+// each once: what Tenjin is asked about the device with, and what tells the
+// app's requests on a device when its ID cannot.
+func (r *runner) deviceKeys(t *project.Target, src source) []keyLiteral {
+	var keys []keyLiteral
+	seen := map[string]bool{}
+	for _, b := range t.Builds {
+		candidates, _, _ := r.candidateKeys(t, src, b.ID, t.SeveralBuilds())
+		for _, k := range candidates {
+			if !seen[k.Value] {
+				seen[k.Value] = true
+				keys = append(keys, k)
+			}
+		}
+	}
+	if len(t.Builds) == 0 {
+		keys, _, _ = r.candidateKeys(t, src, string(t.Platform), false)
+	}
+	return keys
+}
+
+// appMatch is whose a request on a device is.
+type appMatch int
+
+const (
+	// otherApp: another app on the device with the Tenjin SDK.
+	otherApp appMatch = iota
+	// thisApp: the target's own app.
+	thisApp
+	// unknownApp: it cannot be told, so it never passes as the app's.
+	unknownApp
+)
+
+// appMatcher tells the target's own requests from other apps' on the same
+// device. A request is the app's when its bundle ID is one of the target's
+// builds' IDs, or one of them with a suffix such as .debug, and another
+// app's otherwise. When the project's ID could not be read, no request can
+// be told by its ID: one that carries the SDK key, as the iOS SDK logs with
+// debug logs on, is the app's if the key is one the project holds, and any
+// other cannot be told. A request that names no app (an iOS log without
+// debug logs) counts as the app's.
+func (r *runner) appMatcher(t *project.Target, src source) func(*devicelog.Request) appMatch {
+	var ids []string
+	for _, id := range append([]string{t.BundleID}, buildIDs(t)...) {
+		if project.Resolved(id) {
+			ids = append(ids, id)
+		}
+	}
+	keys := map[string]bool{}
+	if len(ids) == 0 {
+		for _, k := range r.deviceKeys(t, src) {
+			keys[k.Value] = true
+		}
+	}
+	return func(req *devicelog.Request) appMatch {
+		running := req.Params["bundle_id"]
+		if running == "" {
+			return thisApp
+		}
+		if len(ids) == 0 {
+			if key := req.Params["api_key"]; key != "" && keys[key] {
+				return thisApp
+			}
+			return unknownApp
+		}
+		for _, id := range ids {
+			if running == id || strings.HasPrefix(running, id+".") {
+				return thisApp
+			}
+		}
+		return otherApp
+	}
+}
+
+// buildIDs are the bundle IDs of the target's builds.
+func buildIDs(t *project.Target) []string {
+	var ids []string
 	for _, b := range t.Builds {
 		ids = append(ids, b.BundleID)
 	}
-	return func(running string) bool {
-		if running == "" {
-			return true
-		}
-		for _, id := range ids {
-			if id != "" && (running == id || strings.HasPrefix(running, id+".")) {
-				return true
-			}
-		}
-		return t.BundleID == ""
-	}
+	return ids
 }
 
 // checkOtherRequests summarises everything the app sent besides connect.
 // Other apps on the device with the Tenjin SDK log the same lines; theirs
-// are left out.
-func (r *runner) checkOtherRequests(log *devicelog.Log, t *project.Target) {
+// are left out, and so are requests that cannot be told to be the app's.
+func (r *runner) checkOtherRequests(log *devicelog.Log, t *project.Target, isOurs func(*devicelog.Request) appMatch) {
 	platform := t.Platform
-	isOurs := ownApp(t)
 	accepted := map[string]int{}
 	var refused []string
-	for _, req := range log.Requests {
-		if req.IsConnect() || !isOurs(req.Params["bundle_id"]) {
+	for i := range log.Requests {
+		req := &log.Requests[i]
+		if req.IsConnect() || isOurs(req) != thisApp {
 			continue
 		}
 		if req.Accepted() {
