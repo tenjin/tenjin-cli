@@ -49,14 +49,15 @@ var keyPlatforms = []struct {
 
 // givenKeys reads the SDK keys passed with --sdk-key and in the environment.
 // A flag wins over the variable for the same build. Keys for builds other
-// than a platform's main one are matched to the project in resolveGiven.
+// than a platform's main one are matched to the project in resolveGiven. A
+// key from either is cleaned of what comes along when it is copied.
 func givenKeys(flags []string, getenv func(string) string) (verify.GivenKeys, error) {
 	given := verify.GivenKeys{ByBuild: map[string]verify.GivenKey{}}
-	if key := getenv("TENJIN_SDK_KEY"); key != "" {
+	if key := cleanKey(getenv("TENJIN_SDK_KEY")); key != "" {
 		given.All = verify.GivenKey{Value: key, Source: "TENJIN_SDK_KEY"}
 	}
 	for _, p := range keyPlatforms {
-		if key := getenv(p.env); key != "" {
+		if key := cleanKey(getenv(p.env)); key != "" {
 			given.ByBuild[string(p.platform)] = verify.GivenKey{Value: key, Source: p.env}
 		}
 	}
@@ -131,7 +132,7 @@ func resolveGiven(given *verify.GivenKeys, p *project.Project, env *environment)
 		if _, ok := resolved[b.ID]; ok {
 			continue
 		}
-		if key := env.getenv(verify.KeyVariable(b.ID)); key != "" {
+		if key := cleanKey(env.getenv(verify.KeyVariable(b.ID))); key != "" {
 			resolved[b.ID] = verify.GivenKey{Value: key, Source: verify.KeyVariable(b.ID)}
 		}
 	}

@@ -347,6 +347,33 @@ func TestAnEnvironmentKeyForAPlatformTheProjectLacksIsNotUsed(t *testing.T) {
 	}
 }
 
+// A key exported with the newline or the quotes that came along when it was
+// copied is cleaned as one passed with the flag is: what is written in the
+// source is the key alone.
+func TestEnvironmentKeysAreCleanedLikeTheFlag(t *testing.T) {
+	for _, variable := range []string{"TENJIN_SDK_KEY", "TENJIN_SDK_KEY_ANDROID"} {
+		t.Run(variable, func(t *testing.T) {
+			h, dir := agentPlaceholderAndroid(t)
+			h.vars[variable] = " \"" + goodKey + "\"\n"
+			code, stdout, stderr := h.run("project", "set-keys", dir, "--offline")
+			source, _ := os.ReadFile(filepath.Join(dir, androidActivity))
+			if code != 0 || !strings.Contains(string(source), `"`+goodKey+`"`) {
+				t.Errorf("exit = %d, stderr = %q\n%s\n%s", code, stderr, stdout, source)
+			}
+		})
+	}
+	// The variable of a build other than the main one is read later, once
+	// the project's builds are known; it is cleaned the same way.
+	h, dir := multiStore(t, placeholderStores())
+	h.vars["TENJIN_SDK_KEY_ANDROID"] = testproject.PlayKey
+	h.vars["TENJIN_SDK_KEY_ANDROID_AMAZON"] = testproject.AmazonKey + "\n"
+	code, stdout, stderr := h.run("project", "set-keys", dir, "--offline")
+	source, _ := os.ReadFile(filepath.Join(dir, flavorBuild))
+	if code != 0 || !strings.Contains(string(source), `"\"`+testproject.AmazonKey+`\""`) {
+		t.Errorf("exit = %d, stderr = %q\n%s\n%s", code, stderr, stdout, source)
+	}
+}
+
 // Something that cannot be a key is not sent to Tenjin to check.
 func TestPastedTextThatIsNotAKey(t *testing.T) {
 	h, dir := placeholderAndroid(t)
