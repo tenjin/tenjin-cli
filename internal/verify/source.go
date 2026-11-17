@@ -1,0 +1,497 @@
+package verify
+
+import (
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"github.com/tenjin/tenjin-cli/internal/keyfill"
+	"github.com/tenjin/tenjin-cli/internal/project"
+)
+
+// frameworkSpec says how the SDK is used in one kind of project: where the
+// source lives and what the calls look like.
+type frameworkSpec struct {
+	exts       []string
+	sourceDirs func(t *project.Target) []string
+	packages   []string // prefixes of project.Integration.Package this spec covers
+	// installFix says how to add the SDK; sdkVersionToken in it stands for
+	// the newest release (installFix).
+	installFix  string
+	initName    string
+	connectName string
+	// initCall matches any initialisation call. keyLiteral matches one whose
+	// key is a string literal, capturing the key.
+	initCall   *regexp.Regexp
+	keyLiteral *regexp.Regexp
+	// deprecatedInit, when set, matches an initialiser the SDK has replaced.
+	deprecatedInit *regexp.Regexp
+	deprecatedFix  string
+	connectCall    *regexp.Regexp
+	initFix        string
+	connectFix     string
+	// normalize rewrites the project's own names for the SDK's receiver to
+	// the canonical one (receivers.go). Nil leaves the text as it is.
+	normalize func(text string) string
+	// bundlesPlayServices is true when the wrapper already ships the Play
+	// Services libraries the native Android SDK needs.
+	bundlesPlayServices bool
+	// attCall matches a request for App Tracking Transparency permission.
+	// attPackages are npm packages that provide one, for wrappers whose SDK
+	// has no ATT API of its own.
+	attCall *regexp.Regexp
+	// debugLogsCall matches the call that turns the SDK's request logs on,
+	// which a launch check reads, and debugLogsName names it. debugLogsFix
+	// says how to add it, where a launch check needs it; debugOnlyFix, how
+	// to keep it out of release builds.
+	debugLogsCall *regexp.Regexp
+	debugLogsName string
+	debugLogsFix  string
+	debugOnlyFix  string
+	attPackages   []string
+	// skip lists folders inside the source folders that are the SDK's own
+	// code, and so say nothing about the app's use of it.
+	skip []string
+}
+
+// skips reports whether a file is in one of the spec's skipped folders.
+func (s frameworkSpec) skips(rel string) bool {
+	for _, prefix := range s.skip {
+		if strings.HasPrefix(rel, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func (s frameworkSpec) ownsPackage(pkg string) bool {
+	for _, prefix := range s.packages {
+		if strings.HasPrefix(pkg, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+var nativeSpecs = map[project.Platform]frameworkSpec{
+	project.Android: {
+		exts: []string{".kt", ".java"},
+		// The app module's code, and that of the modules it depends on.
+		sourceDirs: func(t *project.Target) []string {
+			dirs := []string{t.Android.ModuleDir + "/src"}
+			for _, m := range t.Android.LibraryModules {
+				dirs = append(dirs, m+"/src")
+			}
+			return dirs
+		},
+		packages:    []string{"com.tenjin:android-sdk", "tenjin.aar", "tenjin.jar"},
+		installFix:  `Add implementation("com.tenjin:android-sdk:` + sdkVersionToken + `") to the app module's dependencies, and make sure mavenCentral() is a repository.`,
+		initName:    "TenjinSDK.getInstance(context, key)",
+		connectName: "connect()",
+		// getInstance has variants that take an app subversion or a
+		// shared secret as well; the key is the second argument of each. The
+		// context before it may be a call of its own: getApplicationContext().
+		initCall:   regexp.MustCompile(`TenjinSDK\.getInstance(?:WithAppSubversion|WithSharedSecret|WithSharedSecretAppSubversion)?\(`),
+		keyLiteral: regexp.MustCompile(`TenjinSDK\.getInstance(?:WithAppSubversion|WithSharedSecret|WithSharedSecretAppSubversion)?\(\s*(?:[^,()]|\([^()]*\))+,\s*"([^"]*)"`),
+		// On a Tenjin receiver only, after normalizeAndroid: a media
+		// browser's or a socket's connect() is not Tenjin's.
+		connectCall: regexp.MustCompile(`TenjinSDK\.connect\(`),
+		normalize:   normalizeAndroid,
+		initFix:     `In the launcher Activity's onResume(), call TenjinSDK.getInstance(this, "<SDK_KEY>").connect().`,
+		connectFix:  "Call connect() on the TenjinSDK instance in the launcher Activity's onResume(), on every launch.",
+	},
+	project.IOS: {
+		exts: []string{".swift", ".m", ".mm"},
+		sourceDirs: func(t *project.Target) []string {
+			return []string{filepath.ToSlash(filepath.Dir(t.IOS.Xcodeproj))}
+		},
+		packages:    []string{"TenjinSDK"},
+		installFix:  `Add pod 'TenjinSDK' to the app target in the Podfile and run pod install, or add the Swift package https://github.com/tenjin/tenjin-ios-spm.`,
+		initName:    "TenjinSDK.getInstance(key)",
+		connectName: "TenjinSDK.connect()",
+		// sharedInstanceWithToken: initialises and connects in one; the SDK
+		// marks it, and init:, deprecated.
+		initCall:       regexp.MustCompile(`TenjinSDK\.(?:getInstance|initialize)\(|\[TenjinSDK (?:getInstance|initialize|init|sharedInstanceWithToken):|TenjinSDK\.sharedInstance\(withToken:`),
+		keyLiteral:     regexp.MustCompile(`TenjinSDK\.(?:getInstance|initialize)\(\s*"([^"]*)"|\[TenjinSDK (?:getInstance|initialize|init|sharedInstanceWithToken):\s*@"([^"]*)"|TenjinSDK\.sharedInstance\(withToken:\s*"([^"]*)"`),
+		deprecatedInit: regexp.MustCompile(`\[TenjinSDK (?:init|sharedInstanceWithToken):|TenjinSDK\.sharedInstance\(withToken:`),
+		deprecatedFix:  "Replace it with TenjinSDK.initialize(\"<SDK_KEY>\") ([TenjinSDK initialize:@\"<SDK_KEY>\"] in Objective-C), then call TenjinSDK.connect() after the tracking prompt.",
+		connectCall:    regexp.MustCompile(`TenjinSDK\.connect\(|\[TenjinSDK connect|connectWithDeferredDeeplink|\[TenjinSDK sharedInstanceWithToken:|TenjinSDK\.sharedInstance\(withToken:`),
+		initFix:        `At launch, call TenjinSDK.getInstance("<SDK_KEY>") (Swift) or [TenjinSDK initialize:@"<SDK_KEY>"] (Objective-C).`,
+		connectFix:     "Call TenjinSDK.connect() on every launch, after the user has answered the tracking prompt.",
+		attCall:        regexp.MustCompile(`requestTrackingAuthorization`),
+		debugLogsCall:  regexp.MustCompile(`TenjinSDK\.debugLogs\(|\[TenjinSDK debugLogs\]`),
+		debugLogsName:  "TenjinSDK.debugLogs()",
+		debugOnlyFix:   "Put the call inside #if DEBUG … #endif (Swift) or #ifdef DEBUG … #endif (Objective-C).",
+		debugLogsFix:   "Before TenjinSDK.getInstance, add TenjinSDK.debugLogs() inside #if DEBUG … #endif (Swift), or [TenjinSDK debugLogs] inside #ifdef DEBUG … #endif (Objective-C), so that debug builds log what Tenjin answered and release builds stay quiet.",
+	},
+}
+
+var wrapperSpecs = map[project.Framework]frameworkSpec{
+	project.Flutter: {
+		exts:                []string{".dart"},
+		sourceDirs:          func(*project.Target) []string { return []string{"lib"} },
+		packages:            []string{"tenjin_plugin"},
+		installFix:          "Run flutter pub add tenjin_plugin.",
+		initName:            "TenjinSDK.instance.initialize(sdkKey: ...)",
+		connectName:         "TenjinSDK.instance.connect()",
+		initCall:            regexp.MustCompile(`TenjinSDK\.instance\.(?:initialize|init)\(`),
+		keyLiteral:          regexp.MustCompile(`TenjinSDK\.instance\.(?:initialize\(\s*sdkKey|init\(\s*apiKey)\s*:\s*['"]([^'"]*)['"]`),
+		deprecatedInit:      regexp.MustCompile(`TenjinSDK\.instance\.init\(`),
+		deprecatedFix:       "Replace TenjinSDK.instance.init(apiKey: ...) with TenjinSDK.instance.initialize(sdkKey: ...).",
+		connectCall:         regexp.MustCompile(`TenjinSDK\.instance\.connect\(`),
+		normalize:           normalizeFlutter,
+		initFix:             `At startup, call TenjinSDK.instance.initialize(sdkKey: "<SDK_KEY>"), choosing the key by platform.`,
+		connectFix:          "Call TenjinSDK.instance.connect() on every launch, after the tracking prompt on iOS.",
+		bundlesPlayServices: true,
+		attCall:             regexp.MustCompile(`requestTrackingAuthorization`),
+	},
+	project.ReactNative: {
+		exts:        []string{".js", ".jsx", ".ts", ".tsx"},
+		sourceDirs:  func(*project.Target) []string { return []string{"."} },
+		packages:    []string{"react-native-tenjin"},
+		installFix:  "Install react-native-tenjin with your package manager, then run pod install in ios/.",
+		initName:    "Tenjin.initialize(key)",
+		connectName: "Tenjin.connect()",
+		initCall:    regexp.MustCompile(`Tenjin\.initialize\(`),
+		keyLiteral:  regexp.MustCompile(`Tenjin\.initialize\(\s*['"]([^'"]*)['"]`),
+		connectCall: regexp.MustCompile(`Tenjin\.connect\(`),
+		normalize:   normalizeReactNative,
+		initFix:     `At startup, call Tenjin.initialize("<SDK_KEY>"), choosing the key with Platform.OS.`,
+		connectFix:  "Call Tenjin.connect() on every launch, after the tracking prompt on iOS.",
+		attPackages: []string{"react-native-tracking-transparency", "expo-tracking-transparency"},
+	},
+	project.Capacitor: {
+		exts:        []string{".ts", ".tsx", ".js", ".jsx", ".vue"},
+		sourceDirs:  func(*project.Target) []string { return []string{"src"} },
+		packages:    []string{"ionic-capacitor-tenjin"},
+		installFix:  "Run npm install ionic-capacitor-tenjin, then npx cap sync.",
+		initName:    "Tenjin.initialize({ sdkKey })",
+		connectName: "Tenjin.connect()",
+		initCall:    regexp.MustCompile(`Tenjin\.initialize\(`),
+		keyLiteral:  regexp.MustCompile(`Tenjin\.initialize\(\s*\{\s*sdkKey\s*:\s*['"]([^'"]*)['"]`),
+		connectCall: regexp.MustCompile(`Tenjin\.connect\(`),
+		normalize:   normalizeCapacitor,
+		initFix:     `After the platform is ready, call await Tenjin.initialize({ sdkKey: "<SDK_KEY>" }), choosing the key by platform.`,
+		connectFix:  "Call await Tenjin.connect() on every launch, after the tracking prompt on iOS.",
+		attPackages: []string{"capacitor-plugin-app-tracking-transparency", "@capacitor-community/app-tracking-transparency"},
+	},
+}
+
+// call is one place in the source where the SDK is used.
+type call struct {
+	File string
+	Line int
+	// At is the call's offset in Text.
+	At int
+	// Text is the source file's whole content, for checks that look at what
+	// surrounds the call.
+	Text string
+}
+
+// source is what scanning the project's code found.
+type source struct {
+	inits      []call
+	deprecated []call
+	connects   []call
+	att        []call
+	debugLogs  []call
+	// componentDebugLogs are Unity TenjinObject components with Debug Logs
+	// ticked.
+	componentDebugLogs []call
+	// keys are the SDK keys written as string literals, in order of first
+	// appearance, each with where it was found.
+	keys []keyLiteral
+}
+
+type keyLiteral struct {
+	Value string
+	File  string
+	Line  int
+	// Platform is the one platform whose builds send the key, where the
+	// code chooses it by platform (Unity's #if UNITY_IOS); "" for every
+	// build's.
+	Platform project.Platform
+}
+
+const maxSourceFileSize = 2 << 20
+
+// scanSource reads the project's source files and records every SDK call.
+func (r *runner) scanSource(spec frameworkSpec, dirs []string) source {
+	var src source
+	seen := map[string]bool{}
+	for _, dir := range dirs {
+		for _, rel := range project.SourceFiles(r.p.Root, dir, spec.exts...) {
+			if seen[rel] || spec.skips(rel) || testSource(rel) {
+				continue
+			}
+			seen[rel] = true
+			path := filepath.Join(r.p.Root, filepath.FromSlash(rel))
+			if info, err := os.Stat(path); err != nil || info.Size() > maxSourceFileSize {
+				continue
+			}
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				continue
+			}
+			text := blankComments(project.Text(raw))
+			// Cheap filter: most files never mention the SDK. One that
+			// imports it under another name still names its package:
+			// import sdk from 'react-native-tenjin'.
+			if !strings.Contains(text, "Tenjin") && !strings.Contains(text, "tenjin") {
+				continue
+			}
+			if spec.normalize != nil {
+				text = spec.normalize(text)
+			}
+			// Calls are found where strings are blanked, at the same
+			// offsets: println("tenjin.connect()") is no call. Keys are
+			// read from the text, where the strings are.
+			code := project.BlankStrings(text, filepath.Ext(rel))
+			calls := func(re *regexp.Regexp) []call {
+				var found []call
+				for _, loc := range re.FindAllStringIndex(code, -1) {
+					found = append(found, call{File: rel, Line: lineAt(text, loc[0]), At: loc[0], Text: text})
+				}
+				return found
+			}
+			src.inits = append(src.inits, calls(spec.initCall)...)
+			if spec.deprecatedInit != nil {
+				src.deprecated = append(src.deprecated, calls(spec.deprecatedInit)...)
+			}
+			src.connects = append(src.connects, calls(spec.connectCall)...)
+			if spec.attCall != nil {
+				src.att = append(src.att, calls(spec.attCall)...)
+			}
+			if spec.debugLogsCall != nil {
+				src.debugLogs = append(src.debugLogs, calls(spec.debugLogsCall)...)
+			}
+			for _, m := range spec.keyLiteral.FindAllStringSubmatchIndex(text, -1) {
+				if code[m[0]] != text[m[0]] {
+					continue
+				}
+				// Some patterns have one capture group per syntax; take
+				// whichever matched.
+				for g := 2; g+1 < len(m); g += 2 {
+					if m[g] >= 0 {
+						src.keys = append(src.keys, keyLiteral{Value: text[m[g]:m[g+1]], File: rel, Line: lineAt(text, m[0])})
+						break
+					}
+				}
+			}
+		}
+	}
+	return src
+}
+
+// checkCalls reports whether the SDK is initialised and connected.
+func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Platform) {
+	// The SDK may come with a published library whose code is not in the
+	// project: if so, its calls may be made in there, out of sight.
+	if lib := r.publishedLibrary(spec); lib != "" && (len(src.inits) == 0 || len(src.connects) == 0) {
+		r.add(Finding{
+			ID: "sdk.init", Severity: Info, Platform: platform,
+			Title:  "The SDK comes with " + lib + ", whose code is not in the project, so whether it initializes and connects was not checked",
+			Detail: "If the library calls " + spec.initName + " and " + spec.connectName + " itself, nothing is missing here; if it leaves them to the app, they are.",
+			Fix:    "Check the library's instructions; if the app is to make the calls, " + strings.ToLower(spec.connectFix[:1]) + spec.connectFix[1:],
+		})
+		return
+	}
+	if len(src.inits) == 0 {
+		r.add(Finding{
+			ID: "sdk.init", Severity: Error, Platform: platform,
+			Title:  "The SDK is never initialized",
+			Detail: "No call to " + spec.initName + " was found.",
+			Fix:    r.updateFirst(spec, "the initializer this fix names") + spec.initFix,
+		})
+	} else {
+		r.pass("sdk.init", platform, "The SDK is initialized", src.inits[0].File, src.inits[0].Line)
+	}
+	deprecatedFix := r.updateFirst(spec, "the replacement") + spec.deprecatedFix
+	for _, c := range src.deprecated {
+		r.add(Finding{
+			ID: "sdk.init.deprecated", Severity: Warning, Platform: platform,
+			Title: "A deprecated initializer is used",
+			File:  c.File, Line: c.Line, Fix: deprecatedFix,
+		})
+	}
+
+	if len(src.connects) == 0 {
+		r.add(Finding{
+			ID: "sdk.connect", Severity: Error, Platform: platform,
+			Title:  spec.connectName + " is never called",
+			Detail: "Without it no install or session reaches Tenjin.",
+			Fix:    spec.connectFix,
+		})
+	} else if allDebugOnly(src.connects) {
+		c := src.connects[0]
+		r.add(Finding{
+			ID: "sdk.connect", Severity: Error, Platform: platform,
+			Title:  spec.connectName + " is called only in debug builds",
+			Detail: "Every call is inside #if DEBUG, so release builds, the ones people install, never connect.",
+			File:   c.File, Line: c.Line,
+			Fix: "Move " + spec.connectName + " out of the #if DEBUG block, so that every build calls it.",
+		})
+	} else {
+		r.pass("sdk.connect", platform, spec.connectName+" is called", src.connects[0].File, src.connects[0].Line)
+	}
+
+	for _, k := range src.keys {
+		// A key the code chooses by platform is that platform's.
+		at := platform
+		if k.Platform != "" {
+			at = k.Platform
+		}
+		switch {
+		case strayWhitespace(k.Value):
+			r.add(Finding{
+				ID: "sdk.key.whitespace", Severity: Error, Platform: at,
+				Title:  "The SDK key " + mask(strings.Join(strings.Fields(k.Value), "")) + " has spaces in it",
+				Detail: "The string holds the key with spaces, tabs or line breaks around or inside it. The SDK sends it as written, and Tenjin refuses it.",
+				File:   k.File, Line: k.Line,
+				Fix: "Remove the spaces from the key's string, so that it holds the key alone.",
+			})
+		case strings.TrimSpace(k.Value) == "":
+			r.add(Finding{
+				ID: "sdk.key.placeholder", Severity: Error, Platform: at,
+				Title:  "The SDK key is empty",
+				Detail: "The SDK is given an empty string where its key belongs.",
+				File:   k.File, Line: k.Line,
+				Fix: "Write " + r.placeholderFor(at) + " in the empty string. Then 'tenjin setup' (press Enter at its check), or 'tenjin project set-keys' in your own terminal, gets the app's key from Tenjin, checks it, and writes it there.",
+			})
+		case isPlaceholder(k.Value) && !keyfill.IsPlaceholder(k.Value):
+			r.add(Finding{
+				ID: "sdk.key.placeholder", Severity: Error, Platform: at,
+				Title:  "The SDK key is still a placeholder",
+				Detail: "Found " + shown(k.Value) + " where the key should be.",
+				File:   k.File, Line: k.Line,
+				Fix: "Replace " + shown(k.Value) + " with " + r.placeholderFor(at) + ". Then 'tenjin setup' (press Enter at its check), or 'tenjin project set-keys' in your own terminal, gets the app's key from Tenjin, checks it, and writes it there.",
+			})
+		}
+	}
+}
+
+// updateFirst goes before a fix that names the initializer the SDK brought
+// in initializeSince (frameworkSpec.initFix and deprecatedFix), where the
+// SDK declared is older than that: the fix does not compile until it is
+// updated. what is the fix's word for the initializer. "" where the SDK has
+// it, or its version is not declared.
+func (r *runner) updateFirst(spec frameworkSpec, what string) string {
+	i := r.integration(spec)
+	if i == nil {
+		return ""
+	}
+	since := initializeSinceFor(i.Package)
+	if since == "" || !olderThan(i.Version, since) {
+		return ""
+	}
+	return "First update " + i.Package + " to " + latestVersion(i.Package, r.opts.Latest) + ": " + i.Version + " is older than " + since + ", which brought " + what + ". "
+}
+
+// placeholderFor names the placeholder to write for the builds of a
+// platform, or of every platform for "": the build's own when there is one,
+// otherwise each build's with the build it is for.
+func (r *runner) placeholderFor(platform project.Platform) string {
+	type choice struct{ placeholder, label string }
+	var choices []choice
+	for _, t := range r.p.Targets {
+		if platform != "" && t.Platform != platform {
+			continue
+		}
+		if len(t.Builds) == 0 {
+			choices = append(choices, choice{keyfill.Placeholder(t.Platform), platformName(t.Platform)})
+			continue
+		}
+		for _, b := range t.Builds {
+			label := platformName(t.Platform)
+			if t.SeveralBuilds() {
+				label = buildLabel(b)
+			}
+			choices = append(choices, choice{b.SDKKeyPlaceholder, label})
+		}
+	}
+	switch len(choices) {
+	case 0:
+		return keyfill.Placeholder(project.Android) + " (Android) or " + keyfill.Placeholder(project.IOS) + " (iOS), for the platform it is for"
+	case 1:
+		return choices[0].placeholder
+	}
+	var list []string
+	for _, c := range choices {
+		list = append(list, c.placeholder+" for "+c.label)
+	}
+	return "the placeholder of the build it is for (" + strings.Join(list, ", ") + ")"
+}
+
+// strayWhitespace reports whether a key literal is a real key with
+// whitespace around or inside it, which no placeholder looks like.
+func strayWhitespace(key string) bool {
+	joined := strings.Join(strings.Fields(key), "")
+	return joined != key && wholeKey.MatchString(joined) && !isPlaceholder(joined)
+}
+
+// keyLikeRun is a run of characters long enough to be most of a key.
+var keyLikeRun = regexp.MustCompile(`[A-Za-z0-9]{16,}`)
+
+// shown is a literal from where a key belongs, quoted for a finding, or
+// masked when it holds what could be a key: a key is never printed whole.
+func shown(literal string) string {
+	if keyLikeRun.MatchString(literal) {
+		return quote(mask(strings.TrimSpace(literal)))
+	}
+	return quote(literal)
+}
+
+var placeholderKey = regexp.MustCompile(`(?i)^$|[<>{}\s]|your|sdk[_-]?key|api[_-]?key|placeholder|xxxx|changeme|todo`)
+
+// wholeKey is what a real SDK key looks like: a long run of capitals and
+// digits.
+var wholeKey = regexp.MustCompile(`^[A-Z0-9]{24,64}$`)
+
+// LooksLikeKey reports whether s has the shape of an SDK key.
+func LooksLikeKey(s string) bool { return wholeKey.MatchString(s) }
+
+// isPlaceholder reports whether a key literal is obviously not a real key.
+// Real keys are long runs of letters and digits; one of those is a key even
+// when it happens to contain "TODO" or "XXXX", unless it is one character
+// over and over.
+func isPlaceholder(key string) bool {
+	if wholeKey.MatchString(key) {
+		return strings.Count(key, key[:1]) == len(key)
+	}
+	return placeholderKey.MatchString(key)
+}
+
+func quote(s string) string { return `"` + s + `"` }
+
+// blankComments removes comments while keeping every newline, so line
+// numbers still match the file.
+func blankComments(s string) string { return project.BlankComments(s) }
+
+// lineAt returns the 1-based line number of a byte offset.
+func lineAt(text string, offset int) int {
+	return strings.Count(text[:offset], "\n") + 1
+}
+
+// allDebugOnly reports whether every one of the calls is compiled into debug
+// builds only.
+func allDebugOnly(calls []call) bool {
+	for _, c := range calls {
+		if !debugOnly(c) {
+			return false
+		}
+	}
+	return len(calls) > 0
+}
+
+// publishedLibrary names the published library the SDK comes with, when the
+// app does not declare it itself and the library's code is not in the
+// project; "" otherwise.
+func (r *runner) publishedLibrary(spec frameworkSpec) string {
+	for _, i := range r.p.Tenjin {
+		if spec.ownsPackage(i.Package) && i.Through != "" && !i.Local {
+			return i.Through
+		}
+	}
+	return ""
+}

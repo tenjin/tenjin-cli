@@ -1,0 +1,323 @@
+package verify_test
+
+import (
+	"context"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/tenjin/tenjin-cli/internal/project"
+	"github.com/tenjin/tenjin-cli/internal/testproject"
+	"github.com/tenjin/tenjin-cli/internal/verify"
+)
+
+const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+
+// withMAX is the Android sample with AppLovin MAX among its dependencies,
+// and the activity's onResume body replaced by body.
+func withMAX(body string) testproject.Files {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	return base.With(testproject.Files{
+		build:    strings.Replace(base[build], "dependencies {", "dependencies {\n    implementation(\"com.applovin:applovin-sdk:13.0.1\")", 1),
+		activity: strings.Replace(base[activity], "        tenjin.connect()\n", "        tenjin.connect()\n"+body, 1),
+	})
+}
+
+func featureFinding(t *testing.T, r *verify.Report, id string) *verify.Finding {
+	t.Helper()
+	for i := range r.Findings {
+		if r.Findings[i].ID == id {
+			return &r.Findings[i]
+		}
+	}
+	return nil
+}
+
+func TestAdRevenueFromADetectedNetwork(t *testing.T) {
+	// Not chosen: a suggestion.
+	r := run(t, withMAX(""), verify.Options{})
+	f := featureFinding(t, r, "feature.ad_revenue")
+	if f == nil || f.Severity != verify.Info || !strings.Contains(f.Title, "Ad revenue from AppLovin MAX: could be sent to Tenjin") || !strings.Contains(f.Fix, "tenjin sdk guide android") {
+		t.Fatalf("finding = %+v", f)
+	}
+	// Chosen: a warning.
+	r = run(t, withMAX(""), verify.Options{Features: []string{project.FeatureOpens, project.FeatureAdRevenue}})
+	if f := featureFinding(t, r, "feature.ad_revenue"); f == nil || f.Severity != verify.Warning || !strings.Contains(f.Title, "chosen for the integration") {
+		t.Fatalf("finding = %+v", f)
+	}
+	// Sent: a pass, wherever the call is.
+	r = run(t, withMAX("        tenjin.eventAdImpressionAppLovin(ad)\n"), verify.Options{Features: []string{project.FeatureAdRevenue}})
+	if f := featureFinding(t, r, "feature.ad_revenue"); f == nil || f.Severity != verify.Pass || f.File != activity {
+		t.Fatalf("finding = %+v", f)
+	}
+}
+
+// Capacitor copies the built web app into the native projects on each sync.
+// That copy is output, maybe older than the source, and says nothing.
+func TestCapacitorsWebCopyIsNotSource(t *testing.T) {
+	const call = "import { Tenjin } from 'ionic-capacitor-tenjin';\nawait Tenjin.eventWithName({ name: 'level' });\n"
+	files := testproject.Files{
+		"package.json":          `{"dependencies": {"@capacitor/core": "6.0.0", "ionic-capacitor-tenjin": "2.2.0"}}`,
+		"capacitor.config.json": `{"appId": "com.example.sample"}`,
+		"src/main.ts":           "import { Tenjin } from 'ionic-capacitor-tenjin';\nawait Tenjin.initialize({ sdkKey: '" + testproject.Key + "' });\nawait Tenjin.connect();\n",
+		"android/app/src/main/assets/public/main.js": call,
+		"ios/App/App/public/main.js":                 call,
+	}
+	chosen := verify.Options{Features: []string{project.FeatureCustomEvents}}
+	if f := featureFinding(t, run(t, files, chosen), "feature.custom_events"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("a call only in the web copy passed: %+v", f)
+	}
+	files["src/events.ts"] = call
+	if f := featureFinding(t, run(t, files, chosen), "feature.custom_events"); f == nil || f.Severity != verify.Pass || f.File != "src/events.ts" {
+		t.Fatalf("finding = %+v", f)
+	}
+}
+
+// An Ionic Vue app sends its events from .vue components.
+func TestFeaturesSentFromVueComponents(t *testing.T) {
+	files := testproject.Capacitor().With(testproject.Files{
+		"src/views/Level.vue": "<template>\n  <ion-page />\n</template>\n\n<script setup lang=\"ts\">\nimport { Tenjin } from 'ionic-capacitor-tenjin';\nawait Tenjin.eventWithName({ name: 'level' });\n</script>\n",
+	})
+	chosen := verify.Options{Features: []string{project.FeatureCustomEvents}}
+	if f := featureFinding(t, run(t, files, chosen), "feature.custom_events"); f == nil || f.Severity != verify.Pass || f.File != "src/views/Level.vue" || f.Line != 7 {
+		t.Fatalf("finding = %+v", f)
+	}
+}
+
+// The app gets the SDK through a package of its own, taken from a folder
+// beside the app, above its root: that package's code is the app's, for the
+// features as for the calls that start the SDK.
+func TestFeaturesSentFromALibraryAboveTheRoot(t *testing.T) {
+	flutter := testproject.Flutter()
+	files := testproject.Files{
+		"shared/pubspec.yaml":       "name: shared\nenvironment:\n  sdk: ^3.7.2\ndependencies:\n  tenjin_plugin: ^1.5.0\n",
+		"shared/lib/analytics.dart": "import 'package:tenjin_plugin/tenjin_sdk.dart';\n\nvoid level() {\n  TenjinSDK.instance.eventWithName('level');\n}\n",
+	}
+	for rel, content := range flutter {
+		files["app/"+rel] = content
+	}
+	files["app/pubspec.yaml"] = strings.Replace(flutter["pubspec.yaml"], "  tenjin_plugin: ^1.5.0\n", "  shared:\n    path: ../shared\n", 1)
+	p, err := project.Detect(filepath.Join(testproject.Write(t, files), "app"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.LibraryCode) != 1 || p.LibraryCode[0] != "../shared/lib" {
+		t.Fatalf("library code = %q", p.LibraryCode)
+	}
+	r := verify.Run(context.Background(), p, verify.Options{Features: []string{project.FeatureCustomEvents}})
+	if f := featureFinding(t, r, "feature.custom_events"); f == nil || f.Severity != verify.Pass || f.File != "../shared/lib/analytics.dart" || f.Line != 4 {
+		t.Fatalf("finding = %+v", f)
+	}
+}
+
+// The SDK's own code, and the Xcode and Gradle projects Unity exports into
+// the project, call every method of the SDK: none of it is the app's.
+func TestUnityExportsAndTheSDKsOwnCodeAreNotTheApps(t *testing.T) {
+	const bridge = "#import \"TenjinSDK.h\"\nvoid iosTenjinSendEvent(const char* name) {\n    [TenjinSDK sendEventWithName:[NSString stringWithUTF8String:name]];\n}\n"
+	files := testproject.Unity().With(testproject.Files{
+		"Builds/iOS/Unity-iPhone.xcodeproj/project.pbxproj":                       "// !$*UTF8*$!\n",
+		"Builds/iOS/Libraries/com.tenjin.sdk/Plugins/iOS/TenjinUnityInterface.mm": bridge,
+		"Builds/Android/unityLibrary/src/main/java/com/example/TenjinBridge.java": "import com.tenjin.android.TenjinSDK;\nclass TenjinBridge { void send(TenjinSDK tenjin, String name) { tenjin.eventWithName(name); } }\n",
+		"Packages/com.tenjin.sdk/Runtime/IosTenjin.cs":                            "public class IosTenjin : BaseTenjin {\n    public override void SendEvent(string eventName) { Tenjin.SendEvent(eventName); }\n}\n",
+		"Assets/Tenjin/Scripts/AndroidTenjin.cs":                                  "public class AndroidTenjin : BaseTenjin {\n    public override void SendEvent(string eventName) { Tenjin.SendEvent(eventName); }\n}\n",
+		"Assets/Plugins/iOS/TenjinUnityInterface.mm":                              bridge,
+	})
+	chosen := verify.Options{Features: []string{project.FeatureCustomEvents}}
+	if f := featureFinding(t, run(t, files, chosen), "feature.custom_events"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("the SDK's own calls passed for the app's: %+v", f)
+	}
+	files["Assets/Scripts/Events.cs"] = "public class Events {\n    void Level() { BaseTenjin instance = Tenjin.getInstance(\"" + testproject.Key + "\"); instance.SendEvent(\"level\"); }\n}\n"
+	if f := featureFinding(t, run(t, files, chosen), "feature.custom_events"); f == nil || f.Severity != verify.Pass || f.File != "Assets/Scripts/Events.cs" {
+		t.Fatalf("finding = %+v", f)
+	}
+}
+
+// A generic name counts only on a Tenjin receiver.
+func TestAPurchaseIsATenjinCall(t *testing.T) {
+	chosen := verify.Options{Features: []string{project.FeaturePurchases}}
+	r := run(t, withMAX("        db.transaction(a, b, c, d)\n"), chosen)
+	if f := featureFinding(t, r, "feature.purchases"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("a database transaction passed for a purchase: %+v", f)
+	}
+	r = run(t, withMAX("        tenjin.transaction(\"pro\", \"USD\", 1, 9.99)\n"), chosen)
+	if f := featureFinding(t, r, "feature.purchases"); f == nil || f.Severity != verify.Pass {
+		t.Fatalf("finding = %+v", f)
+	}
+}
+
+func TestFeatureCallsAcrossSDKs(t *testing.T) {
+	ios := testproject.IOSNative()
+	const delegate = "Sample/AppDelegate.swift"
+	r := run(t, ios.With(testproject.Files{
+		"Sample/Store.m": "#import <TenjinSDK/TenjinSDK.h>\n\nvoid bought(id t, id r) {\n    [TenjinSDK transaction:t andReceipt:r];\n}\n",
+		delegate:         strings.Replace(ios[delegate], "TenjinSDK.connect()", "TenjinSDK.connect()\n            TenjinSDK.updatePostbackConversionValue(1)", 1),
+	}), verify.Options{Features: []string{project.FeaturePurchases, project.FeatureSKAN}})
+	for _, id := range []string{"feature.purchases", "feature.skan"} {
+		if f := featureFinding(t, r, id); f == nil || f.Severity != verify.Pass {
+			t.Errorf("%s = %+v", id, f)
+		}
+	}
+
+	unity := testproject.Unity()
+	var script string
+	for path, content := range unity {
+		if strings.HasSuffix(path, ".cs") && strings.Contains(content, "Tenjin.getInstance") {
+			script = path
+		}
+	}
+	if script == "" {
+		t.Fatal("the Unity fixture has no script that starts Tenjin")
+	}
+	r = run(t, unity.With(testproject.Files{
+		script: strings.Replace(unity[script], "instance.Connect();", "instance.Connect();\n        instance.Transaction(\"pro\", \"USD\", 1, 9.99, null, null, null);", 1),
+	}), verify.Options{Features: []string{project.FeaturePurchases}})
+	if f := featureFinding(t, r, "feature.purchases"); f == nil || f.Severity != verify.Pass {
+		t.Errorf("unity purchases = %+v", f)
+	}
+}
+
+// handleOpenURL is also UIKit's: application:handleOpenURL: is the app
+// delegate method that receives a URL. Only the call on Tenjin's receiver
+// passes the URL to Tenjin.
+func TestADeepLinkHandlerCountsOnTheTenjinReceiverOnly(t *testing.T) {
+	ios := testproject.IOSNative()
+	const delegate = "Sample/AppDelegate.m"
+	chosen := verify.Options{Features: []string{project.FeatureDeepLinks}}
+	uikit := "#import <TenjinSDK/TenjinSDK.h>\n@implementation AppDelegate\n- (BOOL)application:(UIApplication *)application handleOpenURL:(NSURL *)url {\n    return YES;\n}\n@end\n"
+	if f := featureFinding(t, run(t, ios.With(testproject.Files{delegate: uikit}), chosen), "feature.deep_links"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("UIKit's delegate method passed for Tenjin's call: %+v", f)
+	}
+	tenjin := strings.Replace(uikit, "    return YES;", "    [TenjinSDK handleOpenURL:url];\n    return YES;", 1)
+	if f := featureFinding(t, run(t, ios.With(testproject.Files{delegate: tenjin}), chosen), "feature.deep_links"); f == nil || f.Severity != verify.Pass || f.Line != 4 {
+		t.Fatalf("finding = %+v", f)
+	}
+	swift := ios.With(testproject.Files{"Sample/Links.swift": "import TenjinSDK\nfunc opened(_ url: URL) {\n    TenjinSDK.handleOpenURL(url)\n}\n"})
+	if f := featureFinding(t, run(t, swift, chosen), "feature.deep_links"); f == nil || f.Severity != verify.Pass {
+		t.Fatalf("finding = %+v", f)
+	}
+}
+
+// A feature nothing suggests and nobody chose is not mentioned.
+func TestUnchosenFeaturesTheProjectDoesNotSuggest(t *testing.T) {
+	r := run(t, testproject.AndroidNative(), verify.Options{})
+	for _, f := range r.Findings {
+		if strings.HasPrefix(f.ID, "feature.") {
+			t.Errorf("finding = %+v", f)
+		}
+	}
+	r = run(t, testproject.AndroidNative(), verify.Options{Features: []string{project.FeatureCustomEvents}})
+	if f := featureFinding(t, r, "feature.custom_events"); f == nil || f.Severity != verify.Warning || f.Detail != "" {
+		t.Errorf("finding = %+v", f)
+	}
+}
+
+// Android's other ways of starting the SDK are initialisation too.
+func TestGetInstanceVariantsInitialise(t *testing.T) {
+	base := testproject.AndroidNative()
+	r := run(t, base.With(testproject.Files{
+		activity: strings.Replace(base[activity], "TenjinSDK.getInstance(this, ", "TenjinSDK.getInstanceWithSharedSecret(this, ", 1),
+	}), verify.Options{})
+	if f := featureFinding(t, r, "sdk.init"); f == nil || f.Severity != verify.Pass {
+		t.Errorf("sdk.init = %+v", f)
+	}
+}
+
+// Calls that only the SDKs' sources name, not the guides, count too.
+func TestCallsFromTheSDKSources(t *testing.T) {
+	ios := testproject.IOSNative()
+	const base = "Sample/Ads.m"
+	r := run(t, ios.With(testproject.Files{
+		"Podfile": strings.Replace(ios["Podfile"], "pod 'TenjinSDK'", "pod 'TenjinSDK'\n  pod 'Google-Mobile-Ads-SDK'", 1),
+		base:      "#import <TenjinSDK/TenjinSDK.h>\n\nvoid paid(id view, id value) {\n    [TenjinSDK handleAdMobILRD:view :value];\n}\n",
+	}), verify.Options{Features: []string{project.FeatureAdRevenue}})
+	if f := featureFinding(t, r, "feature.ad_revenue"); f == nil || f.Severity != verify.Pass {
+		t.Errorf("ad revenue = %+v", f)
+	}
+}
+
+// Automatic purchase tracking on Android needs Play Billing at runtime.
+func TestAutoTrackingNeedsPlayBilling(t *testing.T) {
+	base := testproject.AndroidNative()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	files := base.With(testproject.Files{activity: strings.Replace(base[activity], "        tenjin.connect()\n", "        tenjin.enableAutoPurchaseTracking()\n        tenjin.connect()\n", 1)})
+	r := run(t, files, verify.Options{Features: []string{project.FeaturePurchases}})
+	if f := expect(t, r, "feature.auto_tracking.billing", project.Android, verify.Warning); !strings.Contains(f.Fix, "billing:9.0.0") {
+		t.Errorf("fix = %q", f.Fix)
+	}
+}
+
+// A test that calls the SDK says nothing about the app.
+func TestATestsCallsAreNotTheApps(t *testing.T) {
+	files := testproject.AndroidNative().With(testproject.Files{
+		"app/src/test/java/com/example/sample/IdCheck.kt": "package com.example.sample\nimport com.tenjin.android.TenjinSDK\nclass IdCheck { fun run(tenjin: TenjinSDK) { tenjin.setCustomerUserId(\"u\") } }\n",
+	})
+	chosen := verify.Options{Features: []string{project.FeatureUserID}}
+	if f := featureFinding(t, run(t, files, chosen), "feature.user_id"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("a test's call passed for the app's: %+v", f)
+	}
+}
+
+// Kotlin sets the customer user ID as a property, from the Android SDK's
+// getter and setter.
+func TestTheUserIDSetAsAKotlinProperty(t *testing.T) {
+	base := testproject.AndroidNative()
+	files := base.With(testproject.Files{activity: strings.Replace(base[activity], "        tenjin.connect()\n", "        tenjin.connect()\n        tenjin.customerUserId = \"u\"\n", 1)})
+	chosen := verify.Options{Features: []string{project.FeatureUserID}}
+	if f := featureFinding(t, run(t, files, chosen), "feature.user_id"); f == nil || f.Severity != verify.Pass {
+		t.Fatalf("finding = %+v", f)
+	}
+	// A comparison is not a setting.
+	files = base.With(testproject.Files{activity: strings.Replace(base[activity], "        tenjin.connect()\n", "        tenjin.connect()\n        if (tenjin.customerUserId == null) return\n", 1)})
+	if f := featureFinding(t, run(t, files, chosen), "feature.user_id"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("a comparison passed: %+v", f)
+	}
+}
+
+// Without the Tenjin SDK as a dependency, a call of the same name is
+// another library's: it sends nothing to Tenjin.
+func TestNoFeatureIsSentWithoutTheSDK(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	files := base.With(testproject.Files{
+		build:    strings.Replace(base[build], `implementation("com.tenjin:android-sdk:2.0.0")`, "", 1),
+		activity: strings.Replace(base[activity], "        tenjin.connect()\n", "        tenjin.connect()\n        tenjin.eventWithName(\"level\")\n", 1),
+	})
+	chosen := verify.Options{Features: []string{project.FeatureCustomEvents}}
+	r := run(t, files, chosen)
+	if featureFinding(t, r, "sdk.dependency") == nil {
+		t.Fatal("the fixture still declares the SDK")
+	}
+	if f := featureFinding(t, r, "feature.custom_events"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("a call passed without the SDK: %+v", f)
+	}
+}
+
+// Another SDK's setCustomerUserId, in a file that mentions Tenjin, passes
+// nothing to Tenjin: called on its getInstance(), or on a variable named
+// instance that the file sets from it.
+func TestAnotherSDKsUserIDIsNotTenjins(t *testing.T) {
+	const login = "app/src/main/java/com/example/sample/Login.kt"
+	cases := []struct {
+		name, body string
+		want       verify.Severity
+	}{
+		{"on another SDK's getInstance()", "    AppsFlyerLib.getInstance().setCustomerUserId(user.id)\n", verify.Warning},
+		{"on another SDK's instance", "    val instance = AppsFlyerLib.getInstance()\n    instance.setCustomerUserId(user.id)\n", verify.Warning},
+		{"on Tenjin's getInstance()", "    TenjinSDK.getInstance(context, \"\").setCustomerUserId(user.id)\n", verify.Pass},
+		{"on Tenjin's instance", "    val instance = TenjinSDK.getInstance(context, \"\")\n    instance.setCustomerUserId(user.id)\n", verify.Pass},
+	}
+	for _, c := range cases {
+		files := testproject.AndroidNative().With(testproject.Files{
+			login: "package com.example.sample\n\nimport android.content.Context\nimport com.appsflyer.AppsFlyerLib\nimport com.tenjin.android.TenjinSDK\n\nfun login(context: Context, user: User) {\n" + c.body + "}\n",
+		})
+		for _, opts := range []verify.Options{
+			{Features: []string{project.FeatureUserID}},
+			{Features: []string{project.FeatureUserID}, UserID: "user.id"},
+		} {
+			if f := featureFinding(t, run(t, files, opts), "feature.user_id"); f == nil || f.Severity != c.want {
+				t.Errorf("%s, user ID %q: %+v", c.name, opts.UserID, f)
+			}
+		}
+	}
+}

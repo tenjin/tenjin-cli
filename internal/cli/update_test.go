@@ -1,0 +1,186 @@
+package cli
+
+import (
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/tenjin/tenjin-cli/internal/testproject"
+	"github.com/tenjin/tenjin-cli/internal/update"
+)
+
+// withRelease makes the harness a person at a terminal running 0.1.0, with
+// latest out on the releases page.
+func withRelease(t *testing.T, h *harness, latest string) {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/releases/tag/"+latest, http.StatusFound)
+	}))
+	t.Cleanup(srv.Close)
+	h.env.updates = &update.Checker{
+		Current:  "0.1.0",
+		Releases: srv.URL + "/releases",
+		State:    filepath.Join(t.TempDir(), "update-check.json"),
+	}
+}
+
+func TestANewerReleaseIsMentionedAfterTheCommand(t *testing.T) {
+	h := newHarness(t)
+	withRelease(t, h, "v0.2.0")
+	dir := testproject.Write(t, testproject.AndroidNative())
+
+	code, stdout, stderr := h.run("project", "detect", dir)
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, stderr)
+	}
+	if strings.Contains(stdout, "new version") {
+		t.Errorf("the notice is in stdout:\n%s", stdout)
+	}
+	for _, want := range []string{
+		"A new version of the Tenjin CLI is available: 0.1.0 → 0.2.0",
+		// The harness's binary is /usr/local/bin/tenjin: the install script's
+		// place, so its command, for this OS.
+		"Update with: " + update.Command("/usr/local/bin/tenjin", runtime.GOOS, h.env.getenv),
+		"/releases/tag/v0.2.0",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, stderr)
+		}
+	}
+
+	// Once a day is enough.
+	_, _, stderr = h.run("project", "detect", dir)
+	if strings.Contains(stderr, "new version") {
+		t.Errorf("told twice:\n%s", stderr)
+	}
+}
+
+// A copy installed from the Homebrew cask is told of a version once the
+// tap's cask names it, which is when brew upgrade can install it, and only
+// then; and it is told to update with brew.
+func TestAHomebrewCopyIsToldOnceTheCaskHasIt(t *testing.T) {
+	h := newHarness(t)
+	withRelease(t, h, "v0.2.0")
+	h.env.executable = func() (string, error) { return "/opt/homebrew/Caskroom/tenjin/0.1.0/tenjin", nil }
+	version := "0.1.0"
+	tap := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = fmt.Fprintf(w, "cask \"tenjin\" do\n  version \"%s\"\nend\n", version)
+	}))
+	t.Cleanup(tap.Close)
+	now := time.Now()
+	h.env.updates.Cask = tap.URL + "/Casks/tenjin.rb"
+	h.env.updates.Now = func() time.Time { return now }
+	dir := testproject.Write(t, testproject.AndroidNative())
+
+	if _, _, stderr := h.run("project", "detect", dir); strings.Contains(stderr, "new version") {
+		t.Errorf("told before the cask has it:\n%s", stderr)
+	}
+	version = "0.2.0"
+	now = now.Add(25 * time.Hour)
+	_, _, stderr := h.run("project", "detect", dir)
+	for _, want := range []string{"A new version of the Tenjin CLI is available: 0.1.0 → 0.2.0", "Update with: brew upgrade tenjin"} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr lacks %q:\n%s", want, stderr)
+		}
+	}
+}
+
+// Which copy reads the cask is decided by where it is installed.
+func TestOnlyAHomebrewCopysCheckReadsTheCask(t *testing.T) {
+	none := func(string) string { return "" }
+	at := func(path string) func() (string, error) { return func() (string, error) { return path, nil } }
+	if c := newUpdateChecker(none, at("/opt/homebrew/Caskroom/tenjin/0.1.0/tenjin")); c == nil || c.Cask != update.Cask {
+		t.Errorf("Homebrew: %+v", c)
+	}
+	if c := newUpdateChecker(none, at("/home/dev/.local/bin/tenjin")); c == nil || c.Cask != "" || c.Releases != update.Releases {
+		t.Errorf("install script: %+v", c)
+	}
+	ci := func(name string) string {
+		if name == "CI" {
+			return "true"
+		}
+		return ""
+	}
+	if c := newUpdateChecker(ci, at("/opt/homebrew/Caskroom/tenjin/0.1.0/tenjin")); c != nil {
+		t.Errorf("CI: %+v", c)
+	}
+}
+
+// An agent at work is not a person: a notice in its terminal would be used
+// up there, and the person told nothing. --offline asks for no network, so
+// the check is not made. Either way the notice is left for a later run.
+func TestNoUpdateNoticeInsideAnAgentOrOffline(t *testing.T) {
+	h := newHarness(t)
+	withRelease(t, h, "v0.2.0")
+	dir := testproject.Write(t, testproject.AndroidNative())
+
+	h.vars["CLAUDECODE"] = "1"
+	if _, _, stderr := h.run("project", "detect", dir); strings.Contains(stderr, "new version") {
+		t.Errorf("told inside an agent:\n%s", stderr)
+	}
+	delete(h.vars, "CLAUDECODE")
+	if _, _, stderr := h.run("doctor", dir, "--offline"); strings.Contains(stderr, "new version") {
+		t.Errorf("told with --offline:\n%s", stderr)
+	}
+	if _, err := os.Stat(h.env.updates.State); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the check was made: %v", err)
+	}
+	if _, _, stderr := h.run("project", "detect", dir); !strings.Contains(stderr, "A new version of the Tenjin CLI is available") {
+		t.Errorf("the person was not told:\n%s", stderr)
+	}
+}
+
+// JSON is read by programs, which have no use for the notice.
+func TestJSONOutputHasNoUpdateNotice(t *testing.T) {
+	h := newHarness(t)
+	withRelease(t, h, "v0.2.0")
+	dir := testproject.Write(t, testproject.AndroidNative())
+
+	_, _, stderr := h.run("project", "detect", dir, "--json")
+	if stderr != "" {
+		t.Errorf("stderr = %q", stderr)
+	}
+}
+
+// Failing commands still mention it, after their error.
+func TestAnUpdateNoticeFollowsAnError(t *testing.T) {
+	h := newHarness(t)
+	withRelease(t, h, "v0.2.0")
+
+	code, _, stderr := h.run("project", "detect", t.TempDir())
+	if code == 0 {
+		t.Fatal("detect passed on an empty folder")
+	}
+	errAt, noticeAt := strings.Index(stderr, "no mobile project"), strings.Index(stderr, "A new version")
+	if errAt < 0 || noticeAt < errAt {
+		t.Errorf("stderr:\n%s", stderr)
+	}
+}
+
+// A stray request to the sign-in's local port, without the sign-in's state,
+// does not end the sign-in.
+func TestAStrayCallbackDoesNotEndTheSignIn(t *testing.T) {
+	h := newHarness(t)
+	follow := h.env.openBrowser
+	h.env.openBrowser = func(authorize string) error {
+		u, err := url.Parse(authorize)
+		if err != nil {
+			return err
+		}
+		if resp, err := http.Get(u.Query().Get("redirect_uri") + "?state=guess&code=x"); err == nil {
+			_ = resp.Body.Close()
+		}
+		return follow(authorize)
+	}
+	if code, _, stderr := h.run("login"); code != 0 {
+		t.Fatalf("exit = %d: %s", code, stderr)
+	}
+}

@@ -1,0 +1,638 @@
+[
+  {
+    "macro": "app_version",
+    "description": "App version of the app. (1.0.3)",
+    "category": "App"
+  },
+  {
+    "macro": "bundle_id",
+    "description": "Bundle ID of the app. (com.tenjin.wordfinder)",
+    "category": "App"
+  },
+  {
+    "macro": "lowercase_bundle_id",
+    "description": "Lower case of Bundle ID of the app. (com.tenjin.wordfinder)",
+    "category": "App"
+  },
+  {
+    "macro": "platform",
+    "description": "Platform of the app (ios)",
+    "category": "App"
+  },
+  {
+    "macro": "user_agent",
+    "description": "User's user agent",
+    "category": "App"
+  },
+  {
+    "macro": "sdk_version",
+    "description": "User's Tenjin SDK version",
+    "category": "App"
+  },
+  {
+    "macro": "store_id",
+    "description": "App Store ID of the app (887212194)",
+    "category": "App"
+  },
+  {
+    "macro": "acquired_at_s",
+    "description": "Timestamp for Install event in seconds",
+    "category": "Attribution"
+  },
+  {
+    "macro": "acquired_at_ms",
+    "description": "Timestamp for Install event in milliseconds",
+    "category": "Attribution"
+  },
+  {
+    "macro": "engaged_at_s",
+    "description": "Timestamp for click or impression event in seconds",
+    "category": "Attribution"
+  },
+  {
+    "macro": "engaged_at_ms",
+    "description": "Timestamp for click or impression event in milliseconds",
+    "category": "Attribution"
+  },
+  {
+    "macro": "ad_network",
+    "description": "Channel name that a user is attributed to",
+    "category": "Attribution"
+  },
+  {
+    "macro": "campaign_id",
+    "description": "Same as remote_campaign_id",
+    "category": "Attribution"
+  },
+  {
+    "macro": "campaign_name",
+    "description": "Tenjin Campaign Name that the user is attributed to",
+    "category": "Attribution"
+  },
+  {
+    "macro": "campaign_name_encoded",
+    "description": "Encoded Tenjin Campaign Name that the user is attributed to",
+    "category": "Attribution"
+  },
+  {
+    "macro": "click_id",
+    "description": "Channel's click ID if the user is attributed to paid channels",
+    "category": "Attribution"
+  },
+  {
+    "macro": "creative_name",
+    "description": "Creative name",
+    "category": "Attribution"
+  },
+  {
+    "macro": "deeplink_url",
+    "description": "Deeplink URL",
+    "category": "Attribution"
+  },
+  {
+    "macro": "is_conversion_integer",
+    "description": "1 for first app open, 0 for other events",
+    "category": "Attribution"
+  },
+  {
+    "macro": "is_impression",
+    "description": "1 => view-through Attribution, 0 => click Attribution",
+    "category": "Attribution"
+  },
+  {
+    "macro": "is_install_or_landing",
+    "description": "For first open 'Install', for subsequent app opens 'landing'",
+    "category": "Attribution"
+  },
+  {
+    "macro": "ip_address",
+    "description": "User's IP address",
+    "category": "Attribution"
+  },
+  {
+    "macro": "ip_address_click",
+    "description": "IP address for click or impression event",
+    "category": "Attribution"
+  },
+  {
+    "macro": "remote_campaign_id",
+    "description": "Channel's Campaign ID that the user is attributed to",
+    "category": "Attribution"
+  },
+  {
+    "macro": "site_id",
+    "description": "Channel's Site ID that a user is attributed to",
+    "category": "Attribution"
+  },
+  {
+    "macro": "site_id_encoded",
+    "description": "Encoded channel's Site ID that a user is attributed to",
+    "category": "Attribution"
+  },
+  {
+    "macro": "ad_network_short_id_match_type",
+    "description": "If the user came from device, probablistic or referrer Attribution. ad_network_short_id part varies for each network, please ask us for the details.",
+    "category": "Attribution"
+  },
+  {
+    "macro": "is_organic",
+    "description": "'1' -> the user is attributed to organic channel, '0' -> the user is attributed to a non-organic channel",
+    "category": "Attribution"
+  },
+  {
+    "macro": "tenjin_campaign_id",
+    "description": "Tenjin Campaign ID that the user is attributed to",
+    "category": "Attribution"
+  },
+  {
+    "macro": "tenjin_parameter_0",
+    "description": "Pass through macro you can pass through from click url",
+    "category": "Attribution"
+  },
+  {
+    "macro": "tenjin_parameter_1",
+    "description": "Pass through macro you can pass through from click url",
+    "category": "Attribution"
+  },
+  {
+    "macro": "tenjin_parameter_2",
+    "description": "Pass through macro you can pass through from click url",
+    "category": "Attribution"
+  },
+  {
+    "macro": "tenjin_parameter_3",
+    "description": "Pass through macro you can pass through from click url",
+    "category": "Attribution"
+  },
+  {
+    "macro": "tenjin_parameter_4",
+    "description": "Pass through macro you can pass through from click url",
+    "category": "Attribution"
+  },
+  {
+    "macro": "tenjin_parameter_5",
+    "description": "Pass through macro you can pass through from click url",
+    "category": "Attribution"
+  },
+  {
+    "macro": "advertising_id",
+    "description": "Advertising identifier of the device",
+    "category": "Device Identifier"
+  },
+  {
+    "macro": "analytics_installation_id",
+    "description": "Application Install-specific identifier. Lower case, without hyphen.",
+    "category": "Device Identifier"
+  },
+  {
+    "macro": "developer_device_id",
+    "description": "Identifier for Vendor (IDFV) or the developer device ID",
+    "category": "Device Identifier"
+  },
+  {
+    "macro": "formatted_advertising_id",
+    "description": "Formatte Advertising identifier of the device, 00000000-0000-0000-0000-000000000000 if it is empty",
+    "category": "Device Identifier"
+  },
+  {
+    "macro": "imei",
+    "description": "IMEI",
+    "category": "Device Identifier"
+  },
+  {
+    "macro": "md5_advertising_id",
+    "description": "MD5 of the advertising identifier",
+    "category": "Device Identifier"
+  },
+  {
+    "macro": "lowercase_advertising_id",
+    "description": "Lower case of advertising identifier of the device",
+    "category": "Device Identifier"
+  },
+  {
+    "macro": "md5_imei",
+    "description": "md5 of IMEI",
+    "category": "Device Identifier"
+  },
+  {
+    "macro": "md5_oaid",
+    "description": "md5 of OAID",
+    "category": "Device Identifier"
+  },
+  {
+    "macro": "oaid",
+    "description": "OAID",
+    "category": "Device Identifier"
+  },
+  {
+    "macro": "customer_user_id",
+    "description": "User ID from the app, as set by setCustomerUserId SDK method",
+    "category": "Device Identifier"
+  },
+  {
+    "macro": "allow_ad_tracking",
+    "description": "Device allows ad tracking? (true, false)",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "allow_ad_tracking_integer",
+    "description": "Device allows ad tracking? (1, 0)",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "carrier",
+    "description": "Device carrier",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "connection_type",
+    "description": "Connection type",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "country",
+    "description": "Country code of the user's device",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "device",
+    "description": "User's device",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "device_brand",
+    "description": "Device brand",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "device_model",
+    "description": "Device model",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "language",
+    "description": "User's language setting",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "limit_ad_tracking",
+    "description": "Device limits ad tracking? (true, false)",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "limit_ad_tracking_integer",
+    "description": "Device limits ad tracking? (1, 0)",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "locale",
+    "description": "Device locale",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "os_version",
+    "description": "User's OS version",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "os_version_release",
+    "description": "User's OS version release",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "referrer",
+    "description": "Android referrer",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "timezone",
+    "description": "Device timezone",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "tracking_status",
+    "description": "Integer for the iOS device's ATT status. 0 => not determined, 1 => restricted, 2 => denied, 3 => authorized",
+    "category": "Device Properties"
+  },
+  {
+    "macro": "currency",
+    "description": "3 digit currency code of the purchase",
+    "category": "Event"
+  },
+  {
+    "macro": "event",
+    "description": "Event name",
+    "category": "Event"
+  },
+  {
+    "macro": "time_in_seconds",
+    "description": "Request time in seconds",
+    "category": "Event"
+  },
+  {
+    "macro": "time_in_ms",
+    "description": "Request time in milliseconds",
+    "category": "Event"
+  },
+  {
+    "macro": "time_iso8601",
+    "description": "Request time in ISO 8601 format",
+    "category": "Event"
+  },
+  {
+    "macro": "revenue",
+    "description": "Gross revenue earned for a purchase in original currency",
+    "category": "Event"
+  },
+  {
+    "macro": "revenue_usd_net",
+    "description": "Net revenue in USD for a purchase",
+    "category": "Event"
+  },
+  {
+    "macro": "revenue_usd_gross",
+    "description": "Gross revenue in USD for a purchase",
+    "category": "Event"
+  },
+  {
+    "macro": "value",
+    "description": "Custom event value",
+    "category": "Event"
+  },
+  {
+    "macro": "ilrd::ad_unit_id",
+    "description": "Ad unit ID reported by the winning network",
+    "category": "Ad Impressions",
+    "providers": [
+      "AppLovin",
+      "AdMob"
+    ]
+  },
+  {
+    "macro": "ilrd::currency",
+    "description": "Currency ad revenue is reported in",
+    "category": "Ad Impressions",
+    "providers": [
+      "AppLovin",
+      "AdMob"
+    ]
+  },
+  {
+    "macro": "ilrd::ad_format",
+    "description": "Format of the ad unit",
+    "category": "Ad Impressions",
+    "providers": [
+      "AppLovin",
+      "Unity LevelPlay"
+    ]
+  },
+  {
+    "macro": "ilrd::mediation_country",
+    "description": "Country from the mediation provider",
+    "category": "Ad Impressions",
+    "providers": [
+      "AppLovin",
+      "Unity LevelPlay",
+      "Topon"
+    ]
+  },
+  {
+    "macro": "ilrd::network_name",
+    "description": "Network that displayed the ad",
+    "category": "Ad Impressions",
+    "providers": [
+      "AppLovin",
+      "Unity LevelPlay"
+    ]
+  },
+  {
+    "macro": "ilrd::ad_revenue",
+    "description": "Revenue reported by the Ad Network",
+    "category": "Ad Impressions",
+    "providers": [
+      "AppLovin",
+      "Unity LevelPlay"
+    ]
+  },
+  {
+    "macro": "ilrd::network_placement",
+    "description": "Network defined placement",
+    "category": "Ad Impressions",
+    "providers": [
+      "AppLovin"
+    ]
+  },
+  {
+    "macro": "ilrd::placement",
+    "description": "Placement of the ad unit",
+    "category": "Ad Impressions",
+    "providers": [
+      "AppLovin",
+      "Unity LevelPlay"
+    ]
+  },
+  {
+    "macro": "ilrd::creative_id",
+    "description": "Creative ID of the ad unit",
+    "category": "Ad Impressions",
+    "providers": [
+      "AppLovin"
+    ]
+  },
+  {
+    "macro": "ilrd::precision",
+    "description": "Precision of the revenue",
+    "category": "Ad Impressions",
+    "providers": [
+      "AppLovin",
+      "Unity LevelPlay",
+      "AdMob"
+    ]
+  },
+  {
+    "macro": "ilrd::ab_test",
+    "description": "A/B test value",
+    "category": "Ad Impressions",
+    "providers": [
+      "Unity LevelPlay"
+    ]
+  },
+  {
+    "macro": "ilrd::auction_id",
+    "description": "Auction ID from Ironsource mediation",
+    "category": "Ad Impressions",
+    "providers": [
+      "Unity LevelPlay"
+    ]
+  },
+  {
+    "macro": "ilrd::ecpm",
+    "description": "eCPM from Ironsource mediation",
+    "category": "Ad Impressions",
+    "providers": [
+      "Unity LevelPlay"
+    ]
+  },
+  {
+    "macro": "ilrd::instance_id",
+    "description": "Instance ID from Ironsource mediation",
+    "category": "Ad Impressions",
+    "providers": [
+      "Unity LevelPlay"
+    ]
+  },
+  {
+    "macro": "ilrd::instance_name",
+    "description": "Instance Name from Ironsource mediation",
+    "category": "Ad Impressions",
+    "providers": [
+      "Unity LevelPlay"
+    ]
+  },
+  {
+    "macro": "ilrd::mediation_ltv",
+    "description": "Lifetime Revenue from Ironsource mediation",
+    "category": "Ad Impressions",
+    "providers": [
+      "Unity LevelPlay"
+    ]
+  },
+  {
+    "macro": "ilrd::segment",
+    "description": "Segment Name from Ironsource mediation",
+    "category": "Ad Impressions",
+    "providers": [
+      "Unity LevelPlay"
+    ]
+  },
+  {
+    "macro": "ilrd::adapter_class",
+    "description": "Adapter class of Ad Network",
+    "category": "Ad Impressions",
+    "providers": [
+      "AdMob"
+    ]
+  },
+  {
+    "macro": "ilrd::response_id",
+    "description": "Response ID provided by AdMob",
+    "category": "Ad Impressions",
+    "providers": [
+      "AdMob"
+    ]
+  },
+  {
+    "macro": "ilrd::ad_revenue_micro",
+    "description": "Ad revenue in micro cents provided by AdMob",
+    "category": "Ad Impressions",
+    "providers": [
+      "AdMob"
+    ]
+  },
+  {
+    "macro": "ilrd::ad_network_type",
+    "description": "Type of Network, Cross Promotion, or exchange",
+    "category": "Ad Impressions",
+    "providers": [
+      "Topon"
+    ]
+  },
+  {
+    "macro": "ilrd::adsource_index",
+    "description": "Sorting of the current ad source in the Waterfall",
+    "category": "Ad Impressions",
+    "providers": [
+      "Topon"
+    ]
+  },
+  {
+    "macro": "meta::account_id",
+    "description": "Ad account used to generate the ad",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::ad_id",
+    "description": "Unique ID of the ad clicked/viewed before Conversion",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::ad_objective_name",
+    "description": "Objective selected when creating campaign (e.g., MOBILE_APP_INSTALLS)",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::adgroup_id",
+    "description": "ID of the Meta Ad",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::adgroup_name",
+    "description": "Name of the Meta Ad",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::campaign_group_id",
+    "description": "ID of the Meta Campaign",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::campaign_group_name",
+    "description": "Name of the Meta Campaign",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::campaign_id",
+    "description": "ID of the Meta AdSet",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::campaign_name",
+    "description": "Name of the Meta AdSet",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::click_time",
+    "description": "Timestamp of the last ad click before Attribution",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::engagement_type",
+    "description": "Engagement type for Attribution (e.g., engaged_view)",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::is_fb",
+    "description": "Whether the Install was from Meta",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::is_modeled",
+    "description": "Whether Attribution is modeled or deterministic",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::is_paid",
+    "description": "Whether the Install was from a paid channel on Meta",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::is_view_through",
+    "description": "Whether Attribution was view-through or click-based",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::platform_position",
+    "description": "Ad format shown on the platform",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::publisher_platform",
+    "description": "Platform where the ad was shown (e.g., AUDIENCE_NETWORK, INSTAGRAM)",
+    "category": "Meta Attributions"
+  },
+  {
+    "macro": "meta::view_time",
+    "description": "Timestamp of the last ad view before Attribution",
+    "category": "Meta Attributions"
+  }
+]

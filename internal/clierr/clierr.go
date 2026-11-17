@@ -1,0 +1,105 @@
+// Package clierr defines the errors the CLI reports and the exit code each
+// one maps to. Scripts and agents branch on the code, so kinds are stable:
+// add new ones, never renumber.
+package clierr
+
+import (
+	"errors"
+	"fmt"
+)
+
+// Kind classifies a failure.
+type Kind string
+
+const (
+	Internal    Kind = "error"
+	Usage       Kind = "usage"
+	NotSignedIn Kind = "not_signed_in"
+	Permission  Kind = "permission_denied"
+	NotFound    Kind = "not_found"
+	RateLimited Kind = "rate_limited"
+	Upstream    Kind = "upstream_error"
+	// AlreadyExists is a create that found the thing already there.
+	AlreadyExists Kind = "already_exists"
+	ChecksFailed  Kind = "checks_failed"
+	// Interrupted is a run stopped from outside: Ctrl-C, SIGTERM or SIGHUP.
+	Interrupted Kind = "interrupted"
+	// Refused is a request Tenjin understood and turned down, such as a
+	// value it does not accept: the input is at fault, not the CLI.
+	Refused Kind = "refused"
+	// Busy is a wait for another tenjin command that ran out, such as one
+	// using the sign-in, before the command changed anything: running it
+	// again once the other has finished is enough. A command that had
+	// already changed something reports Upstream instead, saying what it
+	// changed, since running it again could do that twice.
+	Busy Kind = "busy"
+)
+
+// ExitCode is the process exit status for a failure of this kind. 8 is kept
+// free for "timed out waiting", which the commands that wait for an event
+// will use.
+func (k Kind) ExitCode() int {
+	switch k {
+	case Usage:
+		return 2
+	case NotSignedIn:
+		return 3
+	case Permission:
+		return 4
+	case NotFound:
+		return 5
+	case RateLimited:
+		return 6
+	case Upstream:
+		return 7
+	case AlreadyExists:
+		return 10
+	case ChecksFailed:
+		return 9
+	case Refused:
+		return 11
+	case Busy:
+		return 12
+	case Interrupted:
+		// The shells' code for a program stopped by SIGINT.
+		return 130
+	}
+	return 1
+}
+
+// Error is a failure with a kind, a message for the user and, where there is
+// one, the next thing to try.
+type Error struct {
+	Kind    Kind
+	Message string
+	Hint    string
+	Cause   error
+}
+
+func (e *Error) Error() string { return e.Message }
+func (e *Error) Unwrap() error { return e.Cause }
+
+// New builds an error of the given kind.
+func New(kind Kind, format string, a ...any) *Error {
+	return &Error{Kind: kind, Message: fmt.Sprintf(format, a...)}
+}
+
+// Wrap builds an error of the given kind that keeps cause for errors.Is/As.
+func Wrap(kind Kind, cause error, format string, a ...any) *Error {
+	return &Error{Kind: kind, Message: fmt.Sprintf(format, a...), Cause: cause}
+}
+
+// WithHint sets the suggested next step and returns the error.
+func (e *Error) WithHint(format string, a ...any) *Error {
+	e.Hint = fmt.Sprintf(format, a...)
+	return e
+}
+
+// From returns err as an *Error, treating anything unclassified as Internal.
+func From(err error) *Error {
+	var e *Error
+	if errors.As(err, &e) {
+		return e
+	}
+	return &Error{Kind: Internal, Message: err.Error(), Cause: err}
+}

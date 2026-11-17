@@ -1,0 +1,312 @@
+name: Test
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  # The release workflow runs these first, so a release is published only
+  # from a commit that passes them.
+  workflow_call:
+    inputs:
+      ref:
+        description: The commit to test, such as a release tag
+        type: string
+        required: false
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    concurrency: ${{ github.workflow }}/${{ github.ref }}/test/${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The binary ships for all three; each has its own keychain, paths
+        # and file modes.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: go build ./cmd/tenjin
+      - name: Run the binary
+        # The tests call the command tree in-process; this starts the real
+        # binary, console handling included.
+        shell: bash
+        run: |
+          ./tenjin version
+          ./tenjin sdk guide android > guide.md && grep -q TenjinSDK guide.md
+          mkdir empty
+          code=0; ./tenjin project detect empty --json 2> error.json || code=$?
+          test "$code" -eq 5 && grep -q '"not_found"' error.json
+      - name: Test
+        if: runner.os != 'Windows'
+        run: make test
+      - name: Test
+        # The race detector needs cgo, which the Windows runner has no C
+        # compiler for.
+        if: runner.os == 'Windows'
+        run: go test ./...
+  release:
+    # The release pipeline, short of publishing: the archives, checksums and
+    # cask a tag would publish.
+    name: Release snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+      - name: Check the configuration
+        run: make release-check
+      - name: Build
+        # An Amplitude key in the environment reaches a release only: a
+        # snapshot, like make build, has none and sends no usage statistics.
+        env:
+          TENJIN_AMPLITUDE_KEY: not-a-release-key
+        run: |
+          make release-snapshot
+          make build
+          found=$(find dist bin -type f \( -name tenjin -o -name tenjin.exe \) -print0 | xargs -0 grep -alF not-a-release-key || true)
+          if [ -n "$found" ]; then echo "these builds hold the Amplitude key: $found"; exit 1; fi
+          test -x bin/tenjin
+      - name: Keep
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+            dist/metadata.json
+            dist/homebrew/Casks/tenjin.rb
+  install:
+    # Installs the snapshot the way users will, from a local copy of the
+    # release served over HTTP.
+    name: Install (${{ matrix.os }})
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Fetch the snapshot
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release
+          path: dist
+      - name: Lay out the release
+        shell: bash
+        run: |
+          version=$(python3 -c 'import json; print(json.load(open("dist/metadata.json"))["version"])' 2>/dev/null ||
+            python -c 'import json; print(json.load(open("dist/metadata.json"))["version"])')
+          mkdir site
+          cp dist/*.tar.gz dist/*.zip dist/checksums.txt install.sh install.ps1 site/
+          echo "TENJIN_VERSION=$version" >> "$GITHUB_ENV"
+          echo "TENJIN_RELEASES_URL=http://127.0.0.1:8765" >> "$GITHUB_ENV"
+      - name: install.sh
+        if: runner.os != 'Windows'
+        run: |
+          # Served as GitHub serves a release, /latest redirect included.
+          python3 scripts/serve-release.py site "$TENJIN_VERSION" 8765 &
+          until curl -fs http://127.0.0.1:8765/install.sh > /dev/null; do sleep 1; done
+          curl -fsSL http://127.0.0.1:8765/install.sh | TENJIN_INSTALL_DIR="$RUNNER_TEMP/bin" TENJIN_NO_MODIFY_PATH=1 sh
+          "$RUNNER_TEMP/bin/tenjin" version | grep -F "Tenjin CLI $TENJIN_VERSION"
+          # A new user, with nothing on PATH to install into: a new terminal
+          # must find the tenjin command with no step of theirs.
+          shells="bash"
+          if command -v zsh > /dev/null; then shells="bash zsh"; fi
+          for shell in $shells; do
+            home="$RUNNER_TEMP/home-$shell"
+            mkdir -p "$home"
+            # No version given, as a person runs it: the latest is looked up.
+            curl -fsSL http://127.0.0.1:8765/install.sh |
+              env -i HOME="$home" PATH=/usr/bin:/bin SHELL="/bin/$shell" \
+                TENJIN_RELEASES_URL="$TENJIN_RELEASES_URL" sh
+            # Once more: nothing is added twice.
+            curl -fsSL http://127.0.0.1:8765/install.sh |
+              env -i HOME="$home" PATH=/usr/bin:/bin SHELL="/bin/$shell" \
+                TENJIN_RELEASES_URL="$TENJIN_RELEASES_URL" TENJIN_VERSION="$TENJIN_VERSION" sh > /dev/null
+            modes="-lc -ic"
+            if [ "$shell" = zsh ]; then modes="-c -lc -ic"; fi
+            for mode in $modes; do
+              found=$(env -i HOME="$home" PATH=/usr/bin:/bin TERM=dumb "/bin/$shell" "$mode" 'command -v tenjin' 2> /dev/null | tail -n 1 || true)
+              test "$found" = "$home/.local/bin/tenjin" || { echo "$shell $mode found '$found'"; exit 1; }
+            done
+            for f in "$home"/.??*; do
+              if [ -f "$f" ] && [ "$(grep -c 'Tenjin CLI installer' "$f")" -gt 1 ]; then echo "$f was changed twice"; exit 1; fi
+            done
+            echo "$shell: a new terminal finds the tenjin command"
+          done
+          # A folder named with a trailing slash, as tab completion leaves it,
+          # is the same folder as on PATH without one, and the other way
+          # round: no startup file is changed, and the copy just installed is
+          # not taken for another one.
+          home="$RUNNER_TEMP/home-slash"
+          mkdir -p "$home/bin"
+          for pair in "$home/bin/ $home/bin" "$home/bin $home/bin/"; do
+            given=${pair% *}
+            entry=${pair#* }
+            out=$(curl -fsSL http://127.0.0.1:8765/install.sh |
+              env -i HOME="$home" PATH="$entry:/usr/bin:/bin" SHELL=/bin/bash \
+                TENJIN_RELEASES_URL="$TENJIN_RELEASES_URL" TENJIN_VERSION="$TENJIN_VERSION" TENJIN_INSTALL_DIR="$given" sh)
+            echo "$out"
+            case "$out" in
+            *"Added "* | *"Another copy"* | *"$home/bin//"*) echo "TENJIN_INSTALL_DIR=$given, PATH=$entry: wrong output"; exit 1 ;;
+            *"Start with: tenjin setup") ;;
+            *) echo "TENJIN_INSTALL_DIR=$given, PATH=$entry: not found on PATH"; exit 1 ;;
+            esac
+            if [ "$(ls -A "$home")" != bin ]; then echo "files were added to $home: $(ls -A "$home")"; exit 1; fi
+          done
+          # A shell under Rosetta says x86_64; Apple silicon still gets the
+          # arm64 build.
+          if [ "$(uname)" = Darwin ] && [ "$(sysctl -n hw.optional.arm64 2> /dev/null)" = 1 ] && arch -x86_64 /usr/bin/true 2> /dev/null; then
+            curl -fsSL http://127.0.0.1:8765/install.sh |
+              TENJIN_INSTALL_DIR="$RUNNER_TEMP/rosetta" TENJIN_NO_MODIFY_PATH=1 arch -x86_64 /bin/sh
+            file "$RUNNER_TEMP/rosetta/tenjin" | grep -q arm64
+          fi
+      - name: Homebrew
+        if: runner.os != 'Windows'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          if ! command -v brew > /dev/null; then eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"; fi
+          # The Homebrew people have, not the runner image's. tap-new turns on
+          # developer mode, where a deprecated cask stanza is an error.
+          brew update --quiet
+          brew --version
+          brew tap-new --no-git tenjin/local
+          tap="$(brew --repository tenjin/local)"
+          mkdir -p "$tap/Casks"
+          sed -E "s#https://github.com/tenjin/tenjin-cli/releases/download/[^/]+/#file://$PWD/site/#" \
+            dist/homebrew/Casks/tenjin.rb > "$tap/Casks/tenjin.rb"
+          brew install --cask tenjin/local/tenjin
+          "$(brew --prefix)/bin/tenjin" version | grep -F "Tenjin CLI $TENJIN_VERSION"
+          if [ "$(uname)" = Darwin ] && xattr -p com.apple.quarantine "$(brew --prefix)/Caskroom/tenjin/$TENJIN_VERSION/tenjin" 2> /dev/null; then
+            echo "the binary is still quarantined"; exit 1
+          fi
+          # The shell completions are installed.
+          prefix=$(brew --prefix)
+          find "$prefix/share/zsh/site-functions" "$prefix/etc/bash_completion.d" "$prefix/share/fish/vendor_completions.d" -iname '*tenjin*' 2> /dev/null | grep .
+      - name: install.ps1, Windows PowerShell
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Start-Process -FilePath python -ArgumentList 'scripts/serve-release.py', 'site', $env:TENJIN_VERSION, '8765' -WindowStyle Hidden
+          for ($i = 0; $i -lt 30; $i++) {
+            try { Invoke-WebRequest -Uri 'http://127.0.0.1:8765/install.ps1' -UseBasicParsing | Out-Null; break } catch { Start-Sleep -Seconds 1 }
+          }
+          # The installer's own run of tenjin turns these off, and puts them
+          # back as they were in this shell: one set, one not.
+          $env:TENJIN_NO_UPDATE_CHECK = 'kept'
+          irm http://127.0.0.1:8765/install.ps1 | iex
+          if ($env:TENJIN_NO_UPDATE_CHECK -ne 'kept') { throw "TENJIN_NO_UPDATE_CHECK is now '$env:TENJIN_NO_UPDATE_CHECK'" }
+          if (Test-Path env:TENJIN_NO_TELEMETRY) { throw 'the installer left TENJIN_NO_TELEMETRY set' }
+          $env:TENJIN_NO_UPDATE_CHECK = $null
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\tenjin'
+          tenjin version
+          if (-not ((tenjin version) -like "Tenjin CLI $env:TENJIN_VERSION *")) { throw 'wrong version' }
+          $saved = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+          if (($saved -split ';') -notcontains $dir) { throw "$dir is not on the saved PATH: $saved" }
+      - name: install.ps1 again, PowerShell 7
+        # Over the installed copy, and with the other PowerShell.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          try { Invoke-WebRequest -Uri 'http://127.0.0.1:8765/install.ps1' | Out-Null } catch {
+            Start-Process -FilePath python -ArgumentList 'scripts/serve-release.py', 'site', $env:TENJIN_VERSION, '8765' -WindowStyle Hidden
+            for ($i = 0; $i -lt 30; $i++) {
+              try { Invoke-WebRequest -Uri 'http://127.0.0.1:8765/install.ps1' | Out-Null; break } catch { Start-Sleep -Seconds 1 }
+            }
+          }
+          # No version given: the latest is looked up, through the redirect.
+          $version = $env:TENJIN_VERSION
+          $env:TENJIN_VERSION = $null
+          irm http://127.0.0.1:8765/install.ps1 | iex
+          $saved = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+          $dir = Join-Path $env:LOCALAPPDATA 'Programs\tenjin'
+          if (-not ((& (Join-Path $dir 'tenjin.exe') version) -like "Tenjin CLI $version *")) { throw 'the latest was not installed' }
+          if ((@($saved -split ';') | Where-Object { $_ -eq $dir }).Count -ne 1) { throw "PATH should hold $dir once: $saved" }
+          & (Join-Path $dir 'tenjin.exe') version
+          # Named with a trailing slash, as tab completion leaves it: the same
+          # folder, still on PATH once.
+          $env:TENJIN_INSTALL_DIR = "$dir\"
+          irm http://127.0.0.1:8765/install.ps1 | iex
+          $env:TENJIN_INSTALL_DIR = $null
+          $saved = (Get-Item 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+          if ((@($saved -split ';') | Where-Object { $_.TrimEnd('\') -eq $dir }).Count -ne 1) { throw "PATH should hold $dir once: $saved" }
+      - name: Setup Go
+        # For the stand-in tenjin.exe below.
+        if: runner.os == 'Windows'
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: install.ps1 runs its tenjin with no usage event or update notice
+        # A stand-in tenjin.exe, released as the real one is, writes down the
+        # variables the installer runs it with. The last step: it leaves its
+        # folder on the saved PATH.
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $stub = Join-Path $env:RUNNER_TEMP 'stub'
+          New-Item -ItemType Directory -Path "$stub\src", "$stub\site" -Force | Out-Null
+          Set-Content -Path "$stub\src\main.go" -Value @'
+          package main
+
+          import "os"
+
+          func main() {
+            seen := "TENJIN_NO_TELEMETRY=" + os.Getenv("TENJIN_NO_TELEMETRY") + " TENJIN_NO_UPDATE_CHECK=" + os.Getenv("TENJIN_NO_UPDATE_CHECK")
+            _ = os.WriteFile(os.Getenv("TENJIN_STUB_SEEN"), []byte(seen), 0o644)
+            _, _ = os.Stdout.WriteString("Tenjin CLI 0.0.0-stub\n")
+          }
+          '@
+          Push-Location "$stub\src"
+          try {
+            $arch = go env GOARCH
+            go build -o tenjin.exe main.go
+            if ($LASTEXITCODE -ne 0) { throw 'the stand-in did not build' }
+          } finally { Pop-Location }
+          $archive = "tenjin_0.0.0-stub_windows_$arch.zip"
+          Compress-Archive -Path "$stub\src\tenjin.exe" -DestinationPath "$stub\site\$archive"
+          $sum = (Get-FileHash -Algorithm SHA256 -Path "$stub\site\$archive").Hash.ToLower()
+          Set-Content -Path "$stub\site\checksums.txt" -Value "$sum  $archive"
+          Copy-Item install.ps1 "$stub\site\"
+          Start-Process -FilePath python -ArgumentList 'scripts/serve-release.py', "$stub\site", '0.0.0-stub', '8766' -WindowStyle Hidden
+          for ($i = 0; $i -lt 30; $i++) {
+            try { Invoke-WebRequest -Uri 'http://127.0.0.1:8766/install.ps1' -UseBasicParsing | Out-Null; break } catch { Start-Sleep -Seconds 1 }
+          }
+          $env:TENJIN_RELEASES_URL = 'http://127.0.0.1:8766'
+          $env:TENJIN_VERSION = '0.0.0-stub'
+          $env:TENJIN_INSTALL_DIR = "$stub\bin"
+          $env:TENJIN_STUB_SEEN = "$stub\seen.txt"
+          # The other way round from the first install: this one set, the
+          # other not.
+          $env:TENJIN_NO_TELEMETRY = 'kept'
+          if (Test-Path env:TENJIN_NO_UPDATE_CHECK) { throw 'TENJIN_NO_UPDATE_CHECK is set before the install' }
+          irm http://127.0.0.1:8766/install.ps1 | iex
+          $seen = Get-Content -Path "$stub\seen.txt" -Raw
+          if ($seen -ne 'TENJIN_NO_TELEMETRY=1 TENJIN_NO_UPDATE_CHECK=1') { throw "the installer ran tenjin with $seen" }
+          if ($env:TENJIN_NO_TELEMETRY -ne 'kept') { throw "TENJIN_NO_TELEMETRY is now '$env:TENJIN_NO_TELEMETRY'" }
+          if (Test-Path env:TENJIN_NO_UPDATE_CHECK) { throw 'the installer left TENJIN_NO_UPDATE_CHECK set' }

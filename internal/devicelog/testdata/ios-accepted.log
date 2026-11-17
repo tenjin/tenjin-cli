@@ -1,0 +1,40 @@
+Timestamp               Ty Process[PID:TID]
+2026-10-06 10:04:49.130 Df Sample[3930:b3ce6c] (libMobileGestalt.dylib) No persisted cache on this platform.
+2026-10-06 10:04:49.134 Df Sample[3930:b3ce68] [com.apple.FrontBoard:SceneExtension] Realizing settings extension _UIApplicationSceneKeyboardSettings on FBSSceneSettings
+2026-10-06 10:04:49.135 Db Sample[3930:b3ce68] [com.apple.FrontBoard:SceneExtension] registering method "hardwareKeyboardExclusivityIdentifier" from extension _UIApplicationSceneKeyboardSettings on class "FBSSceneSettings"
+2026-10-06 10:04:49.135 Db Sample[3930:b3ce68] [com.apple.FrontBoard:SceneExtension] registering method "setHardwareKeyboardExclusivityIdentifier:" from extension _UIApplicationSceneKeyboardSettings on class "FBSSceneSettings"
+2026-10-06 10:04:49.186 Df Sample[3930:b3ce51] (TenjinSDK) [Tenjin] - DEBUG: Stored initialized_at timestamp: 1791299089184.599854
+2026-10-06 10:04:49.187 Df Sample[3930:b3ce51] (TenjinSDK) [Tenjin] - LOG: Initialized Tenjin SDK
+2026-10-06 10:04:49.187 Df Sample[3930:b3ce51] (TenjinSDK) [Tenjin] - DEBUG: Creating startup operation
+2026-10-06 10:04:49.188 Df Sample[3930:b3ce6f] (TenjinSDK) [Tenjin] - ERROR: Error Apple Search Attribution Token retrieval - Error Domain=com.apple.ap.adservices.attributionError Code=3 "Attribution services are only available on iOS and iPadOS." UserInfo={NSLocalizedDescription=Attribution services are only available on iOS and iPadOS.}
+2026-10-06 10:04:49.188 Df Sample[3930:b3ce6f] (TenjinSDK) [Tenjin] - DEBUG: Startup attempt complete - success: 0
+2026-10-06 10:04:49.188 Df Sample[3930:b3ce6f] (TenjinSDK) [Tenjin] - ERROR: Retry startup operation attempt #1, sleep=3.53s
+2026-10-06 10:04:49.188 Df Sample[3930:b3ce6f] (TenjinSDK) [Tenjin] - DEBUG: Parameter providers set
+2026-10-06 10:04:49.398 Df Sample[3930:b3ce51] (TenjinSDK) [Tenjin] - DEBUG: Connect
+2026-10-06 10:04:49.415 Df Sample[3930:b3ce51] (TenjinSDK) [Tenjin] - LOG: Connect request
+2026-10-06 10:04:49.416 Df Sample[3930:b3ce6f] (TenjinSDK) [Tenjin] - LOG: Sending request - https://track.tenjin.com/v0/event
+2026-10-06 10:04:49.416 Df Sample[3930:b3ce6f] (TenjinSDK) [Tenjin] - DEBUG: request body total_ilrd_revenue_usd=0&session_id=AAAABBBB-CCCC-DDDD-EEEE-000000000001&device_info=true&timezone=UTC&advertising_id=00000000-0000-0000-0000-000000000000&bundle_id=com.example.sample&total_session_time=0&tracking_status=0&average_session_length=0&last_session_length=0&build_id=25G83&limit_ad_tracking=true&developer_device_id=AAAABBBB-CCCC-DDDD-EEEE-000000000002&device_model=arm64&os_version_release=18.5&device=arm64&initialized_at=1791299089184.599854&os_version=18.5&country=US&sent_at=1791299089416.047119&platform=ios&sdk_version=1.19.1&app_version=1.0&session_count=0&retry_enabled=false&locale=en_US&iap_transaction_count=0&api_key=REDACTEDREDACTEDREDACTEDREDACT&analytics_installation_id=AAAABBBB-CCCC-DDDD-EEEE-000000000003
+2026-10-06 10:04:49.693 Df Sample[3930:b3ce6f] (TenjinSDK) [Tenjin] - DEBUG: Request encryption disabled. Using system trust for <NSURLAuthenticationChallenge: 0x600000000000>
+2026-10-06 10:04:49.903 Df Sample[3930:b3ce70] (TenjinSDK) [Tenjin] - LOG: Got http response 200
+2026-10-06 10:04:49.903 Df Sample[3930:b3ce70] (TenjinSDK) [Tenjin] - DEBUG: Response body {"code":200,"success":true}
+2026-10-06 10:04:49.908 Df Sample[3930:b3ce70] (TenjinSDK) [Tenjin] - LOG: Connect succeeded, processing 0 queued events
+2026-10-06 10:04:52.953 Df Sample[3930:b3ce51] (TenjinSDK) [Tenjin] - DEBUG: Creating startup operation
+2026-10-06 10:04:52.954 Df Sample[3930:b3ce6f] (TenjinSDK) [Tenjin] - ERROR: Error Apple Search Attribution Token retrieval - Error Domain=com.apple.ap.adservices.attributionError Code=3 "Attribution services are only available on iOS and iPadOS." UserInfo={NSLocalizedDescription=Attribution services are only available on iOS and iPadOS.}
+2026-10-06 10:04:52.954 Df Sample[3930:b3ce6f] (TenjinSDK) [Tenjin] - DEBUG: Startup attempt complete - success: 0
+2026-10-06 10:04:52.954 Df Sample[3930:b3ce6f] (TenjinSDK) [Tenjin] - ERROR: Retry startup operation attempt #2, sleep=9.96s
+2026-10-06 10:04:52.955 Df Sample[3930:b3ce6f] (TenjinSDK) [Tenjin] - DEBUG: Parameter providers set
+2026-10-06 10:05:03.579 Df Sample[3930:b3ce51] (TenjinSDK) [Tenjin] - DEBUG: Creating startup operation
+2026-10-06 10:05:03.580 Df Sample[3930:b3ce6e] (TenjinSDK) [Tenjin] - ERROR: Error Apple Search Attribution Token retrieval - Error Domain=com.apple.ap.adservices.attributionError Code=3 "Attribution services are only available on iOS and iPadOS." UserInfo={NSLocalizedDescription=Attribution services are only available on iOS and iPadOS.}
+2026-10-06 10:05:03.580 Df Sample[3930:b3ce6e] (TenjinSDK) [Tenjin] - DEBUG: Startup attempt complete - success: 0
+2026-10-06 10:05:03.581 Df Sample[3930:b3ce6e] (TenjinSDK) [Tenjin] - ERROR: Retry startup operation attempt #3, sleep=10.61s
+2026-10-06 10:05:03.581 Df Sample[3930:b3ce6e] (TenjinSDK) [Tenjin] - DEBUG: Parameter providers set
+2026-10-06 10:05:14.895 Df Sample[3930:b3ce51] (TenjinSDK) [Tenjin] - DEBUG: Creating startup operation
+2026-10-06 10:05:14.896 Df Sample[3930:b3d11b] (TenjinSDK) [Tenjin] - ERROR: Error Apple Search Attribution Token retrieval - Error Domain=com.apple.ap.adservices.attributionError Code=3 "Attribution services are only available on iOS and iPadOS." UserInfo={NSLocalizedDescription=Attribution services are only available on iOS and iPadOS.}
+2026-10-06 10:05:14.896 Df Sample[3930:b3d11b] (TenjinSDK) [Tenjin] - DEBUG: Startup attempt complete - success: 0
+2026-10-06 10:05:14.896 Df Sample[3930:b3d11b] (TenjinSDK) [Tenjin] - ERROR: Retry startup operation attempt #4, sleep=4.29s
+2026-10-06 10:05:14.898 Df Sample[3930:b3d11b] (TenjinSDK) [Tenjin] - DEBUG: Parameter providers set
+2026-10-06 10:05:19.473 Df Sample[3930:b3ce51] (TenjinSDK) [Tenjin] - DEBUG: Creating startup operation
+2026-10-06 10:05:19.473 Df Sample[3930:b3d3e5] (TenjinSDK) [Tenjin] - ERROR: Error Apple Search Attribution Token retrieval - Error Domain=com.apple.ap.adservices.attributionError Code=3 "Attribution services are only available on iOS and iPadOS." UserInfo={NSLocalizedDescription=Attribution services are only available on iOS and iPadOS.}
+2026-10-06 10:05:19.474 Df Sample[3930:b3d3e5] (TenjinSDK) [Tenjin] - DEBUG: Startup attempt complete - success: 0
+2026-10-06 10:05:19.474 Df Sample[3930:b3d3e5] (TenjinSDK) [Tenjin] - ERROR: Retry startup operation attempt #5, sleep=9.60s
+2026-10-06 10:05:19.474 Df Sample[3930:b3d3e5] (TenjinSDK) [Tenjin] - DEBUG: Parameter providers set

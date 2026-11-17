@@ -1,0 +1,960 @@
+package cli
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"regexp"
+	"runtime"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/spf13/cobra"
+
+	"github.com/tenjin/tenjin-cli/internal/agent"
+	"github.com/tenjin/tenjin-cli/internal/buildinfo"
+	"github.com/tenjin/tenjin-cli/internal/clierr"
+	"github.com/tenjin/tenjin-cli/internal/devicelog"
+	"github.com/tenjin/tenjin-cli/internal/keyfill"
+	"github.com/tenjin/tenjin-cli/internal/project"
+	"github.com/tenjin/tenjin-cli/internal/render"
+	"github.com/tenjin/tenjin-cli/internal/track"
+	"github.com/tenjin/tenjin-cli/internal/verify"
+)
+
+func newDoctorCmd(opts *options, env *environment) *cobra.Command {
+	var (
+		sdkKeys   []string
+		offline   bool
+		strict    bool
+		device    bool
+		serial    string
+		logs      string
+		builds    []string
+		features  []string
+		fixWith   string
+		analytics analyticsFlags
+	)
+	cmd := &cobra.Command{
+		Use:   "doctor [path]",
+		Short: "Check a Tenjin SDK integration and explain what is wrong",
+		Long: `Check the Tenjin SDK integration in a project: that the SDK is a dependency,
+that it is initialized and connected, that the manifest and Info.plist carry
+what the SDK needs, and that Tenjin accepts the SDK key for each platform's
+bundle ID.
+
+The key check sends one request to Tenjin and no event. Once a
+day doctor also asks the SDKs' public registries (Maven Central, pub.dev,
+npm, GitHub) for their newest releases, so its fixes name current versions.
+--offline skips both.
+
+doctor does not edit the project. At a terminal, when your coding agent
+(Claude Code or Codex) is installed and there is code to fix, it offers to
+have the agent fix it, then checks again; --agent picks one without asking,
+and --agent none never offers. The agent works under the limits 'tenjin
+setup' describes, is never given an SDK key, and leaves any key already in
+the project as it is. Where it writes a placeholder instead, doctor writes
+the --sdk-key key there once Tenjin accepts it for that build (not with
+--offline). The custom events and the user ID it is told to send come from
+--events and --user-id, or else from what the app gives its other analytics
+SDKs, and where there is nothing, it adds none; doctor says which before the
+agent starts.
+
+With --device, doctor also reads what the app's last launch sent and what
+Tenjin answered to each request, then asks Tenjin whether the device's
+install was processed. It reads a connected Android device or emulator, an
+iPhone connected by cable, or a running iOS simulator. On an iPhone, doctor
+launches the installed app itself to read its console, and leaves it
+running. A project that builds for both platforms is read from an Android
+device when one is connected, and from iOS otherwise. On iOS the SDK logs its
+requests only when the build calls TenjinSDK.debugLogs(). Only an iPhone
+confirms that Tenjin processed an install: the SDK marks a simulator's
+installs, and Tenjin leaves them out of attribution by design.
+
+--logs reads a saved log instead, from logcat or from an iOS simulator, or
+standard input with "-".
+
+Exit status is 0 when nothing would stop events reaching Tenjin and 9
+otherwise. With --strict, warnings count too.`,
+		Args: maxArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			format, err := opts.format(cmd)
+			if err != nil {
+				return err
+			}
+			if fixWith != "" && fixWith != "none" {
+				if !contains(agent.IDs(), fixWith) {
+					return clierr.New(clierr.Usage, "unknown agent %q (use %s, or none)", fixWith, strings.Join(agent.IDs(), ", "))
+				}
+				// An agent's run is followed by a person; JSON is for scripts
+				// and agents, which make the changes themselves.
+				if format == render.JSON {
+					return clierr.New(clierr.Usage, "--agent %s starts a coding agent, which is for a person at a terminal, and has no JSON output", fixWith).
+						WithHint("Run 'tenjin doctor --agent %s' without --json, or read 'tenjin doctor --json' and make the fixes it names.", fixWith)
+				}
+			}
+			if err := analytics.read(cmd); err != nil {
+				return err
+			}
+			p, err := loadProject(args)
+			if err != nil {
+				return err
+			}
+			env.noteProject(p)
+			if !p.Supported {
+				return clierr.New(clierr.NotFound, "%s", strings.Join(p.Notes, " "))
+			}
+
+			if serial != "" && !device {
+				return clierr.New(clierr.Usage, "--serial only applies with --device")
+			}
+			if device && logs != "" {
+				return clierr.New(clierr.Usage, "use either --device or --logs, not both")
+			}
+
+			given, err := givenKeys(sdkKeys, env.getenv)
+			if err != nil {
+				return err
+			}
+			if err := resolveGiven(&given, p, env); err != nil {
+				return err
+			}
+			if err := narrowBuilds(p, builds); err != nil {
+				return err
+			}
+			if cmd.Flags().Changed("features") && features == nil {
+				features = []string{}
+			}
+			chosen, err := chosenFeatures(p, features)
+			if err != nil {
+				return err
+			}
+			if err := analytics.conflicts(chosen); err != nil {
+				return err
+			}
+			// The agent integrates the features chosen, or else the ones the
+			// project suggests. --events and --user-id choose their own
+			// features when --features is not given.
+			integrate := chosen
+			if implied := analytics.implied(); chosen == nil && len(implied) > 0 {
+				chosen = inOrder(p, featureSet(append([]string{project.FeatureOpens}, implied...)))
+				integrate = inOrder(p, featureSet(append(suggestedFeatures(p), implied...)))
+			}
+			if integrate == nil {
+				integrate = suggestedFeatures(p)
+			}
+			p.ReadAnalyticsFor(integrate)
+			vopts := verify.Options{Given: given, Features: chosen}
+			// Only what the flags name is checked: what the app sends other
+			// SDKs is a suggestion, not a choice.
+			if analytics.eventsGiven {
+				vopts.Events = analytics.events
+			}
+			if analytics.userIDGiven {
+				vopts.UserID = analytics.userID
+				vopts.UserIDFromCode = userIDSite(p, analytics.userID) != nil
+			}
+			var tenjin *track.Client
+			if !offline {
+				vopts.Latest = env.latestSDKs(cmd.Context())
+				tenjin = env.trackClient()
+				vopts.Keys = tenjin
+			}
+			if device || logs != "" {
+				// A launch on an iPhone is followed for up to a minute and a
+				// half; a person at a terminal is told how it goes.
+				var say func(string, ...any)
+				if format != render.JSON && env.interactive {
+					say = func(format string, a ...any) { _, _ = fmt.Fprintf(cmd.ErrOrStderr(), format+"\n", a...) }
+				}
+				input, err := readDevice(cmd, env, p, serial, logs, say)
+				if err != nil {
+					return err
+				}
+				// A read that Ctrl-C cut short is not a device that cannot
+				// be read.
+				if err := env.interrupted(); err != nil {
+					return err
+				}
+				if tenjin != nil {
+					input.Lookup = tenjin
+				}
+				vopts.Device = input
+			}
+			report := verify.Run(cmd.Context(), p, vopts)
+			// Nor is a key check it cut short a warning: nothing after it
+			// stands.
+			if err := env.interrupted(); err != nil {
+				return err
+			}
+			report.Findings = append(report.Findings, skillFindings(env.otherSkills(p.Root, buildinfo.Get().Version), p.Root, buildinfo.Get().Version)...)
+			env.noteReport(report)
+
+			if format == render.JSON {
+				if err := render.WriteJSON(cmd.OutOrStdout(), report); err != nil {
+					return err
+				}
+				return reportStatus(report.Summary, strict)
+			}
+			if err := writeReport(cmd.OutOrStdout(), report, offline); err != nil {
+				return err
+			}
+			// The fixer writes no key of its own accord: keys are settled
+			// after the agent, by writeGivenKeys.
+			fixer := &setup{cmd: cmd, env: env, args: args, agentFlag: fixWith, offline: offline, out: cmd.OutOrStdout(), style: render.NewStyler(cmd.OutOrStdout()),
+				given: given, features: integrate, analyticsFlags: analytics, analytics: defaultAnalytics(p, analytics), inProject: projectKeys{}, keys: map[string]verify.GivenKey{}}
+			fixed, offered, err := fixer.offerFix(p, report)
+			if err != nil {
+				return err
+			}
+			if fixed {
+				// The agent changed the project: read it again, write the
+				// keys over the placeholders it left, and say what stands now.
+				if p, err = loadProject(args); err != nil {
+					return err
+				}
+				env.noteProject(p)
+				if err := narrowBuilds(p, builds); err != nil {
+					return err
+				}
+				if err := fixer.writeGivenKeys(p); err != nil {
+					fixer.say("%s %s", fixer.style.Yellow("!"), render.Clean(err.Error()))
+				}
+				vopts.Device = nil
+				report = verify.Run(cmd.Context(), p, vopts)
+				if err := env.interrupted(); err != nil {
+					return err
+				}
+				env.noteReport(report)
+				fixer.say("\n%s", fixer.style.Heading("Checking again"))
+				if err := writeReport(cmd.OutOrStdout(), report, offline); err != nil {
+					return err
+				}
+			}
+			if !fixed && hasFinding(report, "sdk.version") && !agent.InsideAgent(env.getenv) {
+				upgrade := "tenjin sdk upgrade"
+				// A path that cannot be shown as it is cannot be copied either.
+				if len(args) == 1 && args[0] != "" && args[0] != "." && render.Clean(args[0]) == args[0] {
+					upgrade += " " + shellArg(args[0], runtime.GOOS)
+				}
+				fixer.say("\nTo upgrade the Tenjin SDK, with your coding agent or by hand: %s", fixer.style.Accent(upgrade))
+			}
+			// What Ctrl-C ended is said as that, whatever the report says.
+			if err := env.interrupted(); err != nil {
+				return err
+			}
+			status := reportStatus(report.Summary, strict)
+			if status != nil && !offered && len(fixer.agentItems(doctorWork(report))) > 0 {
+				return clierr.From(status).WithHint("Run 'tenjin setup' to fix these step by step, or 'tenjin doctor --agent claude' (or codex) to have your coding agent fix them.")
+			}
+			return status
+		},
+	}
+	cmd.Flags().StringVar(&fixWith, "agent", "", "fix what can be fixed in code with this coding agent: claude or codex, or none never to offer (default: ask at a terminal)")
+	addSDKKeyFlag(cmd, &sdkKeys)
+	cmd.Flags().BoolVar(&offline, "offline", false, "skip the SDK key check against Tenjin, and the look for newer SDK releases")
+	cmd.Flags().BoolVar(&strict, "strict", false, "exit non-zero on warnings as well as errors")
+	cmd.Flags().BoolVar(&device, "device", false, "also read what the app's last launch sent: from a connected Android device or emulator, an iPhone connected by cable, or a running iOS simulator")
+	cmd.Flags().StringVar(&serial, "serial", "", serialUsage)
+	cmd.Flags().StringVar(&logs, "logs", "", "also read a saved device log (logcat or iOS simulator), or - for standard input")
+	addBuildFlag(cmd, &builds)
+	addFeaturesFlag(cmd, &features, "check")
+	addAnalyticsFlags(cmd, &analytics)
+	return cmd
+}
+
+// hasFinding reports whether the report holds a finding with this ID that is
+// not a pass.
+func hasFinding(report *verify.Report, id string) bool {
+	for _, f := range report.Findings {
+		if f.ID == id && f.Severity != verify.Pass {
+			return true
+		}
+	}
+	return false
+}
+
+// doctorWork is what a coding agent can fix of a doctor's report: what setup
+// gives its agent, less what a device reported, which no change to the code
+// answers by itself.
+func doctorWork(report *verify.Report) []verify.Finding {
+	var work []verify.Finding
+	for _, f := range agentWork(report) {
+		if !strings.HasPrefix(f.ID, "device.") {
+			work = append(work, f)
+		}
+	}
+	return work
+}
+
+// offerFix offers, at a terminal, to have the developer's coding agent fix
+// what doctor found, and runs it on a yes or with --agent. The default is no:
+// doctor is first a check. fixed says the agent ran; offered, that the
+// developer was asked or chose with --agent.
+func (s *setup) offerFix(p *project.Project, report *verify.Report) (fixed, offered bool, err error) {
+	work := s.agentItems(doctorWork(report))
+	if len(work) == 0 || s.agentFlag == "none" || agent.InsideAgent(s.env.getenv) {
+		return false, s.agentFlag == "none", nil
+	}
+	installed := agent.Find(s.env.lookPath)
+	var helper *agent.Agent
+	switch {
+	case s.agentFlag != "":
+		for i := range installed {
+			if installed[i].ID == s.agentFlag {
+				helper = &installed[i]
+			}
+		}
+		if helper == nil {
+			return false, true, clierr.New(clierr.NotFound, "--agent %s was given, but it is not installed on this machine", s.agentFlag)
+		}
+		if s.refuseAgent(helper) {
+			return false, true, nil
+		}
+		s.sayAgentAnalytics(p, true)
+	case !s.env.interactive || len(installed) == 0:
+		return false, false, nil
+	default:
+		s.say("\n%s above can be fixed in the project's code.", plural(len(work), "finding"))
+		// An agent this run must not start is not offered; with none left,
+		// the reason said is the answer.
+		if installed = s.offerable(installed); len(installed) == 0 {
+			return false, true, nil
+		}
+		s.sayAgentAnalytics(p, false)
+		helper, err = s.askToFix(installed)
+		if err != nil || helper == nil {
+			return false, true, err
+		}
+	}
+	s.helper = helper
+	s.inProject = keysInProject(s.cmd.Context(), p, s.given)
+	ran, err := s.runAgent(p, report)
+	return ran, true, err
+}
+
+// keysInProject are the builds whose SDK key is written in the project,
+// whether Tenjin accepts it or not. The agent is told to leave those alone:
+// doctor may hold no key to write back over a placeholder. It reads the
+// files only.
+func keysInProject(ctx context.Context, p *project.Project, given verify.GivenKeys) projectKeys {
+	given.PreferSource = true
+	report := verify.Run(ctx, p, verify.Options{Given: given})
+	in := projectKeys{}
+	for i := range p.Targets {
+		t := &p.Targets[i]
+		for _, b := range t.Builds {
+			if f := findingFor(report, "key.unchecked", t, b); f != nil && f.File != "" {
+				in[b.ID] = keyIn(report, t, f)
+			}
+		}
+	}
+	return in
+}
+
+// projectKeys says, per build, what SDK key the project already holds.
+type projectKeys map[string]projectKey
+
+// projectKey is a key written in the project for a build. shared is where
+// it is when the code it is in serves every platform and also holds a
+// placeholder: whether the key is this build's or another platform's
+// cannot be told from the code.
+type projectKey struct {
+	held   bool
+	shared string
+}
+
+// keyIn describes the key a build's key.unchecked finding f points at.
+func keyIn(report *verify.Report, t *project.Target, f *verify.Finding) projectKey {
+	otherPlatform := false
+	for _, o := range report.Findings {
+		if o.ID == "key.unchecked" && o.Platform != t.Platform && o.File == f.File && o.Line == f.Line {
+			otherPlatform = true
+		}
+	}
+	placeholder := false
+	for _, o := range report.Findings {
+		if (o.ID == "sdk.key.placeholder" || o.ID == "sdk.key.unfilled" || o.ID == "sdk.key.whitespace") && (o.Platform == "" || o.Platform == t.Platform) {
+			placeholder = true
+		}
+	}
+	if !otherPlatform || !placeholder {
+		return projectKey{held: true}
+	}
+	at := f.File
+	if f.Line > 0 {
+		at = fmt.Sprintf("%s:%d", at, f.Line)
+	}
+	return projectKey{shared: at}
+}
+
+// writeGivenKeys writes, over the placeholders an agent left, the keys given
+// with --sdk-key or the environment, each only once Tenjin accepts it for
+// that build's own app. A key given without a build serves a platform with
+// one build only. Offline nothing can be checked, so nothing is written.
+func (s *setup) writeGivenKeys(p *project.Project) error {
+	builds, _ := placeholderBuilds(p, keyfill.Find(p.Root))
+	keys := map[string]string{}
+	for _, pb := range builds {
+		b := pb.build
+		given, ok := s.given.For(pb.target, b.ID)
+		if !ok {
+			if s.given.PassedOver(pb.target) {
+				s.say("  %s %s: the key from %s was not written: it is not given for this build, and %s has %d. Run tenjin setup, or tenjin project set-keys, to write this build's own key.",
+					s.style.Yellow("!"), pb.title, s.given.All.Source, platformNames[pb.target.Platform], len(pb.target.Builds))
+			}
+			continue
+		}
+		label := pb.title + ", key " + maskKey(given.Value) + " from " + given.Source
+		if s.offline {
+			s.say("  %s %s: not written: with --offline it cannot be checked with Tenjin first. Run tenjin project set-keys to check and write it.", s.style.Yellow("!"), label)
+			continue
+		}
+		verdict := checkGivenKey(s.cmd.Context(), s.keyCheck(), given.Value, b, false)
+		if verdict.ok && !verdict.checked {
+			// Kept by setup, which checks again later; doctor writes only
+			// what Tenjin has accepted.
+			verdict = keyVerdict{message: verdict.message + ", so it was not written"}
+		}
+		s.asker().verdict(label, verdict)
+		if verdict.checked {
+			keys[b.SDKKeyPlaceholder] = given.Value
+		}
+	}
+	filled, err := keyfill.Fill(p.Root, keys)
+	for _, spot := range filled {
+		s.say("  %s Wrote %s at %s:%d", s.style.Green("✓"), keyNoun(p, spot), render.Clean(spot.File), spot.Line)
+	}
+	if err != nil {
+		return fmt.Errorf("could not write the SDK keys: %w", err)
+	}
+	return nil
+}
+
+// askToFix asks whether an installed agent should fix the findings, and
+// which one when there are several. No is the default.
+func (s *setup) askToFix(installed []agent.Agent) (*agent.Agent, error) {
+	if len(installed) == 1 {
+		a := &installed[0]
+		s.say("%s is installed and can make the changes:", a.Name)
+		s.say("  - it works in this project only, under your own %s account;", a.Name)
+		s.say("  - %s;", a.Limits())
+		s.say("  - it %s;", agentCost("that account"))
+		s.say("  - it is never given an SDK key, and doctor checks its work afterwards.")
+		ok, err := s.env.confirm(s.out, fmt.Sprintf("Fix them with %s?", a.Name), false)
+		if err != nil || !ok {
+			return nil, err
+		}
+		return a, nil
+	}
+	s.say("These coding agents are installed and can make the changes, in this project only and under your own account:")
+	options := make([]string, len(installed))
+	for i, a := range installed {
+		s.say("  %d) %s: %s", i+1, s.style.Bold(a.Name), a.Limits())
+		options[i] = fmt.Sprintf("%s (%d)", a.Name, i+1)
+	}
+	s.say("Either %s.", agentCost("your own account"))
+	answer, err := s.env.ask(s.out, fmt.Sprintf("Fix them with %s, or neither? [n]", strings.Join(options, ", ")))
+	if err != nil {
+		return nil, err
+	}
+	answer = strings.ToLower(answer)
+	for i := range installed {
+		if answer == fmt.Sprint(i+1) || answer == installed[i].ID || answer == strings.ToLower(installed[i].Name) {
+			return &installed[i], nil
+		}
+	}
+	return nil, nil
+}
+
+// readDevice gets the device log from a device, a file or standard input. A
+// device that cannot be read is reported in the findings, not as a failure
+// of the command; a file that cannot be read is the user's mistake.
+func readDevice(cmd *cobra.Command, env *environment, p *project.Project, serial, logs string, say func(string, ...any)) (*verify.DeviceInput, error) {
+	var raw []byte
+	var platform project.Platform
+	switch {
+	case logs == "-":
+		b, err := io.ReadAll(env.stdin)
+		if err != nil {
+			return nil, err
+		}
+		raw = b
+	case logs != "":
+		b, err := os.ReadFile(logs)
+		if err != nil {
+			return nil, clierr.Wrap(clierr.NotFound, err, "cannot read %s: %v", logs, plainOSError(err))
+		}
+		raw = b
+	default:
+		platforms, err := serialPlatforms(p, serial)
+		if err != nil {
+			return nil, err
+		}
+		var problems []*devicelog.Unavailable
+		var tried []project.Platform
+		for _, candidate := range platforms {
+			b, _, err := readDeviceLog(cmd.Context(), env, p, candidate, serial, say)
+			var unavailable *devicelog.Unavailable
+			if errors.As(err, &unavailable) {
+				problems, tried = append(problems, unavailable), append(tried, candidate)
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+			raw, platform = b, candidate
+			break
+		}
+		if raw == nil && serial != "" {
+			// The device named with --serial cannot be read: the user's
+			// mistake, as a --logs file that cannot be read is.
+			return nil, deviceNotThere(combineProblems(tried, problems))
+		}
+		if raw == nil {
+			return &verify.DeviceInput{Problem: combineProblems(tried, problems), Platform: firstPlatform(tried, p)}, nil
+		}
+	}
+	log, err := devicelog.Parse(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	if platform == "" {
+		platform = project.Platform(log.Platform)
+		if platform == "" {
+			platform = firstPlatform(nil, p)
+		}
+	}
+	return &verify.DeviceInput{Log: log, Platform: platform}, nil
+}
+
+// devicePlatforms are the platforms whose devices to try, in order: the
+// project's own, Android first. A serial in the form of a UDID can only be a
+// simulator's, and any other only an Android device's.
+func devicePlatforms(p *project.Project, serial string) []project.Platform {
+	var out []project.Platform
+	for _, platform := range []project.Platform{project.Android, project.IOS} {
+		if p.Target(platform) == nil {
+			continue
+		}
+		if serial != "" && (platform == project.IOS) != looksLikeUDID(serial) {
+			continue
+		}
+		out = append(out, platform)
+	}
+	return out
+}
+
+// serialPlatforms is devicePlatforms for a run that may name a device with
+// --serial: the one platform that serial can name, or a usage error where
+// the project does not build for it. A serial that can name no device of
+// the project is a mistake to say, not a step to skip.
+func serialPlatforms(p *project.Project, serial string) ([]project.Platform, error) {
+	platforms := devicePlatforms(p, serial)
+	if serial == "" || len(platforms) > 0 {
+		return platforms, nil
+	}
+	if looksLikeUDID(serial) {
+		return nil, clierr.New(clierr.Usage, "--serial %s names an iPhone or an iOS simulator, and this project does not build for iOS", serial).
+			WithHint("Give an Android serial, as 'adb devices' lists them, or leave --serial out.")
+	}
+	return nil, clierr.New(clierr.Usage, "--serial %s names an Android device, and this project does not build for Android", serial).
+		WithHint("Give an iPhone's or a simulator's UDID, or leave --serial out.")
+}
+
+// deviceNotThere is the error for a device named with --serial that could
+// not be read: what the read said, as the command's failure.
+func deviceNotThere(problem *devicelog.Unavailable) error {
+	e := clierr.New(clierr.NotFound, "%s", problem.Reason)
+	if problem.Fix != "" {
+		e = e.WithHint("%s", problem.Fix)
+	}
+	return e
+}
+
+// A simulator's UDID is a UUID; an iPhone's is 8 and 16 hex digits, or 40
+// on older models.
+var udidPattern = regexp.MustCompile(`^(?:[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}|[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}|[0-9A-Fa-f]{40})$`)
+
+func looksLikeUDID(s string) bool { return udidPattern.MatchString(s) }
+
+// Where a device log came from.
+const (
+	fromAndroid   = "android"
+	fromIPhone    = "iphone"
+	fromSimulator = "simulator"
+)
+
+// serialUsage describes --serial, which doctor and setup share.
+const serialUsage = "which device to read, when several are connected: an Android serial (see 'adb devices'), or an iPhone's or a simulator's UDID"
+
+// readDeviceLog reads the SDK's lines from a device of one platform, and
+// says what kind of device it was. On iOS a connected iPhone is preferred to
+// a simulator: tenjin launches the app on it to read its console. The error
+// is a *devicelog.Unavailable when there is nothing to read from.
+func readDeviceLog(ctx context.Context, env *environment, p *project.Project, platform project.Platform, serial string, say func(string, ...any)) ([]byte, string, error) {
+	return readLaunch(ctx, env, p, platform, serial, nil, say)
+}
+
+// launchMark is where a device's log stood before a launch: the time of the
+// newest line in an Android device's, on the device's clock, and this Mac's
+// time for a simulator's, which logs on this Mac's clock. An iPhone needs
+// none: each read launches the app afresh.
+type launchMark struct {
+	android string
+	// unmarked is why the Android device could not be read when the mark
+	// was taken, such as not being plugged in yet. Where its log stood then
+	// is unknown, so the read goes by the device's clock from since instead
+	// (devicelog.ReadAndroidSince): nothing it logged before counts.
+	unmarked *devicelog.Unavailable
+	since    time.Time
+}
+
+// markLaunch notes where the log stands now, so that a read after a launch
+// holds that launch only.
+func markLaunch(ctx context.Context, env *environment, platform project.Platform, serial string) *launchMark {
+	m := &launchMark{since: time.Now()}
+	if platform == project.Android {
+		if adb, ok := devicelog.FindADB(env.lookPath, env.getenv); ok {
+			var err error
+			if m.android, err = devicelog.AndroidMark(ctx, env.runner(), adb, serial); err != nil && !errors.As(err, &m.unmarked) {
+				m.unmarked = &devicelog.Unavailable{Reason: err.Error()}
+			}
+		}
+	}
+	return m
+}
+
+// readLaunch is readDeviceLog for what came after mark; nil reads it all.
+// say, which may be nil, is told what is read, and how a launch on an
+// iPhone goes while it is followed.
+func readLaunch(ctx context.Context, env *environment, p *project.Project, platform project.Platform, serial string, mark *launchMark, say func(string, ...any)) ([]byte, string, error) {
+	since := time.Time{}
+	if mark != nil {
+		// A second's margin for the log's rounding.
+		since = mark.since.Add(-time.Second)
+	}
+	if platform == project.IOS {
+		xcrun, err := env.lookPath("xcrun")
+		if err != nil {
+			return nil, "", &devicelog.Unavailable{
+				Reason: "Xcode was not found, so no iPhone or iOS simulator could be read",
+				Fix:    "Install Xcode, or save the log yourself and pass it with --logs.",
+			}
+		}
+		phones, listErr := devicelog.ConnectedIPhones(ctx, env.runner(), xcrun)
+		var matching []devicelog.IPhone
+		for _, phone := range phones {
+			if serial == "" || strings.EqualFold(phone.UDID, serial) {
+				matching = append(matching, phone)
+			}
+		}
+		switch {
+		case len(matching) > 1:
+			var names []string
+			for _, phone := range matching {
+				names = append(names, phone.Name+" ("+phone.UDID+")")
+			}
+			return nil, "", &devicelog.Unavailable{
+				Reason: "More than one iPhone is connected: " + strings.Join(names, ", "),
+				Fix:    "Pass --serial with the UDID of the one to read.",
+			}
+		case len(matching) == 1:
+			bundle := ""
+			if t := p.Target(project.IOS); t != nil {
+				bundle = t.BundleID
+			}
+			raw, err := readIPhone(ctx, env, xcrun, matching[0], bundle, say)
+			return raw, fromIPhone, err
+		}
+		raw, err := devicelog.ReadIOSSimulatorSince(ctx, env.runner(), xcrun, serial, since)
+		if err == nil && say != nil {
+			// Only a list that came back empty says no iPhone is there.
+			if listErr == nil && len(phones) == 0 {
+				say("No iPhone is connected, so this is the simulator's log.")
+			} else {
+				say("This is the simulator's log.")
+			}
+		}
+		// With no simulator either, a devicectl that failed is the more
+		// likely reason nothing was found.
+		var unavailable *devicelog.Unavailable
+		if listErr != nil && errors.As(err, &unavailable) {
+			unavailable.Reason += "; and Xcode's devicectl could not list iPhones (" + listErr.Error() + ")"
+		}
+		return raw, fromSimulator, err
+	}
+	adb, ok := devicelog.FindADB(env.lookPath, env.getenv)
+	if !ok {
+		return nil, "", &devicelog.Unavailable{
+			Reason: "adb was not found, so the device log could not be read",
+			Fix:    "Install the Android platform tools, or save the log yourself and pass it with --logs.",
+		}
+	}
+	if mark != nil && mark.unmarked != nil {
+		raw, err := devicelog.ReadAndroidSince(ctx, env.runner(), adb, serial, since)
+		return raw, fromAndroid, err
+	}
+	raw, err := devicelog.ReadAndroid(ctx, env.runner(), adb, serial)
+	if err == nil && mark != nil {
+		raw = devicelog.Since(raw, mark.android)
+	}
+	return raw, fromAndroid, err
+}
+
+// launchTick is how often a person waiting on a launch on an iPhone is told
+// that the SDK has not logged yet. Tests shorten it.
+var launchTick = 30 * time.Second
+
+// readIPhone is devicelog.ReadIPhone, saying as it goes what the launch has
+// reached, since it can take as long as devicelog.IPhoneLaunchWindow.
+func readIPhone(ctx context.Context, env *environment, xcrun string, phone devicelog.IPhone, bundle string, say func(string, ...any)) ([]byte, error) {
+	if say == nil {
+		return devicelog.ReadIPhone(ctx, env.streamer(), xcrun, phone, bundle, nil)
+	}
+	window := devicelog.IPhoneLaunchWindow
+	// Device names come from the device, and bundle IDs from the project.
+	name, app := render.Clean(phone.Name), render.Clean(bundle)
+	// mu orders what is said; once the read has ended, the ticker says
+	// nothing more, and has stopped before readIPhone returns.
+	var mu sync.Mutex
+	reached, ended := devicelog.LaunchStage(0), false
+	tick := launchTick
+	done, stopped := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(stopped)
+		ticker := time.NewTicker(tick)
+		defer ticker.Stop()
+		// The read ends at the window; a tick then would say nothing new.
+		for waited := tick; waited < window; waited += tick {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+			}
+			mu.Lock()
+			if !ended {
+				seconds := fmt.Sprintf("%d of %d seconds", int(waited/time.Second), int(window/time.Second))
+				switch reached {
+				case devicelog.Launching:
+					say("  · %s, and the app has not started yet. Keep the phone unlocked.", seconds)
+				case devicelog.AppStarted:
+					say("  · %s, and nothing from the Tenjin SDK yet. If the app shows the tracking prompt, answer it.", seconds)
+				}
+			}
+			mu.Unlock()
+		}
+	}()
+	defer func() {
+		mu.Lock()
+		ended = true
+		mu.Unlock()
+		close(done)
+		<-stopped
+	}()
+	return devicelog.ReadIPhone(ctx, env.streamer(), xcrun, phone, bundle, func(stage devicelog.LaunchStage) {
+		mu.Lock()
+		defer mu.Unlock()
+		reached = stage
+		switch stage {
+		case devicelog.Launching:
+			say("Launching %s on %s and reading its console, for up to %d seconds (Ctrl-C stops)…", app, name, int(window/time.Second))
+		case devicelog.AppStarted:
+			say("  · The app is running on %s. Waiting for the Tenjin SDK…", name)
+		case devicelog.SDKLogging:
+			say("  · The Tenjin SDK is logging. Waiting for Tenjin's answer to its connect…")
+		}
+	})
+}
+
+// combineProblems says why no device could be read, for every platform tried.
+func combineProblems(tried []project.Platform, problems []*devicelog.Unavailable) *devicelog.Unavailable {
+	switch len(problems) {
+	case 0:
+		return &devicelog.Unavailable{Reason: "This project builds for no platform whose device can be read"}
+	case 1:
+		return problems[0]
+	}
+	var reasons, fixes []string
+	for i, u := range problems {
+		reasons = append(reasons, u.Reason)
+		if u.Fix != "" {
+			fixes = append(fixes, platformNames[tried[i]]+": "+u.Fix)
+		}
+	}
+	return &devicelog.Unavailable{Reason: strings.Join(reasons, "; "), Fix: strings.Join(fixes, " ")}
+}
+
+// firstPlatform is the platform device findings are reported on when no
+// device was read: the first one tried, or the project's first.
+func firstPlatform(tried []project.Platform, p *project.Project) project.Platform {
+	if len(tried) > 0 {
+		return tried[0]
+	}
+	if len(p.Targets) > 0 {
+		return p.Targets[0].Platform
+	}
+	return project.Android
+}
+
+// reportStatus turns a summary into the command's exit status.
+func reportStatus(s verify.Summary, strict bool) error {
+	switch {
+	case s.Errors > 0:
+		return clierr.New(clierr.ChecksFailed, "%s will stop events reaching Tenjin", plural(s.Errors, "problem"))
+	case strict && s.Warnings > 0:
+		return clierr.New(clierr.ChecksFailed, "%s (--strict)", plural(s.Warnings, "warning"))
+	}
+	return nil
+}
+
+// shellArg is an argument as it is typed in a shell on goos: as it is when
+// nothing in it is special, in double quotes on Windows (where a path holds
+// no double quote), in single quotes elsewhere. A path that starts with a
+// dash is made relative, so that it is not read as a flag.
+func shellArg(s, goos string) string {
+	if strings.HasPrefix(s, "-") {
+		s = "./" + s
+	}
+	plain := "-_./:@+=,"
+	if goos == "windows" {
+		plain += `\`
+	}
+	isPlain := func(r rune) bool {
+		return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune(plain, r)
+	}
+	if s != "" && !strings.ContainsFunc(s, func(r rune) bool { return !isPlain(r) }) {
+		return s
+	}
+	if goos == "windows" {
+		return `"` + s + `"`
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
+}
+
+func writeReport(w io.Writer, report *verify.Report, offline bool) error {
+	report = forPeople(report)
+	style, width := render.NewStyler(w), render.TextWidth(w)
+	var b strings.Builder
+	p := report.Project
+	kind := frameworkNames[p.Framework]
+	if p.Library != nil {
+		kind = project.LibraryKindName(p.Library.Kind)
+	}
+	fmt.Fprintf(&b, "%s %s (%s)\n", style.Bold("Checking"), p.Root, kind)
+
+	// What the device log says is its own section: it is about the build
+	// that ran, which is not always the project on disk.
+	sections := []struct {
+		platform project.Platform
+		device   bool
+		title    string
+	}{
+		{"", false, "Shared code"},
+		{project.Android, false, "Android"},
+		{project.IOS, false, "iOS"},
+		{project.Android, true, "On the device"},
+		{project.IOS, true, "On the device"},
+		{"", true, "On the device"},
+	}
+	for _, section := range sections {
+		var findings []verify.Finding
+		for _, f := range report.Findings {
+			if f.Platform == section.platform && strings.HasPrefix(f.ID, "device.") == section.device {
+				findings = append(findings, f)
+			}
+		}
+		if len(findings) == 0 {
+			continue
+		}
+		title := section.title
+		if p.Library != nil && section.platform == "" && !section.device {
+			title = "Library"
+		}
+		if t := p.Target(section.platform); t != nil && t.AppBundleID() != "" && !section.device {
+			title += " · " + t.AppBundleID()
+		}
+		fmt.Fprintf(&b, "\n%s\n", style.Heading(title))
+		// What needs doing comes first, the worst of it at the top, and what
+		// passed after it. A problem's explanation and fix make a block of
+		// their own, set apart by a blank line.
+		sort.SliceStable(findings, func(i, j int) bool {
+			return severityOrder[findings[i].Severity] < severityOrder[findings[j].Severity]
+		})
+		for i, f := range findings {
+			if i > 0 && (isBlock(findings[i-1]) || isBlock(f)) {
+				b.WriteString("\n")
+			}
+			writeFinding(&b, style, f, width)
+		}
+	}
+
+	s := report.Summary
+	// Each count takes its severity's colour once there is something to count.
+	tint := func(n int, text string, colour func(string) string) string {
+		if n == 0 {
+			return text
+		}
+		return colour(text)
+	}
+	fmt.Fprintf(&b, "\n%s, %s, %s\n",
+		tint(s.Errors, plural(s.Errors, "error"), style.Red),
+		tint(s.Warnings, plural(s.Warnings, "warning"), style.Yellow),
+		tint(s.Passed, fmt.Sprintf("%d passed", s.Passed), style.Green))
+	if offline {
+		b.WriteString("The SDK key was not checked against Tenjin (--offline).\n")
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+// severityOrder is the order findings are listed in.
+var severityOrder = map[verify.Severity]int{verify.Error: 0, verify.Warning: 1, verify.Info: 2, verify.Pass: 3}
+
+// isBlock reports whether a finding prints more than its one line.
+func isBlock(f verify.Finding) bool {
+	return f.Severity != verify.Pass && (f.Detail != "" || f.Fix != "")
+}
+
+// writeFinding prints one finding. width is the terminal's, or 0 to leave
+// long lines whole, as for a pipe.
+func writeFinding(b *strings.Builder, style render.Styler, f verify.Finding, width int) {
+	mark := map[verify.Severity]string{
+		verify.Pass:    style.Green("✓"),
+		verify.Error:   style.Red("✗"),
+		verify.Warning: style.Yellow("!"),
+		verify.Info:    style.Dim("i"),
+	}[f.Severity]
+
+	line := "  " + mark + " " + f.Title
+	if f.File != "" {
+		where := f.File
+		if f.Line > 0 {
+			where = fmt.Sprintf("%s:%d", f.File, f.Line)
+		}
+		line += "  " + style.Dim(where)
+	}
+	b.WriteString(line + "\n")
+	if f.Severity == verify.Pass {
+		return
+	}
+	if f.Detail != "" {
+		b.WriteString(render.Indent(f.Detail, 6, width) + "\n")
+	}
+	if f.Fix != "" {
+		fix := render.Indent("Fix: "+f.Fix, 6, width)
+		b.WriteString(strings.Replace(fix, "Fix:", style.Bold("Fix:"), 1) + "\n")
+	}
+}

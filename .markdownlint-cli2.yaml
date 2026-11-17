@@ -1,0 +1,28 @@
+# Markdown lint for the documentation (CI: .github/workflows/docs.yaml).
+config:
+  default: true
+  # Prose is not wrapped; tables and long commands can't be.
+  MD013: false
+  # <details> and <summary> fold the installer's details in the README.
+  MD033:
+    allowed_elements: [details, summary]
+  # Changelog and template headings repeat by design.
+  MD024:
+    siblings_only: true
+globs:
+  - "**/*.md"
+ignores:
+  # Templates GitHub fills in: no heading by design.
+  - ".github/**"
+  - "internal/guides/data/**"
+  - "dist/**"
+  - "demo/**"
+  - "docs/findings.md"
+  - "docs/plan.md"
+  - "docs/spike-notes.md"
+  - "docs/how-it-works.md"
+  - "CLAUDE.local.md"
+  - "THIRD_PARTY_NOTICES.md"
+  - "completions/**"
+  # Written by release-please.
+  - "CHANGELOG.md"

@@ -1,0 +1,86 @@
+{
+  "conversion_value_count": {
+    "name": "Conversions",
+    "description": "Number of Conversion postbacks received (includes redownloads and first downloads)",
+    "categories": [
+      "SKAdNetwork"
+    ]
+  },
+  "conversion_value_avg": {
+    "name": "Conversion Value Average",
+    "description": "Average Conversion Value",
+    "categories": [
+      "SKAdNetwork"
+    ]
+  },
+  "conversion_value_total": {
+    "name": "Conversion Value Total",
+    "description": "Sum of Conversion Values",
+    "categories": [
+      "SKAdNetwork"
+    ]
+  },
+  "redownload_count": {
+    "name": "Redownloads",
+    "description": "Number of Conversion postbacks received for redownloads",
+    "categories": [
+      "SKAdNetwork"
+    ]
+  },
+  "redownload_cv_avg": {
+    "name": "Redownload Conversion Value Average",
+    "description": "Average Conversion Value for redownloads",
+    "categories": [
+      "SKAdNetwork"
+    ]
+  },
+  "redownload_cv_total": {
+    "name": "Redownload Conversion Value Total",
+    "description": "Sum of Conversion Values for redownloads",
+    "categories": [
+      "SKAdNetwork"
+    ]
+  },
+  "first_download_count": {
+    "name": "First Downloads",
+    "description": "Number of Conversion postbacks received for first downloads",
+    "categories": [
+      "SKAdNetwork"
+    ]
+  },
+  "first_download_cv_avg": {
+    "name": "First Download Conversion Value Average",
+    "description": "Average Conversion Value for first downloads",
+    "categories": [
+      "SKAdNetwork"
+    ]
+  },
+  "first_download_cv_total": {
+    "name": "First Download Conversion Value Total",
+    "description": "Sum of Conversion Values for first downloads",
+    "categories": [
+      "SKAdNetwork"
+    ]
+  },
+  "assists": {
+    "name": "Assists",
+    "description": "Number of ad impressions that were shown to a user that ultimately downloaded the app, but were not awarded with an attribution. Introduced in SKAdNetwork 3.0, this corresponds to postbacks with did-win=false.",
+    "categories": [
+      "SKAdNetwork"
+    ]
+  },
+  "first_download_assists": {
+    "name": "First Download Assists",
+    "description": "Number of Assist postbacks received for first downloads",
+    "categories": [
+      "SKAdNetwork"
+    ]
+  },
+  "redownload_assists": {
+    "name": "Redownload Assists",
+    "description": "Number of Assist postbacks received for redownloads",
+    "categories": [
+      "SKAdNetwork"
+    ]
+  }
+}

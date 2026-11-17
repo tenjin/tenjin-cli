@@ -1,0 +1,197 @@
+package keyfill
+
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/tenjin/tenjin-cli/internal/project"
+)
+
+func write(t *testing.T, root string, files map[string]string) {
+	t.Helper()
+	for rel, content := range files {
+		path := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o640); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestPlaceholders(t *testing.T) {
+	if Placeholder(project.Android) != "__TENJIN_ANDROID_SDK_KEY__" || Placeholder(project.IOS) != "__TENJIN_IOS_SDK_KEY__" {
+		t.Errorf("placeholders = %q, %q", Placeholder(project.Android), Placeholder(project.IOS))
+	}
+	if !IsPlaceholder("__TENJIN_IOS_SDK_KEY__") || IsPlaceholder("x__TENJIN_IOS_SDK_KEY__") || IsPlaceholder("REALKEY") {
+		t.Error("IsPlaceholder")
+	}
+}
+
+func TestFindAndFill(t *testing.T) {
+	root := t.TempDir()
+	dart := "final key = Platform.isIOS\n    ? '__TENJIN_IOS_SDK_KEY__'\n    : '__TENJIN_ANDROID_SDK_KEY__';\n"
+	write(t, root, map[string]string{
+		"lib/main.dart":                dart,
+		"android/app/src/main/Main.kt": `val k = "__TENJIN_ANDROID_SDK_KEY__"` + "\n",
+		"node_modules/lib/x.js":        `"__TENJIN_ANDROID_SDK_KEY__"`, // dependencies are never touched
+		"README.md":                    "__TENJIN_ANDROID_SDK_KEY__\n", // nor files that are not code or config
+		"lib/other.dart":               "nothing here\n",
+		"lib/look_alike.dart":          "'__TENJIN_WINDOWS_SDK_KEY__'\n",
+	})
+
+	spots := Find(root)
+	var got []string
+	for _, s := range spots {
+		got = append(got, string(s.Platform)+"@"+s.File+":"+strconv.Itoa(s.Line))
+	}
+	want := "android@android/app/src/main/Main.kt:1 ios@lib/main.dart:2 android@lib/main.dart:3"
+	if strings.Join(got, " ") != want {
+		t.Fatalf("found %q, want %q", strings.Join(got, " "), want)
+	}
+
+	// Only Android's key is known: its placeholders are filled, iOS's stays.
+	filled, err := Fill(root, map[string]string{Placeholder(project.Android): "ANDROIDKEY"})
+	if err != nil || len(filled) != 2 {
+		t.Fatalf("filled = %+v, err = %v", filled, err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(root, "lib/main.dart"))
+	if string(raw) != "final key = Platform.isIOS\n    ? '__TENJIN_IOS_SDK_KEY__'\n    : 'ANDROIDKEY';\n" {
+		t.Errorf("main.dart = %q", raw)
+	}
+	for _, rel := range []string{"node_modules/lib/x.js", "README.md", "lib/look_alike.dart"} {
+		if b, _ := os.ReadFile(filepath.Join(root, rel)); strings.Contains(string(b), "ANDROIDKEY") {
+			t.Errorf("%s was changed", rel)
+		}
+	}
+	// The file keeps its permissions.
+	if info, _ := os.Stat(filepath.Join(root, "lib/main.dart")); runtime.GOOS != "windows" && info.Mode().Perm() != 0o640 {
+		t.Errorf("mode = %v", info.Mode().Perm())
+	}
+	if left := Find(root); len(left) != 1 || left[0].Platform != project.IOS {
+		t.Errorf("left = %+v", left)
+	}
+}
+
+// A build other than the main one has its own placeholder, and only its key
+// fills it.
+func TestFillABuildsOwnPlaceholder(t *testing.T) {
+	root := t.TempDir()
+	gradle := `productFlavors {
+    create("play") { buildConfigField("String", "TENJIN_SDK_KEY", "\"__TENJIN_ANDROID_SDK_KEY__\"") }
+    create("amazon") { buildConfigField("String", "TENJIN_SDK_KEY", "\"__TENJIN_ANDROID_SDK_KEY_AMAZON__\"") }
+}
+`
+	write(t, root, map[string]string{
+		"app/build.gradle.kts": gradle,
+		// A file that holds only a build's placeholder, none of a platform's.
+		"lib/stores.dart": "const amazonKey = '__TENJIN_ANDROID_SDK_KEY_AMAZON__'; // Tenjin\n",
+	})
+	spots := Find(root)
+	if len(spots) != 3 || spots[1].Placeholder != "__TENJIN_ANDROID_SDK_KEY_AMAZON__" || spots[1].Platform != project.Android || spots[1].Line != 3 || spots[2].File != "lib/stores.dart" {
+		t.Fatalf("spots = %+v", spots)
+	}
+	if !IsPlaceholder("__TENJIN_ANDROID_SDK_KEY_AMAZON_PROD__") {
+		t.Error("a build's placeholder is not recognised")
+	}
+	filled, err := Fill(root, map[string]string{"__TENJIN_ANDROID_SDK_KEY_AMAZON__": "AMAZONKEY"})
+	if err != nil || len(filled) != 2 {
+		t.Fatalf("filled = %+v, err = %v", filled, err)
+	}
+	raw, _ := os.ReadFile(filepath.Join(root, "app/build.gradle.kts"))
+	if want := strings.Replace(gradle, "__TENJIN_ANDROID_SDK_KEY_AMAZON__", "AMAZONKEY", 1); string(raw) != want {
+		t.Errorf("build file:\n%s", raw)
+	}
+}
+
+// A placeholder in a file that is a symbolic link is left alone: the file
+// it points to may be outside the project.
+func TestASymlinkedFileIsNotFilled(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need privileges on Windows")
+	}
+	root, outside := t.TempDir(), t.TempDir()
+	target := filepath.Join(outside, "config.json")
+	if err := os.WriteFile(target, []byte(`{"key": "__TENJIN_ANDROID_SDK_KEY__"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(root, "config.json")); err != nil {
+		t.Fatal(err)
+	}
+	filled, _ := Fill(root, map[string]string{"__TENJIN_ANDROID_SDK_KEY__": "K"})
+	if len(filled) != 0 {
+		t.Errorf("filled %v", filled)
+	}
+	if info, err := os.Lstat(filepath.Join(root, "config.json")); err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Error("the link was replaced")
+	}
+	if raw, _ := os.ReadFile(target); !strings.Contains(string(raw), "__TENJIN_ANDROID_SDK_KEY__") {
+		t.Errorf("the file outside the project was written: %s", raw)
+	}
+	// It is still found, with why it is not filled.
+	spots := Find(root)
+	if len(spots) != 1 || spots[0].File != "config.json" || !strings.Contains(spots[0].Blocked, "symbolic link") || len(Writable(spots)) != 0 {
+		t.Errorf("spots = %+v", spots)
+	}
+}
+
+// The TenjinObject component keeps its key in a scene or a prefab. Saved as
+// YAML text, it is filled like any file; saved in binary form, where a
+// string carries its length, it is found and left.
+func TestUnityScenesAndPrefabs(t *testing.T) {
+	root := t.TempDir()
+	const scene = "%YAML 1.1\n%TAG !u! tag:unity3d.com,2011:\n--- !u!114 &1\nMonoBehaviour:\n  sdkKey: __TENJIN_ANDROID_SDK_KEY__\n"
+	binary := "\x00\x00\x00\x1a__TENJIN_ANDROID_SDK_KEY__\x00"
+	write(t, root, map[string]string{
+		"Assets/Scenes/Main.unity":      scene,
+		"Assets/Prefabs/Tenjin.prefab":  binary,
+		"Assets/Settings/Tenjin.asset":  "%YAML 1.1\n--- !u!114 &1\n  key: '__TENJIN_IOS_SDK_KEY__'\n",
+		"Assets/Scenes/Main.unity.meta": "guid: 1\n",
+		"Assets/Scenes/Other.unity":     "%YAML 1.1\n  sdkKey: \n",
+	})
+	spots := Find(root)
+	var got []string
+	for _, s := range spots {
+		got = append(got, s.File+":"+strconv.Itoa(s.Line)+":"+strconv.FormatBool(s.Blocked != ""))
+	}
+	if want := "Assets/Prefabs/Tenjin.prefab:1:true Assets/Scenes/Main.unity:5:false Assets/Settings/Tenjin.asset:3:false"; strings.Join(got, " ") != want {
+		t.Fatalf("found %q, want %q", strings.Join(got, " "), want)
+	}
+	const key = "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+	filled, err := Fill(root, map[string]string{Placeholder(project.Android): key})
+	if err != nil || len(filled) != 1 || filled[0].File != "Assets/Scenes/Main.unity" {
+		t.Fatalf("filled = %+v, err = %v", filled, err)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(root, "Assets/Scenes/Main.unity")); string(raw) != strings.Replace(scene, "__TENJIN_ANDROID_SDK_KEY__", key, 1) {
+		t.Errorf("scene = %q", raw)
+	}
+	if raw, _ := os.ReadFile(filepath.Join(root, "Assets/Prefabs/Tenjin.prefab")); string(raw) != binary {
+		t.Errorf("the binary prefab was written: %q", raw)
+	}
+}
+
+// Unfill puts back exactly what Fill wrote.
+func TestUnfillPutsThePlaceholdersBack(t *testing.T) {
+	root := t.TempDir()
+	const original = "val key = \"__TENJIN_ANDROID_SDK_KEY__\"\n"
+	path := filepath.Join(root, "Main.kt")
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	keys := map[string]string{"__TENJIN_ANDROID_SDK_KEY__": "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"}
+	filled, err := Fill(root, keys)
+	if err != nil || len(filled) != 1 {
+		t.Fatalf("filled %v, %v", filled, err)
+	}
+	if err := Unfill(root, filled, keys); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(path); string(got) != original {
+		t.Errorf("got %q", got)
+	}
+}

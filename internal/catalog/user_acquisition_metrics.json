@@ -1,0 +1,1268 @@
+{
+  "spend": {
+    "name": "Spend",
+    "description": "Total Spend Amount ($)",
+    "categories": [
+      "Acquisition"
+    ]
+  },
+  "installs": {
+    "name": "Reported Installs",
+    "description": "Number of Reported Installs",
+    "categories": [
+      "Acquisition"
+    ]
+  },
+  "clicks": {
+    "name": "Reported Clicks",
+    "description": "Number of Reported Clicks",
+    "categories": [
+      "Acquisition"
+    ]
+  },
+  "impressions": {
+    "name": "Reported Impressions",
+    "description": "Number of Reported Impressions",
+    "categories": [
+      "Acquisition"
+    ]
+  },
+  "cpi": {
+    "name": "Cost-Per-Install (CPI)",
+    "description": "Average CPI Amount ($)",
+    "categories": [
+      "Cost"
+    ]
+  },
+  "tcpi": {
+    "name": "Cost-Per-Tracked Install (tCPI)",
+    "description": "Average tCPI Amount ($)",
+    "categories": [
+      "Cost"
+    ]
+  },
+  "cpc": {
+    "name": "Cost-Per-Click (CPC)",
+    "description": "Average CPC Amount ($)",
+    "categories": [
+      "Cost"
+    ]
+  },
+  "cpm": {
+    "name": "Cost-Per-1000-Impressions (CPM)",
+    "description": "Average CPM Amount ($)",
+    "categories": [
+      "Cost"
+    ]
+  },
+  "ctr": {
+    "name": "Click-Through-Rate (CTR)",
+    "description": "Average CTR Percentage (%)",
+    "categories": [
+      "Engagement"
+    ]
+  },
+  "cvr": {
+    "name": "Conversion Rate (CVR)",
+    "description": "Average CVR Percentage (%)",
+    "categories": [
+      "Engagement"
+    ]
+  },
+  "cpr": {
+    "name": "Completion Rate (CPR)",
+    "description": "Average CPR Percentage (%)",
+    "categories": [
+      "Engagement"
+    ]
+  },
+  "users": {
+    "name": "Daily Active Users (DAU)",
+    "description": "Average DAU",
+    "categories": [
+      "Engagement"
+    ]
+  },
+  "sessions": {
+    "name": "Sessions",
+    "description": "Average Sessions",
+    "categories": [
+      "Engagement"
+    ]
+  },
+  "revenues": {
+    "name": "In App Purchase (IAP) Revenue",
+    "description": "Total IAP Amount ($)",
+    "categories": [
+      "Revenue"
+    ]
+  },
+  "total_rev": {
+    "name": "Total Revenue",
+    "description": "Total Revenue Amount ($)",
+    "categories": [
+      "Revenue"
+    ]
+  },
+  "pub_rev": {
+    "name": "Ad Revenue",
+    "description": "Total Ad Revenue Amount ($)",
+    "categories": [
+      "Revenue"
+    ]
+  },
+  "ad_mediation_revenue": {
+    "name": "Ad Mediation Revenue",
+    "description": "Total Ad Mediation Revenue Amount ($)",
+    "categories": [
+      "Revenue"
+    ]
+  },
+  "iap_arpu": {
+    "name": "In App Purchase (IPA) per Daily Active Users (DAU)",
+    "description": "Average IAP per DAU Amount ($)",
+    "categories": [
+      "ARPU"
+    ]
+  },
+  "pub_arpu": {
+    "name": "Ad Revenue per Daily Active Users (DAU)",
+    "description": "Average Ad Revenue per DAU Amount ($)",
+    "categories": [
+      "ARPU"
+    ]
+  },
+  "ad_mediation_arpu": {
+    "name": "Ad Mediation Revenue per Daily Active Users (DAU)",
+    "description": "Average Ad Mediation Revenue per DAU Amount ($)",
+    "categories": [
+      "ARPU"
+    ]
+  },
+  "total_ad_mediation_revenue": {
+    "name": "Total Ad Mediation Revenue",
+    "description": "Ad Mediation Revenue + IAP Revenue Amount ($)",
+    "categories": [
+      "Revenue"
+    ]
+  },
+  "total_ad_mediation_revenue_Nd": {
+    "name": "N-Day Total Ad Mediation LTV",
+    "description": "Total N-Day (Ad Mediation LTV + IAP LTV) Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "LTV"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "total_ad_mediation_rpu_Nd": {
+    "name": "N-Day Total Ad Mediation LTV / User",
+    "description": "Average N-Day Total (Ad Mediation LTV + IAP LTV) per User Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "LTV"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "total_ad_mediation_roi_Nd": {
+    "name": "N-Day Total Ad Mediation ROI",
+    "description": "Average N-Day Total (Ad Mediation + IAP) ROI Percentage (%) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "ROI/ROAS"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "total_ad_mediation_roas_Nd": {
+    "name": "N-Day Total Ad Mediation ROAS",
+    "description": "Average N-Day (Ad Mediation + IAP) ROAS Percentage (%) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "ROI/ROAS"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "total_ad_mediation_arpu": {
+    "name": "Total Ad Mediation Revenue per Daily Active Users (DAU)",
+    "description": "Average Total (Ad Mediation Revenue + IAP Revenue) ARPDAU Amount ($)",
+    "categories": [
+      "ARPU"
+    ]
+  },
+  "total_arpu": {
+    "name": "Total Revenue per Daily Active Users (DAU)",
+    "description": "Average Total ARPDAU Amount ($)",
+    "categories": [
+      "ARPU"
+    ]
+  },
+  "tracked_clicks": {
+    "name": "Tracked Clicks",
+    "description": "Number of Tracked Clicks",
+    "categories": [
+      "Acquisition"
+    ]
+  },
+  "tracked_installs": {
+    "name": "Tracked Installs",
+    "description": "Number of Tracked Installs",
+    "categories": [
+      "Acquisition"
+    ]
+  },
+  "tracked_reinstalls": {
+    "name": "Tracked Reinstalls",
+    "description": "Number of Tracked Reinstalls",
+    "categories": [
+      "Acquisition"
+    ]
+  },
+  "tracked_impressions": {
+    "name": "Tracked Impressions",
+    "description": "Number of  Tracked Impressions",
+    "categories": [
+      "Acquisition"
+    ]
+  },
+  "tracked_cvr": {
+    "name": "Tracked Conversion Rate (CVR)",
+    "description": "Average CVR Percentage (%)",
+    "categories": [
+      "Engagement"
+    ]
+  },
+  "installs_difference": {
+    "name": "Installs Difference",
+    "description": "Total Installs Difference",
+    "categories": [
+      "Fraud"
+    ]
+  },
+  "clicks_difference": {
+    "name": "Clicks Difference",
+    "description": "Total Clicks Difference",
+    "categories": [
+      "Fraud"
+    ]
+  },
+  "installs_difference_pct": {
+    "name": "Installs Difference Percent",
+    "description": "Average Installs Difference Percentage (%)",
+    "categories": [
+      "Fraud"
+    ]
+  },
+  "clicks_difference_pct": {
+    "name": "Clicks Difference Percent",
+    "description": "Average Clicks Difference Percentage (%)",
+    "categories": [
+      "Fraud"
+    ]
+  },
+  "all_fraud": {
+    "name": "Fraud Events",
+    "description": "Number of Fraud Events",
+    "categories": [
+      "Fraud"
+    ]
+  },
+  "blocked_clicks": {
+    "name": "Blocked Clicks",
+    "description": "Number of Blocked Clicks",
+    "categories": [
+      "Fraud"
+    ]
+  },
+  "fraud_purchases": {
+    "name": "Fraudulent Purchases",
+    "description": "Number of Fraudulent Purchases",
+    "categories": [
+      "Fraud"
+    ]
+  },
+  "fraud_revenue": {
+    "name": "Blocked Fraudulent Revenue",
+    "description": "Total Blocked Fraudulent Revenue Amount ($)",
+    "categories": [
+      "Fraud"
+    ]
+  },
+  "blocked_device_events": {
+    "name": "Blocked Device Events",
+    "description": "Number of Blocked Device Events",
+    "categories": [
+      "Fraud"
+    ]
+  },
+  "users_Nd": {
+    "name": "N-Day Retained Users",
+    "description": "Number of N-Day Retained Users where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "Retention"
+    ],
+    "cohort_type": "point_in_time",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "sessions_Nd": {
+    "name": "N-Day Sessions",
+    "description": "Number of N-Day Sessions where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "Retention"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "retention_Nd": {
+    "name": "N-Day Retention Rate",
+    "description": "Average N-Day Retention Rate Percentage (%) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "Retention"
+    ],
+    "cohort_type": "point_in_time",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "revenues_Nd": {
+    "name": "N-Day IAP LTV",
+    "description": "Total N-Day IAP LTV Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "LTV"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "pubrev_Nd": {
+    "name": "N-Day Ad Revenue LTV",
+    "description": "Total N-Day Ad Revenue LTV Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "LTV"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "ad_mediation_revenue_Nd": {
+    "name": "N-Day Ad Mediation Revenue LTV",
+    "description": "Total N-Day Ad Mediation Revenue LTV Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "LTV"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "total_rev_Nd": {
+    "name": "N-Day Total LTV",
+    "description": "N-Day Total LTV Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "LTV"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "iap_rpu_Nd": {
+    "name": "N-Day IAP LTV / User",
+    "description": "Average N-Day IAP LTV per User Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "LTV"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "pub_rpu_Nd": {
+    "name": "N-Day Ad Revenue LTV / User",
+    "description": "Average N-Day Ad Revenue LTV per User Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "LTV"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "ad_mediation_rpu_Nd": {
+    "name": "N-Day Ad Mediation Revenue LTV / User",
+    "description": "Average N-Day Ad Mediation Revenue LTV per User Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "LTV"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "rpu_Nd": {
+    "name": "N-Day Total LTV / User",
+    "description": "Average N-Day Total LTV per User Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "LTV"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "roi_Nd": {
+    "name": "N-Day ROI",
+    "description": "Average N-Day ROI Percentage (%) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "ROI/ROAS"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "roas_Nd": {
+    "name": "N-Day ROAS",
+    "description": "Average N-Day ROAS Percentage (%) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "ROI/ROAS"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "iap_roi_Nd": {
+    "name": "N-Day IAP ROI",
+    "description": "Average N-Day IAP-only ROI Percentage (%), N-Day IAP ROAS minus 100, where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "ROI/ROAS"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "iap_roas_Nd": {
+    "name": "N-Day IAP ROAS",
+    "description": "Average N-Day IAP-only ROAS Percentage (%), N-Day IAP LTV over spend, where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "ROI/ROAS"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "pub_roi_Nd": {
+    "name": "N-Day Ad ROI",
+    "description": "Average N-Day Ad Revenue ROI Percentage (%), N-Day Ad ROAS minus 100, where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "ROI/ROAS"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "pub_roas_Nd": {
+    "name": "N-Day Ad ROAS",
+    "description": "Average N-Day Ad Revenue ROAS Percentage (%), N-Day Ad Revenue LTV over spend, where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "ROI/ROAS"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "ad_mediation_roi_Nd": {
+    "name": "N-Day Ad Mediation ROI",
+    "description": "Average N-Day Ad Mediation ROI Percentage (%), N-Day Ad Mediation ROAS minus 100, where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "ROI/ROAS"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "ad_mediation_roas_Nd": {
+    "name": "N-Day Ad Mediation ROAS",
+    "description": "Average N-Day Ad Mediation ROAS Percentage (%), N-Day Ad Mediation LTV over spend, where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "ROI/ROAS"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "ad_mediation_arpu_Nd": {
+    "name": "N-Day Ad Mediation LTV / Active User",
+    "description": "Average N-Day Ad Mediation LTV per Active User Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "ARPU"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "total_ad_mediation_arpu_Nd": {
+    "name": "N-Day Total Ad Mediation LTV / Active User",
+    "description": "Average N-Day Total (Ad Mediation + IAP) LTV per Active User Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "ARPU"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "cp_user_Nd": {
+    "name": "Cost per N-Day Retained User",
+    "description": "Average Cost per N-Day Retained User Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "Cost"
+    ],
+    "cohort_type": "point_in_time",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "cp_ksessions_Nd": {
+    "name": "Cost per 1000 N-Day Sessions",
+    "description": "Average Cost per 1000 N-Day Sessions Amount ($) where N can be 0, 1, 2, 3, 4, 5, 6, 7, 14, 30, 60, 90, 120, 150, 180, 365",
+    "categories": [
+      "Cost"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      14,
+      30,
+      60,
+      90,
+      120,
+      150,
+      180,
+      365
+    ]
+  },
+  "pltv_Nd": {
+    "name": "N-Day Predicted LTV",
+    "description": "Predicted N-Day Total LTV Amount ($) where N can be any day from 0 to 30, or 90, 180, 365",
+    "categories": [
+      "LTV"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      90,
+      180,
+      365
+    ]
+  },
+  "proi_Nd": {
+    "name": "N-Day Predicted ROI",
+    "description": "Predicted N-Day Total (Ad Mediation + IAP) ROI Percentage (%), N-Day Predicted ROAS minus 100, where N can be any day from 0 to 30, or 90, 180, 365",
+    "categories": [
+      "ROI/ROAS"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      90,
+      180,
+      365
+    ]
+  },
+  "proas_Nd": {
+    "name": "N-Day Predicted ROAS",
+    "description": "Predicted N-Day Total (Ad Mediation + IAP) ROAS Percentage (%), N-Day Predicted LTV over spend, where N can be any day from 0 to 30, or 90, 180, 365",
+    "categories": [
+      "ROI/ROAS"
+    ],
+    "cohort_type": "cumulative",
+    "n_day": true,
+    "valid_n": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      90,
+      180,
+      365
+    ]
+  },
+  "new_trials": {
+    "name": "New Trials",
+    "description": "Number of New Trials",
+    "categories": [
+      "Subscriptions"
+    ]
+  },
+  "new_subscriptions": {
+    "name": "New Subscriptions",
+    "description": "Number of New Subscriptions",
+    "categories": [
+      "Subscriptions"
+    ]
+  },
+  "renewals": {
+    "name": "Renewals",
+    "description": "Number of Subscription Renewals",
+    "categories": [
+      "Subscriptions"
+    ]
+  },
+  "cancelled_subscriptions": {
+    "name": "Cancelled Subscriptions",
+    "description": "Number of Cancelled Subscriptions",
+    "categories": [
+      "Subscriptions"
+    ]
+  },
+  "new_subscriptions_revenue": {
+    "name": "New Subscriptions Revenue",
+    "description": "Total New Subscriptions Revenue Amount ($)",
+    "categories": [
+      "Subscriptions",
+      "Revenue"
+    ]
+  },
+  "renewals_revenue": {
+    "name": "Renewals Revenue",
+    "description": "Total Subscription Renewals Revenue Amount ($)",
+    "categories": [
+      "Subscriptions",
+      "Revenue"
+    ]
+  },
+  "all_subscriptions_revenue": {
+    "name": "All Subscriptions Revenue",
+    "description": "Total Subscriptions Revenue Amount ($), New Subscriptions Revenue + Renewals Revenue. Not included in Total Revenue, which would double-count orgs reporting both purchases and subscriptions",
+    "categories": [
+      "Subscriptions",
+      "Revenue"
+    ]
+  },
+  "tracked_reengagements": {
+    "name": "Tracked Re-engagements",
+    "description": "Number of Tracked Re-engagements",
+    "categories": [
+      "Acquisition"
+    ]
+  },
+  "tracked_reactivations": {
+    "name": "Tracked Reactivations",
+    "description": "Number of Tracked Reactivations",
+    "categories": [
+      "Acquisition"
+    ]
+  },
+  "tracked_ipm": {
+    "name": "Tracked Installs Per 1000 Impressions (IPM)",
+    "description": "Average Tracked Installs per 1000 Tracked Impressions",
+    "categories": [
+      "Engagement"
+    ]
+  },
+  "avg_dau": {
+    "name": "Average Daily Active Users (DAU)",
+    "description": "Average Daily Active Users over the selected period",
+    "categories": [
+      "Engagement"
+    ]
+  },
+  "avg_wau": {
+    "name": "Average Weekly Active Users (WAU)",
+    "description": "Average Weekly Active Users over the selected period",
+    "categories": [
+      "Engagement"
+    ]
+  },
+  "avg_mau": {
+    "name": "Average Monthly Active Users (MAU)",
+    "description": "Average Monthly Active Users over the selected period",
+    "categories": [
+      "Engagement"
+    ]
+  },
+  "ad_mediation_impressions": {
+    "name": "Ad Mediation Impressions",
+    "description": "Number of Ad Mediation Impressions",
+    "categories": [
+      "Monetization"
+    ]
+  },
+  "ad_mediation_impdau": {
+    "name": "Ad Mediation Impressions per Daily Active User (IMPDAU)",
+    "description": "Average Ad Mediation Impressions per Daily Active User",
+    "categories": [
+      "Monetization"
+    ]
+  },
+  "iap_profit_margin": {
+    "name": "IAP Profit Margin",
+    "description": "IAP Revenue minus Spend Amount ($)",
+    "categories": [
+      "Revenue"
+    ]
+  },
+  "pub_profit_margin": {
+    "name": "Ad Profit Margin",
+    "description": "Ad Revenue minus Spend Amount ($)",
+    "categories": [
+      "Revenue"
+    ]
+  },
+  "ad_mediation_profit_margin": {
+    "name": "Ad Mediation Profit Margin",
+    "description": "Ad Mediation Revenue minus Spend Amount ($)",
+    "categories": [
+      "Revenue"
+    ]
+  },
+  "total_profit_margin": {
+    "name": "Total Profit Margin",
+    "description": "Total (IAP + Ad) Revenue minus Spend Amount ($)",
+    "categories": [
+      "Revenue"
+    ]
+  },
+  "total_ad_mediation_profit_margin": {
+    "name": "Total Ad Mediation Profit Margin",
+    "description": "Total (Ad Mediation + IAP) Revenue minus Spend Amount ($)",
+    "categories": [
+      "Revenue"
+    ]
+  }
+}

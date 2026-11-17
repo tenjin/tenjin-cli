@@ -1,0 +1,161 @@
+{
+  "project": {
+    "root": "<root>",
+    "framework": "native",
+    "supported": true,
+    "targets": [
+      {
+        "platform": "android",
+        "bundle_id": "com.example.sample",
+        "bundle_id_source": "app/build.gradle.kts",
+        "builds": [
+          {
+            "id": "android",
+            "bundle_id": "com.example.sample",
+            "tenjin_platform": "android",
+            "sdk_key_placeholder": "__TENJIN_ANDROID_SDK_KEY__"
+          }
+        ],
+        "android": {
+          "module_dir": "app",
+          "build_file": "app/build.gradle.kts",
+          "dsl": "kotlin",
+          "manifest": "app/src/main/AndroidManifest.xml",
+          "launcher_activity": "com.example.sample.MainActivity",
+          "launcher_source": "app/src/main/java/com/example/sample/MainActivity.kt",
+          "minify": false,
+          "flavors": false
+        }
+      }
+    ],
+    "tenjin": [
+      {
+        "package": "com.tenjin:android-sdk",
+        "version": "2.0.0",
+        "source": "app/build.gradle.kts"
+      }
+    ],
+    "ad_sdks": [],
+    "features": [
+      {
+        "id": "opens",
+        "name": "App opens and attribution",
+        "required": true,
+        "suggested": true
+      },
+      {
+        "id": "purchases",
+        "name": "In-app purchases",
+        "suggested": false
+      },
+      {
+        "id": "subscriptions",
+        "name": "Subscriptions",
+        "suggested": false
+      },
+      {
+        "id": "ad_revenue",
+        "name": "Ad revenue (ILRD)",
+        "suggested": false
+      },
+      {
+        "id": "consent",
+        "name": "Consent (GDPR)",
+        "suggested": false
+      },
+      {
+        "id": "deep_links",
+        "name": "Deep links",
+        "suggested": false
+      },
+      {
+        "id": "custom_events",
+        "name": "Custom events",
+        "suggested": false
+      },
+      {
+        "id": "user_id",
+        "name": "Customer user ID",
+        "suggested": false
+      }
+    ],
+    "analytics": {
+      "events": [],
+      "user_ids": []
+    },
+    "notes": []
+  },
+  "findings": [
+    {
+      "id": "sdk.dependency",
+      "severity": "pass",
+      "platform": "android",
+      "title": "Tenjin SDK is declared: com.tenjin:android-sdk 2.0.0",
+      "file": "app/build.gradle.kts"
+    },
+    {
+      "id": "sdk.init",
+      "severity": "pass",
+      "platform": "android",
+      "title": "The SDK is initialized",
+      "file": "app/src/main/java/com/example/sample/MainActivity.kt",
+      "line": 9
+    },
+    {
+      "id": "sdk.connect",
+      "severity": "pass",
+      "platform": "android",
+      "title": "connect() is called",
+      "file": "app/src/main/java/com/example/sample/MainActivity.kt",
+      "line": 10
+    },
+    {
+      "id": "android.permission.internet",
+      "severity": "pass",
+      "platform": "android",
+      "title": "INTERNET permission is declared",
+      "file": "app/src/main/AndroidManifest.xml"
+    },
+    {
+      "id": "android.permission.network_state",
+      "severity": "pass",
+      "platform": "android",
+      "title": "ACCESS_NETWORK_STATE permission is declared",
+      "file": "app/src/main/AndroidManifest.xml"
+    },
+    {
+      "id": "android.permission.ad_id",
+      "severity": "pass",
+      "platform": "android",
+      "title": "AD_ID permission is declared",
+      "file": "app/src/main/AndroidManifest.xml"
+    },
+    {
+      "id": "android.play_services.ads_identifier",
+      "severity": "pass",
+      "platform": "android",
+      "title": "play-services-ads-identifier is a dependency",
+      "file": "app/build.gradle.kts"
+    },
+    {
+      "id": "android.play_services.appset",
+      "severity": "pass",
+      "platform": "android",
+      "title": "play-services-appset is a dependency",
+      "file": "app/build.gradle.kts"
+    },
+    {
+      "id": "key.valid",
+      "severity": "pass",
+      "platform": "android",
+      "title": "Tenjin accepts the SDK key …MNBV for com.example.sample",
+      "file": "app/src/main/java/com/example/sample/MainActivity.kt",
+      "line": 9
+    }
+  ],
+  "summary": {
+    "errors": 0,
+    "warnings": 0,
+    "passed": 9
+  }
+}

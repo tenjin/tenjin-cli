@@ -1,0 +1,429 @@
+// Package devicelog reads what the Tenjin SDK writes to a device's log: the
+// requests it sent and what Tenjin answered. That is the only place
+// the reason for a refused request is visible to a developer.
+package devicelog
+
+import (
+	"bytes"
+	"encoding/json"
+	"io"
+	"net/url"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"unicode/utf16"
+)
+
+// The Android SDK logs each request as three lines once the response is in:
+//
+//	D/HttpConnection: Tenjin request URL: https://track.tenjin.com/v0/event
+//	D/HttpConnection: Tenjin::connect params: {key=value, ...}
+//	D/HttpConnection: Tenjin::connect response: {"code":200,"success":true}
+//
+// The label says "connect" for every kind of request, so the URL is what
+// tells them apart. Lines are matched on these messages, not on the log tag,
+// because "HttpConnection" is a name other libraries use too.
+const (
+	markURL      = "Tenjin request URL: "
+	markParams   = "Tenjin::connect params: "
+	markResponse = "Tenjin::connect response: "
+	// markDeduped is logged when a connect is skipped because one was sent
+	// less than 30 seconds earlier, a gap that persists across launches.
+	markDeduped = "Connect deduped by persisted timestamp"
+)
+
+// The iOS SDK logs a request in four lines, the second and fourth only with
+// TenjinSDK.debugLogs() on:
+//
+//	[Tenjin] - LOG: Sending request - https://track.tenjin.com/v0/event
+//	[Tenjin] - DEBUG: request body key=value&key=value
+//	[Tenjin] - LOG: Got http response 200
+//	[Tenjin] - DEBUG: Response body {"code":200,"success":true}
+//
+// Every line carries the "[Tenjin]" tag, wherever the log comes from.
+const (
+	iosTag = "[Tenjin]"
+	// iosSDKTag is the tag as the SDK writes it, followed by the level. The
+	// tag alone may be another program's: the log tool logs each search,
+	// predicate and all.
+	iosSDKTag = iosTag + " - "
+
+	iosMarkURL      = "Sending request - "
+	iosMarkParams   = "request body "
+	iosMarkStatus   = "Got http response "
+	iosMarkResponse = "Response body "
+	// iosMarkDeduped is the iOS form of the 30-second rule, in SDK
+	// versions that have it.
+	iosMarkDeduped = "ignoring duplicate ping"
+)
+
+// sdkTags are the log tags only the Tenjin SDK uses.
+var sdkTags = []string{"TenjinSDK", "TenjinStartup", "TenjinReflection"}
+
+// Request is one call the SDK made to Tenjin.
+type Request struct {
+	URL string
+	// Endpoint is the last part of the URL path: "event", "purchase", ...
+	Endpoint string
+	Params   map[string]string
+	// Code and Message come from the response body. Code is 0 when the body
+	// could not be read as Tenjin's JSON. On iOS, where the body is
+	// logged only with debug logs on, Code is the HTTP status otherwise.
+	Code     int
+	Message  string
+	Response string
+	// Line is where the request starts in the log, counting from 1.
+	Line int
+	// PID is the process that sent it, as the log names it, or "". One
+	// launch of an app is one process.
+	PID string
+	// Time is when the device logged it, as the log writes it, or "".
+	Time string
+	// Unread is true for an iOS request whose body was not logged, as
+	// without debug logs: what it was cannot be told.
+	Unread bool
+}
+
+// IsConnect reports whether this is the launch call that registers an
+// install or session, as opposed to a custom event sent to the same URL.
+func (r Request) IsConnect() bool {
+	_, named := r.Params["event"]
+	return r.Endpoint == "event" && !named && !r.Unread
+}
+
+// Accepted reports whether Tenjin took the request.
+func (r Request) Accepted() bool { return r.Code == 200 }
+
+// Log is what a device log says about the SDK.
+type Log struct {
+	// Platform is the SDK that wrote the log: "android" or "ios", or ""
+	// when the log has nothing from the SDK.
+	Platform string
+	// SawSDK is true when the SDK wrote anything at all.
+	SawSDK   bool
+	Requests []Request
+	// Dedups are the connects the SDK skipped under its 30-second rule, in
+	// log order. A skipped connect says nothing about which app skipped it.
+	Dedups []Dedup
+}
+
+// Dedup is a connect the SDK skipped because it had sent one less than 30
+// seconds earlier.
+type Dedup struct {
+	// PID is the process that skipped it, as the log names it, or "".
+	PID string
+	// Line is where it is in the log, counting from 1.
+	Line int
+}
+
+// DedupedAfter reports whether the process that sent c skipped a connect
+// later on. Another process's skipped connect, another app's or a later
+// launch's, says nothing about c: the log is paired per process.
+func (l *Log) DedupedAfter(c *Request) bool {
+	for _, d := range l.Dedups {
+		if d.PID == c.PID && d.Line > c.Line {
+			return true
+		}
+	}
+	return false
+}
+
+// logTime matches the time at the start of a log line: logcat's "-v time"
+// (10-02 15:07:34.121) and the unified log's (2026-10-06 14:22:01.123).
+var logTime = regexp.MustCompile(`^\s*((?:\d{4}-)?\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:\.\d+)?)`)
+
+func lineTime(line string) string {
+	if m := logTime.FindStringSubmatch(line); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// Since returns the lines of a logcat log written after mark, a time as
+// AndroidMark gives it. A line without a time, such as logcat's
+// "--------- beginning of main", goes with the line before it. When mark is
+// empty, the whole log is new.
+func Since(raw []byte, mark string) []byte {
+	if mark == "" {
+		return raw
+	}
+	var kept []string
+	keep := false
+	for _, line := range strings.Split(string(raw), "\n") {
+		if t := lineTime(line); t != "" {
+			keep = later(t, mark)
+		}
+		if keep {
+			kept = append(kept, line)
+		}
+	}
+	return []byte(strings.Join(kept, "\n"))
+}
+
+// newestTime is the latest time on any line of a logcat log, or "".
+func newestTime(raw []byte) string {
+	newest := ""
+	for _, line := range strings.Split(string(raw), "\n") {
+		if t := lineTime(line); t != "" && (newest == "" || later(t, newest)) {
+			newest = t
+		}
+	}
+	return newest
+}
+
+// later reports whether logcat time a is after b. Logcat's "time" format
+// (10-02 15:07:34.121) has no year, so a January line is after a December
+// mark.
+func later(a, b string) bool {
+	switch {
+	case strings.HasPrefix(a, "01-") && strings.HasPrefix(b, "12-"):
+		return true
+	case strings.HasPrefix(a, "12-") && strings.HasPrefix(b, "01-"):
+		return false
+	}
+	return a > b
+}
+
+// LastConnect returns the most recent connect request, or nil.
+func (l *Log) LastConnect() *Request {
+	for i := len(l.Requests) - 1; i >= 0; i-- {
+		if l.Requests[i].IsConnect() {
+			return &l.Requests[i]
+		}
+	}
+	return nil
+}
+
+// logPID matches the process ID in a logcat line: "D/Tag( 3956):" in the
+// time and brief formats, or the first number after the time in threadtime.
+var logPID = regexp.MustCompile(`^(?:[^(]*?/[^(]*\(\s*(\d+)\)|\s*\S+\s+\S+\s+(\d+)\s+\d+\s+[VDIWEF]\s)`)
+
+func linePID(line string) string {
+	if m := logPID.FindStringSubmatch(line); m != nil {
+		return m[1] + m[2]
+	}
+	return ""
+}
+
+// Parse reads a device log in any logcat format. Lines are paired into
+// requests per process, so two apps with the Tenjin SDK logging at the same
+// moment do not mix.
+func Parse(r io.Reader) (*Log, error) {
+	log := &Log{}
+	var pending *Request
+	waiting := map[string]*Request{}
+	iosWaiting := map[string]*Request{}
+	flush := func() {
+		if pending != nil {
+			log.Requests = append(log.Requests, *pending)
+			pending = nil
+		}
+	}
+
+	lines, err := readLines(r)
+	if err != nil {
+		return nil, err
+	}
+	for i, line := range lines {
+		n := i + 1
+		if strings.Contains(line, iosSDKTag) {
+			log.SawSDK, log.Platform = true, "ios"
+			parseIOSLine(log, iosWaiting, line, n)
+			continue
+		}
+		pid := linePID(line)
+		switch {
+		case strings.Contains(line, markURL):
+			pending = waiting[pid]
+			flush()
+			url := strings.TrimSpace(after(line, markURL))
+			waiting[pid] = &Request{URL: url, Endpoint: endpoint(url), Params: map[string]string{}, Line: n, PID: pid, Time: lineTime(line)}
+			log.SawSDK = true
+		case strings.Contains(line, markParams):
+			if waiting[pid] == nil {
+				waiting[pid] = &Request{Params: map[string]string{}, Line: n, PID: pid}
+			}
+			waiting[pid].Params = parseParams(after(line, markParams))
+			log.SawSDK = true
+		case strings.Contains(line, markResponse):
+			if waiting[pid] == nil {
+				waiting[pid] = &Request{Params: map[string]string{}, Line: n, PID: pid}
+			}
+			pending = waiting[pid]
+			delete(waiting, pid)
+			pending.Response = strings.TrimSpace(after(line, markResponse))
+			pending.Code, pending.Message = parseResponse(pending.Response)
+			log.SawSDK = true
+			flush()
+		case strings.Contains(line, markDeduped):
+			log.Dedups = append(log.Dedups, Dedup{PID: pid, Line: n})
+			log.SawSDK = true
+		default:
+			for _, tag := range sdkTags {
+				if strings.Contains(line, tag) {
+					log.SawSDK = true
+					break
+				}
+			}
+		}
+	}
+	flush()
+	// Requests still waiting for an answer, in the order they began.
+	var unanswered []Request
+	for _, req := range waiting {
+		unanswered = append(unanswered, *req)
+	}
+	for _, req := range iosWaiting {
+		req.Unread = len(req.Params) == 0
+		unanswered = append(unanswered, *req)
+	}
+	sort.Slice(unanswered, func(i, j int) bool { return unanswered[i].Line < unanswered[j].Line })
+	log.Requests = append(log.Requests, unanswered...)
+	sort.SliceStable(log.Requests, func(i, j int) bool { return log.Requests[i].Line < log.Requests[j].Line })
+	if log.SawSDK && log.Platform == "" {
+		log.Platform = "android"
+	}
+	return log, nil
+}
+
+// maxLine is the longest line kept whole; the SDK's never come near it.
+const maxLine = 1 << 20
+
+// readLines splits a log into lines. A log saved by Windows PowerShell is
+// UTF-16 with a byte-order mark, and is read as such; a line longer than
+// maxLine is cut there rather than failing the whole read.
+func readLines(r io.Reader) ([]string, error) {
+	raw, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	text := decodeText(raw)
+	var lines []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if len(line) > maxLine {
+			line = line[:maxLine]
+		}
+		lines = append(lines, line)
+	}
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines, nil
+}
+
+// decodeText returns a log as UTF-8 text, from UTF-8 or from UTF-16 with a
+// byte-order mark.
+func decodeText(raw []byte) string {
+	switch {
+	case bytes.HasPrefix(raw, []byte{0xFF, 0xFE}), bytes.HasPrefix(raw, []byte{0xFE, 0xFF}):
+		little := raw[0] == 0xFF
+		raw = raw[2:]
+		units := make([]uint16, len(raw)/2)
+		for i := range units {
+			if little {
+				units[i] = uint16(raw[2*i]) | uint16(raw[2*i+1])<<8
+			} else {
+				units[i] = uint16(raw[2*i])<<8 | uint16(raw[2*i+1])
+			}
+		}
+		return string(utf16.Decode(units))
+	case bytes.HasPrefix(raw, []byte{0xEF, 0xBB, 0xBF}):
+		return string(raw[3:])
+	}
+	return string(raw)
+}
+
+// iosPID matches the process ID in a unified log or console line:
+// "Sample[3930:b3ce6c]".
+var iosPID = regexp.MustCompile(`\[(\d+):[0-9a-fA-Fx]+\]`)
+
+// parseIOSLine reads one line of the iOS SDK's output into the request its
+// process has open, so that two apps logging at once do not mix.
+func parseIOSLine(log *Log, waiting map[string]*Request, line string, n int) {
+	pid := ""
+	if m := iosPID.FindStringSubmatch(line); m != nil {
+		pid = m[1]
+	}
+	pending := waiting[pid]
+	flush := func() {
+		if pending != nil {
+			pending.Unread = len(pending.Params) == 0
+			log.Requests = append(log.Requests, *pending)
+			pending = nil
+			delete(waiting, pid)
+		}
+	}
+	switch {
+	case strings.Contains(line, iosMarkURL):
+		flush()
+		u := strings.TrimSpace(after(line, iosMarkURL))
+		waiting[pid] = &Request{URL: u, Endpoint: endpoint(u), Params: map[string]string{}, Line: n, PID: pid, Time: lineTime(line)}
+	case strings.Contains(line, iosMarkDeduped):
+		log.Dedups = append(log.Dedups, Dedup{PID: pid, Line: n})
+	case pending == nil:
+	case strings.Contains(line, iosMarkParams):
+		if values, err := url.ParseQuery(strings.TrimSpace(after(line, iosMarkParams))); err == nil {
+			for k, v := range values {
+				pending.Params[k] = v[0]
+			}
+		}
+	case strings.Contains(line, iosMarkStatus):
+		if status, err := strconv.Atoi(strings.TrimSpace(after(line, iosMarkStatus))); err == nil {
+			pending.Code = status
+		}
+	case strings.Contains(line, iosMarkResponse):
+		pending.Response = strings.TrimSpace(after(line, iosMarkResponse))
+		if code, message := parseResponse(pending.Response); code != 0 {
+			pending.Code, pending.Message = code, message
+		}
+		flush()
+	}
+}
+
+func after(line, marker string) string {
+	return line[strings.Index(line, marker)+len(marker):]
+}
+
+// endpoint returns the path after the API version: ".../v0/ad_impressions/max"
+// gives "ad_impressions/max".
+func endpoint(url string) string {
+	for _, version := range []string{"/v0/", "/v1/"} {
+		if i := strings.Index(url, version); i >= 0 {
+			return strings.TrimSuffix(url[i+len(version):], "/")
+		}
+	}
+	return ""
+}
+
+var paramKey = regexp.MustCompile(`(?:^|, )([a-z_0-9]+)=`)
+
+// parseParams reads the SDK's parameter dump, a Java map printed as
+// {key=value, key=value}. Values may contain commas, so the text is split
+// where a new "key=" begins and not at every comma.
+func parseParams(s string) map[string]string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimSuffix(strings.TrimPrefix(s, "{"), "}")
+	params := map[string]string{}
+	keys := paramKey.FindAllStringSubmatchIndex(s, -1)
+	for i, k := range keys {
+		end := len(s)
+		if i+1 < len(keys) {
+			end = keys[i+1][0]
+		}
+		params[s[k[2]:k[3]]] = s[k[1]:end]
+	}
+	return params
+}
+
+func parseResponse(body string) (int, string) {
+	var r struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if json.Unmarshal([]byte(body), &r) != nil {
+		return 0, ""
+	}
+	return r.Code, r.Message
+}

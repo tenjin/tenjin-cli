@@ -1,0 +1,3812 @@
+{
+  "openapi": "3.0.2",
+  "info": {
+    "title": "Campaign Management API",
+    "description": "# Introduction\n<p>The Tenjin Campaign Management API is structured as a collection\nof RESTful resources that allows customers to interact with Tenjin campaign\nconfiguration resources without accessing the Tenjin dashboard. The main\nobjective of this API is to enable customers to build internal tooling that\nwould automate the campaign creation and bid management process.</p>\n\n<p>An access token can be generated\n<a href='https://tenjin.com/dashboard/access_tokens' title='Tenjin Access Tokens' target='_blank'>here</a>.</p>\n\n## Access to the API\n<p>You can access the Campaign Management API via the following Base URL:</p>\n\n```\nhttps://api.tenjin.com/v2/\n```\n",
+    "version": "2.0.1"
+  },
+  "servers": [
+    {
+      "url": "https://api.tenjin.com/v2"
+    }
+  ],
+  "externalDocs": {
+    "description": "Find out more about the Campaign Management API",
+    "url": "https://tenjin.com/docs/automation-apis/#campaign-management-api"
+  },
+  "security": [
+    {
+      "Bearer Authentication": []
+    }
+  ],
+  "paths": {
+    "/apps": {
+      "get": {
+        "summary": "Retrieves a list of apps",
+        "tags": [
+          "Apps"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success (200)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfApps"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "e55c55ae-db64-40ad-a711-8bb3885b9581",
+                      "type": "app",
+                      "attributes": {
+                        "name": "Another App",
+                        "bundle_id": "com.this.AnotherApp",
+                        "platform": "ios",
+                        "public_key": "abc123456",
+                        "ios_shared_secret": null,
+                        "store_id": "123445678",
+                        "released_on": "2017-10-03",
+                        "rating": "2.0",
+                        "price": 0,
+                        "developer_name": "Tenjin",
+                        "match_strings": [],
+                        "protocol": null,
+                        "facebook_referrer_decryption_key": null,
+                        "destination_url": null,
+                        "created_at": "2018-05-22T21:50:20.591Z",
+                        "sending_events": true
+                      }
+                    },
+                    {
+                      "id": "5fce6a93-877c-44f7-9c56-3bfe4acbbfd5",
+                      "type": "app",
+                      "attributes": {
+                        "name": "Dog Watcher",
+                        "bundle_id": "com.this.DogWatcher",
+                        "platform": "ios",
+                        "public_key": null,
+                        "ios_shared_secret": "3f3ff9gia1fafafab-afds",
+                        "store_id": "123445678",
+                        "released_on": "2017-10-03",
+                        "rating": "4.3",
+                        "price": 99,
+                        "developer_name": "Tenjin",
+                        "match_strings": [],
+                        "protocol": "fb190003007235028",
+                        "facebook_referrer_decryption_key": "2575590594a9cd809e5bfacf397f8c1ac730dbc38a3e137ecd1ab66591c8c3c9",
+                        "destination_url": null,
+                        "created_at": "2019-05-22T21:50:20.591Z",
+                        "sending_events": true
+                      }
+                    }
+                  ],
+                  "links": {
+                    "self": "https://api.tenjin.com/v2/apps"
+                  },
+                  "meta": {
+                    "count": 2,
+                    "per_page": 25
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search for app's by name"
+          }
+        ]
+      },
+      "post": {
+        "summary": "Add a new app",
+        "tags": [
+          "Apps"
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/AppBodyPOST"
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created an app",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppResponse"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/App"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App could not be created."
+          }
+        }
+      }
+    },
+    "/apps/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The app's ID"
+        }
+      ],
+      "get": {
+        "summary": "Get an app",
+        "tags": [
+          "Apps"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get an app",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppResponse"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/App"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found."
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update an app",
+        "requestBody": {
+          "$ref": "#/components/requestBodies/AppBodyPUT"
+        },
+        "tags": [
+          "Apps"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully updated an app",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppResponse"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/App"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found or could not be updated."
+          }
+        }
+      },
+      "delete": {
+        "summary": "Soft-delete an app",
+        "tags": [
+          "Apps"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully deleted an app",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found."
+          }
+        }
+      }
+    },
+    "/ad_accounts": {
+      "get": {
+        "summary": "Retrieves a list of ad accounts",
+        "tags": [
+          "Ad Accounts"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success (200)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfAdAccounts"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "6e3fbfa6-27cc-45f2-af3f-5c9ead45280e",
+                      "type": "ad_account",
+                      "attributes": {
+                        "name": "Facebook Account",
+                        "channel_id": 3,
+                        "external_id": "444509211788999"
+                      }
+                    },
+                    {
+                      "id": "6d16d36f-a074-4acd-bdf3-2d1180295b79",
+                      "type": "ad_account",
+                      "attributes": {
+                        "name": "Chartboost Account",
+                        "channel_id": 7,
+                        "external_id": null
+                      }
+                    },
+                    {
+                      "id": "333c57b6-c022-496a-bd27-5d8d7caa8cae",
+                      "type": "ad_account",
+                      "attributes": {
+                        "name": "Tapjoy Account",
+                        "channel_id": 1,
+                        "external_id": null
+                      }
+                    }
+                  ],
+                  "links": {
+                    "self": "https://api.tenjin.com/v2/ad_accounts"
+                  },
+                  "meta": {
+                    "count": 3,
+                    "per_page": 25
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search for ad account's by name"
+          },
+          {
+            "in": "query",
+            "name": "channel_id",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Filter ad account's by channel"
+          }
+        ]
+      }
+    },
+    "/ad_accounts/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The ad account's ID"
+        }
+      ],
+      "get": {
+        "summary": "Get an ad account",
+        "tags": [
+          "Ad Accounts"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get an ad account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdAccountResponse"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/AdAccount"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ad account not found."
+          }
+        }
+      }
+    },
+    "/campaigns": {
+      "get": {
+        "summary": "Retrieves a list of campaigns",
+        "tags": [
+          "Campaigns"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success (200)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfCampaigns"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "41149a48-9766-4c23-7744-56cb4836a603",
+                      "type": "campaign",
+                      "attributes": {
+                        "channel_id": 3,
+                        "app_id": "17ef8c1a-5729-456e-98db-ccc104bdf860",
+                        "ad_account_id": "6e3fbfa6-27cc-45f2-af3f-5c9ead45280e",
+                        "name": "Facebook Campaign",
+                        "short_id": "zzzk0TXwNXu7Y5Maf2aRkL",
+                        "remote_campaign_id": "48249a48-9766-4c23-8c13-56cb4836d903",
+                        "click_tracking_url": "https://track.tenjin.com/v0/click/zzzk0TXwNXu7Y5Maf2aRkL",
+                        "impression_tracking_url": null,
+                        "attribution_window": null,
+                        "created_at": "2019-08-20T21:56:12.336Z",
+                        "hidden": false
+                      }
+                    },
+                    {
+                      "id": "3ba367d2-62a7-4791-941c-a2a53d2832e3",
+                      "type": "campaign",
+                      "attributes": {
+                        "channel_id": 1,
+                        "app_id": "5fce6a93-877c-44f7-9c56-3bfe4acbbfd5",
+                        "ad_account_id": "333c57b6-c022-496a-bd27-5d8d7caa8cae",
+                        "name": "Dog Watcher -- Video - Offerwall/Featured (iOS) - AU,DE - eCPI Goal of $1.50",
+                        "short_id": "bYHn2BhR5O9zgGJ6Cp1E37",
+                        "remote_campaign_id": "ee8244a0-075b-406e-a4c7-0755cc844920",
+                        "click_tracking_url": "https://track.tenjin.com/v0/tapjoy/cZarDzkYbGtUYM7pPM2ZCH?bundle_id=com.this.DogWatcher&platform=ios&advertising_id=TAPJOY_ADVERTISING_ID&campaign_id=TAPJOY_OFFER_ID&site_id=TAPJOY_GENERIC_SOURCE&click_id=TAPJOY_TJCID&ip_address=[ip_address]&creative_name=TAPJOY_CREATIVE_NAME",
+                        "impression_tracking_url": null,
+                        "attribution_window": 604800,
+                        "created_at": "2019-08-12T02:08:51.252Z",
+                        "hidden": false
+                      }
+                    }
+                  ],
+                  "links": {
+                    "self": "https://api.tenjin.com/v2/campaigns"
+                  },
+                  "meta": {
+                    "count": 2,
+                    "per_page": 25
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search for campaign's by name, short_id or remote_campaign_id"
+          },
+          {
+            "in": "query",
+            "name": "app_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Filter campaign's by app"
+          },
+          {
+            "in": "query",
+            "name": "channel_id",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Filter campaign's by channel"
+          },
+          {
+            "in": "query",
+            "name": "platform",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ios",
+                "android",
+                "amazon",
+                "android_other"
+              ]
+            },
+            "description": "Filter campaign's by platform"
+          }
+        ]
+      },
+      "post": {
+        "summary": "Add a new campaign",
+        "tags": [
+          "Campaigns"
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/CampaignBodyPOST"
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created a campaign",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignResponse"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/Campaign"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found, channel not found, ad account not found, or campaign could not be created."
+          }
+        }
+      }
+    },
+    "/campaigns/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The campaign's ID"
+        }
+      ],
+      "get": {
+        "summary": "Get a campaign",
+        "tags": [
+          "Campaigns"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get a campaign",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignResponse"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/Campaign"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Campaign not found."
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a campaign",
+        "tags": [
+          "Campaigns"
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/CampaignBodyPUT"
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully updated a campaign",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignResponse"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/Campaign"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Campaign not found or could not be updated."
+          }
+        }
+      },
+      "delete": {
+        "summary": "Soft-delete a campaign",
+        "tags": [
+          "Campaigns"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully deleted a campaign",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Campaign not found or cannot be deleted because it has started tracking installs."
+          }
+        }
+      }
+    },
+    "/channels": {
+      "get": {
+        "summary": "Retrieves a list of channels",
+        "tags": [
+          "Channels"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success (200)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfChannels"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 1,
+                      "type": "channel",
+                      "attributes": {
+                        "name": "Tapjoy",
+                        "short_id": "tapjoy"
+                      }
+                    },
+                    {
+                      "id": 3,
+                      "type": "channel",
+                      "attributes": {
+                        "name": "Facebook",
+                        "short_id": "facebook"
+                      }
+                    },
+                    {
+                      "id": 7,
+                      "type": "channel",
+                      "attributes": {
+                        "name": "Chartboost",
+                        "short_id": "chartboost"
+                      }
+                    }
+                  ],
+                  "links": {
+                    "self": "https://api.tenjin.com/v2/channels"
+                  },
+                  "meta": {
+                    "count": 3,
+                    "per_page": 25
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search for channel's by name"
+          }
+        ]
+      }
+    },
+    "/channels/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          },
+          "description": "The channel's ID"
+        }
+      ],
+      "get": {
+        "summary": "Get a channel",
+        "tags": [
+          "Channels"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get a channel",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelResponse"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/Channel"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Channel not found."
+          }
+        }
+      }
+    },
+    "/apps/{app_id}/callback_templates": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "app_id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The app's ID"
+        },
+        {
+          "in": "query",
+          "name": "channel_id",
+          "schema": {
+            "type": "integer"
+          },
+          "description": "Filter callback templates by a marketing channel"
+        }
+      ],
+      "get": {
+        "summary": "Retrieves a list of callback templates for an app",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          }
+        ],
+        "tags": [
+          "Callback Templates"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success (200)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfCallbackTemplates"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "b7af0230-913b-416d-8043-06a4048cea30",
+                      "type": "callback_template",
+                      "attributes": {
+                        "name": "Facebook install",
+                        "description": "Facebook install callback template",
+                        "action": "ping_on_first",
+                        "event": null,
+                        "customer_parameters": {
+                          "remote_app_id": "Remote App ID"
+                        },
+                        "is_install": false,
+                        "channel_id": 3,
+                        "platform": "ios",
+                        "required_by_channel": false
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found or if `channel_id` query parameter passed, channel not found."
+          }
+        }
+      }
+    },
+    "/apps/{app_id}/callback_templates/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "app_id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The app's ID"
+        },
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The callback template's ID"
+        }
+      ],
+      "get": {
+        "summary": "Get a callback template for an app",
+        "tags": [
+          "Callback Templates"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get a callback template",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallbackTemplate"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/CallbackTemplate"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found or callback template not found"
+          }
+        }
+      }
+    },
+    "/apps/{app_id}/callbacks": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "app_id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The app's ID"
+        }
+      ],
+      "get": {
+        "summary": "Retrieves a list of callbacks for an app",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          },
+          {
+            "in": "query",
+            "name": "channel_id",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Filter callbacks by a marketing channel"
+          }
+        ],
+        "tags": [
+          "Callbacks"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success (200)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfCallbacks"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "1268b1a8-57b5-485d-a597-8fd88ea27849",
+                      "type": "callback",
+                      "attributes": {
+                        "name": "Facebook install",
+                        "event": "install",
+                        "action": "ping_on_first",
+                        "channel_id": 3,
+                        "url": "https://fake.facebook.com?ida={{advertising_id}}&impId={{click_id}}&trackingPartner=tenjin&eventTime={{time_in_ms}}",
+                        "http_method": "GET",
+                        "active": true,
+                        "customer_parameters": {
+                          "remote_app_id": "test"
+                        },
+                        "callback_template_id": "b7af0230-913b-416d-8043-06a4048cea30",
+                        "created_at": "2019-11-28T18:45:00.687Z"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found or if `channel_id` query parameter passed, channel not found."
+          }
+        }
+      },
+      "post": {
+        "summary": "Add a new callback",
+        "tags": [
+          "Callbacks"
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/CallbackBody"
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created a callback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Callback"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/Callback"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found or unable to create the callback."
+          }
+        }
+      }
+    },
+    "/apps/{app_id}/callbacks/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "app_id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The app's ID"
+        },
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The callback's ID"
+        }
+      ],
+      "get": {
+        "summary": "Get a callback for an app",
+        "tags": [
+          "Callbacks"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get a callback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Callback"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/Callback"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found or callback not found."
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a callback",
+        "tags": [
+          "Callbacks"
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/CallbackBody"
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully updated a callback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Callback"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/Callback"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found, callback not found or the callback could not be updated."
+          }
+        }
+      }
+    },
+    "/apps/{app_id}/s2s_callbacks": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "app_id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The app's ID"
+        }
+      ],
+      "get": {
+        "summary": "Retrieves a list of S2S callbacks for an app",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          }
+        ],
+        "tags": [
+          "S2S Callbacks"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success (200)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfS2sCallbacks"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/ArrayOfS2sCallbacks"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found"
+          },
+          "403": {
+            "description": "This organization does not have access to S2S callbacks"
+          }
+        }
+      },
+      "post": {
+        "summary": "Add a new S2S callback",
+        "tags": [
+          "S2S Callbacks"
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/S2sCallbackBody"
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created a S2S callback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S2sCallback"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/S2sCallback"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found, Event not found, or unable to create the s2s callback."
+          },
+          "403": {
+            "description": "This organization does not have access to S2S callbacks"
+          }
+        }
+      }
+    },
+    "/apps/{app_id}/s2s_callbacks/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "app_id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The app's ID"
+        },
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The S2S callback's ID"
+        }
+      ],
+      "get": {
+        "summary": "Get a S2S callback for an app",
+        "tags": [
+          "S2S Callbacks"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get a callback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S2sCallback"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/S2sCallback"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found or S2S callback not found."
+          },
+          "403": {
+            "description": "This organization does not have access to S2S callbacks"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a callback",
+        "tags": [
+          "S2S Callbacks"
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/S2sCallbackBody"
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully updated a S2S callback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/S2sCallback"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/S2sCallback"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found, S2S Callback not found, Event not found, or unable to create the s2s callback."
+          },
+          "403": {
+            "description": "This organization does not have access to S2S callbacks"
+          }
+        }
+      }
+    },
+    "/apps/{app_id}/sdk_keys": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "app_id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The app's ID"
+        }
+      ],
+      "get": {
+        "summary": "Retrieves an app's SDK keys",
+        "description": "The enabled keys of the app itself, oldest first. An app with none returns an empty list. Organization-level keys are not listed. Limited to 30 reads a minute per user.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          }
+        ],
+        "tags": [
+          "SDK Keys"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success (200)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfSdkKeys"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "1",
+                      "type": "sdk_key",
+                      "attributes": {
+                        "name": "Default",
+                        "key": "ABCDEFGHIJKLMNOPQRSTUVWXYZ012345",
+                        "created_at": "2026-10-15T12:00:00.000Z"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found"
+          },
+          "401": {
+            "description": "Not signed in, or the token is not valid"
+          },
+          "403": {
+            "description": "The user's role cannot read SDK keys"
+          },
+          "429": {
+            "description": "More than 30 reads a minute; X-Retry-After says how many seconds to wait"
+          }
+        }
+      }
+    },
+    "/apps/{app_id}/integrations/{integration_id}/callback_settings": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "app_id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The app's ID"
+        },
+        {
+          "in": "path",
+          "name": "integration_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          },
+          "description": "The marketing channel's ID"
+        }
+      ],
+      "get": {
+        "summary": "Get callback settings for an app and marketing channel",
+        "tags": [
+          "Callback Settings"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get callback settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallbackSettings"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/CallbackSettings"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App does not exist, or You do not have an ad account for this integration"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update callback settings for an app and marketing channel",
+        "tags": [
+          "Callback Settings"
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/CallbackSettingsBody"
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully updated callback settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallbackSettings"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/CallbackSettings"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App does not exist, You do not have an ad account for this integration, or Could not update callback settings"
+          }
+        }
+      }
+    },
+    "/integrations/{integration_id}/callback_group_templates": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "integration_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          },
+          "description": "The marketing channel's ID"
+        }
+      ],
+      "get": {
+        "summary": "Get callback group templates for a marketing channel",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          }
+        ],
+        "tags": [
+          "Callback Group Templates"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get callback group templates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfCallbackGroupTemplates"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/ArrayOfCallbackGroupTemplates"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Integration does not exist"
+          }
+        }
+      }
+    },
+    "/apps/{app_id}/integrations/{integration_id}/callback_groups": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "app_id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The app's ID"
+        },
+        {
+          "in": "path",
+          "name": "integration_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          },
+          "description": "The marketing channel's ID"
+        }
+      ],
+      "get": {
+        "summary": "Get callback groups for an app and marketing channel",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          }
+        ],
+        "tags": [
+          "Callback Groups"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get callback groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfCallbackGroups"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/ArrayOfCallbackGroups"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App does not exist, or You do not have an ad account for this integration, or Could not create callback"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a callback group",
+        "tags": [
+          "Callback Groups"
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/CallbackGroupBody"
+        },
+        "responses": {
+          "201": {
+            "description": "Successfully created a callback group (sent as 201)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallbackGroup"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/CallbackGroup"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App does not exist, or You do not have an ad account for this integration"
+          }
+        }
+      }
+    },
+    "/apps/{app_id}/integrations/{integration_id}/callback_groups/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "app_id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The app's ID"
+        },
+        {
+          "in": "path",
+          "name": "integration_id",
+          "required": true,
+          "schema": {
+            "type": "integer"
+          },
+          "description": "The marketing channel's ID"
+        },
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Get a callback group by id",
+        "tags": [
+          "Callback Groups"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get a callback group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallbackGroup"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/CallbackGroup"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App does not exist, or You do not have an ad account for this integration"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a callback group",
+        "tags": [
+          "Callback Groups"
+        ],
+        "requestBody": {
+          "$ref": "#/components/requestBodies/CallbackGroupBodyUpdate"
+        },
+        "responses": {
+          "200": {
+            "description": "Successfully updated a callback group",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallbackGroup"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/CallbackGroup"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App does not exist, or You do not have an ad account for this integration"
+          }
+        }
+      }
+    },
+    "/apps/{app_id}/events": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "app_id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "description": "The app's ID"
+        }
+      ],
+      "get": {
+        "summary": "Retrieves a list of events for an app",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          }
+        ],
+        "tags": [
+          "Events"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success (200)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfEvents"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "402a9bc4-d6e3-4e3f-8621-52193c3c3034",
+                      "type": "event",
+                      "attributes": {
+                        "name": "App Open",
+                        "event": "open"
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "App not found"
+          }
+        }
+      }
+    },
+    "/sk_ad_networks": {
+      "get": {
+        "summary": "Retrieves a list of SK Ad Networks",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/page"
+          },
+          {
+            "$ref": "#/components/parameters/per_page"
+          }
+        ],
+        "tags": [
+          "SK Ad Networks"
+        ],
+        "responses": {
+          "200": {
+            "description": "Success (200)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArrayOfSKAdNetworks"
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": "4fzdc2evr5.skadnetwork",
+                      "type": "sk_ad_network",
+                      "attributes": {
+                        "channel_id": 13
+                      }
+                    },
+                    {
+                      "id": "4pfyvq9l8r.skadnetwork",
+                      "type": "sk_ad_network",
+                      "attributes": {
+                        "channel_id": 2
+                      }
+                    }
+                  ],
+                  "links": {
+                    "self": "https://api.tenjin.com/v2/sk_ad_networks"
+                  },
+                  "meta": {
+                    "count": 2,
+                    "per_page": 25
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sk_ad_networks/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "/[a-zA-Z0-9]{10}\\.skadnetwork/"
+          },
+          "description": "The SK AdNetwork's ID"
+        }
+      ],
+      "get": {
+        "summary": "Get an SK Ad Network",
+        "tags": [
+          "SK Ad Networks"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully get an SK Ad Network",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SKAdNetwork"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/SKAdNetwork"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SK Ad Network not found."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "Bearer Authentication": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "If you have an account on Tenjin you can <a href='https://tenjin.com/dashboard/access_tokens' title='generate an access token' target='_blank'>generate an access token</a> for accessing the Campaign Management API. You can learn more about authenticating with Tenjin in our <a title='learn more about access tokens' href='https://tenjin.com/docs/api-access-tokens/' target='_blank'>documentation</a>. Usage format: set the `Authorization` header to `Bearer <Access Token>`."
+      }
+    },
+    "schemas": {
+      "EmptyResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {}
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "DefaultLinks": {
+        "type": "object",
+        "properties": {
+          "self": {
+            "type": "string",
+            "format": "uri",
+            "description": "Self-reference to the current API request URL"
+          }
+        }
+      },
+      "LinksWithPagination": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/DefaultLinks"
+          },
+          {
+            "type": "object",
+            "description": "Additional pagination links.",
+            "properties": {
+              "first": {
+                "type": "string",
+                "format": "uri",
+                "description": "API request URL for the first page of data."
+              },
+              "last": {
+                "type": "string",
+                "format": "uri",
+                "description": "API request URL for the last page of data."
+              },
+              "next": {
+                "type": "string",
+                "format": "uri",
+                "description": "API request URL for the next page of data."
+              },
+              "prev": {
+                "type": "string",
+                "format": "uri",
+                "description": "API request URL for the previous page of data."
+              }
+            }
+          }
+        ]
+      },
+      "Meta": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "description": "Total number of items across all pages."
+          },
+          "per_page": {
+            "type": "integer",
+            "description": "Number of items returned per API request."
+          }
+        }
+      },
+      "App": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "app"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The name of the app."
+              },
+              "bundle_id": {
+                "type": "string",
+                "description": "The Bundle ID of the app in the App Store."
+              },
+              "store_id": {
+                "type": "string",
+                "nullable": true,
+                "description": "The Store ID of the app in the App Store."
+              },
+              "platform": {
+                "type": "string",
+                "enum": [
+                  "ios",
+                  "android",
+                  "amazon",
+                  "android_other"
+                ],
+                "description": "The platform of the app."
+              },
+              "public_key": {
+                "type": "string",
+                "nullable": true,
+                "description": "Used for Android receipt validation."
+              },
+              "ios_shared_secret": {
+                "type": "string",
+                "nullable": true,
+                "description": "Used for iOS subscription revenue."
+              },
+              "released_on": {
+                "type": "string",
+                "format": "date",
+                "description": "The date the app was released."
+              },
+              "rating": {
+                "type": "string",
+                "pattern": "^\\d{1}.\\d{1}$",
+                "nullable": true,
+                "description": "The app's rating on the app store."
+              },
+              "price": {
+                "type": "integer",
+                "minimum": 0,
+                "nullable": true,
+                "description": "The price of the app on the app store."
+              },
+              "developer_name": {
+                "type": "string",
+                "nullable": true,
+                "description": "The name of the app developer."
+              },
+              "match_strings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Strings used for campaign and app matching logic."
+              },
+              "protocol": {
+                "type": "string",
+                "nullable": true,
+                "description": "Used for facebook deeplink."
+              },
+              "facebook_referrer_decryption_key": {
+                "type": "string",
+                "nullable": true,
+                "description": "Used for facebook referrer tracking."
+              },
+              "destination_url": {
+                "type": "string",
+                "nullable": true,
+                "description": "Destination URL to download app for `android_other` platform."
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "sending_events": {
+                "type": "boolean",
+                "nullable": false,
+                "description": "The flag to show if an event is sent for the app or not."
+              }
+            }
+          }
+        }
+      },
+      "AppResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/App"
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "AppBodyPOST": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "The name of the app."
+          },
+          "bundle_id": {
+            "type": "string",
+            "description": "The Bundle ID of the app in the App Store."
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "amazon",
+              "android_other"
+            ],
+            "description": "The platform of the app."
+          },
+          "public_key": {
+            "type": "string",
+            "description": "Used for Android receipt validation."
+          },
+          "ios_shared_secret": {
+            "type": "string",
+            "description": "Used for iOS subscription revenue."
+          },
+          "protocol": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Used for facebook deeplink."
+          },
+          "match_strings": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Strings used for campaign and app matching logic."
+          },
+          "destination_url": {
+            "type": "string",
+            "description": "Destination URL to download app for `android_other` platform."
+          }
+        },
+        "required": [
+          "name",
+          "bundle_id",
+          "platform"
+        ]
+      },
+      "AppBodyPUT": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "The name of the app."
+          },
+          "public_key": {
+            "type": "string",
+            "description": "Used for Android receipt validation."
+          },
+          "ios_shared_secret": {
+            "type": "string",
+            "description": "Used for iOS subscription revenue."
+          },
+          "protocol": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Used for facebook deeplink."
+          },
+          "match_strings": {
+            "type": "string",
+            "maxLength": 255,
+            "description": "Strings used for campaign and app matching logic."
+          },
+          "destination_url": {
+            "type": "string",
+            "description": "Destination URL to download app for `android_other` platform."
+          }
+        }
+      },
+      "ArrayOfApps": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/App"
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "AdAccount": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "ad_account"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Name of the ad account."
+              },
+              "channel_id": {
+                "type": "integer",
+                "description": "The Channel ID on the Tenjin platform."
+              },
+              "external_id": {
+                "type": "string",
+                "nullable": true,
+                "description": "The ID of the ad account on the external marketing channel."
+              }
+            }
+          }
+        }
+      },
+      "AdAccountResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AdAccount"
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "ArrayOfAdAccounts": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdAccount"
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "Campaign": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "campaign"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The name of the campaign on Tenjin."
+              },
+              "channel_id": {
+                "type": "integer",
+                "description": "The ID of the associated marketing channel on Tenjin."
+              },
+              "app_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The ID of the associated app on Tenjin."
+              },
+              "ad_account_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The ID of the associated ad account on Tenjin."
+              },
+              "platform": {
+                "type": "string",
+                "enum": [
+                  "ios",
+                  "android",
+                  "amazon",
+                  "android_other"
+                ],
+                "description": "The platform of the app."
+              },
+              "short_id": {
+                "type": "string",
+                "description": "A unique URL-safe slug that identifies the campaign defined by Tenjin."
+              },
+              "remote_campaign_id": {
+                "type": "string",
+                "nullable": true,
+                "description": "Campaign ID that we get from marketing channels."
+              },
+              "click_tracking_url": {
+                "type": "string",
+                "format": "uri",
+                "nullable": true,
+                "description": "URL for click tracking."
+              },
+              "impression_tracking_url": {
+                "type": "string",
+                "format": "uri",
+                "nullable": true,
+                "description": "URL for tracking impressions."
+              },
+              "attribution_window": {
+                "type": "integer",
+                "nullable": true,
+                "description": "Click attribution window in seconds. Default is 604800 (7 days)."
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "hidden": {
+                "type": "boolean",
+                "description": "Is the campaign hidden on Tenjin"
+              }
+            }
+          }
+        }
+      },
+      "CampaignResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Campaign"
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "CampaignBodyPOST": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CampaignRequestBodyWithChannel"
+          },
+          {
+            "$ref": "#/components/schemas/CampaignRequestBodyWithAdAccount"
+          }
+        ]
+      },
+      "CampaignBodyPUT": {
+        "type": "object",
+        "properties": {
+          "attribution_window": {
+            "type": "integer",
+            "description": "Click attribution window in seconds. Default is 604800 (7 days)."
+          }
+        }
+      },
+      "CampaignRequestBodyWithChannel": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "channel_id": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "channel_id"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/CampaignRequestShared"
+          }
+        ]
+      },
+      "CampaignRequestBodyWithAdAccount": {
+        "allOf": [
+          {
+            "type": "object",
+            "properties": {
+              "ad_account_id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "ad_account_id"
+            ]
+          },
+          {
+            "$ref": "#/components/schemas/CampaignRequestShared"
+          }
+        ]
+      },
+      "ArrayOfCampaigns": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Campaign"
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "CampaignRequestShared": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "app_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "name",
+          "app_id"
+        ]
+      },
+      "Channel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "channel"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The name of the marketing channel."
+              },
+              "short_id": {
+                "type": "string",
+                "description": "A unique URL-safe slug that identifies the channel."
+              }
+            }
+          }
+        }
+      },
+      "ChannelResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/Channel"
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "ArrayOfChannels": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Channel"
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "CallbackTemplate": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "callback_template"
+                ]
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "The name of the callback template."
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "A short summary that describes the callback template."
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "ping",
+                      "ping_on_first",
+                      "ping_adwords",
+                      "ping_facebook_deferred",
+                      "ping_facebook",
+                      "ping_double_click_bid_manager",
+                      "ping_snapchat"
+                    ],
+                    "description": "The action to take when a particular event occurs."
+                  },
+                  "event": {
+                    "type": "string",
+                    "description": "The event that will fire off a callback."
+                  },
+                  "customer_parameters": {
+                    "type": "object",
+                    "description": "Pass through macros that we get from the click URL and pass to callbacks."
+                  },
+                  "is_install": {
+                    "type": "boolean",
+                    "description": "If this is `true`, only one callback can be created from this template."
+                  },
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "ios",
+                      "android",
+                      "amazon",
+                      "android_other"
+                    ]
+                  },
+                  "required_by_channel": {
+                    "type": "boolean",
+                    "description": "If this is `true`, the click URL won't be shown until a callback is created."
+                  },
+                  "channel_id": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "ArrayOfCallbackTemplates": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallbackTemplate"
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "Callback": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "callback"
+                ]
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "The name of the callback."
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "The endpoint to hit."
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "ping",
+                      "ping_on_first",
+                      "ping_adwords",
+                      "ping_facebook_deferred",
+                      "ping_facebook",
+                      "ping_double_click_bid_manager",
+                      "ping_snapchat"
+                    ],
+                    "description": "The action to take when a particular event occurs."
+                  },
+                  "event": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "The event that will fire off a callback."
+                  },
+                  "http_method": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST"
+                    ],
+                    "description": "The type of HTTP request to make."
+                  },
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "callback_template_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "channel_id": {
+                    "type": "integer"
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                }
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "ArrayOfCallbacks": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Callback"
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "CallbackBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "customer_parameters": {
+            "type": "object"
+          },
+          "event": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "callback_template_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_filter": {
+            "type": "string",
+            "enum": [
+              "all",
+              "channel"
+            ]
+          }
+        },
+        "required": [
+          "callback_template_id"
+        ]
+      },
+      "S2sCallback": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "s2s_callbacks"
+                ]
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "app_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "The name of the S2S callback."
+                  },
+                  "event": {
+                    "type": "string",
+                    "description": "The event that will fire off a callback."
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "The endpoint to hit."
+                  },
+                  "http_method": {
+                    "type": "string",
+                    "enum": [
+                      "GET",
+                      "POST"
+                    ],
+                    "description": "The type of HTTP request to make."
+                  },
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "created_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "ping",
+                      "ping_on_first"
+                    ],
+                    "description": "The action to take when a particular event occurs."
+                  },
+                  "advertising_id_filter": {
+                    "type": "boolean",
+                    "description": "Only send callback for users with a known advertising id."
+                  },
+                  "user_filter": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "description": "Only send callbacks for users attributed to these ad networks. Leave blank to send for all ad networks."
+                  }
+                }
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "ArrayOfS2sCallbacks": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/S2sCallbackData"
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "S2sCallbackBody": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "event": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "http_method": {
+            "type": "string",
+            "enum": [
+              "GET",
+              "POST"
+            ]
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "ping",
+              "ping_on_first"
+            ]
+          },
+          "advertising_id_filter": {
+            "type": "boolean",
+            "description": "Only send callback for users with a known advertising id."
+          },
+          "user_filter": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Only send callbacks for users attributed to these ad networks. Leave blank to send for all ad networks."
+          }
+        }
+      },
+      "CallbackSettings": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "callback_settings"
+                ]
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "app_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "integration_id": {
+                    "type": "integer"
+                  },
+                  "callback_settings": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "CallbackSettingsBody": {
+        "type": "object",
+        "properties": {
+          "callback_settings": {
+            "type": "object",
+            "description": "The settings that will be applied to all callback groups for this app and marketing channel"
+          }
+        }
+      },
+      "CallbackGroupTemplate": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "callback_group_template"
+                ]
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "integration_id": {
+                    "type": "integer"
+                  },
+                  "platform": {
+                    "type": "string"
+                  },
+                  "user_filter_default": {
+                    "type": "string",
+                    "enum": [
+                      "all",
+                      "channel",
+                      "channel_and_organic"
+                    ],
+                    "description": "The default value for user filter"
+                  },
+                  "user_filter_editable": {
+                    "type": "boolean",
+                    "description": "Whether the user is allowed to change the user filter from the default value"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "event": {
+                    "type": "string"
+                  },
+                  "allow_multiple": {
+                    "type": "boolean",
+                    "description": "Can one app have multiple versions of this callback group?"
+                  },
+                  "required_settings": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "The settings that will need to be included to create this callback group"
+                  }
+                }
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "ArrayOfCallbackGroupTemplates": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallbackGroupTemplateData"
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "CallbackGroup": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "callback_group"
+                ]
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "app_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "integration_id": {
+                    "type": "integer"
+                  },
+                  "callback_group_template_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "event_definition_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "event": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "active": {
+                    "type": "boolean"
+                  },
+                  "user_filter": {
+                    "type": "string",
+                    "enum": [
+                      "all",
+                      "channel",
+                      "channel_and_organic"
+                    ]
+                  },
+                  "callback_settings": {
+                    "type": "object",
+                    "description": "The settings that apply to just this callback group"
+                  }
+                }
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "ArrayOfCallbackGroups": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallbackGroupData"
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "CallbackGroupBody": {
+        "type": "object",
+        "properties": {
+          "callback_group_template_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "event_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Either event_definition_id or event is necessary. event_definition_id is prioritized"
+          },
+          "event": {
+            "type": "string",
+            "description": "Either event_definition_id or event is necessary"
+          },
+          "name": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "user_filter": {
+            "type": "string",
+            "enum": [
+              "all",
+              "channel",
+              "channel_and_organic"
+            ]
+          },
+          "callback_settings": {
+            "type": "object"
+          }
+        }
+      },
+      "CallbackGroupBodyUpdate": {
+        "type": "object",
+        "properties": {
+          "event_definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "If both event_definition_id and event are present, event_definition_id takes priority"
+          },
+          "event": {
+            "type": "string",
+            "description": "Either event_definition_id or event is necessary"
+          },
+          "name": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "user_filter": {
+            "type": "string",
+            "enum": [
+              "all",
+              "channel",
+              "channel_and_organic"
+            ]
+          },
+          "callback_settings": {
+            "type": "object"
+          }
+        }
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "event"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The name of the event."
+              },
+              "event": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ArrayOfEvents": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "SKAdNetwork": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "sk_ad_network"
+                ]
+              },
+              "attributes": {
+                "type": "object",
+                "properties": {
+                  "channel_id": {
+                    "type": "integer",
+                    "description": "The ID of the associated marketing channel on Tenjin."
+                  }
+                }
+              }
+            }
+          },
+          "links": {
+            "$ref": "#/components/schemas/DefaultLinks"
+          }
+        }
+      },
+      "ArrayOfSKAdNetworks": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SKAdNetwork"
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      },
+      "S2sCallbackData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "s2s_callbacks"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "app_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the S2S callback."
+              },
+              "event": {
+                "type": "string",
+                "description": "The event that will fire off a callback."
+              },
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "The endpoint to hit."
+              },
+              "http_method": {
+                "type": "string",
+                "enum": [
+                  "GET",
+                  "POST"
+                ],
+                "description": "The type of HTTP request to make."
+              },
+              "active": {
+                "type": "boolean"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "ping",
+                  "ping_on_first"
+                ],
+                "description": "The action to take when a particular event occurs."
+              },
+              "advertising_id_filter": {
+                "type": "boolean",
+                "description": "Only send callback for users with a known advertising id."
+              },
+              "user_filter": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "Only send callbacks for users attributed to these ad networks. Leave blank to send for all ad networks."
+              }
+            }
+          }
+        }
+      },
+      "CallbackGroupTemplateData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "callback_group_template"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "integration_id": {
+                "type": "integer"
+              },
+              "platform": {
+                "type": "string"
+              },
+              "user_filter_default": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "channel",
+                  "channel_and_organic"
+                ],
+                "description": "The default value for user filter"
+              },
+              "user_filter_editable": {
+                "type": "boolean",
+                "description": "Whether the user is allowed to change the user filter from the default value"
+              },
+              "name": {
+                "type": "string"
+              },
+              "event": {
+                "type": "string"
+              },
+              "allow_multiple": {
+                "type": "boolean",
+                "description": "Can one app have multiple versions of this callback group?"
+              },
+              "required_settings": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The settings that will need to be included to create this callback group"
+              }
+            }
+          }
+        }
+      },
+      "CallbackGroupData": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "callback_group"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "app_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "integration_id": {
+                "type": "integer"
+              },
+              "callback_group_template_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "event_definition_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "event": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              },
+              "user_filter": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "channel",
+                  "channel_and_organic"
+                ]
+              },
+              "callback_settings": {
+                "type": "object",
+                "description": "The settings that apply to just this callback group"
+              }
+            }
+          }
+        }
+      },
+      "SdkKey": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The key's ID, an integer written as a string."
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "sdk_key"
+            ]
+          },
+          "attributes": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The key's name."
+              },
+              "key": {
+                "type": "string",
+                "description": "The SDK key the app sends."
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "ArrayOfSdkKeys": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SdkKey"
+            }
+          },
+          "links": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultLinks"
+              },
+              {
+                "$ref": "#/components/schemas/LinksWithPagination"
+              }
+            ]
+          },
+          "meta": {
+            "$ref": "#/components/schemas/Meta"
+          }
+        }
+      }
+    },
+    "requestBodies": {
+      "AppBodyPOST": {
+        "description": "A JSON object containing app information for a POST request",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AppBodyPOST"
+            }
+          }
+        }
+      },
+      "AppBodyPUT": {
+        "description": "A JSON object containing app information for a PUT request",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/AppBodyPUT"
+            }
+          }
+        }
+      },
+      "CampaignBodyPOST": {
+        "description": "A JSON object containing campaign information for a POST request",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CampaignBodyPOST"
+            }
+          }
+        }
+      },
+      "CampaignBodyPUT": {
+        "description": "A JSON object containing campaign information for a PUT request",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CampaignBodyPUT"
+            }
+          }
+        }
+      },
+      "CallbackBody": {
+        "description": "A JSON object containing callback information for a POST request",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CallbackBody"
+            }
+          }
+        }
+      },
+      "S2sCallbackBody": {
+        "description": "A JSON object containing S2S callback information for a POST or PATCH",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/S2sCallbackBody"
+            }
+          }
+        }
+      },
+      "CallbackSettingsBody": {
+        "description": "A JSON object containing callback settings information for a PATCH request",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CallbackSettingsBody"
+            }
+          }
+        }
+      },
+      "CallbackGroupBody": {
+        "description": "A JSON object containing callback group information",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CallbackGroupBody"
+            }
+          }
+        }
+      },
+      "CallbackGroupBodyUpdate": {
+        "description": "A JSON object containing callback group information",
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/CallbackGroupBodyUpdate"
+            }
+          }
+        }
+      }
+    },
+    "examples": {
+      "App": {
+        "value": {
+          "data": {
+            "id": "17ef8c1a-5729-456e-98db-ccc104bdf860",
+            "type": "app",
+            "attributes": {
+              "name": "This is an app",
+              "bundle_id": "com.this.IsAnApp",
+              "platform": "ios",
+              "public_key": null,
+              "ios_shared_secret": null,
+              "store_id": "655745678",
+              "released_on": "2013-09-09",
+              "rating": "4.5",
+              "price": 0,
+              "developer_name": "Tenjin",
+              "match_strings": [],
+              "protocol": null,
+              "facebook_referrer_decryption_key": null,
+              "destination_url": null,
+              "created_at": "2019-07-21T21:50:20.591Z",
+              "sending_events": true
+            }
+          },
+          "links": {
+            "self": "https://api.tenjin.com/v2/apps/17ef8c1a-5729-456e-98db-ccc104bdf860"
+          }
+        }
+      },
+      "AdAccount": {
+        "value": {
+          "data": {
+            "id": "6e3fbfa6-27cc-45f2-af3f-5c9ead45280e",
+            "type": "ad_account",
+            "attributes": {
+              "name": "Facebook Account",
+              "channel_id": 3,
+              "external_id": "444509211788999"
+            }
+          },
+          "links": {
+            "self": "https://api.tenjin.com/v2/ad_accounts/6e3fbfa6-27cc-45f2-af3f-5c9ead45280e"
+          }
+        }
+      },
+      "Campaign": {
+        "value": {
+          "data": {
+            "id": "41149a48-9766-4c23-7744-56cb4836a603",
+            "type": "campaign",
+            "attributes": {
+              "channel_id": 3,
+              "app_id": "17ef8c1a-5729-456e-98db-ccc104bdf860",
+              "ad_account_id": "6e3fbfa6-27cc-45f2-af3f-5c9ead45280e",
+              "name": "Facebook Campaign",
+              "short_id": "zzzk0TXwNXu7Y5Maf2aRkL",
+              "remote_campaign_id": "48249a48-9766-4c23-8c13-56cb4836d903",
+              "click_tracking_url": "https://tenjin.io/v0/click/zzzk0TXwNXu7Y5Maf2aRkL",
+              "impression_tracking_url": null,
+              "attribution_window": null,
+              "created_at": "2019-08-20T21:56:12.336Z",
+              "hidden": false
+            }
+          },
+          "links": {
+            "self": "https://api.tenjin.com/v2/campaigns/41149a48-9766-4c23-7744-56cb4836a603"
+          }
+        }
+      },
+      "Channel": {
+        "value": {
+          "data": {
+            "id": 3,
+            "type": "channel",
+            "attributes": {
+              "name": "Facebook",
+              "short_id": "facebook"
+            }
+          },
+          "links": {
+            "self": "https://api.tenjin.com/v2/channels/3"
+          }
+        }
+      },
+      "CallbackTemplate": {
+        "value": {
+          "data": {
+            "id": "b7af0230-913b-416d-8043-06a4048cea30",
+            "type": "callback_template",
+            "attributes": {
+              "name": "Facebook install",
+              "description": "Facebook install callback template",
+              "action": "ping_on_first",
+              "event": "install",
+              "customer_parameters": {
+                "remote_app_id": "Remote App ID"
+              },
+              "is_install": false,
+              "channel_id": 3,
+              "platform": "ios",
+              "required_by_channel": false
+            }
+          },
+          "links": {
+            "self": "https://api.tenjin.com/v2/apps/17ef8c1a-5729-456e-98db-ccc104bdf860/callback_templates/b7af0230-913b-416d-8043-06a4048cea30"
+          }
+        }
+      },
+      "Callback": {
+        "value": {
+          "data": {
+            "id": "1268b1a8-57b5-485d-a597-8fd88ea27849",
+            "type": "callback",
+            "attributes": {
+              "name": "Facebook install",
+              "event": "install",
+              "action": "ping_on_first",
+              "channel_id": 3,
+              "url": "https://fake.facebook.com?ida={{advertising_id}}&impId={{click_id}}&trackingPartner=tenjin&eventTime={{time_in_ms}}",
+              "http_method": "GET",
+              "active": true,
+              "customer_parameters": {
+                "remote_app_id": "test"
+              },
+              "callback_template_id": "b7af0230-913b-416d-8043-06a4048cea30",
+              "created_at": "2019-11-28T18:45:00.687Z"
+            }
+          },
+          "links": {
+            "self": "https://api.tenjin.com/v2/apps/17ef8c1a-5729-456e-98db-ccc104bdf860/callbacks/1268b1a8-57b5-485d-a597-8fd88ea27849"
+          }
+        }
+      },
+      "S2sCallback": {
+        "value": {
+          "data": {
+            "id": "06daaf45-8bab-4070-848b-b198024fb927",
+            "type": "s2s_callbacks",
+            "attributes": {
+              "app_id": "e3448393-bbf4-432e-9d4d-bdf640508b4c",
+              "name": "S2S Purchase,",
+              "event": "purchase,",
+              "url": "https://fake.tenjin.com?bundle_id={{bundle_id}},",
+              "http_method": "GET,",
+              "active": "true,",
+              "created_at": "2024-12-18T00:01:32.473Z,",
+              "action": "ping,",
+              "advertising_id_filter": "true,",
+              "user_filter": [
+                1,
+                3,
+                5
+              ]
+            }
+          },
+          "links": {
+            "self": "https://api.tenjin.com/v2/apps/e3448393-bbf4-432e-9d4d-bdf640508b4c/s2s_callbacks/06daaf45-8bab-4070-848b-b198024fb927"
+          }
+        }
+      },
+      "ArrayOfS2sCallbacks": {
+        "value": {
+          "data": [
+            {
+              "id": "06daaf45-8bab-4070-848b-b198024fb927",
+              "type": "s2s_callbacks",
+              "attributes": {
+                "app_id": "e3448393-bbf4-432e-9d4d-bdf640508b4c",
+                "name": "S2S Purchase,",
+                "event": "purchase,",
+                "url": "https://fake.tenjin.com?bundle_id={{bundle_id}},",
+                "http_method": "GET,",
+                "active": "true,",
+                "created_at": "2024-12-18T00:01:32.473Z,",
+                "action": "ping,",
+                "advertising_id_filter": "true,",
+                "user_filter": [
+                  1,
+                  3,
+                  5
+                ]
+              }
+            },
+            {
+              "id": "06daaf45-8bab-4070-848b-a087913ea818",
+              "type": "s2s_callbacks",
+              "attributes": {
+                "app_id": "e3448393-bbf4-432e-9d4d-bdf640508b4c",
+                "name": "S2S Open,",
+                "event": "open,",
+                "url": "https://fake.tenjin.com?bundle_id={{bundle_id}}&advertising_id={{advertising_id}},",
+                "http_method": "GET,",
+                "active": "false,",
+                "created_at": "2023-11-12T00:03:34.442Z,",
+                "action": "ping_on_first,",
+                "advertising_id_filter": "false,",
+                "user_filter": []
+              }
+            }
+          ],
+          "links": {
+            "self": "https://api.tenjin.com/v2/apps/e3448393-bbf4-432e-9d4d-bdf640508b4c/s2s_callbacks"
+          },
+          "meta": {
+            "count": 2,
+            "per_page": 25
+          }
+        }
+      },
+      "CallbackSettings": {
+        "value": {
+          "data": {
+            "id": "1268b1a2-57b7-484d-a598-8fd88ea27949",
+            "type": "callback_setting",
+            "attributes": {
+              "app_id": "17ef8c1a-5729-456e-98db-ccc104bdf860",
+              "integration_id": 18,
+              "callback_settings": {
+                "game_id": "abcde12345"
+              }
+            }
+          },
+          "links": {
+            "self": "https://api.tenjin.com/v2/apps/1268b1a2-57b7-484d-a598-8fd88ea27949/integrations/18/callback_settings"
+          }
+        }
+      },
+      "ArrayOfCallbackGroupTemplates": {
+        "value": {
+          "data": [
+            {
+              "id": "5af128e0-78ae-4df7-9591-91f6f8411b83",
+              "type": "callback_group_template",
+              "attributes": {
+                "platform": "ios",
+                "allow_multiple": false,
+                "user_filter_default": "all",
+                "user_filter_editable": true,
+                "name": "Custom event",
+                "integration_id": 18,
+                "event": "open",
+                "required_settings": [
+                  "event_name"
+                ]
+              }
+            },
+            {
+              "id": "5af128e0-78ae-4df7-9591-91f6f8411b84",
+              "type": "callback_group_template",
+              "attributes": {
+                "platform": "ios",
+                "allow_multiple": false,
+                "user_filter_default": "channel",
+                "user_filter_editable": false,
+                "name": "Install",
+                "integration_id": 18,
+                "event": "open",
+                "required_settings": []
+              }
+            }
+          ],
+          "links": {
+            "self": "https://api.tenjin.com/v2/integrations/18/callback_group_templates"
+          },
+          "meta": {
+            "count": 2,
+            "per_page": 25
+          }
+        }
+      },
+      "CallbackGroup": {
+        "value": {
+          "data": {
+            "id": "2bf128e0-78ae-4df7-9591-91f6ff412b85",
+            "type": "callback_group",
+            "attributes": {
+              "app_id": "17ef8c1a-5729-456e-98db-ccc104bdf860",
+              "integration_id": 18,
+              "callback_group_template_id": "5af128e0-78ae-4df7-9591-91f6f8411b83",
+              "event_definition_id": "402a9bc4-d6e3-4e3f-8621-52193c3c3034",
+              "event": "level_10",
+              "name": "Level 10",
+              "active": true,
+              "user_filter": "channel",
+              "callback_settings": {
+                "event_name": "level_10"
+              }
+            }
+          }
+        }
+      },
+      "ArrayOfCallbackGroups": {
+        "value": {
+          "data": [
+            {
+              "id": "2bf128e0-78ae-4df7-9591-91f6ff412b85",
+              "type": "callback_group",
+              "attributes": {
+                "app_id": "17ef8c1a-5729-456e-98db-ccc104bdf860",
+                "integration_id": 18,
+                "callback_group_template_id": "5af128e0-78ae-4df7-9591-91f6f8411b83",
+                "event_definition_id": "402a9bc4-d6e3-4e3f-8621-52193c3c3034",
+                "event": "level_10",
+                "name": "Level 10",
+                "active": true,
+                "user_filter": "channel",
+                "callback_settings": {
+                  "event_name": "level_10"
+                }
+              }
+            },
+            {
+              "id": "2bf128e0-78ae-4df7-9591-91f6ff412b86",
+              "type": "callback_group",
+              "attributes": {
+                "app_id": "17ef8c1a-5729-456e-98db-ccc104bdf860",
+                "integration_id": 18,
+                "callback_group_template_id": "5af128e0-78ae-4df7-9591-91f6f8411b84",
+                "event_definition_id": "6af228e0-79ae-46f9-9591-91f7f8411e21",
+                "event": "open",
+                "name": "Install",
+                "active": true,
+                "user_filter": "all",
+                "callback_settings": {}
+              }
+            }
+          ],
+          "links": {
+            "self": "https://api.tenjin.com/v2/apps/17ef8c1a-5729-456e-98db-ccc104bdf860/integrations/18/callback_groups"
+          },
+          "meta": {
+            "count": 2,
+            "per_page": 25
+          }
+        }
+      },
+      "Event": {
+        "value": {
+          "data": {
+            "id": "402a9bc4-d6e3-4e3f-8621-52193c3c3034",
+            "type": "event",
+            "attributes": {
+              "name": "App Open",
+              "event": "open"
+            }
+          },
+          "links": {
+            "self": "https://api.tenjin.com/v2/apps/17ef8c1a-5729-456e-98db-ccc104bdf860/events"
+          }
+        }
+      },
+      "SKAdNetwork": {
+        "value": {
+          "data": {
+            "id": "4fzdc2evr5.skadnetwork",
+            "type": "sk_ad_network",
+            "attributes": {
+              "channel_id": 13
+            }
+          },
+          "links": {
+            "self": "https://api.tenjin.com/v2/sk_ad_networks/4fzdc2evr5.skadnetwork"
+          }
+        }
+      }
+    },
+    "parameters": {
+      "per_page": {
+        "in": "query",
+        "name": "per_page",
+        "schema": {
+          "type": "integer",
+          "maximum": 1000,
+          "example": 25,
+          "default": 25
+        },
+        "description": "Number of results per page."
+      },
+      "page": {
+        "in": "query",
+        "name": "page",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "example": 1,
+          "default": 1
+        },
+        "description": "The page you want in your response."
+      }
+    }
+  }
+}

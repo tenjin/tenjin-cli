@@ -1,0 +1,39 @@
+name: Docs
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.md'
+      - .markdownlint-cli2.yaml
+      - .github/workflows/docs.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '**/*.md'
+      - .markdownlint-cli2.yaml
+      - .github/workflows/docs.yaml
+permissions:
+  contents: read
+jobs:
+  docs:
+    name: Markdown and links
+    concurrency: ${{ github.ref }}/docs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+      # Files and globs come from .markdownlint-cli2.yaml.
+      - name: Lint Markdown
+        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24.2.0
+      # Links between our own files and to their headings. Web links are left
+      # out: they would fail on a site being down, not on a change here.
+      - name: Check links
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: >-
+            --offline --include-fragments --no-progress
+            README.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md 'docs/adr/*.md'
+          fail: true

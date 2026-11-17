@@ -1,8 +1,9 @@
-**JIRA**:
+<!-- Pull requests are for Tenjin's own changes for now. Bugs and ideas are welcome as issues. -->
 
-- https://adromance.atlassian.net/browse/TENJIN-
+**What changes, and why:**
 
-**Proposed Changes:**
+-
 
-- Description
+**How it was tested:**
 
+-

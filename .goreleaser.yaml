@@ -1,0 +1,118 @@
+# Release builds, archives and the Homebrew cask. A release is made by merging
+# release-please's pull request (see .github/workflows/release-please.yaml).
+# To try the whole pipeline locally without publishing anything:
+# make release-snapshot
+version: 2
+
+project_name: tenjin
+
+before:
+  hooks:
+    - ./scripts/completions.sh
+    - ./scripts/notices.sh
+
+builds:
+  - id: tenjin
+    main: ./cmd/tenjin
+    binary: tenjin
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/tenjin/tenjin-cli/internal/buildinfo.version={{ .Version }}
+      - -X github.com/tenjin/tenjin-cli/internal/buildinfo.commit={{ .ShortCommit }}
+      - -X github.com/tenjin/tenjin-cli/internal/buildinfo.date={{ .CommitDate }}
+      # The AMPLITUDE_API_KEY secret, in a release only; a snapshot has none,
+      # even where the environment holds it, and sends no telemetry.
+      - -X github.com/tenjin/tenjin-cli/internal/telemetry.apiKey={{ if not .IsSnapshot }}{{ index .Env "TENJIN_AMPLITUDE_KEY" }}{{ end }}
+    # Builds of one commit are byte for byte the same, wherever they are made.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: tenjin
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # install.sh builds this name too; change both together.
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Every entry carries the commit's time, owner and mode, not the
+    # checkout's or the build hooks', so an archive built again from the same
+    # commit is the same file, with the checksum the release and cask name.
+    builds_info:
+      owner: root
+      group: root
+      mode: 0755
+      mtime: "{{ .CommitDate }}"
+    files:
+      - src: README.md
+        info: &docs
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+      - src: LICENSE*
+        info: *docs
+      - src: THIRD_PARTY_NOTICES.md
+        info: *docs
+      - src: completions/*
+        info: *docs
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+# The release notes are release-please's, from the conventional commits.
+changelog:
+  disable: true
+
+release:
+  github:
+    owner: tenjin
+    name: tenjin-cli
+  # Fills the draft release-please made, found by this name (v1.0.0), and
+  # leaves it a draft: release.yaml publishes it once it is attested.
+  name_template: "{{ .Tag }}"
+  use_existing_draft: true
+  draft: true
+  # A tag such as v0.2.0-rc.1 is a pre-release: not the latest release, so
+  # the install scripts and the update notice keep to the last full one.
+  prerelease: auto
+  # A release job run again after a failure replaces what it uploaded.
+  replace_existing_artifacts: true
+
+homebrew_casks:
+  - name: tenjin
+    # Written to dist/homebrew/Casks/tenjin.rb and not pushed: GoReleaser
+    # would propose it while the release is still a draft, so release.yaml
+    # proposes it to the tap once the release is published.
+    repository:
+      owner: tenjin
+      name: homebrew-tap
+    skip_upload: true
+    homepage: https://github.com/tenjin/tenjin-cli
+    description: Integrate and verify the Tenjin SDK from your terminal
+    completions:
+      bash: completions/tenjin.bash
+      zsh: completions/tenjin.zsh
+      fish: completions/tenjin.fish
+    # Homebrew marks what a cask downloads as quarantined, and macOS then
+    # refuses to run a binary that is not notarized. Until releases are
+    # signed and notarized, the mark is removed after install.
+    #
+    # Homebrew deprecated `postflight` (an error in developer mode) for
+    # `postflight_steps`. GoReleaser writes that from hooks.post.install_steps
+    # from v2.19; until then it goes in custom_block, which puts it first in
+    # the cask, out of Homebrew's stanza order but working.
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/tenjin"]
+        end
+      end

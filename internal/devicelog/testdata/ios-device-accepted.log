@@ -1,0 +1,19 @@
+Launched application with com.example.sample bundle identifier.
+Waiting for the application to terminate…
+2026-10-06 13:18:53.803 Sample[26943:6535783] [Tenjin] - DEBUG: Stored initialized_at timestamp: 1791310733802.572998
+2026-10-06 13:18:53.803 Sample[26943:6535783] [Tenjin] - LOG: Initialized Tenjin SDK
+2026-10-06 13:18:53.803 Sample[26943:6535783] [Tenjin] - DEBUG: Creating startup operation
+2026-10-06 13:18:53.918 Sample[26943:6535825] [Tenjin] - LOG: Retrieved Apple Search Attribution Token - REDACTEDATTRIBUTIONTOKEN
+2026-10-06 13:18:53.918 Sample[26943:6535825] [Tenjin] - DEBUG: Startup attempt complete - success: 0
+2026-10-06 13:18:53.918 Sample[26943:6535825] [Tenjin] - DEBUG: Parameter providers set
+2026-10-06 13:18:54.128 Sample[26943:6535783] [Tenjin] - DEBUG: Connect
+No IABTCF_AddtlConsent
+No IABTCF_PurposeConsents
+2026-10-06 13:18:54.148 Sample[26943:6535783] [Tenjin] - LOG: Connect request
+2026-10-06 13:18:54.149 Sample[26943:6535833] [Tenjin] - LOG: Sending request - https://track.tenjin.com/v0/event
+2026-10-06 13:18:54.149 Sample[26943:6535833] [Tenjin] - DEBUG: request body session_id=AAAABBBB-CCCC-DDDD-EEEE-000000000011&sent_at=1791310734148.836182&session_count=0&country=US&platform=ios&os_version_release=26.6&total_session_time=0&device_model=iPhone16%2C2&device=iPhone16%2C2&limit_ad_tracking=true&bundle_id=com.example.sample&last_session_length=0&average_session_length=0&api_key=REDACTEDREDACTEDREDACTEDREDACT&initialized_at=1791310733802.572998&developer_device_id=AAAABBBB-CCCC-DDDD-EEEE-000000000012&retry_enabled=false&analytics_installation_id=AAAABBBB-CCCC-DDDD-EEEE-000000000013&advertising_id=00000000-0000-0000-0000-000000000000&locale=en_US&os_version=26.6&timezone=UTC&attribution_token=REDACTEDATTRIBUTIONTOKEN&iap_transaction_count=0&app_version=%28null%29&total_ilrd_revenue_usd=0&build_id=23G71&tracking_status=0&sdk_version=1.19.1
+2026-10-06 13:18:54.361 Sample[26943:6535833] [Tenjin] - DEBUG: Request encryption disabled. Using system trust for <NSURLAuthenticationChallenge: 0x600000000000>
+2026-10-06 13:18:54.462 Sample[26943:6535825] [Tenjin] - LOG: Got http response 200 
+2026-10-06 13:18:54.462 Sample[26943:6535825] [Tenjin] - DEBUG: Response body {"code":200,"success":true}
+2026-10-06 13:18:54.463 Sample[26943:6535825] [Tenjin] - LOG: Connect succeeded, processing 0 queued events
+App terminated due to signal 14.

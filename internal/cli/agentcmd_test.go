@@ -1,0 +1,271 @@
+package cli
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"testing"
+
+	"github.com/tenjin/tenjin-cli/internal/skill"
+)
+
+func skillFile(dir string) string {
+	return filepath.Join(dir, ".claude", "skills", "tenjin-cli", "SKILL.md")
+}
+func agentsSkillFile(dir string) string {
+	return filepath.Join(dir, ".agents", "skills", "tenjin-cli", "SKILL.md")
+}
+func exists(path string) bool { _, err := os.Stat(path); return err == nil }
+
+func TestAgentInstall(t *testing.T) {
+
+	t.Run("asks, lists the files, then writes", func(t *testing.T) {
+		h, dir := newHarness(t), t.TempDir()
+		h.typing("n")
+		code, _, stderr := h.run("agent", "install", dir, "--agent", "claude")
+		if code != 0 || exists(skillFile(dir)) || !strings.Contains(stderr, skillFile(dir)) || !strings.Contains(stderr, "Nothing was changed.") {
+			t.Fatalf("answered no: exit = %d, written = %v, stderr = %q", code, exists(skillFile(dir)), stderr)
+		}
+		h.typing("y")
+		code, stdout, _ := h.run("agent", "install", dir, "--agent", "claude")
+		if code != 0 || !exists(skillFile(dir)) || !strings.Contains(stdout, "create") {
+			t.Errorf("answered yes: exit = %d, stdout:\n%s", code, stdout)
+		}
+		// Nothing to do the second time, so nothing to ask.
+		h.env.interactive = false
+		code, stdout, _ = h.run("agent", "install", dir, "--agent", "claude")
+		if code != 0 || !strings.Contains(stdout, "Already up to date") {
+			t.Errorf("second install: exit = %d, stdout:\n%s", code, stdout)
+		}
+	})
+
+	t.Run("never writes unasked", func(t *testing.T) {
+		h, dir := newHarness(t), t.TempDir()
+		code, _, stderr := h.run("agent", "install", dir, "--agent", "claude")
+		if code != 2 || exists(skillFile(dir)) || !strings.Contains(stderr, "--yes") {
+			t.Errorf("no terminal: exit = %d, stderr = %q", code, stderr)
+		}
+		code, stdout, _ := h.run("agent", "install", dir, "--agent", "claude", "--dry-run", "--json")
+		var result struct {
+			Changes []struct{ Agent, Path, Action string }
+			Applied bool
+		}
+		if err := json.Unmarshal([]byte(stdout), &result); err != nil || code != 0 {
+			t.Fatalf("dry run: exit = %d, err = %v", code, err)
+		}
+		if result.Applied || exists(skillFile(dir)) || len(result.Changes) != 1 || result.Changes[0].Action != "create" || result.Changes[0].Path != skillFile(dir) {
+			t.Errorf("dry run = %+v, written = %v", result, exists(skillFile(dir)))
+		}
+	})
+
+	t.Run("picks the agents that are present", func(t *testing.T) {
+		h, dir := newHarness(t), t.TempDir()
+		// No agent on PATH, and nothing in the project.
+		code, _, stderr := h.run("agent", "install", dir, "--yes")
+		if code != 5 || !strings.Contains(stderr, "--agent") {
+			t.Fatalf("none found: exit = %d, stderr = %q", code, stderr)
+		}
+		// A project that already has an AGENTS.md gets the agents' skill
+		// and the pointer there, and only those.
+		if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("# Notes\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		code, _, _ = h.run("agent", "install", dir, "--yes")
+		raw, _ := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+		if code != 0 || !strings.HasPrefix(string(raw), "# Notes\n") || !strings.Contains(string(raw), "tenjin-cli:begin") || exists(skillFile(dir)) || !exists(agentsSkillFile(dir)) {
+			t.Errorf("exit = %d, claude skill written = %v, agents' skill written = %v, AGENTS.md:\n%.200s", code, exists(skillFile(dir)), exists(agentsSkillFile(dir)), raw)
+		}
+	})
+
+	t.Run("global goes to the home directory", func(t *testing.T) {
+		h, dir, home := newHarness(t), t.TempDir(), t.TempDir()
+		h.vars["HOME"] = home
+		if code, _, stderr := h.run("agent", "install", dir, "--agent", "claude", "--global", "--yes"); code != 0 {
+			t.Fatalf("exit = %d, stderr = %q", code, stderr)
+		}
+		if !exists(skillFile(home)) || exists(skillFile(dir)) {
+			t.Errorf("in home = %v, in project = %v", exists(skillFile(home)), exists(skillFile(dir)))
+		}
+		if code, _, stderr := h.run("agent", "install", dir, "--agent", "agents", "--global", "--yes"); code != 2 || !strings.Contains(stderr, "per project") {
+			t.Errorf("agents with --global: exit = %d, stderr = %q", code, stderr)
+		}
+	})
+
+	t.Run("unknown agent", func(t *testing.T) {
+		code, _, stderr := newHarness(t).run("agent", "install", "--agent", "notepad", "--yes")
+		if code != 2 || !strings.Contains(stderr, "claude for Claude Code") {
+			t.Errorf("exit = %d, stderr = %q", code, stderr)
+		}
+	})
+}
+
+func TestAgentStatusAndUninstall(t *testing.T) {
+	h, dir := newHarness(t), t.TempDir()
+	states := func() string {
+		t.Helper()
+		code, stdout, stderr := h.run("agent", "status", dir, "--json")
+		var rows []struct{ Agent, State string }
+		if err := json.Unmarshal([]byte(stdout), &rows); err != nil || code != 0 {
+			t.Fatalf("exit = %d, err = %v, stderr = %q", code, err, stderr)
+		}
+		var out []string
+		for _, r := range rows {
+			out = append(out, r.Agent+"="+r.State)
+		}
+		return strings.Join(out, " ")
+	}
+
+	if got := states(); got != "claude=not_installed agents=not_installed" {
+		t.Errorf("before: %q", got)
+	}
+	if code, _, stderr := h.run("agent", "install", dir, "--agent", "claude,agents", "--yes"); code != 0 {
+		t.Fatalf("install: exit = %d, stderr = %q", code, stderr)
+	}
+	if got := states(); got != "claude=installed agents=installed" {
+		t.Errorf("after install: %q", got)
+	}
+	// --agent takes the program's name as install does, and refuses a typo.
+	if code, stdout, stderr := h.run("agent", "status", dir, "--agent", "codex", "--json"); code != 0 || !strings.Contains(stdout, `"agent": "agents"`) || !strings.Contains(stdout, `"installed"`) {
+		t.Errorf("--agent codex: exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	if code, _, stderr := h.run("agent", "status", dir, "--agent", "claud"); code != 2 || !strings.Contains(stderr, `unknown agent "claud"`) {
+		t.Errorf("--agent claud: exit = %d, stderr = %q", code, stderr)
+	}
+
+	// Uninstall needs no --agent and no agent on the machine: it removes
+	// whatever was written.
+	if code, _, stderr := h.run("agent", "uninstall", dir); code != 2 || !strings.Contains(stderr, "--yes") {
+		t.Errorf("uninstall without a yes: exit = %d, stderr = %q", code, stderr)
+	}
+	code, stdout, _ := h.run("agent", "uninstall", dir, "--yes")
+	if code != 0 || strings.Count(stdout, "remove") != 3 {
+		t.Errorf("uninstall: exit = %d, stdout:\n%s", code, stdout)
+	}
+	if got := states(); got != "claude=not_installed agents=not_installed" {
+		t.Errorf("after uninstall: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err == nil {
+		t.Error("an AGENTS.md that held only the section was left behind")
+	}
+	for _, folder := range []string{".claude", ".agents"} {
+		if _, err := os.Stat(filepath.Join(dir, folder, "skills")); err != nil {
+			t.Errorf("the %s/skills folder above the skill was removed: %v", folder, err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, folder, "skills", "tenjin-cli")); err == nil {
+			t.Errorf("the skill's own folder in %s was left behind", folder)
+		}
+	}
+	if code, stdout, _ := h.run("agent", "uninstall", dir, "--yes"); code != 0 || !strings.Contains(stdout, "Nothing to remove") {
+		t.Errorf("second uninstall: exit = %d, stdout = %q", code, stdout)
+	}
+}
+
+func TestAgentSkillPrintsTheInstructions(t *testing.T) {
+	code, stdout, _ := newHarness(t).run("agent", "skill")
+	if code != 0 || stdout != skill.Body() {
+		t.Errorf("exit = %d, %d bytes", code, len(stdout))
+	}
+}
+
+var (
+	skillCommand = regexp.MustCompile("(?m)^tenjin .+$")
+	inlineCode   = regexp.MustCompile("`(tenjin [^`]+)`")
+	longFlag     = regexp.MustCompile(`--[a-z][a-z-]*`)
+)
+
+// The instructions are only worth installing if every command and flag in
+// them exists in this binary.
+func TestTheSkillOnlyNamesCommandsThatExist(t *testing.T) {
+	var lines []string
+	lines = append(lines, skillCommand.FindAllString(skill.Body(), -1)...)
+	for _, m := range inlineCode.FindAllStringSubmatch(skill.Body(), -1) {
+		lines = append(lines, m[1])
+	}
+	if len(lines) < 8 {
+		t.Fatalf("found only %d commands in the skill; the patterns no longer match it", len(lines))
+	}
+	// Agents run a release, which has no data commands yet.
+	checkCommandLines(t, newHarness(t).withoutData(), lines)
+}
+
+// codex names the agents' target: the skill in .agents/skills, which Codex
+// reads when a task calls for it, and two lines in AGENTS.md, which it reads
+// on every turn.
+func TestAgentInstallTakesCodex(t *testing.T) {
+	h, dir := newHarness(t), t.TempDir()
+	if code, _, stderr := h.run("agent", "install", dir, "--agent", "codex", "--yes"); code != 0 {
+		t.Fatalf("exit = %d, stderr = %q", code, stderr)
+	}
+	installed, err := os.ReadFile(agentsSkillFile(dir))
+	if err != nil || !strings.Contains(string(installed), skill.Body()) {
+		t.Errorf("the agents' skill: err = %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil || strings.Count(string(raw), "\n") != 4 || !strings.Contains(string(raw), ".agents/skills/tenjin-cli/SKILL.md") || strings.Contains(string(raw), "tenjin doctor") {
+		t.Errorf("AGENTS.md is not a two-line pointer: err = %v\n%s", err, raw)
+	}
+}
+
+// An AGENTS.md that holds the whole instructions, as earlier versions wrote
+// them, is reported, and the next install puts the pointer in their place.
+func TestAgentInstallReplacesTheInstructionsInAGENTSmdWithThePointer(t *testing.T) {
+	h, dir := newHarness(t), t.TempDir()
+	file := filepath.Join(dir, "AGENTS.md")
+	old := "# Notes\n\n<!-- tenjin-cli:begin (written by `tenjin agent install`; edits are overwritten) -->\n" + strings.TrimRight(skill.Body(), "\n") + "\n<!-- tenjin-cli:end -->\n\n# More notes\n"
+	if err := os.WriteFile(file, []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, stdout, _ := h.run("agent", "status", dir, "--agent", "codex")
+	if code != 0 || !strings.Contains(stdout, "out of date") || !strings.Contains(stdout, "holds the whole instructions") {
+		t.Errorf("status: exit = %d, stdout:\n%s", code, stdout)
+	}
+	if code, _, stderr := h.run("agent", "install", dir, "--agent", "codex", "--yes"); code != 0 {
+		t.Fatalf("install: exit = %d, stderr = %q", code, stderr)
+	}
+	raw, _ := os.ReadFile(file)
+	if strings.Contains(string(raw), "tenjin doctor") || !strings.HasPrefix(string(raw), "# Notes\n\n<!-- tenjin-cli:begin") || !strings.HasSuffix(string(raw), "<!-- tenjin-cli:end -->\n\n# More notes\n") {
+		t.Errorf("AGENTS.md after install:\n%s", raw)
+	}
+	if code, stdout, _ := h.run("agent", "status", dir, "--agent", "codex", "--json"); code != 0 || !strings.Contains(stdout, `"state": "installed"`) || strings.Contains(stdout, "detail") {
+		t.Errorf("status after install: exit = %d\n%s", code, stdout)
+	}
+}
+
+// Two names for one target change it once.
+func TestAgentInstallTakesTwoNamesForOneTargetOnce(t *testing.T) {
+	h, dir := newHarness(t), t.TempDir()
+	for _, command := range []string{"install", "uninstall"} {
+		code, stdout, stderr := h.run("agent", command, dir, "--agent", "codex,cursor,agents", "--yes", "--json")
+		if code != 0 || strings.Count(stdout, "AGENTS.md") != 1 || strings.Count(stdout, "SKILL.md") != 1 {
+			t.Errorf("%s: exit = %d, stderr = %q\n%s", command, code, stderr, stdout)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); !os.IsNotExist(err) {
+		t.Errorf("AGENTS.md is still there: %v", err)
+	}
+}
+
+// An AGENTS.md whose markers do not fence one section is refused as it is:
+// guessing could remove the developer's own text.
+func TestAgentInstallLeavesBrokenMarkersAlone(t *testing.T) {
+	h, dir := newHarness(t), t.TempDir()
+	file := filepath.Join(dir, "AGENTS.md")
+	content := "# Notes\n\n<!-- tenjin-cli:begin (written by `tenjin agent install`; edits are overwritten) -->\nmy own text\n"
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range []string{"install", "uninstall"} {
+		code, stdout, stderr := h.run("agent", command, dir, "--agent", "codex", "--yes")
+		if code != 1 || stdout != "" || !strings.Contains(stderr, "do not fence one section") {
+			t.Errorf("%s: exit = %d, stdout = %q, stderr = %q", command, code, stdout, stderr)
+		}
+	}
+	if raw, _ := os.ReadFile(file); string(raw) != content {
+		t.Errorf("AGENTS.md was changed: %q", raw)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".agents")); err == nil {
+		t.Error("the skill was written although the pointer could not be")
+	}
+}
