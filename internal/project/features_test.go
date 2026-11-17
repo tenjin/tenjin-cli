@@ -104,6 +104,36 @@ func TestRevenueCatSuggestsSubscriptions(t *testing.T) {
 	}
 }
 
+// A VIEW action in <queries> is what the app asks the system about, not
+// what it receives: only an intent filter on an activity opens links.
+func TestAQueryForViewIsNotADeepLink(t *testing.T) {
+	base := testproject.AndroidNative()
+	const manifest = "app/src/main/AndroidManifest.xml"
+	queries := `    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+    <application`
+	p := detect(t, base.With(testproject.Files{manifest: strings.Replace(base[manifest], "    <application", queries, 1)}))
+	if got := suggested(p); got != "opens()" {
+		t.Errorf("suggested = %s", got)
+	}
+	// On an alias, as on an activity, it counts.
+	alias := `        <activity-alias android:name=".Links" android:targetActivity=".MainActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <data android:scheme="https" android:host="example.com" />
+            </intent-filter>
+        </activity-alias>
+    </application>`
+	p = detect(t, base.With(testproject.Files{manifest: strings.Replace(base[manifest], "    </application>", alias, 1)}))
+	if got := suggested(p); got != "opens() deep_links(an intent filter that opens links)" {
+		t.Errorf("suggested = %s", got)
+	}
+}
+
 // Words in comments are not signals.
 func TestCommentsAreNotSignals(t *testing.T) {
 	base := testproject.AndroidNative()

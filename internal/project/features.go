@@ -126,7 +126,6 @@ var codeSignals = []signal{
 
 var (
 	featureCodeExts = []string{".kt", ".java", ".swift", ".m", ".mm", ".dart", ".js", ".jsx", ".ts", ".tsx", ".cs"}
-	viewIntent      = regexp.MustCompile(`android\.intent\.action\.VIEW`)
 	urlSchemes      = regexp.MustCompile(`CFBundleURLSchemes`)
 	associated      = regexp.MustCompile(`com\.apple\.developer\.associated-domains`)
 )
@@ -178,7 +177,7 @@ func (d *detector) findFeatures() {
 	for _, t := range d.p.Targets {
 		if t.Android != nil {
 			for _, m := range d.manifests(t.Android.ModuleDir) {
-				if viewIntent.MatchString(d.read(m)) {
+				if manifest, ok := d.manifestXML(m); ok && manifest.opensLinks() {
 					add(FeatureDeepLinks, "an intent filter that opens links", m)
 				}
 			}

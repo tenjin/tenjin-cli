@@ -35,14 +35,8 @@ func (d *detector) androidShape(info *AndroidInfo, content string) {
 		return
 	}
 
-	var manifest struct {
-		Package     string `xml:"package,attr"`
-		Application struct {
-			Activities []manifestActivity `xml:"activity"`
-			Aliases    []manifestActivity `xml:"activity-alias"`
-		} `xml:"application"`
-	}
-	if xml.Unmarshal([]byte(d.read(info.Manifest)), &manifest) != nil {
+	manifest, ok := d.manifestXML(info.Manifest)
+	if !ok {
 		return
 	}
 	namespace := manifest.Package
@@ -87,6 +81,35 @@ func (d *detector) androidShape(info *AndroidInfo, content string) {
 	}
 }
 
+// manifestXML is the part of AndroidManifest.xml detection reads. What the
+// app receives is declared on its activities; a <queries> element declares
+// what it asks the system about, and is not read.
+type manifestXML struct {
+	Package     string `xml:"package,attr"`
+	Application struct {
+		Activities []manifestActivity `xml:"activity"`
+		Aliases    []manifestActivity `xml:"activity-alias"`
+	} `xml:"application"`
+}
+
+// manifestXML reads a manifest; ok is false for one that is missing or not
+// well-formed XML.
+func (d *detector) manifestXML(rel string) (manifestXML, bool) {
+	var m manifestXML
+	return m, xml.Unmarshal([]byte(d.read(rel)), &m) == nil
+}
+
+// opensLinks reports whether an activity, or an alias, takes links: an
+// intent filter with the VIEW action.
+func (m manifestXML) opensLinks() bool {
+	for _, a := range append(append([]manifestActivity{}, m.Application.Activities...), m.Application.Aliases...) {
+		if a.opensLinks() {
+			return true
+		}
+	}
+	return false
+}
+
 type manifestActivity struct {
 	Name    string `xml:"http://schemas.android.com/apk/res/android name,attr"`
 	Target  string `xml:"http://schemas.android.com/apk/res/android targetActivity,attr"`
@@ -98,6 +121,19 @@ type manifestActivity struct {
 
 type manifestName struct {
 	Name string `xml:"http://schemas.android.com/apk/res/android name,attr"`
+}
+
+// opensLinks reports whether the activity has an intent filter with the
+// VIEW action, the one that opens links.
+func (a manifestActivity) opensLinks() bool {
+	for _, f := range a.Filters {
+		for _, action := range f.Actions {
+			if action.Name == "android.intent.action.VIEW" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // launcher reports whether the activity is the one the home screen starts.
