@@ -168,6 +168,16 @@ func TestAQueryForViewIsNotADeepLink(t *testing.T) {
 	}
 }
 
+// A Capacitor app's code can be Vue components, read like its other code.
+func TestFeatureSignalsInAVueComponent(t *testing.T) {
+	p := detect(t, testproject.Capacitor().With(testproject.Files{
+		"src/components/Consent.vue": "<script setup lang=\"ts\">\nimport { ConsentInformation } from '@capacitor-community/admob';\nawait ConsentInformation.Update();\n</script>\n<template><button>Consent</button></template>\n",
+	}))
+	if got := suggested(p); got != "opens() consent(a consent form)" {
+		t.Errorf("suggested = %s", got)
+	}
+}
+
 // writeLargeProject writes an Android app with 2000 source files of ordinary
 // code, none of which shows a feature or sends analytics, and one that
 // does: what detection spends on a project this size is reading them.

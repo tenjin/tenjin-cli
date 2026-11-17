@@ -144,7 +144,7 @@ var codeSignals = []signal{
 }
 
 var (
-	featureCodeExts = []string{".kt", ".java", ".swift", ".m", ".mm", ".dart", ".js", ".jsx", ".ts", ".tsx", ".cs"}
+	featureCodeExts = []string{".kt", ".java", ".swift", ".m", ".mm", ".dart", ".js", ".jsx", ".ts", ".tsx", ".vue", ".cs"}
 	urlSchemes      = regexp.MustCompile(`CFBundleURLSchemes`)
 	associated      = regexp.MustCompile(`com\.apple\.developer\.associated-domains`)
 )
