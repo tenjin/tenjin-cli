@@ -176,12 +176,22 @@ otherwise. With --strict, warnings count too.`,
 				if err != nil {
 					return err
 				}
+				// A read that Ctrl-C cut short is not a device that cannot
+				// be read.
+				if err := env.interrupted(); err != nil {
+					return err
+				}
 				if tenjin != nil {
 					input.Lookup = tenjin
 				}
 				vopts.Device = input
 			}
 			report := verify.Run(cmd.Context(), p, vopts)
+			// Nor is a key check it cut short a warning: nothing after it
+			// stands.
+			if err := env.interrupted(); err != nil {
+				return err
+			}
 			report.Findings = append(report.Findings, skillFindings(env.otherSkills(p.Root, buildinfo.Get().Version), p.Root, buildinfo.Get().Version)...)
 			env.noteReport(report)
 
@@ -217,6 +227,9 @@ otherwise. With --strict, warnings count too.`,
 				}
 				vopts.Device = nil
 				report = verify.Run(cmd.Context(), p, vopts)
+				if err := env.interrupted(); err != nil {
+					return err
+				}
 				env.noteReport(report)
 				fixer.say("\n%s", fixer.style.Heading("Checking again"))
 				if err := writeReport(cmd.OutOrStdout(), report, offline); err != nil {
@@ -230,6 +243,10 @@ otherwise. With --strict, warnings count too.`,
 					upgrade += " " + shellArg(args[0], runtime.GOOS)
 				}
 				fixer.say("\nTo upgrade the Tenjin SDK, with your coding agent or by hand: %s", fixer.style.Accent(upgrade))
+			}
+			// What Ctrl-C ended is said as that, whatever the report says.
+			if err := env.interrupted(); err != nil {
+				return err
 			}
 			status := reportStatus(report.Summary, strict)
 			if status != nil && !offered && len(fixer.agentItems(doctorWork(report))) > 0 {

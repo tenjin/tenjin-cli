@@ -4,6 +4,9 @@ package cli
 
 import (
 	"bufio"
+	"context"
+	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -48,6 +51,42 @@ func TestCtrlCAtAPromptStopsSetup(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("setup was still waiting at its prompt 3 seconds after Ctrl-C")
+	}
+}
+
+// Ctrl-C while the device is read ends doctor with the interrupted status.
+// The read it cut short is not a device that cannot be read, and the key
+// check it cut short is not a warning: nothing after it stands.
+func TestCtrlCWhileReadingTheDeviceStopsDoctor(t *testing.T) {
+	h := newHarness(t)
+	dir := testproject.Write(t, testproject.AndroidNative())
+	h.env.lookPath = func(name string) (string, error) {
+		if name == "adb" {
+			return "/opt/android/platform-tools/adb", nil
+		}
+		return "", fmt.Errorf("%s: not found", name)
+	}
+	h.env.run = func(ctx context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) == 1 && args[0] == "devices" {
+			return []byte("List of devices attached\nemulator-5554\tdevice\n\n"), nil
+		}
+		// Ctrl-C lands while adb dumps the log, and ends adb with it.
+		if err := syscall.Kill(os.Getpid(), syscall.SIGINT); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(3 * time.Second):
+			t.Fatal("the command's context was not cancelled by Ctrl-C")
+		}
+		return nil, errors.New("signal: interrupt")
+	}
+	code, stdout, stderr := h.run("doctor", dir, "--device")
+	if code != 130 || stdout != "" || !strings.Contains(stderr, "stopped") {
+		t.Errorf("exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+	if len(h.fake.keysAsked) != 0 {
+		t.Errorf("the key was checked after Ctrl-C: %q", h.fake.keysAsked)
 	}
 }
 
