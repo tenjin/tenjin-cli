@@ -19,8 +19,6 @@ type sourceFile struct {
 	text, code string
 	// index is the file's place in the scan, which orders what is found.
 	index int
-	// sdks are the analytics SDKs the file uses.
-	sdks []*analyticsSDK
 
 	newlines  []int
 	callIndex map[string][]callSite

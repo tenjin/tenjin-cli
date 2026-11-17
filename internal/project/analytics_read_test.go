@@ -2,6 +2,8 @@ package project_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"unicode/utf16"
@@ -155,6 +157,62 @@ object Other {
 		"Firebase Analytics name=top_level (LEVEL) @"+androidDir+"Game.kt:9 x1",
 		"Firebase Analytics name=other_level (Other.LEVEL) @"+androidDir+"Game.kt:10 x1",
 	)
+}
+
+// The pass over the other SDKs and the pass over Tenjin's read the same
+// files once: a file changed between them is seen by neither, since both
+// describe the project as it was read.
+func TestAnalyticsPassesReadTheFilesOnce(t *testing.T) {
+	files := testproject.AndroidNative().With(testproject.Files{
+		androidDir + "Game.kt": `package com.example.sample
+
+import com.google.firebase.analytics.FirebaseAnalytics
+import com.tenjin.android.TenjinSDK
+
+class Game(private val fa: FirebaseAnalytics, private val tenjin: TenjinSDK) {
+    fun up() {
+        fa.logEvent("level_up", null)
+        tenjin.eventWithName("level_up")
+    }
+}
+`,
+	})
+	root := testproject.Write(t, files)
+	p, err := project.Detect(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.ReadAnalytics()
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(androidDir+"Game.kt")), []byte(strings.Replace(files[androidDir+"Game.kt"], `eventWithName("level_up")`, `eventWithName("level_up")
+        tenjin.eventWithName("added_later")`, 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := p.SentToTenjin().Names(); strings.Join(got, ",") != "level_up" {
+		t.Errorf("sent to Tenjin = %q, which is not what was read with the analytics", got)
+	}
+	if got := p.Analytics.Names(); strings.Join(got, ",") != "level_up" {
+		t.Errorf("analytics = %q", got)
+	}
+}
+
+// Both passes over a large project, from one read of its files.
+func BenchmarkAnalyticsAndSentToTenjin(b *testing.B) {
+	root := writeLargeProject(b)
+	for b.Loop() {
+		b.StopTimer()
+		p, err := project.Detect(root)
+		if err != nil {
+			b.Fatal(err)
+		}
+		b.StartTimer()
+		p.ReadAnalytics()
+		if names := p.Analytics.Names(); strings.Join(names, ",") != "purchase" {
+			b.Fatalf("analytics = %q", names)
+		}
+		if n := len(p.SentToTenjin().Events); n != 0 {
+			b.Fatalf("%d events sent to Tenjin", n)
+		}
+	}
 }
 
 // A regular expression literal holding /* is not a comment: the calls after

@@ -72,6 +72,9 @@ type Project struct {
 	// SentToTenjin.
 	sentToTenjin     Analytics
 	sentToTenjinRead bool
+	// sources are the source files both read, read once (detector.sourceFiles).
+	sources     []*sourceFile
+	sourcesRead bool
 	// LibraryCode are the folders of local libraries the app gets the SDK
 	// through (a pod or a package by path), relative to the root and
 	// possibly above it: their calls are the app's.

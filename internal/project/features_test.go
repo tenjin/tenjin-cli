@@ -168,10 +168,10 @@ func TestAQueryForViewIsNotADeepLink(t *testing.T) {
 	}
 }
 
-// An Android app with 2000 source files of ordinary code, none of which
-// shows a feature, and one that does: the feature scan is most of what
-// detection spends on a project this size.
-func BenchmarkDetectALargeProject(b *testing.B) {
+// writeLargeProject writes an Android app with 2000 source files of ordinary
+// code, none of which shows a feature or sends analytics, and one that
+// does: what detection spends on a project this size is reading them.
+func writeLargeProject(b *testing.B) string {
 	base := testproject.AndroidNative()
 	var body strings.Builder
 	for i := 0; i < 150; i++ {
@@ -180,7 +180,7 @@ func BenchmarkDetectALargeProject(b *testing.B) {
 	for i := 0; i < 2000; i++ {
 		base[fmt.Sprintf("app/src/main/java/com/example/sample/feature%d/Screen%d.kt", i%40, i)] = fmt.Sprintf("package com.example.sample.feature%d\n\nclass Screen%d {\n%s}\n", i%40, i, body.String())
 	}
-	base["app/src/main/java/com/example/sample/Store.kt"] = "package com.example.sample\n\nval type = BillingClient.ProductType.SUBS\n"
+	base["app/src/main/java/com/example/sample/Store.kt"] = "package com.example.sample\n\nimport com.google.firebase.analytics.FirebaseAnalytics\n\nval type = BillingClient.ProductType.SUBS\n\nfun buy(fa: FirebaseAnalytics) { fa.logEvent(\"purchase\", null) }\n"
 	root := b.TempDir()
 	for rel, content := range base {
 		p := filepath.Join(root, filepath.FromSlash(rel))
@@ -191,7 +191,11 @@ func BenchmarkDetectALargeProject(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
-	b.ResetTimer()
+	return root
+}
+
+func BenchmarkDetectALargeProject(b *testing.B) {
+	root := writeLargeProject(b)
 	for b.Loop() {
 		p, err := project.Detect(root)
 		if err != nil {

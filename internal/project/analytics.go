@@ -547,6 +547,28 @@ func (d *detector) findAnalytics(sdks []*analyticsSDK, capped bool) Analytics {
 	default:
 		return Analytics{Events: []AnalyticsEvent{}, UserIDs: []AnalyticsUserID{}}
 	}
+	files := d.sourceFiles()
+	s := &analyticsScan{files: files, sdkCalls: map[spot]bool{}, patterns: map[string][]*regexp.Regexp{}}
+	for _, f := range files {
+		for _, sdk := range sdks {
+			if sdk.hinted(f.text) && sdk.uses.MatchString(f.text) {
+				s.scan(f, sdk)
+			}
+		}
+	}
+	s.followWrappers()
+	return s.result(capped)
+}
+
+// sourceFiles are the app's own source files, read once for the project: the
+// other SDKs' pass (ReadAnalytics) and Tenjin's (SentToTenjin) read the same
+// files, and what each file yields (its calls, scopes and imports) serves
+// both.
+func (d *detector) sourceFiles() []*sourceFile {
+	if d.p.sourcesRead {
+		return d.p.sources
+	}
+	d.p.sourcesRead = true
 	var rels []string
 	for _, rel := range SourceFiles(d.root, ".", featureCodeExts...) {
 		if len(rels) >= maxFeatureScanFiles {
@@ -565,7 +587,7 @@ func (d *detector) findAnalytics(sdks []*analyticsSDK, capped bool) Analytics {
 		go func() {
 			defer wg.Done()
 			for i := range next {
-				read[i] = readSource(d.root, rels[i], sdks)
+				read[i] = readSource(d.root, rels[i])
 			}
 		}()
 	}
@@ -574,26 +596,18 @@ func (d *detector) findAnalytics(sdks []*analyticsSDK, capped bool) Analytics {
 	}
 	close(next)
 	wg.Wait()
-	var files []*sourceFile
 	for _, f := range read {
 		if f != nil {
-			f.index = len(files)
-			files = append(files, f)
+			f.index = len(d.p.sources)
+			d.p.sources = append(d.p.sources, f)
 		}
 	}
-	s := &analyticsScan{files: files, sdkCalls: map[spot]bool{}, patterns: map[string][]*regexp.Regexp{}}
-	for _, f := range files {
-		for _, sdk := range f.sdks {
-			s.scan(f, sdk)
-		}
-	}
-	s.followWrappers()
-	return s.result(capped)
+	return d.p.sources
 }
 
 // readSource reads one of the app's source files, or returns nil for one
 // that is not the app's own: too large, minified, or an SDK's copied in.
-func readSource(root, rel string, sdks []*analyticsSDK) *sourceFile {
+func readSource(root, rel string) *sourceFile {
 	raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 	if err != nil || len(raw) > 2<<20 {
 		return nil
@@ -607,13 +621,7 @@ func readSource(root, rel string, sdks []*analyticsSDK) *sourceFile {
 	if vendored(text) {
 		return nil
 	}
-	f := &sourceFile{rel: rel, ext: ext, text: text, code: BlankStrings(text, ext)}
-	for _, sdk := range sdks {
-		if sdk.hinted(text) && sdk.uses.MatchString(text) {
-			f.sdks = append(f.sdks, sdk)
-		}
-	}
-	return f
+	return &sourceFile{rel: rel, ext: ext, text: text, code: BlankStrings(text, ext)}
 }
 
 func unityVendor(rel string) bool {
