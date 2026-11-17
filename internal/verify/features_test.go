@@ -72,6 +72,17 @@ func TestCapacitorsWebCopyIsNotSource(t *testing.T) {
 	}
 }
 
+// An Ionic Vue app sends its events from .vue components.
+func TestFeaturesSentFromVueComponents(t *testing.T) {
+	files := testproject.Capacitor().With(testproject.Files{
+		"src/views/Level.vue": "<template>\n  <ion-page />\n</template>\n\n<script setup lang=\"ts\">\nimport { Tenjin } from 'ionic-capacitor-tenjin';\nawait Tenjin.eventWithName({ name: 'level' });\n</script>\n",
+	})
+	chosen := verify.Options{Features: []string{project.FeatureCustomEvents}}
+	if f := featureFinding(t, run(t, files, chosen), "feature.custom_events"); f == nil || f.Severity != verify.Pass || f.File != "src/views/Level.vue" || f.Line != 7 {
+		t.Fatalf("finding = %+v", f)
+	}
+}
+
 // The SDK's own code, and the Xcode and Gradle projects Unity exports into
 // the project, call every method of the SDK: none of it is the app's.
 func TestUnityExportsAndTheSDKsOwnCodeAreNotTheApps(t *testing.T) {

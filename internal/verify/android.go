@@ -414,7 +414,7 @@ var setAppStore = regexp.MustCompile(`\bsetAppStore\s*\(`)
 // storeSetInCode returns the first source file that sets the app store in
 // code, or "".
 func (r *runner) storeSetInCode() string {
-	for _, rel := range project.SourceFiles(r.p.Root, ".", ".kt", ".java", ".dart", ".js", ".jsx", ".ts", ".tsx") {
+	for _, rel := range project.SourceFiles(r.p.Root, ".", featureSourceExts...) {
 		if testSource(rel) {
 			continue
 		}

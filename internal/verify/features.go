@@ -98,7 +98,11 @@ var featureTopics = map[string]string{
 
 var (
 	tenjinReceiverVar = regexp.MustCompile(`\b(\w+)\s*(?::\s*[\w?]+\s*)?=\s*(?:TenjinSDK|Tenjin)\s*\.\s*(?:getInstance|instance|sharedInstance)\b|\b(?:TenjinSDK|BaseTenjin)\s+(\w+)\s*=`)
-	featureSourceExts = []string{".kt", ".java", ".swift", ".m", ".mm", ".dart", ".js", ".jsx", ".ts", ".tsx", ".cs"}
+	// featureSourceExts are the source files of every framework, for the
+	// checks that read the whole project's code: the native languages,
+	// Dart, the JavaScript wrappers' (an Ionic Vue app sends from .vue
+	// components), and Unity's C#.
+	featureSourceExts = []string{".kt", ".java", ".swift", ".m", ".mm", ".dart", ".js", ".jsx", ".ts", ".tsx", ".vue", ".cs"}
 )
 
 // tenjinCode is the text of every source file that mentions Tenjin.
