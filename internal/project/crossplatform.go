@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -439,8 +438,7 @@ func (d *detector) unity() bool {
 }
 
 func (d *detector) unreal() bool {
-	matches, _ := filepath.Glob(d.path("*.uproject"))
-	if len(matches) == 0 {
+	if len(Glob(d.root, ".", "*.uproject")) == 0 {
 		return false
 	}
 	d.p.Framework = Unreal

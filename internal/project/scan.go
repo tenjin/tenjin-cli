@@ -188,6 +188,25 @@ func SourceFiles(root, rel string, exts ...string) []string {
 	return files
 }
 
+// Glob lists the files in dir, a slash-separated folder relative to root
+// (possibly above it), whose names match pattern, as slash-separated paths
+// relative to root, in name order. Only the file name is read as a pattern:
+// filepath.Glob on the joined path would read root and dir as one too, and
+// a folder called "app [v2]" would match nothing.
+func Glob(root, dir, pattern string) []string {
+	entries, err := os.ReadDir(filepath.Join(root, filepath.FromSlash(dir)))
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if ok, _ := filepath.Match(pattern, e.Name()); ok {
+			out = append(out, path.Join(dir, e.Name()))
+		}
+	}
+	return out
+}
+
 // TestSource reports whether a file is test code, which says nothing about
 // what the app does: Android's test source sets, Xcode test targets, and
 // the usual JavaScript and Dart test folders and files.

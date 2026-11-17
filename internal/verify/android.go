@@ -304,11 +304,9 @@ func (r *runner) checkProguard(t *project.Target) {
 			return
 		}
 	}
-	matches, _ := filepath.Glob(filepath.Join(r.p.Root, filepath.FromSlash(t.Android.ModuleDir), "*.pro"))
-	for _, m := range matches {
-		if raw, err := os.ReadFile(m); err == nil && strings.Contains(withoutComments(m, string(raw)), "com.tenjin") {
-			rel, _ := filepath.Rel(r.p.Root, m)
-			r.pass("android.proguard", project.Android, "ProGuard keep rules for Tenjin are present", filepath.ToSlash(rel), 0)
+	for _, rel := range project.Glob(r.p.Root, t.Android.ModuleDir, "*.pro") {
+		if strings.Contains(withoutComments(rel, r.readRel(rel)), "com.tenjin") {
+			r.pass("android.proguard", project.Android, "ProGuard keep rules for Tenjin are present", rel, 0)
 			return
 		}
 	}

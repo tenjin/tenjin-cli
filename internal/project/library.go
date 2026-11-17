@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"io/fs"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -73,9 +72,7 @@ func (d *detector) library() *Library {
 }
 
 func (d *detector) podLibrary() *Library {
-	matches, _ := filepath.Glob(filepath.Join(d.root, "*.podspec"))
-	for _, m := range matches {
-		rel := filepath.Base(m)
+	for _, rel := range Glob(d.root, ".", "*.podspec") {
 		content := stripRubyComments(d.read(rel))
 		dep := podspecTenjin.FindStringSubmatch(content)
 		if dep == nil {
@@ -183,11 +180,9 @@ func (d *detector) nativeSDKOf(dirs ...string) *Integration {
 				return &Integration{Package: "com.tenjin:android-sdk", Version: m[1], Source: rel}
 			}
 		}
-		specs, _ := filepath.Glob(filepath.Join(d.root, filepath.FromSlash(dir), "*.podspec"))
-		for _, spec := range specs {
-			rel, _ := filepath.Rel(d.root, spec)
-			if m := podspecTenjin.FindStringSubmatch(stripRubyComments(d.read(filepath.ToSlash(rel)))); m != nil {
-				return &Integration{Package: "TenjinSDK", Version: m[1], Source: filepath.ToSlash(rel)}
+		for _, rel := range Glob(d.root, dir, "*.podspec") {
+			if m := podspecTenjin.FindStringSubmatch(stripRubyComments(d.read(rel))); m != nil {
+				return &Integration{Package: "TenjinSDK", Version: m[1], Source: rel}
 			}
 		}
 	}

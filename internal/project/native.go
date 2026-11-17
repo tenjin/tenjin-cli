@@ -3,7 +3,6 @@ package project
 import (
 	"io/fs"
 	"path"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -776,10 +775,7 @@ func (d *detector) throughPods(info *IOSInfo) bool {
 	}
 	for _, m := range podByPath.FindAllStringSubmatch(stripRubyComments(d.read(info.Podfile)), -1) {
 		podDir := path.Join(dir, m[2])
-		specs, _ := filepath.Glob(filepath.Join(d.root, filepath.FromSlash(podDir), "*.podspec"))
-		for _, spec := range specs {
-			rel, _ := filepath.Rel(d.root, spec)
-			rel = filepath.ToSlash(rel)
+		for _, rel := range Glob(d.root, podDir, "*.podspec") {
 			if content := stripRubyComments(d.read(rel)); podspecTenjin.MatchString(content) {
 				// Pods in one folder share it: the one with Tenjin is the
 				// podspec that names it.
