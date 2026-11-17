@@ -39,19 +39,32 @@ var debugSymbols = map[string]bool{"DEBUG": true, "DEVELOPMENT_BUILD": true, "UN
 // by default, so a block on its absence may still be in them.
 const releaseMarker = "NDEBUG"
 
-// unityIOS are Unity's platform symbols as an iOS player build has them.
-var unityIOS = map[string]bool{
-	"UNITY_IOS": true, "UNITY_IPHONE": true,
-	"UNITY_ANDROID": false, "UNITY_STANDALONE": false, "UNITY_STANDALONE_OSX": false, "UNITY_STANDALONE_WIN": false,
-	"UNITY_STANDALONE_LINUX": false, "UNITY_SERVER": false, "UNITY_WEBGL": false, "UNITY_TVOS": false, "UNITY_VISIONOS": false,
-	"UNITY_WSA": false, "UNITY_WSA_10_0": false, "UNITY_PS4": false, "UNITY_PS5": false, "UNITY_XBOXONE": false,
-	"UNITY_GAMECORE": false, "UNITY_SWITCH": false, "UNITY_EMBEDDED_LINUX": false, "UNITY_QNX": false,
+// unityPlatformSymbols are Unity's platform symbols: the mobile platforms'
+// own, and every other platform's, which a mobile player build never has.
+var unityPlatformSymbols = map[project.Platform][]string{
+	project.IOS:     {"UNITY_IOS", "UNITY_IPHONE"},
+	project.Android: {"UNITY_ANDROID"},
+	"": {"UNITY_STANDALONE", "UNITY_STANDALONE_OSX", "UNITY_STANDALONE_WIN", "UNITY_STANDALONE_LINUX", "UNITY_SERVER",
+		"UNITY_WEBGL", "UNITY_TVOS", "UNITY_VISIONOS", "UNITY_WSA", "UNITY_WSA_10_0", "UNITY_PS4", "UNITY_PS5", "UNITY_XBOXONE",
+		"UNITY_GAMECORE", "UNITY_SWITCH", "UNITY_EMBEDDED_LINUX", "UNITY_QNX"},
+}
+
+// unitySymbols are Unity's platform symbols as a player build for the
+// platform has them: its own defined, every other platform's not.
+func unitySymbols(platform project.Platform) map[string]bool {
+	fixed := map[string]bool{}
+	for p, names := range unityPlatformSymbols {
+		for _, name := range names {
+			fixed[name] = p == platform
+		}
+	}
+	return fixed
 }
 
 // maxSymbols bounds the symbols an expression may name to be tried.
 const maxSymbols = 16
 
-// scopeOf reads which builds run a call. platform, when iOS, also fixes
+// scopeOf reads which builds run a call. platform, when given, also fixes
 // Unity's platform symbols, so a block for another platform never counts.
 func scopeOf(c call, platform project.Platform) buildScope {
 	ext := path.Ext(c.File)
@@ -61,10 +74,18 @@ func scopeOf(c call, platform project.Platform) buildScope {
 		conds = append(conds, runtimeConds(code, c.At)...)
 	}
 	var fixed map[string]bool
-	if ext == ".cs" && platform == project.IOS {
-		fixed = unityIOS
+	if ext == ".cs" && platform != "" {
+		fixed = unitySymbols(platform)
 	}
 	return classify(and(conds...), fixed)
+}
+
+// unityPlatforms says which of the mobile platforms compile a line of a C#
+// file, from the #if blocks around it: a line under #if UNITY_IOS is iOS's
+// alone, one under its #else every other platform's, Android included.
+func unityPlatforms(code string, line int) (android, ios bool) {
+	conds := and(directiveConds(code, line)...)
+	return classify(conds, unitySymbols(project.Android)) != noBuild, classify(conds, unitySymbols(project.IOS)) != noBuild
 }
 
 // debugOnly reports whether a call is compiled into, or run in, debug builds

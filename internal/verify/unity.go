@@ -66,6 +66,7 @@ func (r *runner) checkUnity() {
 	r.checkUnityPackageName()
 	src := r.scanSource(spec, spec.sourceDirs(nil))
 	resolveKeyConstants(&src)
+	keyPlatforms(&src)
 	usesComponent := r.findTenjinObject(&src)
 	r.checkCalls(spec, src, "")
 	r.checkUnityResume(src, usesComponent)
@@ -124,20 +125,72 @@ var (
 // resolveKeyConstants finds keys passed by name, as Unity code usually
 // does: Tenjin.getInstance(TENJIN_API_KEY), with the constant declared in the
 // same file. Only a constant's string value is taken; anything computed is
-// left alone.
+// left alone. A constant declared once per platform, under #if UNITY_IOS and
+// #else as the guide shows, gives each platform its own key; declared
+// several times outside such blocks, each declaration counts.
 func resolveKeyConstants(src *source) {
 	seen := map[string]bool{}
 	for _, c := range src.inits {
-		for _, m := range keyArgument.FindAllStringSubmatch(c.Text, -1) {
-			decl := regexp.MustCompile(fmt.Sprintf(stringConst, regexp.QuoteMeta(m[1])))
-			loc := decl.FindStringSubmatchIndex(c.Text)
-			if loc == nil || seen[c.File+m[1]] {
+		if !strings.HasSuffix(c.File, ".cs") {
+			continue
+		}
+		code := project.BlankStrings(c.Text, ".cs")
+		for _, m := range keyArgument.FindAllStringSubmatchIndex(code, -1) {
+			name := code[m[2]:m[3]]
+			if seen[c.File+name] {
 				continue
 			}
-			seen[c.File+m[1]] = true
-			src.keys = append(src.keys, keyLiteral{Value: c.Text[loc[2]:loc[3]], File: c.File, Line: lineAt(c.Text, loc[0])})
+			seen[c.File+name] = true
+			callAndroid, callIOS := unityPlatforms(code, lineAt(code, m[0]))
+			decl := regexp.MustCompile(fmt.Sprintf(stringConst, regexp.QuoteMeta(name)))
+			for _, loc := range decl.FindAllStringSubmatchIndex(c.Text, -1) {
+				line := lineAt(c.Text, loc[0])
+				declAndroid, declIOS := unityPlatforms(code, line)
+				// The call and the declaration are both compiled for the
+				// platform; for neither, the key is another platform's.
+				platform, ok := mobilePlatform(callAndroid && declAndroid, callIOS && declIOS)
+				if !ok {
+					continue
+				}
+				src.keys = append(src.keys, keyLiteral{Value: c.Text[loc[2]:loc[3]], File: c.File, Line: line, Platform: platform})
+			}
 		}
 	}
+}
+
+// keyPlatforms ties each key written in a getInstance call of a C# file to
+// the platform its line is compiled for, where it is one of the two.
+func keyPlatforms(src *source) {
+	texts := map[string]string{}
+	for _, c := range src.inits {
+		if strings.HasSuffix(c.File, ".cs") {
+			texts[c.File] = project.BlankStrings(c.Text, ".cs")
+		}
+	}
+	for i, k := range src.keys {
+		code, ok := texts[k.File]
+		if !ok || k.Platform != "" {
+			continue
+		}
+		android, ios := unityPlatforms(code, k.Line)
+		if platform, ok := mobilePlatform(android, ios); ok {
+			src.keys[i].Platform = platform
+		}
+	}
+}
+
+// mobilePlatform is the platform a line compiled for the given ones is
+// for: "" for both, and false for neither.
+func mobilePlatform(android, ios bool) (project.Platform, bool) {
+	switch {
+	case android && ios:
+		return "", true
+	case android:
+		return project.Android, true
+	case ios:
+		return project.IOS, true
+	}
+	return "", false
 }
 
 // findTenjinObject looks for the no-code component in the project's scenes

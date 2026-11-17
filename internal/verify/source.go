@@ -208,6 +208,10 @@ type keyLiteral struct {
 	Value string
 	File  string
 	Line  int
+	// Platform is the one platform whose builds send the key, where the
+	// code chooses it by platform (Unity's #if UNITY_IOS); "" for every
+	// build's.
+	Platform project.Platform
 }
 
 const maxSourceFileSize = 2 << 20
@@ -333,10 +337,15 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 	}
 
 	for _, k := range src.keys {
+		// A key the code chooses by platform is that platform's.
+		at := platform
+		if k.Platform != "" {
+			at = k.Platform
+		}
 		switch {
 		case strayWhitespace(k.Value):
 			r.add(Finding{
-				ID: "sdk.key.whitespace", Severity: Error, Platform: platform,
+				ID: "sdk.key.whitespace", Severity: Error, Platform: at,
 				Title:  "The SDK key " + mask(strings.Join(strings.Fields(k.Value), "")) + " has spaces in it",
 				Detail: "The string holds the key with spaces, tabs or line breaks around or inside it. The SDK sends it as written, and Tenjin refuses it.",
 				File:   k.File, Line: k.Line,
@@ -344,19 +353,19 @@ func (r *runner) checkCalls(spec frameworkSpec, src source, platform project.Pla
 			})
 		case strings.TrimSpace(k.Value) == "":
 			r.add(Finding{
-				ID: "sdk.key.placeholder", Severity: Error, Platform: platform,
+				ID: "sdk.key.placeholder", Severity: Error, Platform: at,
 				Title:  "The SDK key is empty",
 				Detail: "The SDK is given an empty string where its key belongs.",
 				File:   k.File, Line: k.Line,
-				Fix: "Write " + r.placeholderFor(platform) + " in the empty string. Then 'tenjin setup' (press Enter at its check), or 'tenjin project set-keys' in your own terminal, gets the app's key from Tenjin, checks it, and writes it there.",
+				Fix: "Write " + r.placeholderFor(at) + " in the empty string. Then 'tenjin setup' (press Enter at its check), or 'tenjin project set-keys' in your own terminal, gets the app's key from Tenjin, checks it, and writes it there.",
 			})
 		case isPlaceholder(k.Value) && !keyfill.IsPlaceholder(k.Value):
 			r.add(Finding{
-				ID: "sdk.key.placeholder", Severity: Error, Platform: platform,
+				ID: "sdk.key.placeholder", Severity: Error, Platform: at,
 				Title:  "The SDK key is still a placeholder",
 				Detail: "Found " + shown(k.Value) + " where the key should be.",
 				File:   k.File, Line: k.Line,
-				Fix: "Replace " + shown(k.Value) + " with " + r.placeholderFor(platform) + ". Then 'tenjin setup' (press Enter at its check), or 'tenjin project set-keys' in your own terminal, gets the app's key from Tenjin, checks it, and writes it there.",
+				Fix: "Replace " + shown(k.Value) + " with " + r.placeholderFor(at) + ". Then 'tenjin setup' (press Enter at its check), or 'tenjin project set-keys' in your own terminal, gets the app's key from Tenjin, checks it, and writes it there.",
 			})
 		}
 	}

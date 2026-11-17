@@ -35,6 +35,63 @@ func TestUnityCorrectIntegrationPasses(t *testing.T) {
 	expect(t, r, "unity.att_description", project.IOS, verify.Info)
 }
 
+// The guide's pattern: one constant per platform, chosen with #if UNITY_IOS
+// and #else or #elif UNITY_ANDROID. Each build is checked with the
+// declaration its platform compiles, and a placeholder in either is that
+// platform's.
+func TestUnityKeyConstantPerPlatform(t *testing.T) {
+	const iosKey = "IOSKEY7890ASDFGH5678ZXCVBN9012MNBV"
+	base := testproject.Unity()
+	script := func(decl string) testproject.Files {
+		return base.With(testproject.Files{unityScript: strings.Replace(base[unityScript], `    const string TenjinKey = "`+testproject.Key+`";`, decl, 1)})
+	}
+	keys := func() *fakeKeys {
+		return &fakeKeys{answers: map[string]track.KeyStatus{
+			iosKey + "|com.example.sample|ios":              track.KeyValid,
+			testproject.Key + "|com.example.sample|android": track.KeyValid,
+		}}
+	}
+	ifElse := "#if UNITY_IOS\n    const string TenjinKey = \"" + iosKey + "\";\n#else\n    const string TenjinKey = \"" + testproject.Key + "\";\n#endif"
+	elif := "#if UNITY_IOS\n    const string TenjinKey = \"" + iosKey + "\";\n#elif UNITY_ANDROID\n    const string TenjinKey = \"" + testproject.Key + "\";\n#else\n    const string TenjinKey = \"\";\n#endif"
+	for name, decl := range map[string]string{"if and else": ifElse, "elif, and an editor's empty key": elif} {
+		t.Run(name, func(t *testing.T) {
+			k := keys()
+			r := run(t, script(decl), verify.Options{Keys: k})
+			if f := expect(t, r, "key.valid", project.IOS, verify.Pass); f.Line != 6 {
+				t.Errorf("iOS key found at %s:%d", f.File, f.Line)
+			}
+			if f := expect(t, r, "key.valid", project.Android, verify.Pass); f.Line != 8 {
+				t.Errorf("Android key found at %s:%d", f.File, f.Line)
+			}
+			for _, q := range k.asked {
+				if q == iosKey+"|com.example.sample|android" || q == testproject.Key+"|com.example.sample|ios" {
+					t.Errorf("a key was tried on the other platform's app: %s", q)
+				}
+			}
+			if has(r, "sdk.key.placeholder") {
+				t.Errorf("a key compiled for neither platform was reported: %s", ids(r))
+			}
+		})
+	}
+
+	// A placeholder in the Android branch is the Android build's, and the
+	// iOS key beside it still passes.
+	r := run(t, script(strings.Replace(ifElse, testproject.Key, "YOUR_ANDROID_SDK_KEY", 1)), verify.Options{Keys: keys()})
+	if f := expect(t, r, "sdk.key.placeholder", project.Android, verify.Error); f.Line != 8 || !strings.Contains(f.Fix, "__TENJIN_ANDROID_SDK_KEY__") {
+		t.Errorf("finding = %+v", f)
+	}
+	expect(t, r, "key.valid", project.IOS, verify.Pass)
+
+	// Declared twice outside any directive, in two classes of one file:
+	// each declaration is checked, and a placeholder in either reported.
+	two := base.With(testproject.Files{unityScript: base[unityScript] + "\npublic class OtherBootstrap : MonoBehaviour\n{\n    const string TenjinKey = \"YOUR_SDK_KEY\";\n\n    void Start()\n    {\n        Tenjin.getInstance(TenjinKey).Connect();\n    }\n}\n"})
+	r = run(t, two, verify.Options{Keys: keys()})
+	if f := expect(t, r, "sdk.key.placeholder", "", verify.Error); f.Line != 37 {
+		t.Errorf("finding = %+v", f)
+	}
+	expect(t, r, "key.valid", project.Android, verify.Pass)
+}
+
 // acceptAll accepts every key.
 type acceptAll struct{}
 

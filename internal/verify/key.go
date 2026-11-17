@@ -222,7 +222,10 @@ func (r *runner) candidateKeys(t *project.Target, src source, build string, wide
 		}
 	}
 	for _, k := range src.keys {
-		add(k)
+		// A key the code chooses by platform is only that platform's.
+		if k.Platform == "" || k.Platform == t.Platform {
+			add(k)
+		}
 	}
 	keys = all
 	if wide {
