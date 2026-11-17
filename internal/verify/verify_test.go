@@ -468,6 +468,24 @@ func TestKeyCheckSkipsPlaceholdersAndMissingKeys(t *testing.T) {
 	}
 }
 
+// The context is often a call of its own, getApplicationContext() or
+// requireContext(): the key after it is still read, so it is checked, and a
+// placeholder there is reported.
+func TestTheKeyAfterAContextCallIsRead(t *testing.T) {
+	base := testproject.AndroidNative()
+	for _, context := range []string{"getApplicationContext()", "requireContext()", "requireActivity()", "applicationContext"} {
+		t.Run(context, func(t *testing.T) {
+			files := base.With(testproject.Files{activity: strings.Replace(base[activity], "TenjinSDK.getInstance(this, ", "TenjinSDK.getInstance("+context+", ", 1)})
+			keys := &fakeKeys{answers: map[string]track.KeyStatus{testproject.Key + "|com.example.sample|android": track.KeyValid}}
+			if f := expect(t, run(t, files, verify.Options{Keys: keys}), "key.valid", project.Android, verify.Pass); f.Line != 9 {
+				t.Errorf("key found at %s:%d", f.File, f.Line)
+			}
+			placeholder := files.With(testproject.Files{activity: strings.Replace(files[activity], testproject.Key, "YOUR_SDK_KEY", 1)})
+			expect(t, run(t, placeholder, verify.Options{}), "sdk.key.placeholder", project.Android, verify.Error)
+		})
+	}
+}
+
 func TestKeyCheckSurvivesUnreachableTracking(t *testing.T) {
 	keys := &fakeKeys{err: errors.New("dial tcp: no route to host")}
 	r := run(t, testproject.AndroidNative(), verify.Options{Keys: keys})

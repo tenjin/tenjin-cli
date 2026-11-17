@@ -90,9 +90,10 @@ var nativeSpecs = map[project.Platform]frameworkSpec{
 		initName:    "TenjinSDK.getInstance(context, key)",
 		connectName: "connect()",
 		// getInstance has variants that take an app subversion or a
-		// shared secret as well; the key is the second argument of each.
+		// shared secret as well; the key is the second argument of each. The
+		// context before it may be a call of its own: getApplicationContext().
 		initCall:   regexp.MustCompile(`TenjinSDK\.getInstance(?:WithAppSubversion|WithSharedSecret|WithSharedSecretAppSubversion)?\(`),
-		keyLiteral: regexp.MustCompile(`TenjinSDK\.getInstance(?:WithAppSubversion|WithSharedSecret|WithSharedSecretAppSubversion)?\(\s*[^,()]+,\s*"([^"]*)"`),
+		keyLiteral: regexp.MustCompile(`TenjinSDK\.getInstance(?:WithAppSubversion|WithSharedSecret|WithSharedSecretAppSubversion)?\(\s*(?:[^,()]|\([^()]*\))+,\s*"([^"]*)"`),
 		// On a Tenjin receiver only, after normalizeAndroid: a media
 		// browser's or a socket's connect() is not Tenjin's.
 		connectCall: regexp.MustCompile(`TenjinSDK\.connect\(`),
