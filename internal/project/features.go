@@ -215,12 +215,17 @@ func (d *detector) findFeatures() {
 	}
 }
 
-// dependencyFiles are the files that declare a project's dependencies.
+// dependencyFiles are the files that declare a project's dependencies: the
+// app's own, and the build files of the library modules it depends on,
+// whose dependencies are the app's when it is built.
 func (d *detector) dependencyFiles() []string {
 	files := []string{"pubspec.yaml", "package.json", "Packages/manifest.json"}
 	for _, t := range d.p.Targets {
 		if t.Android != nil {
 			files = append(files, t.Android.BuildFile, t.Android.VersionCatalog)
+			for _, m := range t.Android.LibraryModules {
+				files = append(files, moduleBuildFile(d, m))
+			}
 		}
 		if t.IOS != nil {
 			dir := path.Dir(t.IOS.Xcodeproj)

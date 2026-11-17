@@ -304,22 +304,13 @@ var adSDKs = []struct {
 
 // findAdSDKs looks through the files that declare dependencies.
 func (d *detector) findAdSDKs() {
-	files := []string{"pubspec.yaml", "package.json", "Packages/manifest.json"}
-	for _, t := range d.p.Targets {
-		if t.Android != nil {
-			files = append(files, t.Android.BuildFile, t.Android.VersionCatalog)
-		}
-		if t.IOS != nil {
-			dir := path.Dir(t.IOS.Xcodeproj)
-			files = append(files, t.IOS.Podfile, path.Join(dir, "Podfile.lock"), path.Join(t.IOS.Xcodeproj, "project.pbxproj"))
-		}
-	}
+	files := d.dependencyFiles()
 	contents := map[string]string{}
-	for _, f := range dedupe(files) {
+	for _, f := range files {
 		contents[f] = d.readDependencies(f)
 	}
 	for _, sdk := range adSDKs {
-		for _, f := range dedupe(files) {
+		for _, f := range files {
 			if sdk.pattern.MatchString(contents[f]) {
 				d.p.AdSDKs = append(d.p.AdSDKs, AdSDK{Name: sdk.name, Source: f})
 				break

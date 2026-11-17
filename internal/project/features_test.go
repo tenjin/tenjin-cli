@@ -104,6 +104,37 @@ func TestRevenueCatSuggestsSubscriptions(t *testing.T) {
 	}
 }
 
+// The dependencies of a library module the app depends on are the app's
+// when it is built, and suggest its features.
+func TestFeatureSignalsInALibraryModule(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	const ads = "ads/build.gradle.kts"
+	p := detect(t, base.With(testproject.Files{
+		"settings.gradle.kts": "include(\":app\", \":ads\")\n",
+		build:                 strings.Replace(base[build], "dependencies {", "dependencies {\n    implementation(project(\":ads\"))", 1),
+		ads: `plugins {
+    id("com.android.library")
+}
+
+dependencies {
+    implementation("com.applovin:applovin-sdk:13.0.1")
+    implementation("com.android.billingclient:billing-ktx:7.1.1")
+}
+`,
+	}))
+	want := "opens() purchases(Google Play Billing) ad_revenue(AppLovin MAX)"
+	if got := suggested(p); got != want {
+		t.Errorf("suggested:\n%s\nwant:\n%s", got, want)
+	}
+	if e := p.Feature(project.FeaturePurchases).Evidence[0]; e.File != ads {
+		t.Errorf("evidence = %+v", e)
+	}
+	if len(p.AdSDKs) != 1 || p.AdSDKs[0].Source != ads {
+		t.Errorf("ad SDKs = %+v", p.AdSDKs)
+	}
+}
+
 // A VIEW action in <queries> is what the app asks the system about, not
 // what it receives: only an intent filter on an activity opens links.
 func TestAQueryForViewIsNotADeepLink(t *testing.T) {
