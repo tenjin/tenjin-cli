@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/tenjin/tenjin-cli/internal/agent"
 	"github.com/tenjin/tenjin-cli/internal/clierr"
 	"github.com/tenjin/tenjin-cli/internal/render"
 	"github.com/tenjin/tenjin-cli/internal/tenjinapi"
@@ -420,12 +421,34 @@ bundle ID and platform cannot be changed.`,
 
 func newAppsDeleteCmd(opts *options, env *environment) *cobra.Command {
 	return writeCmd(opts, env, writeSpec{
-		use: "delete <app-id>", short: "Delete an app", destructive: true,
+		use: "delete <app-id>", short: "Delete an app that is not sending events", destructive: true,
 		long: `Delete an app. It no longer appears in the dashboard or the API, and its
-SDK keys stop being accepted.`,
+SDK keys stop being accepted. The app is read first and named, with its
+bundle ID and platform, in the question and the dry run. An app that is
+sending events is not deleted here: the dashboard shows what would go with
+it. A coding agent cannot run this command.`,
 		args: exactArgs(1, "the app's ID, from 'tenjin apps list'"),
 		prepare: func(args []string, _ tenjinapi.Fields, said string) (string, error) {
-			return "Delete the app " + args[0], nil
+			if agent.InsideAgent(env.getenv) {
+				return "", clierr.New(clierr.Usage, "'tenjin apps delete' does not run inside a coding agent: deleting an app cannot be undone, and is the developer's to do").
+					WithHint("Have the developer run it in their own terminal, or delete the app in the dashboard.")
+			}
+			return "Delete the app", nil
+		},
+		// The app is read first, with --yes too: an ID that is nobody's app
+		// fails here, before anything is sent, and an app that is sending
+		// events is refused.
+		keep: func(ctx context.Context, api *tenjinapi.Client, args []string, _ tenjinapi.Fields) (string, error) {
+			app, err := api.GetApp(ctx, args[0])
+			if err != nil {
+				return "", err
+			}
+			named := fmt.Sprintf(" %q (%s on %s, %s)", app.Name, app.BundleID, app.Platform, app.ID)
+			if app.SendingEvents {
+				return "", clierr.New(clierr.Refused, "the app%s is sending events, so the CLI does not delete it", named).
+					WithHint("Delete it in the dashboard, which shows what would go with it.")
+			}
+			return named, nil
 		},
 		show: func(cmd *cobra.Command, format render.Format, api *tenjinapi.Client, args []string, _ tenjinapi.Fields) error {
 			if err := api.DeleteApp(cmd.Context(), args[0]); err != nil {

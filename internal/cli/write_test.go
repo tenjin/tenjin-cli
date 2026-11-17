@@ -40,6 +40,8 @@ func TestWriteCommandsSendTheirBodies(t *testing.T) {
 		t.Run(strings.Join(tc.args, " "), func(t *testing.T) {
 			h := newHarness(t)
 			h.signIn()
+			// apps delete reads the app before deleting it.
+			h.fake.addApp("Sample", "com.example.sample", "android")
 			code, _, stderr := h.run(append(tc.args, "--yes")...)
 			if code != 0 {
 				t.Fatalf("exit = %d, stderr = %q", code, stderr)
@@ -330,6 +332,48 @@ func TestAnEmptyParamRemovesTheParameter(t *testing.T) {
 	}
 }
 
+// Deleting an app cannot be undone, so the app is read and named before the
+// question, an app that is sending events is refused, and a coding agent
+// cannot do it at all. Nothing is sent in any of those cases.
+func TestAppsDeleteIsGuarded(t *testing.T) {
+	h := newHarness(t)
+	h.signIn()
+	app := h.fake.addApp("Sample", "com.example.sample", "android")
+	named := `Delete the app "Sample" (com.example.sample on android, ` + app.ID + `)`
+
+	code, stdout, stderr := h.run("apps", "delete", app.ID, "--dry-run")
+	if code != 0 || stdout != "" || !strings.Contains(stderr, "Would delete the app \"Sample\" (com.example.sample on android") || len(h.fake.writes) != 0 {
+		t.Errorf("dry run: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+	h.typing("")
+	if code, _, stderr := h.run("apps", "delete", app.ID); code != 0 || !strings.Contains(stderr, named+"? [y/N]") || !strings.Contains(stderr, "Nothing was changed.") || len(h.fake.writes) != 0 {
+		t.Errorf("question: exit = %d, stderr = %q, %d writes", code, stderr, len(h.fake.writes))
+	}
+
+	// An ID that is nobody's app fails before anything is sent, --yes or not.
+	if code, _, stderr := h.run("apps", "delete", testOther, "--yes"); code == 0 || len(h.fake.writes) != 0 || !strings.Contains(stderr, "not found") {
+		t.Errorf("unknown app with --yes: exit = %d, stderr = %q, %d writes", code, stderr, len(h.fake.writes))
+	}
+
+	// A coding agent cannot delete an app.
+	h.vars["CLAUDECODE"] = "1"
+	if code, _, stderr := h.run("apps", "delete", app.ID, "--yes"); code != 2 || len(h.fake.writes) != 0 || !strings.Contains(stderr, "does not run inside a coding agent") {
+		t.Errorf("inside an agent: exit = %d, stderr = %q, %d writes", code, stderr, len(h.fake.writes))
+	}
+	delete(h.vars, "CLAUDECODE")
+
+	// An app that is sending events is refused, --yes or not.
+	h.fake.mu.Lock()
+	h.fake.apps[0].SendingEvents = true
+	h.fake.mu.Unlock()
+	if code, _, stderr := h.run("apps", "delete", app.ID, "--yes"); code != 11 || len(h.fake.writes) != 0 || !strings.Contains(stderr, "is sending events, so the CLI does not delete it") || !strings.Contains(stderr, "dashboard") {
+		t.Errorf("sending events: exit = %d, stderr = %q, %d writes", code, stderr, len(h.fake.writes))
+	}
+	if code, stdout, stderr := h.run("apps", "delete", app.ID, "--dry-run"); code != 11 || stdout != "" || len(h.fake.writes) != 0 {
+		t.Errorf("sending events, dry run: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+}
+
 // IDs are checked before the question and the dry run.
 func TestWriteChecksIDsBeforeAsking(t *testing.T) {
 	h := newHarness(t)
@@ -454,6 +498,7 @@ func TestAppWritesShowNoSecret(t *testing.T) {
 	secrets := []string{"ios-secret-0000-wxyz", "play-public-key-0000-abcd", "amazon-secret-0000", "fb-decryption-0000"}
 	h := newHarness(t)
 	h.signIn()
+	h.fake.addApp("Sample", "com.example.sample", "android") // read before a delete
 	h.fake.writeAnswers = map[string]func(*http.Request) (int, any){
 		"PATCH /v2/apps/" + testApp: func(*http.Request) (int, any) {
 			return http.StatusOK, map[string]any{"data": map[string]any{"id": testApp, "type": "app", "attributes": map[string]any{
