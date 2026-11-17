@@ -25,11 +25,16 @@ var (
 	pbxGeneratedPlist  = regexp.MustCompile(`GENERATE_INFOPLIST_FILE = YES;`)
 	pbxInfoPlistKey    = regexp.MustCompile(`\b` + infoPlistKeyPrefix + `(\w+) = "?([^";]*)"?;`)
 	podTenjin          = regexp.MustCompile(`(?m)^\s*pod\s+['"]TenjinSDK['"]`)
-	podLockTenjin      = regexp.MustCompile(`(?m)^\s*-\s+TenjinSDK\s+\(([^)]+)\)`)
 	spmTenjin          = regexp.MustCompile(`github\.com/tenjin/(tenjin-ios-spm|tenjin-ios-sdk)`)
 	linkedTenjin       = regexp.MustCompile(`(libTenjinSDK\w*\.a|TenjinSDK\.xcframework|TenjinSDK\.framework) in (?:Frameworks|Embed Frameworks)`)
 	resolvedTenjinVers = regexp.MustCompile(`tenjin-ios-(?:spm|sdk)[^{}]*\{[^{}]*?"version"\s*:\s*"([^"]+)"`) // within Tenjin's own pin
 )
+
+// podLockTenjin is the pod's own entry in Podfile.lock's PODS, at two spaces,
+// which holds the version installed. Nested deeper, under a pod that depends
+// on it, is that pod's requirement (= 1.19.1, ~> 1.15): the plugins and most
+// adapters have one, and sort before the pod's own entry.
+var podLockTenjin = regexp.MustCompile(`(?m)^  - TenjinSDK \(([^)]+)\)`)
 
 // native detects a plain Android and/or iOS project.
 func (d *detector) native() bool {

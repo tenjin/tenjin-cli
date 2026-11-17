@@ -161,6 +161,8 @@ func olderThan(declared, latest string) bool {
 	case 'v', '=':
 		declared = declared[1:]
 	}
+	// A space may follow the operator, as in a CocoaPods requirement.
+	declared = strings.TrimSpace(declared)
 	declared, _, _ = strings.Cut(declared, "+")
 	declared, pre, prerelease := strings.Cut(declared, "-")
 	have, ok := parseVersion(declared)

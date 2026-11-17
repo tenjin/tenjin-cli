@@ -554,6 +554,44 @@ func TestOutdatedSDKVersionWithRanges(t *testing.T) {
 	}
 }
 
+// Podfile.lock lists TenjinSDK under each pod that depends on it, as that
+// pod's requirement, before its own entry: the version is read from its own
+// entry, never from a requirement.
+func TestThePodVersionIsReadFromItsOwnLockEntry(t *testing.T) {
+	ios := testproject.IOSNative()
+	podfile := strings.Replace(ios["Podfile"], "pod 'TenjinSDK'", "pod 'AdsKit'\n  pod 'TenjinSDK'", 1)
+	for name, requirement := range map[string]string{"a range": "~> 1.15", "an exact version": "= 1.19.1"} {
+		t.Run(requirement, func(t *testing.T) {
+			lock := "PODS:\n  - AdsKit (1.2.0):\n    - TenjinSDK (" + requirement + ")\n  - TenjinSDK (1.19.1)\n\nDEPENDENCIES:\n  - AdsKit\n  - TenjinSDK\n"
+			r := run(t, ios.With(testproject.Files{"Podfile": podfile, "Podfile.lock": lock}), verify.Options{})
+			f := expect(t, r, "sdk.version", project.IOS, verify.Warning)
+			if !strings.Contains(f.Title, "at 1.19.1") || !strings.Contains(f.Fix, "to 1.20.0") {
+				t.Errorf("with %s: finding = %+v", name, f)
+			}
+			plan := verify.Upgrades(r.Project, nil)
+			if len(plan.Upgrades) != 1 || plan.Upgrades[0].Current != "1.19.1" {
+				t.Errorf("with %s: plan = %+v", name, plan)
+			}
+		})
+	}
+
+	// The plugins sort before TenjinSDK too, and pin it exactly.
+	flutter := testproject.Flutter()
+	r := run(t, flutter.With(testproject.Files{
+		"ios/Podfile":      "target 'Runner' do\n  use_frameworks!\nend\n",
+		"ios/Podfile.lock": "PODS:\n  - Flutter (1.0.0)\n  - tenjin_plugin (1.5.0):\n    - Flutter\n    - TenjinSDK (= 1.19.1)\n  - TenjinSDK (1.19.1)\n",
+	}), verify.Options{})
+	var through *project.Integration
+	for i := range r.Project.Tenjin {
+		if r.Project.Tenjin[i].Through == "tenjin_plugin" {
+			through = &r.Project.Tenjin[i]
+		}
+	}
+	if through == nil || through.Version != "1.19.1" {
+		t.Errorf("the SDK the plugin brings = %+v", through)
+	}
+}
+
 // A fix must be something that can be pasted: a version, not "<latest>".
 func TestFixesNameAVersion(t *testing.T) {
 	const build = "app/build.gradle.kts"
