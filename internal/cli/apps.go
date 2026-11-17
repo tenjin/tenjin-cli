@@ -434,7 +434,8 @@ and the request's body as would_create, which an app that exists never has.`,
 
 // ensureApp finds the app or creates it. Creation needs --yes or a yes at
 // the prompt; without a terminal and without --yes it is refused, never
-// assumed.
+// assumed. A no is declined, not a failure: nothing went wrong, and nothing
+// was done.
 func ensureApp(ctx context.Context, env *environment, prompt io.Writer, bundleID, platform, name string, yes bool) (*ensureResult, error) {
 	api := env.api()
 	app, err := api.FindApp(ctx, bundleID, platform)
@@ -456,7 +457,7 @@ func ensureApp(ctx context.Context, env *environment, prompt io.Writer, bundleID
 			return nil, err
 		}
 		if !ok {
-			return nil, clierr.New(clierr.NotFound, "no Tenjin app has the bundle ID %s on %s, and none was created", bundleID, platform)
+			return nil, declined("Nothing was changed.")
 		}
 	}
 	created, isNew, err := api.CreateApp(ctx, tenjinapi.NewApp{Name: name, BundleID: bundleID, Platform: platform})

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -466,11 +467,19 @@ func (s *setup) apps(p *project.Project) error {
 			label := buildTitle(t, b)
 			name := appName(p, t, b)
 			result, err := ensureApp(s.cmd.Context(), s.env, s.out, b.BundleID, b.TenjinPlatform, name, s.yes)
+			// Choosing not to create an app leaves the rest of the
+			// walkthrough useful: the no is said here, in its place.
+			var no declined
+			if errors.As(err, &no) {
+				s.say("  %s %s %s: no Tenjin app has this bundle ID on %s, and none was created", s.style.Yellow("!"), label, render.Clean(b.BundleID), b.TenjinPlatform)
+				s.noApp[b.ID] = true
+				continue
+			}
 			if err != nil {
 				e := clierr.From(err)
-				// Not being allowed to create an app, or choosing not to,
-				// leaves the rest of the walkthrough useful. Anything else
-				// stops it.
+				// Not being allowed to create an app, or having no terminal
+				// to ask at, leaves the rest useful too. Anything else stops
+				// the walkthrough.
 				if e.Kind != clierr.Permission && e.Kind != clierr.NotFound {
 					return err
 				}

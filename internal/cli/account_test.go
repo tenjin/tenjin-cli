@@ -400,8 +400,9 @@ func TestAppsEnsure(t *testing.T) {
 		h := newHarness(t)
 		h.signIn()
 		h.typing("n")
-		if code, _, _ := ensure(h); code != 5 || len(h.fake.apps) != 0 {
-			t.Errorf("answered no: exit = %d, apps = %d", code, len(h.fake.apps))
+		// A no is not a failure: nothing went wrong, and nothing was done.
+		if code, _, stderr := ensure(h); code != 0 || len(h.fake.apps) != 0 || !strings.Contains(stderr, "Create \"com.example.sample\"?") || !strings.Contains(stderr, "Nothing was changed.") {
+			t.Errorf("answered no: exit = %d, apps = %d, stderr = %q", code, len(h.fake.apps), stderr)
 		}
 		h.typing("y")
 		if code, r, _ := ensure(h); code != 0 || !r.Created {
