@@ -75,6 +75,9 @@ type Request struct {
 	Response string
 	// Line is where the request starts in the log, counting from 1.
 	Line int
+	// PID is the process that sent it, as the log names it, or "". One
+	// launch of an app is one process.
+	PID string
 	// Time is when the device logged it, as the log writes it, or "".
 	Time string
 	// Unread is true for an iOS request whose body was not logged, as
@@ -100,10 +103,30 @@ type Log struct {
 	// SawSDK is true when the SDK wrote anything at all.
 	SawSDK   bool
 	Requests []Request
-	// Deduped counts connects the SDK skipped under its 30-second rule, and
-	// DedupedLine is where the last of them is in the log.
-	Deduped     int
-	DedupedLine int
+	// Dedups are the connects the SDK skipped under its 30-second rule, in
+	// log order. A skipped connect says nothing about which app skipped it.
+	Dedups []Dedup
+}
+
+// Dedup is a connect the SDK skipped because it had sent one less than 30
+// seconds earlier.
+type Dedup struct {
+	// PID is the process that skipped it, as the log names it, or "".
+	PID string
+	// Line is where it is in the log, counting from 1.
+	Line int
+}
+
+// DedupedAfter reports whether the process that sent c skipped a connect
+// later on. Another process's skipped connect, another app's or a later
+// launch's, says nothing about c: the log is paired per process.
+func (l *Log) DedupedAfter(c *Request) bool {
+	for _, d := range l.Dedups {
+		if d.PID == c.PID && d.Line > c.Line {
+			return true
+		}
+	}
+	return false
 }
 
 // logTime matches the time at the start of a log line: logcat's "-v time"
@@ -215,17 +238,17 @@ func Parse(r io.Reader) (*Log, error) {
 			pending = waiting[pid]
 			flush()
 			url := strings.TrimSpace(after(line, markURL))
-			waiting[pid] = &Request{URL: url, Endpoint: endpoint(url), Params: map[string]string{}, Line: n, Time: lineTime(line)}
+			waiting[pid] = &Request{URL: url, Endpoint: endpoint(url), Params: map[string]string{}, Line: n, PID: pid, Time: lineTime(line)}
 			log.SawSDK = true
 		case strings.Contains(line, markParams):
 			if waiting[pid] == nil {
-				waiting[pid] = &Request{Params: map[string]string{}, Line: n}
+				waiting[pid] = &Request{Params: map[string]string{}, Line: n, PID: pid}
 			}
 			waiting[pid].Params = parseParams(after(line, markParams))
 			log.SawSDK = true
 		case strings.Contains(line, markResponse):
 			if waiting[pid] == nil {
-				waiting[pid] = &Request{Params: map[string]string{}, Line: n}
+				waiting[pid] = &Request{Params: map[string]string{}, Line: n, PID: pid}
 			}
 			pending = waiting[pid]
 			delete(waiting, pid)
@@ -234,8 +257,7 @@ func Parse(r io.Reader) (*Log, error) {
 			log.SawSDK = true
 			flush()
 		case strings.Contains(line, markDeduped):
-			log.Deduped++
-			log.DedupedLine = n
+			log.Dedups = append(log.Dedups, Dedup{PID: pid, Line: n})
 			log.SawSDK = true
 		default:
 			for _, tag := range sdkTags {
@@ -337,10 +359,9 @@ func parseIOSLine(log *Log, waiting map[string]*Request, line string, n int) {
 	case strings.Contains(line, iosMarkURL):
 		flush()
 		u := strings.TrimSpace(after(line, iosMarkURL))
-		waiting[pid] = &Request{URL: u, Endpoint: endpoint(u), Params: map[string]string{}, Line: n, Time: lineTime(line)}
+		waiting[pid] = &Request{URL: u, Endpoint: endpoint(u), Params: map[string]string{}, Line: n, PID: pid, Time: lineTime(line)}
 	case strings.Contains(line, iosMarkDeduped):
-		log.Deduped++
-		log.DedupedLine = n
+		log.Dedups = append(log.Dedups, Dedup{PID: pid, Line: n})
 	case pending == nil:
 	case strings.Contains(line, iosMarkParams):
 		if values, err := url.ParseQuery(strings.TrimSpace(after(line, iosMarkParams))); err == nil {

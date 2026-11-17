@@ -122,10 +122,10 @@ func TestParseKeepsEachProcessesLinesTogether(t *testing.T) {
 				t.Fatalf("requests = %+v, err = %v", got, err)
 			}
 			purchase, connect := got.Requests[0], got.Requests[1]
-			if purchase.Endpoint != "purchase" || purchase.Params["bundle_id"] != "com.other.app" || purchase.Code != 401 {
+			if purchase.Endpoint != "purchase" || purchase.Params["bundle_id"] != "com.other.app" || purchase.Code != 401 || purchase.PID != "3956" {
 				t.Errorf("purchase = %+v", purchase)
 			}
-			if !connect.IsConnect() || connect.Params["bundle_id"] != "com.example.sample" || !connect.Accepted() {
+			if !connect.IsConnect() || connect.Params["bundle_id"] != "com.example.sample" || !connect.Accepted() || connect.PID != "17522" {
 				t.Errorf("connect = %+v", connect)
 			}
 		})
@@ -134,7 +134,7 @@ func TestParseKeepsEachProcessesLinesTogether(t *testing.T) {
 
 func TestParseDedupAndSilence(t *testing.T) {
 	deduped, _ := Parse(strings.NewReader("D/TenjinSDK( 1): Connecting...\nD/TenjinSDK( 1): Connect deduped by persisted timestamp, flushing queue\n"))
-	if !deduped.SawSDK || deduped.Deduped != 1 || deduped.LastConnect() != nil {
+	if !deduped.SawSDK || len(deduped.Dedups) != 1 || deduped.Dedups[0] != (Dedup{PID: "1", Line: 2}) || deduped.LastConnect() != nil {
 		t.Errorf("deduped = %+v", deduped)
 	}
 	// "HttpConnection" alone is not the SDK: other libraries use that tag.
@@ -450,10 +450,10 @@ func TestParseIOSKeepsEachProcessesLinesTogether(t *testing.T) {
 		t.Fatalf("requests = %+v, err = %v", log, err)
 	}
 	other, sample := log.Requests[0], log.Requests[1]
-	if other.Params["bundle_id"] != "com.other.app" || !other.Accepted() {
+	if other.Params["bundle_id"] != "com.other.app" || !other.Accepted() || other.PID != "3956" {
 		t.Errorf("other = %+v", other)
 	}
-	if sample.Params["bundle_id"] != "com.example.sample" || sample.Code != 401 || sample.Message != "bad key" {
+	if sample.Params["bundle_id"] != "com.example.sample" || sample.Code != 401 || sample.Message != "bad key" || sample.PID != "17522" {
 		t.Errorf("sample = %+v", sample)
 	}
 }
@@ -461,8 +461,43 @@ func TestParseIOSKeepsEachProcessesLinesTogether(t *testing.T) {
 func TestParseIOSSkippedConnect(t *testing.T) {
 	log, _ := Parse(strings.NewReader(`2026-10-06 10:04:49.416 Df Sample[1:2] (TenjinSDK) [Tenjin] - DEBUG: Connect sent 4.2s ago (interval: 30.0s), ignoring duplicate ping
 `))
-	if log.Platform != "ios" || log.Deduped != 1 || log.LastConnect() != nil {
+	if log.Platform != "ios" || len(log.Dedups) != 1 || log.Dedups[0] != (Dedup{PID: "1", Line: 1}) || log.LastConnect() != nil {
 		t.Errorf("log = %+v", log)
+	}
+}
+
+// A connect skipped in one process says nothing about another process's
+// connect, on either platform: a launch is a process, and another app's
+// skipped connect is logged with the same words.
+func TestDedupedAfterIsPerProcess(t *testing.T) {
+	for name, text := range map[string]string{
+		"android": "D/HttpConnection(100): Tenjin request URL: https://track.tenjin.com/v0/event\n" +
+			"D/HttpConnection(100): Tenjin::connect params: {bundle_id=com.example.sample}\n" +
+			"D/HttpConnection(100): Tenjin::connect response: {\"code\":200,\"success\":true}\n" +
+			"D/TenjinSDK(200): Connect deduped by persisted timestamp\n" +
+			"D/TenjinSDK(100): Connect deduped by persisted timestamp\n",
+		"ios": "Sample[100:a] [Tenjin] - LOG: Sending request - https://track.tenjin.com/v0/event\n" +
+			"Sample[100:a] [Tenjin] - DEBUG: request body bundle_id=com.example.sample\n" +
+			"Sample[100:a] [Tenjin] - DEBUG: Response body {\"code\":200,\"success\":true}\n" +
+			"Other[200:a] [Tenjin] - DEBUG: Connect sent 4.2s ago (interval: 30.0s), ignoring duplicate ping\n" +
+			"Sample[100:a] [Tenjin] - DEBUG: Connect sent 4.2s ago (interval: 30.0s), ignoring duplicate ping\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			log, err := Parse(strings.NewReader(text))
+			if err != nil || len(log.Requests) != 1 || log.Requests[0].PID != "100" || len(log.Dedups) != 2 {
+				t.Fatalf("log = %+v, err = %v", log, err)
+			}
+			connect := log.Requests[0]
+			// Only its own process's later skip counts against it.
+			log.Dedups = log.Dedups[:1]
+			if log.DedupedAfter(&connect) {
+				t.Errorf("another process's skipped connect counted against %+v", connect)
+			}
+			log, _ = Parse(strings.NewReader(text))
+			if !log.DedupedAfter(&log.Requests[0]) {
+				t.Errorf("the process's own later skip did not count")
+			}
+		})
 	}
 }
 

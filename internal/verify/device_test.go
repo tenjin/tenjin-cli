@@ -342,8 +342,8 @@ func TestTheKeyTellsThisAppWhenTheProjectsBundleIDIsUnknown(t *testing.T) {
 	}
 }
 
-// A connect the SDK skipped after the last one it sent is what the newest
-// launch did, and an earlier refusal is not reported as this launch's.
+// A connect the SDK skipped after the last one its process sent is what that
+// process last did, and the earlier refusal is not reported as its answer.
 func TestADedupAfterTheConnectWins(t *testing.T) {
 	log := deviceLog(connectURL, connectParams, `{"code":401,"message":"unauthorized"}`) +
 		"D/TenjinSDK( 1): Connect deduped by persisted timestamp\n"
@@ -351,6 +351,44 @@ func TestADedupAfterTheConnectWins(t *testing.T) {
 	expect(t, r, "device.connect.deduped", project.Android, verify.Info)
 	if find(r, "device.connect", project.Android) != nil {
 		t.Error("the earlier connect was reported")
+	}
+}
+
+// A connect skipped in another process, another app's with the SDK or a
+// later launch's, does not cancel this app's accepted connect: the skip
+// does not say which app skipped, and the log is paired per process.
+func TestAConnectSkippedInAnotherProcessDoesNotCancelThisOnes(t *testing.T) {
+	accepted := deviceLog(connectURL, connectParams, `{"code":200,"success":true}`)
+	cases := map[string]string{
+		"another app":    accepted + "D/TenjinSDK( 2): Connect deduped by persisted timestamp\n",
+		"a later launch": accepted + "D/TenjinSDK( 3): Connecting...\nD/TenjinSDK( 3): Connect deduped by persisted timestamp, flushing queue\n",
+	}
+	for name, log := range cases {
+		t.Run(name, func(t *testing.T) {
+			r := withDevice(t, log, &fakeLookup{known: map[string]bool{"install-1": true}})
+			expect(t, r, "device.connect", project.Android, verify.Pass)
+			expect(t, r, "device.processed", project.Android, verify.Pass)
+			if find(r, "device.connect.deduped", project.Android) != nil {
+				t.Error("another process's skipped connect was reported as this app's")
+			}
+		})
+	}
+
+	// The same on iOS, where the other app's process skips its connect
+	// after this app's was accepted.
+	text := "Sample[100:a] [Tenjin] - LOG: Sending request - https://track.tenjin.com/v0/event\n" +
+		"Sample[100:a] [Tenjin] - DEBUG: request body bundle_id=com.example.sample&platform=ios&advertising_id=A1&developer_device_id=V1&tracking_status=3\n" +
+		"Sample[100:a] [Tenjin] - LOG: Got http response 200\n" +
+		"Sample[100:a] [Tenjin] - DEBUG: Response body {\"code\":200,\"success\":true}\n" +
+		"Other[200:a] [Tenjin] - DEBUG: Connect sent 4.2s ago (interval: 30.0s), ignoring duplicate ping\n"
+	log, err := devicelog.Parse(strings.NewReader(text))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := run(t, testproject.IOSNative(), verify.Options{Device: &verify.DeviceInput{Log: log, Platform: project.IOS}})
+	expect(t, r, "device.connect", project.IOS, verify.Pass)
+	if find(r, "device.connect.deduped", project.IOS) != nil {
+		t.Error("another process's skipped connect was reported as this app's")
 	}
 }
 

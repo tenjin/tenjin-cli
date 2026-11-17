@@ -66,9 +66,11 @@ func (r *runner) checkDevice(t *project.Target, src source) {
 
 	isOurs := r.appMatcher(t, src)
 	connect, whose := lastConnectOf(d.Log, isOurs)
-	// A connect skipped under the 30-second rule after the last one sent
-	// is what the newest launch did.
-	if connect != nil && d.Log.DedupedLine > connect.Line {
+	// A connect its process skipped under the 30-second rule after sending
+	// it is what that process last did. A connect skipped in another
+	// process, another app's or a later launch's, says nothing about this
+	// one: which app skipped it, the log does not say.
+	if connect != nil && d.Log.DedupedAfter(connect) {
 		connect = nil
 	}
 	switch {
@@ -87,7 +89,7 @@ func (r *runner) checkDevice(t *project.Target, src source) {
 		if connect.Accepted() {
 			r.checkProcessed(t, src, connect)
 		}
-	case d.Log.Deduped > 0:
+	case len(d.Log.Dedups) > 0:
 		detail := "The SDK leaves at least 30 seconds between connects, also across launches, so nothing was sent this time."
 		if platform == project.IOS {
 			detail = "The SDK leaves at least 30 seconds between connects, so nothing was sent this time."
