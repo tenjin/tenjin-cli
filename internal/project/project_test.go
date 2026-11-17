@@ -822,3 +822,25 @@ func TestTheTrackingPromptIsTheAppsOwn(t *testing.T) {
 		t.Errorf("tracking prompt = %+v, but the app has none", p.TrackingPrompt)
 	}
 }
+
+// Shrinking is on in every spelling Gradle takes: Groovy's minifyEnabled
+// true, the assignment minifyEnabled = true, and Kotlin's isMinifyEnabled.
+func TestMinifyInEverySpelling(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	if !strings.Contains(base[build], "isMinifyEnabled = false") {
+		t.Fatal("the fixture does not turn shrinking off")
+	}
+	for _, spelling := range []string{"minifyEnabled true", "minifyEnabled = true", "isMinifyEnabled = true"} {
+		p := detect(t, base.With(testproject.Files{build: strings.Replace(base[build], "isMinifyEnabled = false", spelling, 1)}))
+		if !p.Target(project.Android).Android.Minify {
+			t.Errorf("%q: minify is off", spelling)
+		}
+	}
+	for _, spelling := range []string{"minifyEnabled false", "minifyEnabled = false", "isMinifyEnabled = false", "minifyEnabled = trueish"} {
+		p := detect(t, base.With(testproject.Files{build: strings.Replace(base[build], "isMinifyEnabled = false", spelling, 1)}))
+		if p.Target(project.Android).Android.Minify {
+			t.Errorf("%q: minify is on", spelling)
+		}
+	}
+}

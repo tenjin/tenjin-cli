@@ -17,7 +17,7 @@ var (
 	applicationSuffix  = regexp.MustCompile(`applicationIdSuffix\s*=?\s*["']([^"']+)["']`)
 	productFlavors     = regexp.MustCompile(`productFlavors\s*\{`)
 	dotnetMobile       = regexp.MustCompile(`<UseMaui>\s*true|<TargetFrameworks?>[^<]*-(?:android|ios)|Xamarin\.(?:Forms|iOS|Android)`)
-	minifyEnabled      = regexp.MustCompile(`(isMinifyEnabled\s*=\s*true|minifyEnabled\s+true)`)
+	minifyEnabled      = regexp.MustCompile(`(?:isMinifyEnabled|minifyEnabled)\s*(?:=\s*)?true\b`)
 	tenjinMaven        = regexp.MustCompile(`com\.tenjin:android-sdk(?::([0-9][0-9A-Za-z.\-+]*))?`)
 	tenjinTOML         = regexp.MustCompile(`group\s*=\s*"com\.tenjin"\s*,\s*name\s*=\s*"android-sdk"`)
 	pbxBundleID        = regexp.MustCompile(`PRODUCT_BUNDLE_IDENTIFIER = "?([^";]+)"?;`)
