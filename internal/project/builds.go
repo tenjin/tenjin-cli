@@ -199,6 +199,18 @@ func Resolved(bundleID string) bool {
 	return bundleID != "" && !strings.ContainsAny(bundleID, "$@{}") && !strings.Contains(bundleID, "(")
 }
 
+// withSuffixes adds applicationIdSuffix values to an application ID as the
+// Android Gradle plugin does: each without its leading dot, every one joined
+// with a dot, so "amazon" and ".amazon" both make com.example.sample.amazon.
+func withSuffixes(appID string, suffixes ...string) string {
+	for _, s := range suffixes {
+		if s = strings.TrimPrefix(s, "."); s != "" {
+			appID += "." + s
+		}
+	}
+	return appID
+}
+
 func mainBuild(t *Target) Build {
 	id := string(t.Platform)
 	return Build{ID: id, BundleID: t.BundleID, TenjinPlatform: string(t.Platform), SDKKeyPlaceholder: Placeholder(id)}
@@ -240,7 +252,7 @@ func (d *detector) androidBuilds(t *Target, content, flavorsBlock, rest string) 
 			return nil
 		}
 		b := mainBuild(t)
-		b.BundleID = t.BundleID + defaultSuffix
+		b.BundleID = withSuffixes(t.BundleID, defaultSuffix)
 		b.Store, b.StoreSource = mainStore, mainStoreSource
 		b.TenjinPlatform = TenjinPlatform(Android, mainStore)
 		b.Declared = []DeclaredStore{{Store: mainStore, Source: mainStoreSource}}
@@ -250,7 +262,7 @@ func (d *detector) androidBuilds(t *Target, content, flavorsBlock, rest string) 
 	var builds []Build
 	index := map[string]int{}
 	for _, variant := range variants(flavors, dimensionOrder(content)) {
-		appID, suffix := t.BundleID, defaultSuffix
+		appID, suffixes := t.BundleID, []string{defaultSuffix}
 		// The first dimension's flavor takes precedence for the ID; suffixes
 		// add up in dimension order.
 		for i := len(variant) - 1; i >= 0; i-- {
@@ -259,9 +271,9 @@ func (d *detector) androidBuilds(t *Target, content, flavorsBlock, rest string) 
 			}
 		}
 		for _, f := range variant {
-			suffix += f.suffix
+			suffixes = append(suffixes, f.suffix)
 		}
-		bundle := appID + suffix
+		bundle := withSuffixes(appID, suffixes...)
 		if !Resolved(bundle) {
 			continue
 		}
@@ -316,7 +328,7 @@ func (d *detector) androidBuilds(t *Target, content, flavorsBlock, rest string) 
 	mainFound := false
 	for i := range builds {
 		id := string(Android) + ":" + builds[i].Variants[0]
-		if len(builds) == 1 || !mainFound && builds[i].BundleID == t.BundleID+defaultSuffix && builds[i].TenjinPlatform == "android" {
+		if len(builds) == 1 || !mainFound && builds[i].BundleID == withSuffixes(t.BundleID, defaultSuffix) && builds[i].TenjinPlatform == "android" {
 			id, mainFound = string(Android), true
 		}
 		builds[i].ID = id

@@ -232,7 +232,7 @@ func (d *detector) androidTarget(rel string) (Target, bool) {
 	}
 	if target.BundleID != "" {
 		for _, m := range applicationSuffix.FindAllStringSubmatch(content, -1) {
-			others = append(others, target.BundleID+m[1])
+			others = append(others, withSuffixes(target.BundleID, m[1]))
 		}
 	}
 	target.OtherBundleIDs = dedupe(others)

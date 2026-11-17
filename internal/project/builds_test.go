@@ -431,3 +431,35 @@ func TestFlavorsWithNoIDThatCanBeReadGiveNoBuild(t *testing.T) {
 		t.Errorf("notes: %q", p.Notes)
 	}
 }
+
+// An applicationIdSuffix is joined to the ID with a dot whether or not it
+// is written with one, as the Android Gradle plugin joins them.
+func TestAnApplicationIdSuffixIsJoinedWithADot(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	p := detect(t, base.With(testproject.Files{
+		build: strings.Replace(base[build], "    buildTypes {", `    flavorDimensions += "store"
+    productFlavors {
+        create("play") { dimension = "store" }
+        create("amazon") {
+            dimension = "store"
+            applicationIdSuffix = "amazon"
+        }
+        create("galaxy") {
+            dimension = "store"
+            applicationIdSuffix = ".galaxy"
+        }
+    }
+    buildTypes {
+        debug { applicationIdSuffix = "debug" }`, 1),
+	}))
+	want := `android com.example.sample android play __TENJIN_ANDROID_SDK_KEY__
+android:amazon com.example.sample.amazon android amazon __TENJIN_ANDROID_SDK_KEY_AMAZON__
+android:galaxy com.example.sample.galaxy android galaxy __TENJIN_ANDROID_SDK_KEY_GALAXY__`
+	if got := buildList(t, p, project.Android); got != want {
+		t.Errorf("builds:\n%s\nwant:\n%s", got, want)
+	}
+	if !hasNote(p, "com.example.sample.debug") || hasNote(p, "com.example.sampledebug") {
+		t.Errorf("notes = %q", p.Notes)
+	}
+}
