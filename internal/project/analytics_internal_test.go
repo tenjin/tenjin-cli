@@ -5,31 +5,55 @@ import (
 	"testing"
 )
 
+// alternatives splits a pattern at its top-level |, each written as the
+// text it matches: without the escapes, and without \b, which is a word
+// boundary rather than text.
+func alternatives(pattern string) []string {
+	depth := 0
+	var out []string
+	var cur strings.Builder
+	for i := 0; i < len(pattern); i++ {
+		switch c := pattern[i]; {
+		case c == '\\' && i+1 < len(pattern):
+			i++
+			if pattern[i] != 'b' {
+				cur.WriteByte(pattern[i])
+			}
+		case c == '(' || c == '[':
+			depth++
+			cur.WriteByte(c)
+		case c == ')' || c == ']':
+			depth--
+			cur.WriteByte(c)
+		case c == '|' && depth == 0:
+			out = append(out, cur.String())
+			cur.Reset()
+		default:
+			cur.WriteByte(c)
+		}
+	}
+	return append(out, cur.String())
+}
+
 // A file is matched against an SDK's imports only when it holds one of
 // the SDK's hints, so each alternative of the imports must hold one.
 func TestEveryImportHasAHint(t *testing.T) {
 	for _, sdk := range analyticsSDKs {
-		pattern := sdk.uses.String()
-		depth, start := 0, 0
-		var alternatives []string
-		for i := 0; i <= len(pattern); i++ {
-			switch {
-			case i == len(pattern):
-				alternatives = append(alternatives, pattern[start:i])
-			case pattern[i] == '\\':
-				i++
-			case pattern[i] == '(' || pattern[i] == '[':
-				depth++
-			case pattern[i] == ')' || pattern[i] == ']':
-				depth--
-			case pattern[i] == '|' && depth == 0:
-				alternatives = append(alternatives, pattern[start:i])
-				start = i + 1
+		for _, alternative := range alternatives(sdk.uses.String()) {
+			if !sdk.hinted(alternative) {
+				t.Errorf("%s: %q holds none of the hints %q", sdk.name, alternative, sdk.hints)
 			}
 		}
-		for _, alternative := range alternatives {
-			if !sdk.hinted(strings.ReplaceAll(alternative, `\`, "")) {
-				t.Errorf("%s: %q holds none of the hints %q", sdk.name, alternative, sdk.hints)
+	}
+}
+
+// A source file is matched against a feature's code signal only when it
+// holds one of the signal's hints, so each alternative must hold one.
+func TestEveryCodeSignalHasAHint(t *testing.T) {
+	for _, s := range codeSignals {
+		for _, alternative := range alternatives(s.pattern.String()) {
+			if !s.hinted(alternative) {
+				t.Errorf("%s: %q holds none of the hints %q", s.what, alternative, s.hints)
 			}
 		}
 	}

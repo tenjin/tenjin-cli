@@ -1,6 +1,9 @@
 package project_test
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -162,6 +165,41 @@ func TestAQueryForViewIsNotADeepLink(t *testing.T) {
 	p = detect(t, base.With(testproject.Files{manifest: strings.Replace(base[manifest], "    </application>", alias, 1)}))
 	if got := suggested(p); got != "opens() deep_links(an intent filter that opens links)" {
 		t.Errorf("suggested = %s", got)
+	}
+}
+
+// An Android app with 2000 source files of ordinary code, none of which
+// shows a feature, and one that does: the feature scan is most of what
+// detection spends on a project this size.
+func BenchmarkDetectALargeProject(b *testing.B) {
+	base := testproject.AndroidNative()
+	var body strings.Builder
+	for i := 0; i < 150; i++ {
+		fmt.Fprintf(&body, "    fun step%d(x: Int): Int {\n        val y = x * %d / 3 // a comment about step %d\n        return listOf(y, x).sum()\n    }\n", i, i+1, i)
+	}
+	for i := 0; i < 2000; i++ {
+		base[fmt.Sprintf("app/src/main/java/com/example/sample/feature%d/Screen%d.kt", i%40, i)] = fmt.Sprintf("package com.example.sample.feature%d\n\nclass Screen%d {\n%s}\n", i%40, i, body.String())
+	}
+	base["app/src/main/java/com/example/sample/Store.kt"] = "package com.example.sample\n\nval type = BillingClient.ProductType.SUBS\n"
+	root := b.TempDir()
+	for rel, content := range base {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			b.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.ResetTimer()
+	for b.Loop() {
+		p, err := project.Detect(root)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if got := suggested(p); got != "opens() purchases(Google Play Billing) subscriptions(subscription products)" {
+			b.Fatalf("suggested = %s", got)
+		}
 	}
 }
 

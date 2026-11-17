@@ -101,27 +101,46 @@ func (p *Project) Feature(id string) *Feature {
 type signal struct {
 	feature, what string
 	pattern       *regexp.Regexp
+	// hints are words one of which a source file must hold for pattern to
+	// run over it: a cheap test that leaves most files out, since the
+	// pattern over every file is most of what detection costs in a large
+	// project. Each alternative of pattern holds one
+	// (TestEveryCodeSignalHasAHint).
+	hints []string
+}
+
+// hinted reports whether text holds one of the signal's hints.
+func (s signal) hinted(text string) bool {
+	for _, h := range s.hints {
+		if strings.Contains(text, h) {
+			return true
+		}
+	}
+	return false
 }
 
 // Signals in the files that declare dependencies.
 var dependencySignals = []signal{
-	{FeaturePurchases, "Google Play Billing", regexp.MustCompile(`com\.android\.billingclient:billing`)},
-	{FeaturePurchases, "RevenueCat", regexp.MustCompile(`com\.revenuecat\.purchases|['"]RevenueCat['"]|- RevenueCat\b|purchases-ios|\bpurchases_flutter\s*:|"react-native-purchases"|"@revenuecat/purchases-capacitor"|"com\.revenuecat\.purchases-unity"`)},
-	{FeatureSubscriptions, "RevenueCat, used mostly for subscriptions", regexp.MustCompile(`com\.revenuecat\.purchases|['"]RevenueCat['"]|- RevenueCat\b|purchases-ios|\bpurchases_flutter\s*:|"react-native-purchases"|"@revenuecat/purchases-capacitor"|"com\.revenuecat\.purchases-unity"`)},
-	{FeaturePurchases, "in_app_purchase", regexp.MustCompile(`\bin_app_purchase\s*:`)},
-	{FeaturePurchases, "a React Native in-app purchase library", regexp.MustCompile(`"react-native-iap"|"expo-in-app-purchases"|"expo-iap"`)},
-	{FeaturePurchases, "an in-app purchase plugin", regexp.MustCompile(`"cordova-plugin-purchase"|"@capgo/native-purchases"`)},
-	{FeaturePurchases, "Unity IAP", regexp.MustCompile(`"com\.unity\.purchasing"`)},
-	{FeatureConsent, "Google's consent SDK (UMP)", regexp.MustCompile(`com\.google\.android\.ump:user-messaging-platform|GoogleUserMessagingPlatform`)},
-	{FeatureConsent, "a consent management platform", regexp.MustCompile(`(?i)com\.onetrust|onetrust-publishers|usercentrics|didomi|sourcepoint`)},
+	{FeaturePurchases, "Google Play Billing", regexp.MustCompile(`com\.android\.billingclient:billing`), nil},
+	{FeaturePurchases, "RevenueCat", regexp.MustCompile(`com\.revenuecat\.purchases|['"]RevenueCat['"]|- RevenueCat\b|purchases-ios|\bpurchases_flutter\s*:|"react-native-purchases"|"@revenuecat/purchases-capacitor"|"com\.revenuecat\.purchases-unity"`), nil},
+	{FeatureSubscriptions, "RevenueCat, used mostly for subscriptions", regexp.MustCompile(`com\.revenuecat\.purchases|['"]RevenueCat['"]|- RevenueCat\b|purchases-ios|\bpurchases_flutter\s*:|"react-native-purchases"|"@revenuecat/purchases-capacitor"|"com\.revenuecat\.purchases-unity"`), nil},
+	{FeaturePurchases, "in_app_purchase", regexp.MustCompile(`\bin_app_purchase\s*:`), nil},
+	{FeaturePurchases, "a React Native in-app purchase library", regexp.MustCompile(`"react-native-iap"|"expo-in-app-purchases"|"expo-iap"`), nil},
+	{FeaturePurchases, "an in-app purchase plugin", regexp.MustCompile(`"cordova-plugin-purchase"|"@capgo/native-purchases"`), nil},
+	{FeaturePurchases, "Unity IAP", regexp.MustCompile(`"com\.unity\.purchasing"`), nil},
+	{FeatureConsent, "Google's consent SDK (UMP)", regexp.MustCompile(`com\.google\.android\.ump:user-messaging-platform|GoogleUserMessagingPlatform`), nil},
+	{FeatureConsent, "a consent management platform", regexp.MustCompile(`(?i)com\.onetrust|onetrust-publishers|usercentrics|didomi|sourcepoint`), nil},
 }
 
 // Signals in the app's own code.
 var codeSignals = []signal{
-	{FeaturePurchases, "StoreKit purchases", regexp.MustCompile(`\bSKPaymentQueue\b|\bSKProductsRequest\b|\bProduct\.products\(|\bTransaction\.updates\b|\bAppStore\.sync\(`)},
-	{FeaturePurchases, "Google Play Billing", regexp.MustCompile(`\bBillingClient\b`)},
-	{FeatureSubscriptions, "subscription products", regexp.MustCompile(`ProductType\.SUBS\b|SkuType\.SUBS\b|\.autoRenewable\b|\bsubscriptionPeriod\b|\bSKProductSubscriptionPeriod\b|ProductType\.Subscription\b`)},
-	{FeatureConsent, "a consent form", regexp.MustCompile(`\bUMPConsentInformation\b|ConsentInformation\.getInstance\(|\bUserMessagingPlatform\.|ConsentInformation\.instance\b|\bConsentInformation\.Update\(`)},
+	{FeaturePurchases, "StoreKit purchases", regexp.MustCompile(`\bSKPaymentQueue\b|\bSKProductsRequest\b|\bProduct\.products\(|\bTransaction\.updates\b|\bAppStore\.sync\(`),
+		[]string{"SKPaymentQueue", "SKProductsRequest", "Product.products(", "Transaction.updates", "AppStore.sync("}},
+	{FeaturePurchases, "Google Play Billing", regexp.MustCompile(`\bBillingClient\b`), []string{"BillingClient"}},
+	{FeatureSubscriptions, "subscription products", regexp.MustCompile(`ProductType\.SUBS\b|SkuType\.SUBS\b|\.autoRenewable\b|\bsubscriptionPeriod\b|\bSKProductSubscriptionPeriod\b|ProductType\.Subscription\b`),
+		[]string{"ProductType.SUBS", "SkuType.SUBS", ".autoRenewable", "ubscriptionPeriod", "ProductType.Subscription"}},
+	{FeatureConsent, "a consent form", regexp.MustCompile(`\bUMPConsentInformation\b|ConsentInformation\.getInstance\(|\bUserMessagingPlatform\.|ConsentInformation\.instance\b|\bConsentInformation\.Update\(`),
+		[]string{"ConsentInformation", "UserMessagingPlatform."}},
 }
 
 var (
@@ -167,8 +186,19 @@ func (d *detector) findFeatures() {
 		if err != nil || len(raw) > 2<<20 {
 			continue
 		}
-		text := blankComments(Text(raw))
+		// A hint absent from the file is absent from it without its
+		// comments too, so most files are left before anything is blanked.
+		var hinted []signal
 		for _, s := range codeSignals {
+			if s.hinted(string(raw)) {
+				hinted = append(hinted, s)
+			}
+		}
+		if len(hinted) == 0 {
+			continue
+		}
+		text := blankComments(Text(raw))
+		for _, s := range hinted {
 			if s.pattern.MatchString(text) {
 				add(s.feature, s.what, rel)
 			}
