@@ -16,8 +16,11 @@ import (
 // platform has no builds, with the key placeholder a coding agent left.
 func unreadAndroidWithPlaceholder() testproject.Files {
 	base := testproject.AndroidNative()
+	// Both applicationId and namespace, which stands in for it, are variables.
+	build := strings.Replace(base["app/build.gradle.kts"], `applicationId = "com.example.sample"`, "applicationId = appId", 1)
+	build = strings.Replace(build, `namespace = "com.example.sample"`, "namespace = appId", 1)
 	return base.With(testproject.Files{
-		"app/build.gradle.kts": strings.Replace(base["app/build.gradle.kts"], `applicationId = "com.example.sample"`, "applicationId = appId", 1),
+		"app/build.gradle.kts": build,
 		androidActivity:        strings.Replace(base[androidActivity], testproject.Key, keyfill.Placeholder(project.Android), 1),
 	})
 }
