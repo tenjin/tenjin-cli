@@ -8,7 +8,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // Runner runs a program and returns its standard output.
@@ -63,30 +65,97 @@ func findADB(lookPath func(string) (string, error), getenv func(string) string, 
 // emulator. serial picks one when several are connected. The error is an
 // *Unavailable when there is nothing to read from.
 func ReadAndroid(ctx context.Context, run Runner, adb, serial string) ([]byte, error) {
-	return readAndroid(ctx, run, adb, serial, true)
+	serial, err := androidDevice(ctx, run, adb, serial)
+	if err != nil {
+		return nil, err
+	}
+	return dumpAndroid(ctx, run, adb, serial, true)
+}
+
+// ReadAndroidSince is ReadAndroid for what was logged since a moment on this
+// computer's clock, or everything when since is zero. A device stamps its
+// log on its own clock, which need not agree with this computer's, so its
+// clock is read with the log, and the moment is found on it by how long ago
+// it was. The error is an *Unavailable when there is nothing to read from,
+// or the device's clock could not be read: the log is then not read at all,
+// since what came after the moment could not be told.
+func ReadAndroidSince(ctx context.Context, run Runner, adb, serial string, since time.Time) ([]byte, error) {
+	if since.IsZero() {
+		return ReadAndroid(ctx, run, adb, serial)
+	}
+	serial, err := androidDevice(ctx, run, adb, serial)
+	if err != nil {
+		return nil, err
+	}
+	mark, err := androidClockAt(ctx, run, adb, serial, since)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := dumpAndroid(ctx, run, adb, serial, true)
+	if err != nil {
+		return nil, err
+	}
+	return Since(raw, mark), nil
 }
 
 // AndroidMark is the time of the newest line in a device's whole log now, as
-// logcat writes it, or "" when the log is empty or the device cannot be read.
-// Passed to Since with a later read, it leaves only what was logged after.
+// logcat writes it, or "" when the log is empty. Passed to Since with a later
+// read, it leaves only what was logged after. The error is an *Unavailable
+// when the device cannot be read: where its log stands is then unknown, and
+// a later read must not take the whole log as new (see ReadAndroidSince).
 //
 // The mark is read without the SDK's tag filter: logcat takes the last lines
 // of the buffer (-t) before it filters them by tag, so asking for the SDK's
 // newest line finds nothing once any other app has logged since.
-func AndroidMark(ctx context.Context, run Runner, adb, serial string) string {
-	raw, err := readAndroid(ctx, run, adb, serial, false, "-t", "1")
+func AndroidMark(ctx context.Context, run Runner, adb, serial string) (string, error) {
+	serial, err := androidDevice(ctx, run, adb, serial)
 	if err != nil {
-		return ""
+		return "", err
 	}
-	return newestTime(raw)
+	raw, err := dumpAndroid(ctx, run, adb, serial, false, "-t", "1")
+	if err != nil {
+		return "", err
+	}
+	return newestTime(raw), nil
 }
 
-// readAndroid dumps a device's log, in logcat's "time" format; filtered, it
-// holds the SDK's tags only.
-func readAndroid(ctx context.Context, run Runner, adb, serial string, filtered bool, extra ...string) ([]byte, error) {
+// deviceClockFormat asks the device's date for its time in logcat's form.
+// There is no space in it, so that the shell on the device takes it as one
+// word; the underscore is read back as logcat's space.
+const deviceClockFormat = "+%m-%d_%H:%M:%S"
+
+// androidClockAt is the moment since, on this computer's clock, as the
+// device's own clock would have written it, in logcat's time format: the
+// device is asked for its time, and since is as long ago on its clock as on
+// this one. The device's date has whole seconds, and the question takes a
+// moment, so the mark lands up to a second early, never late.
+func androidClockAt(ctx context.Context, run Runner, adb, serial string, since time.Time) (string, error) {
+	out, err := run(ctx, adb, "-s", serial, "shell", "date", deviceClockFormat)
+	elapsed := time.Since(since)
+	unreadable := func(detail string) error {
+		return &Unavailable{
+			Reason: fmt.Sprintf("The clock of %s could not be read, so what it logged since the launch was asked for cannot be told from what it held before: %s", serial, detail),
+			Fix:    "Launch the app again.",
+		}
+	}
+	if err != nil {
+		return "", unreadable(describe(err))
+	}
+	// Year 0 serves: logcat writes none, and later knows a January line
+	// comes after a December mark.
+	clock, err := time.Parse("01-02_15:04:05", strings.TrimSpace(string(out)))
+	if err != nil {
+		return "", unreadable("its date answered " + strconv.Quote(lastLine(string(out))))
+	}
+	return clock.Add(-elapsed).Format("01-02 15:04:05.000"), nil
+}
+
+// androidDevice is the serial of the device to read: the one given, if it
+// is connected, or the only one connected.
+func androidDevice(ctx context.Context, run Runner, adb, serial string) (string, error) {
 	out, err := run(ctx, adb, "devices")
 	if err != nil {
-		return nil, &Unavailable{
+		return "", &Unavailable{
 			Reason: "adb could not list devices: " + describe(err),
 			Fix:    "Check that adb works: run 'adb devices'.",
 		}
@@ -94,34 +163,39 @@ func readAndroid(ctx context.Context, run Runner, adb, serial string, filtered b
 	devices := connected(string(out))
 	switch {
 	case len(devices) == 0 && hasState(string(out), "unauthorized"):
-		return nil, &Unavailable{
+		return "", &Unavailable{
 			Reason: "An Android device is connected, but it has not allowed USB debugging from this computer",
 			Fix:    "Unlock the device and accept the \"Allow USB debugging?\" prompt, then run this again.",
 		}
 	case len(devices) == 0 && hasState(string(out), "offline"):
-		return nil, &Unavailable{
+		return "", &Unavailable{
 			Reason: "An Android device is connected but offline",
 			Fix:    "Reconnect it, or run 'adb kill-server' and then 'adb devices', then run this again.",
 		}
 	case len(devices) == 0:
-		return nil, &Unavailable{
+		return "", &Unavailable{
 			Reason: "No Android device or emulator is connected",
 			Fix:    "Start an emulator or plug in a device with USB debugging on, launch the app, then run this again.",
 		}
 	case serial == "" && len(devices) > 1:
-		return nil, &Unavailable{
+		return "", &Unavailable{
 			Reason: "More than one Android device is connected: " + strings.Join(devices, ", "),
 			Fix:    "Pass --serial with the one to read.",
 		}
 	case serial == "":
-		serial = devices[0]
+		return devices[0], nil
 	case !contains(devices, serial):
-		return nil, &Unavailable{
+		return "", &Unavailable{
 			Reason: "No connected Android device has the serial " + serial,
 			Fix:    "Connected: " + strings.Join(devices, ", ") + ".",
 		}
 	}
+	return serial, nil
+}
 
+// dumpAndroid dumps a device's log, in logcat's "time" format; filtered, it
+// holds the SDK's tags only.
+func dumpAndroid(ctx context.Context, run Runner, adb, serial string, filtered bool, extra ...string) ([]byte, error) {
 	// -d dumps what is in the buffer and exits; -s silences every tag but
 	// the ones listed.
 	args := append(append([]string{"-s", serial, "logcat", "-d"}, extra...), "-v", "time")

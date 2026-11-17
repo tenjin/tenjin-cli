@@ -184,6 +184,78 @@ func TestSetupDoesNotTakeAnEarlierLaunchForTheNewOne(t *testing.T) {
 	}
 }
 
+// A phone plugged in only after the launch was asked for was not there when
+// setup looked at its log's newest line, so where the log stood is unknown.
+// Its log is yesterday's, and yesterday's accepted connect is not this
+// launch's: the read goes by the phone's own clock, and says why.
+func TestSetupDoesNotTakeAStaleLogForALaunchOnAPhonePluggedInLate(t *testing.T) {
+	h, dir := correctAndroid(t)
+	h.fake.installs[capturedInstall] = "Organic"
+	h.connectDevice("")
+	h.device.earlier = readCapturedLog(t)
+	h.device.pluggedInLater = true
+	// The phone's clock, the next morning.
+	h.device.clock = "10-02 09:00:00"
+
+	code, stdout, _ := h.typing("", "", "s").run("setup", dir)
+	lacks(t, stdout,
+		"! The device could not be read when the launch was asked for (No Android device or emulator is connected), so what it logged since then is read by its own clock.",
+		"The device log has no output from the Tenjin SDK",
+		"Fix what is marked above, rebuild and relaunch the app",
+	)
+	if code != 0 || strings.Contains(stdout, "works end to end") || strings.Contains(stdout, "Tenjin accepted the app's connect request") {
+		t.Errorf("exit = %d; yesterday's launch was taken for this one:\n%s", code, stdout)
+	}
+}
+
+// A phone plugged in after the launch was asked for, then launched: the
+// launch is read, by the phone's own clock, and what the phone logged before
+// is not.
+func TestSetupReadsTheLaunchOnAPhonePluggedInLate(t *testing.T) {
+	h, dir := correctAndroid(t)
+	h.fake.installs[capturedInstall] = "Organic"
+	launch := readCapturedLog(t)
+	h.connectDevice(launch)
+	// An hour earlier, every request was refused.
+	h.device.earlier = strings.ReplaceAll(strings.ReplaceAll(launch, "10-01 21:", "10-01 20:"), `{"code":200`, `{"code":401,"message":"invalid api key"`)
+	h.device.pluggedInLater = true
+	// The phone's clock, just before the launch.
+	h.device.clock = "10-01 21:55:01"
+
+	code, stdout, stderr := h.typing("", "").run("setup", dir)
+	if code != 0 {
+		t.Fatalf("exit = %d, stderr = %q\n%s", code, stderr, stdout)
+	}
+	lacks(t, stdout,
+		"! The device could not be read when the launch was asked for (No Android device or emulator is connected), so what it logged since then is read by its own clock.",
+		"Tenjin accepted the app's connect request (SDK 1.23.0)",
+		"The integration works end to end.",
+	)
+	if strings.Contains(stdout, "invalid api key") || strings.Contains(stdout, "not accepted") {
+		t.Errorf("the earlier launch was read:\n%s", stdout)
+	}
+}
+
+// A phone plugged in late whose clock cannot be read leaves the launch
+// unread, and setup asks for it again: the whole log must not stand for it.
+func TestSetupAsksAgainWhenAPhonePluggedInLateHasNoClock(t *testing.T) {
+	h, dir := correctAndroid(t)
+	h.fake.installs[capturedInstall] = "Organic"
+	h.connectDevice("")
+	h.device.earlier = readCapturedLog(t)
+	h.device.pluggedInLater = true
+
+	code, stdout, _ := h.typing("", "", "s").run("setup", dir)
+	lacks(t, stdout,
+		"! The clock of emulator-5554 could not be read, so what it logged since the launch was asked for cannot be told from what it held before: exit status 1",
+		"  Launch the app again.",
+		"Skipped.",
+	)
+	if code != 0 || strings.Contains(stdout, "Tenjin accepted") {
+		t.Errorf("exit = %d; the whole log was read:\n%s", code, stdout)
+	}
+}
+
 // logReads counts the reads of a device's whole log among adb calls, leaving
 // out the look at its newest line that setup takes before each launch.
 func logReads(calls [][]string) int {

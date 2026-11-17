@@ -670,7 +670,10 @@ func (h *harness) connectDevice(log string) *[][]string {
 	h.env.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		*calls = append(*calls, args)
 		if len(args) == 1 && args[0] == "devices" {
-			return []byte("List of devices attached\nemulator-5554\tdevice\n\n"), nil
+			return device.devices(), nil
+		}
+		if len(args) > 3 && args[2] == "shell" {
+			return device.shell(args[3:])
 		}
 		return device.logcat(args), nil
 	}
@@ -685,6 +688,41 @@ type fakeDevice struct {
 	// that look finds it there already, as doctor --device does.
 	earlier, launch string
 	marked          bool
+	// pluggedInLater is a device that is not connected when adb first looks
+	// for one, as setup does before it asks for the launch, and is by the
+	// time the log is read.
+	pluggedInLater bool
+	// clock is what the device's clock said at that first look, in logcat's
+	// time format; it runs on from there with this computer's. Empty, the
+	// device has no date to give.
+	clock    string
+	lookedAt time.Time
+}
+
+// devices answers `adb devices`.
+func (d *fakeDevice) devices() []byte {
+	first := d.lookedAt.IsZero()
+	if first {
+		d.lookedAt = time.Now()
+	}
+	if first && d.pluggedInLater {
+		return []byte("List of devices attached\n\n")
+	}
+	return []byte("List of devices attached\nemulator-5554\tdevice\n\n")
+}
+
+// shell answers `adb shell date +FORMAT` with the device's clock, formatted
+// as toybox's date formats it.
+func (d *fakeDevice) shell(args []string) ([]byte, error) {
+	if len(args) != 2 || args[0] != "date" || !strings.HasPrefix(args[1], "+") || d.clock == "" {
+		return nil, fmt.Errorf("exit status 1")
+	}
+	at, err := time.Parse("01-02 15:04:05", d.clock)
+	if err != nil {
+		return nil, err
+	}
+	layout := strings.NewReplacer("%m", "01", "%d", "02", "%H", "15", "%M", "04", "%S", "05").Replace(args[1][1:])
+	return []byte(at.Add(time.Since(d.lookedAt)).Format(layout) + "\n"), nil
 }
 
 // logcat answers `logcat -d [-t n] -v time [-s tag...]` as the real one

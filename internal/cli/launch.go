@@ -121,6 +121,10 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		if err != nil {
 			return err
 		}
+		if mark.unmarked != nil {
+			// Device problems come from the device.
+			s.say("%s The device could not be read when the launch was asked for (%s), so what it logged since then is read by its own clock.", s.style.Yellow("!"), render.Clean(mark.unmarked.Reason))
+		}
 		log, err := devicelog.Parse(bytes.NewReader(raw))
 		if err != nil {
 			return err

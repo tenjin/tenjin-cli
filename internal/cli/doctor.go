@@ -603,20 +603,28 @@ func readDeviceLog(ctx context.Context, env *environment, p *project.Project, pl
 
 // launchMark is where a device's log stood before a launch: the time of the
 // newest line in an Android device's, on the device's clock, and this Mac's
-// time for a simulator's, which logs on this Mac's clock.
+// time for a simulator's, which logs on this Mac's clock. An iPhone needs
+// none: each read launches the app afresh.
 type launchMark struct {
 	android string
-	since   time.Time
+	// unmarked is why the Android device could not be read when the mark
+	// was taken, such as not being plugged in yet. Where its log stood then
+	// is unknown, so the read goes by the device's clock from since instead
+	// (devicelog.ReadAndroidSince): nothing it logged before counts.
+	unmarked *devicelog.Unavailable
+	since    time.Time
 }
 
 // markLaunch notes where the log stands now, so that a read after a launch
-// holds that launch only. An iPhone needs no mark: each read launches the
-// app afresh.
+// holds that launch only.
 func markLaunch(ctx context.Context, env *environment, platform project.Platform, serial string) *launchMark {
 	m := &launchMark{since: time.Now()}
 	if platform == project.Android {
 		if adb, ok := devicelog.FindADB(env.lookPath, env.getenv); ok {
-			m.android = devicelog.AndroidMark(ctx, env.runner(), adb, serial)
+			var err error
+			if m.android, err = devicelog.AndroidMark(ctx, env.runner(), adb, serial); err != nil && !errors.As(err, &m.unmarked) {
+				m.unmarked = &devicelog.Unavailable{Reason: err.Error()}
+			}
 		}
 	}
 	return m
@@ -687,6 +695,10 @@ func readLaunch(ctx context.Context, env *environment, p *project.Project, platf
 			Reason: "adb was not found, so the device log could not be read",
 			Fix:    "Install the Android platform tools, or save the log yourself and pass it with --logs.",
 		}
+	}
+	if mark != nil && mark.unmarked != nil {
+		raw, err := devicelog.ReadAndroidSince(ctx, env.runner(), adb, serial, since)
+		return raw, fromAndroid, err
 	}
 	raw, err := devicelog.ReadAndroid(ctx, env.runner(), adb, serial)
 	if err == nil && mark != nil {

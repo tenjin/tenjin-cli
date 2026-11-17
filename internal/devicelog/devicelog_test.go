@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf16"
 )
 
@@ -143,11 +144,13 @@ func TestParseDedupAndSilence(t *testing.T) {
 	}
 }
 
-// fakeADB answers `adb devices` and records the logcat call.
+// fakeADB answers `adb devices` and records the logcat call. answer, when
+// set, answers every other call.
 type fakeADB struct {
 	devices string
 	err     error
 	calls   [][]string
+	answer  func(args []string) ([]byte, error)
 }
 
 func (f *fakeADB) run(_ context.Context, _ string, args ...string) ([]byte, error) {
@@ -157,6 +160,9 @@ func (f *fakeADB) run(_ context.Context, _ string, args ...string) ([]byte, erro
 	}
 	if len(args) == 1 && args[0] == "devices" {
 		return []byte(f.devices), nil
+	}
+	if f.answer != nil {
+		return f.answer(args)
 	}
 	return []byte("the log"), nil
 }
@@ -228,11 +234,88 @@ func TestAndroidMarkReadsTheWholeLog(t *testing.T) {
 		}
 		return []byte("--------- beginning of main\n10-01 21:30:00.000 I/ActivityManager(  612): Displayed com.android.settings/.Settings\n"), nil
 	}
-	if got := AndroidMark(context.Background(), run, "adb", ""); got != "10-01 21:30:00.000" {
-		t.Errorf("mark = %q", got)
+	if got, err := AndroidMark(context.Background(), run, "adb", ""); got != "10-01 21:30:00.000" || err != nil {
+		t.Errorf("mark = %q, err = %v", got, err)
 	}
 	if got := strings.Join(adb.calls[1], " "); got != "-s emulator-5554 logcat -d -t 1 -v time" {
 		t.Errorf("logcat call = %q", got)
+	}
+}
+
+// An empty log has no mark, and everything logged after is new; a device
+// that cannot be read has none either, and that is an error: where its log
+// stood is unknown, so what it held before must not pass as new.
+func TestAndroidMarkTellsAnEmptyLogFromAnUnreadableDevice(t *testing.T) {
+	empty := &fakeADB{devices: "List of devices attached\nemulator-5554\tdevice\n\n"}
+	run := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		if _, err := empty.run(ctx, name, args...); err != nil || len(args) == 1 {
+			return []byte(empty.devices), err
+		}
+		return []byte("--------- beginning of main\n"), nil
+	}
+	if got, err := AndroidMark(context.Background(), run, "adb", ""); got != "" || err != nil {
+		t.Errorf("empty log: mark = %q, err = %v", got, err)
+	}
+
+	none := &fakeADB{devices: "List of devices attached\n\n"}
+	var unavailable *Unavailable
+	if got, err := AndroidMark(context.Background(), none.run, "adb", ""); got != "" || !errors.As(err, &unavailable) || unavailable.Reason != "No Android device or emulator is connected" {
+		t.Errorf("no device: mark = %q, err = %v", got, err)
+	}
+}
+
+// clockedDevice is a device whose log is buffer and whose clock says now, as
+// `adb shell date` prints it, or fails when now is empty.
+func clockedDevice(buffer, now string) *fakeADB {
+	adb := &fakeADB{devices: "List of devices attached\nemulator-5554\tdevice\n\n"}
+	adb.answer = func(args []string) ([]byte, error) {
+		if len(args) > 3 && args[2] == "shell" {
+			if now == "" {
+				return nil, errors.New("exit status 127")
+			}
+			if strings.Join(args[3:], " ") != "date +%m-%d_%H:%M:%S" {
+				return []byte("date: bad format\n"), nil
+			}
+			return []byte(now + "\n"), nil
+		}
+		return []byte(buffer), nil
+	}
+	return adb
+}
+
+// Without a mark, the device's own clock tells what was logged since a
+// moment: a line from before it is not new, whatever this computer's clock
+// says, and one from after it is.
+func TestReadAndroidSinceGoesByTheDevicesClock(t *testing.T) {
+	buffer := "--------- beginning of main\n" +
+		"10-01 21:54:00.000 D/TenjinSDK(17352): before\n" +
+		"10-01 21:55:10.000 D/TenjinSDK(17352): after\n"
+	// The device's clock is set to another time zone than this computer's:
+	// 40 seconds ago on it is 21:55:00, whatever the time here.
+	adb := clockedDevice(buffer, "10-01_21:55:40")
+	got, err := ReadAndroidSince(context.Background(), adb.run, "adb", "", time.Now().Add(-40*time.Second))
+	if err != nil || strings.Contains(string(got), "before") || !strings.Contains(string(got), "after") {
+		t.Errorf("read = %q, err = %v", got, err)
+	}
+	if got := strings.Join(adb.calls[1], " "); got != "-s emulator-5554 shell date +%m-%d_%H:%M:%S" {
+		t.Errorf("clock call = %q", got)
+	}
+
+	// Without a moment, everything is read, and the clock is not asked.
+	adb = clockedDevice(buffer, "")
+	if got, err := ReadAndroidSince(context.Background(), adb.run, "adb", "", time.Time{}); err != nil || !strings.Contains(string(got), "before") || len(adb.calls) != 2 {
+		t.Errorf("read = %q, err = %v, calls = %q", got, err, adb.calls)
+	}
+
+	// A clock that cannot be read leaves the log unread: what was logged
+	// since cannot be told, and the whole log must not stand for it.
+	for name, now := range map[string]string{"no date": "", "an unreadable date": "Thu Oct  1 21:55:40 UTC"} {
+		adb = clockedDevice(buffer, now)
+		got, err := ReadAndroidSince(context.Background(), adb.run, "adb", "", time.Now().Add(-40*time.Second))
+		var unavailable *Unavailable
+		if got != nil || !errors.As(err, &unavailable) || !strings.Contains(unavailable.Reason, "The clock of emulator-5554 could not be read") || unavailable.Fix != "Launch the app again." {
+			t.Errorf("%s: read = %q, err = %v", name, got, err)
+		}
 	}
 }
 
