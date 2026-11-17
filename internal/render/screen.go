@@ -28,9 +28,9 @@ func LinesUp(n int) string {
 // them.
 func CursorControl(f *os.File) bool { return escapeCodes(f) }
 
-// escapeCodes reports whether the terminal f writes to handles escape
-// codes: not one with TERM=dumb, which prints them as they are.
-func escapeCodes(f *os.File) bool { return os.Getenv("TERM") != "dumb" && colourSupported(f) }
+// escapeCodes reports whether f is a terminal that handles escape codes:
+// not one with TERM=dumb, which prints them as they are.
+func escapeCodes(f *os.File) bool { return os.Getenv("TERM") != "dumb" && terminal(f) }
 
 // Truncate shortens text to at most width columns, ending it with … where
 // it is cut, so that a line never wraps. Escape codes take no column and are

@@ -5,8 +5,6 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"golang.org/x/term"
 )
 
 func TestParseFormat(t *testing.T) {
@@ -87,8 +85,8 @@ func TestStylerEnvironment(t *testing.T) {
 
 // A dumb terminal prints escape codes as they are.
 func TestNoColourOnADumbTerminal(t *testing.T) {
-	isTerminal = func(int) bool { return true }
-	t.Cleanup(func() { isTerminal = term.IsTerminal })
+	terminal = func(*os.File) bool { return true }
+	t.Cleanup(func() { terminal = isTerminal })
 	t.Setenv("TERM", "xterm-256color")
 	if !NewStyler(os.Stdout).Enabled() {
 		t.Fatal("no colour on a terminal")
