@@ -194,6 +194,29 @@ func TestDoctorDeviceFlagErrors(t *testing.T) {
 	}
 }
 
+// A device named with --serial that is not there is the user's mistake, as a
+// --logs file that cannot be read is: an error that says so, not a finding
+// about a device that could not be read.
+func TestDoctorRefusesASerialThatNamesNoDevice(t *testing.T) {
+	h := newHarness(t)
+	h.connectDevice(readCapturedLog(t))
+	dir := testproject.Write(t, testproject.AndroidNative())
+	code, stdout, stderr := h.run("doctor", dir, "--device", "--serial", "243AACFD-275B-4332-8D06-D4B06EFEA171")
+	if code != 2 || stdout != "" || !strings.Contains(stderr, "--serial 243AACFD-275B-4332-8D06-D4B06EFEA171 names an iPhone or an iOS simulator, and this project does not build for iOS") {
+		t.Errorf("UDID: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+	code, stdout, stderr = h.run("doctor", dir, "--device", "--serial", "emulator-9999")
+	if code != 5 || stdout != "" || !strings.Contains(stderr, "No connected Android device has the serial emulator-9999") || !strings.Contains(stderr, "Connected: emulator-5554.") {
+		t.Errorf("not connected: exit = %d, stdout = %q, stderr = %q", code, stdout, stderr)
+	}
+	// An Android serial on an iOS project is the same mistake the other way.
+	dir = testproject.Write(t, testproject.IOSNative())
+	code, _, stderr = h.run("doctor", dir, "--device", "--serial", "emulator-5554")
+	if code != 2 || !strings.Contains(stderr, "--serial emulator-5554 names an Android device, and this project does not build for Android") {
+		t.Errorf("Android serial: exit = %d, stderr = %q", code, stderr)
+	}
+}
+
 // With a key per store, the install is looked up with each. The Google Play
 // app's answer, not processed yet, is the one that counts: the Amazon key's
 // refusal after it says nothing about this install.

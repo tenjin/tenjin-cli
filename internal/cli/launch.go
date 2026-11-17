@@ -27,7 +27,11 @@ const (
 // processed the device's install, which is the proof that events get
 // through. A project that builds for both platforms is checked on each.
 func (s *setup) launch(p *project.Project) error {
-	for _, platform := range devicePlatforms(p, s.serial) {
+	platforms, err := serialPlatforms(p, s.serial)
+	if err != nil {
+		return err
+	}
+	for _, platform := range platforms {
 		if err := s.launchOn(p, platform); err != nil {
 			return err
 		}
@@ -102,6 +106,11 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 		raw, from, err := readLaunch(s.cmd.Context(), s.env, p, platform, s.serial, mark, s.say)
 		var unavailable *devicelog.Unavailable
 		if errors.As(err, &unavailable) {
+			// The device named with --serial cannot be read: a mistake to
+			// say, not a launch to wait for.
+			if s.serial != "" {
+				return deviceNotThere(unavailable)
+			}
 			// Device names come from the device.
 			s.say("%s %s", s.style.Yellow("!"), render.Clean(unavailable.Reason))
 			if unavailable.Fix != "" {

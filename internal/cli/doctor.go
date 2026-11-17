@@ -492,9 +492,13 @@ func readDevice(cmd *cobra.Command, env *environment, p *project.Project, serial
 		}
 		raw = b
 	default:
+		platforms, err := serialPlatforms(p, serial)
+		if err != nil {
+			return nil, err
+		}
 		var problems []*devicelog.Unavailable
 		var tried []project.Platform
-		for _, candidate := range devicePlatforms(p, serial) {
+		for _, candidate := range platforms {
 			b, _, err := readDeviceLog(cmd.Context(), env, p, candidate, serial, say)
 			var unavailable *devicelog.Unavailable
 			if errors.As(err, &unavailable) {
@@ -506,6 +510,11 @@ func readDevice(cmd *cobra.Command, env *environment, p *project.Project, serial
 			}
 			raw, platform = b, candidate
 			break
+		}
+		if raw == nil && serial != "" {
+			// The device named with --serial cannot be read: the user's
+			// mistake, as a --logs file that cannot be read is.
+			return nil, deviceNotThere(combineProblems(tried, problems))
 		}
 		if raw == nil {
 			return &verify.DeviceInput{Problem: combineProblems(tried, problems), Platform: firstPlatform(tried, p)}, nil
@@ -539,6 +548,33 @@ func devicePlatforms(p *project.Project, serial string) []project.Platform {
 		out = append(out, platform)
 	}
 	return out
+}
+
+// serialPlatforms is devicePlatforms for a run that may name a device with
+// --serial: the one platform that serial can name, or a usage error where
+// the project does not build for it. A serial that can name no device of
+// the project is a mistake to say, not a step to skip.
+func serialPlatforms(p *project.Project, serial string) ([]project.Platform, error) {
+	platforms := devicePlatforms(p, serial)
+	if serial == "" || len(platforms) > 0 {
+		return platforms, nil
+	}
+	if looksLikeUDID(serial) {
+		return nil, clierr.New(clierr.Usage, "--serial %s names an iPhone or an iOS simulator, and this project does not build for iOS", serial).
+			WithHint("Give an Android serial, as 'adb devices' lists them, or leave --serial out.")
+	}
+	return nil, clierr.New(clierr.Usage, "--serial %s names an Android device, and this project does not build for Android", serial).
+		WithHint("Give an iPhone's or a simulator's UDID, or leave --serial out.")
+}
+
+// deviceNotThere is the error for a device named with --serial that could
+// not be read: what the read said, as the command's failure.
+func deviceNotThere(problem *devicelog.Unavailable) error {
+	e := clierr.New(clierr.NotFound, "%s", problem.Reason)
+	if problem.Fix != "" {
+		e = e.WithHint("%s", problem.Fix)
+	}
+	return e
 }
 
 // A simulator's UDID is a UUID; an iPhone's is 8 and 16 hex digits, or 40

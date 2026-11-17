@@ -108,6 +108,32 @@ func TestSetupLaunchCanBeSkipped(t *testing.T) {
 	}
 }
 
+// A device named with --serial that is not there is a mistake to say, not a
+// step to skip: a UDID names no device of an Android project, and a serial
+// that no connected device has reads nothing.
+func TestSetupRefusesASerialThatNamesNoDevice(t *testing.T) {
+	h, dir := correctAndroid(t)
+	h.connectDevice(readCapturedLog(t))
+	code, stdout, stderr := h.typing("", "").run("setup", dir, "--serial", "243AACFD-275B-4332-8D06-D4B06EFEA171")
+	if code != 2 || !strings.Contains(stderr, "--serial 243AACFD-275B-4332-8D06-D4B06EFEA171 names an iPhone or an iOS simulator, and this project does not build for iOS") {
+		t.Errorf("UDID: exit = %d, stderr = %q", code, stderr)
+	}
+	// Said at once, not after six steps of work.
+	if strings.Contains(stdout, "Step 2 of 7") {
+		t.Errorf("setup went on with a --serial it cannot use:\n%s", stdout)
+	}
+
+	h, dir = correctAndroid(t)
+	h.connectDevice(readCapturedLog(t))
+	code, stdout, stderr = h.typing("", "", "", "s").run("setup", dir, "--serial", "emulator-9999")
+	if code != 5 || !strings.Contains(stderr, "No connected Android device has the serial emulator-9999") || !strings.Contains(stderr, "Connected: emulator-5554.") {
+		t.Errorf("not connected: exit = %d, stderr = %q", code, stderr)
+	}
+	if strings.Count(stdout, "then press Enter (s to skip):") != 1 || strings.Contains(stdout, "Skipped.") {
+		t.Errorf("setup asked for another launch of a device that is not there:\n%s", stdout)
+	}
+}
+
 // Without a terminal there is nobody to launch the app, so the step says how
 // to check it later instead of reading a stale log.
 func TestSetupWithoutATerminalLeavesTheLaunchToTheDeveloper(t *testing.T) {

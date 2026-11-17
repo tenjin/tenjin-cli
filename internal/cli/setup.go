@@ -282,6 +282,11 @@ func (s *setup) steps() error {
 	if err := narrowBuilds(p, s.chosen); err != nil {
 		return err
 	}
+	// A --serial that can name no device of this project is said now, not
+	// after six steps of work.
+	if _, err := serialPlatforms(p, s.serial); err != nil {
+		return err
+	}
 	if s.features, err = chosenFeatures(p, s.wantFeatures); err != nil {
 		return err
 	}
