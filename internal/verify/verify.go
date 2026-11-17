@@ -144,9 +144,67 @@ func (g GivenKeys) PassedOver(t *project.Target) bool {
 // Run checks the project and returns what it found. Frameworks that are not
 // checked yet produce a single informational finding saying so.
 func Run(ctx context.Context, p *project.Project, opts Options) *Report {
-	r := &runner{ctx: ctx, p: p, opts: opts, report: &Report{Project: p, Findings: []Finding{}, latest: opts.Latest}}
+	r := newRunner(ctx, p, opts)
 	r.run()
 	r.dropUncheckedBesidePlaceholders()
+	return r.summarize()
+}
+
+// Prepared is a project's checks, run once, for what a device says to be
+// added to again and again: setup waits for Tenjin to process an install,
+// reading the device every few seconds, and the project does not change
+// meanwhile, so its source is scanned once rather than at every read.
+type Prepared struct {
+	r *runner
+	// findings are the project's, without a device.
+	findings []Finding
+	// targets are the ones a device log is checked against, each with the
+	// source scanned for it, in the order Run checks them.
+	targets []preparedTarget
+}
+
+type preparedTarget struct {
+	t   *project.Target
+	src source
+}
+
+// Prepare runs every check but the device's, which Device adds; opts.Device
+// is left out.
+func Prepare(ctx context.Context, p *project.Project, opts Options) *Prepared {
+	opts.Device = nil
+	pr := &Prepared{}
+	r := newRunner(ctx, p, opts)
+	r.collect = func(t *project.Target, src source) {
+		pr.targets = append(pr.targets, preparedTarget{t: t, src: src})
+	}
+	r.run()
+	r.dropUncheckedBesidePlaceholders()
+	pr.r, pr.findings = r, r.report.Findings
+	return pr
+}
+
+// Device is the report Run gives with d as Options.Device: the project's
+// findings, then the device's. Each call starts from the project's findings
+// alone, so the device can be read again and again.
+func (pr *Prepared) Device(d *DeviceInput) *Report {
+	r := pr.r
+	r.collect = nil
+	r.opts.Device = d
+	r.report = &Report{Project: r.p, Findings: append([]Finding{}, pr.findings...), latest: r.opts.Latest}
+	r.checkDeviceSupported()
+	for _, pt := range pr.targets {
+		r.checkDevice(pt.t, pt.src)
+	}
+	return r.summarize()
+}
+
+func newRunner(ctx context.Context, p *project.Project, opts Options) *runner {
+	return &runner{ctx: ctx, p: p, opts: opts, report: &Report{Project: p, Findings: []Finding{}, latest: opts.Latest}}
+}
+
+// summarize counts the findings and returns the report.
+func (r *runner) summarize() *Report {
+	r.report.Summary = Summary{}
 	for _, f := range r.report.Findings {
 		switch f.Severity {
 		case Error:
@@ -165,6 +223,9 @@ type runner struct {
 	p      *project.Project
 	opts   Options
 	report *Report
+	// collect, when set, takes each target the device would be checked
+	// against, with its source, in place of checking it (see Prepare).
+	collect func(t *project.Target, src source)
 	// configured caches the keys found in build configuration, and code the
 	// source files that mention Tenjin.
 	configured *[]keyLiteral
@@ -218,12 +279,7 @@ func (r *runner) pass(id string, platform project.Platform, title, file string, 
 
 func (r *runner) run() {
 	r.checkUnfilledKeys()
-	if d := r.opts.Device; d != nil && r.p.Target(d.Platform) == nil {
-		r.add(Finding{
-			ID: "device.unsupported", Severity: Info,
-			Title: "The device log is from " + platformName(d.Platform) + ", and this project does not build for " + platformName(d.Platform),
-		})
-	}
+	r.checkDeviceSupported()
 	if r.p.Library != nil {
 		r.checkLibrary(r.p.Library)
 		return
@@ -294,6 +350,17 @@ func (r *runner) run() {
 		return
 	}
 	r.checkFeatures()
+}
+
+// checkDeviceSupported says when the device log is from a platform the
+// project does not build for, so that no target's check will take it.
+func (r *runner) checkDeviceSupported() {
+	if d := r.opts.Device; d != nil && r.p.Target(d.Platform) == nil {
+		r.add(Finding{
+			ID: "device.unsupported", Severity: Info,
+			Title: "The device log is from " + platformName(d.Platform) + ", and this project does not build for " + platformName(d.Platform),
+		})
+	}
 }
 
 func (r *runner) checkPlatform(spec frameworkSpec, t *project.Target, src source) {

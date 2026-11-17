@@ -2,6 +2,9 @@ package cli
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -79,6 +82,40 @@ func TestSetupSaysWhenTheInstallIsNotProcessedYet(t *testing.T) {
 	}
 	if code != 0 || len(h.fake.installsAsked) != processingPolls+1 {
 		t.Errorf("exit = %d, lookups = %d", code, len(h.fake.installsAsked))
+	}
+}
+
+// While setup waits for Tenjin to process the install, the project's source
+// is scanned once, not at every poll. Each poll asks Tenjin with every key
+// the source holds, so a key added to the source during the wait is asked
+// with only if the source is scanned again: the distinct keys asked count the
+// scans of one launch. Before, 13 (the read, and each of the 12 polls); now 1.
+func TestSetupScansTheSourceOnceWhileWaiting(t *testing.T) {
+	h, dir := correctAndroid(t)
+	h.connectDevice(readCapturedLog(t))
+	polls := 0
+	h.env.wait = func(time.Duration) {
+		polls++
+		name := fmt.Sprintf("Poll%02d", polls)
+		key := fmt.Sprintf("%sKEY34567890ABCDEFGHIJKLMNOPQRS", strings.ToUpper(name))
+		source := "package com.example.sample\n\nimport android.app.Activity\nimport com.tenjin.android.TenjinSDK\n\nclass " + name +
+			" {\n    fun start(activity: Activity) {\n        TenjinSDK.getInstance(activity, \"" + key + "\").connect()\n    }\n}\n"
+		if err := os.WriteFile(filepath.Join(dir, "app", "src", "main", "java", "com", "example", "sample", name+".kt"), []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	code, stdout, _ := h.typing("", "").run("setup", dir)
+	lacks(t, stdout, "has not processed the install yet. Run tenjin doctor --device again in a minute.")
+	if code != 0 || polls != processingPolls {
+		t.Errorf("exit = %d, polls = %d", code, polls)
+	}
+	scans := map[string]bool{}
+	for _, key := range h.fake.installKeys {
+		scans[key] = true
+	}
+	if len(scans) != 1 || !scans[testproject.Key] {
+		t.Errorf("the source was scanned %d times during the launch, want 1: %d lookups", len(scans), len(h.fake.installKeys))
 	}
 }
 

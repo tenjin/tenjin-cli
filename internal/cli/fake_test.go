@@ -70,6 +70,8 @@ type fakeTenjin struct {
 	// it was attributed to.
 	installs      map[string]string
 	installsAsked []string
+	// installKeys are the SDK keys each install lookup was made with.
+	installKeys []string
 	// data answers the data commands' reads, by path; a path it has no
 	// answer for gets a one-item list. dataAsked records each read.
 	data      map[string]func(r *http.Request) (int, any)
@@ -586,6 +588,7 @@ func (f *fakeTenjin) user(w http.ResponseWriter, r *http.Request) {
 	id := q.Get("analytics_installation_id")
 	f.mu.Lock()
 	f.installsAsked = append(f.installsAsked, id)
+	f.installKeys = append(f.installKeys, key)
 	campaign, known := f.installs[id]
 	app, tied := f.keyApps[key]
 	f.mu.Unlock()

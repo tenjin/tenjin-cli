@@ -84,6 +84,10 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 	// refused is set once a read shows Tenjin refusing the app's connect, so
 	// that skipping after it does not end setup as a success.
 	refused := false
+	// checks are the project's checks, run once for every read of the
+	// device: the project does not change while its launch is read, and the
+	// wait for Tenjin reads the device every few seconds.
+	var checks *verify.Prepared
 	for {
 		mark := markLaunch(s.cmd.Context(), s.env, platform, s.serial)
 		prompt := fmt.Sprintf("\nLaunch a debug build of the app on %s, then press Enter (s to skip):", deviceNoun(platform))
@@ -130,7 +134,10 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 			return err
 		}
 
-		report := s.deviceReport(p, log, platform)
+		if checks == nil {
+			checks = verify.Prepare(s.cmd.Context(), p, verify.Options{Given: s.givenForChecks()})
+		}
+		report := s.deviceReport(checks, log, platform)
 		// Wait only when Tenjin answered that it has not processed the
 		// install yet: a lookup that failed, or could not be made, will not
 		// come right by waiting.
@@ -140,7 +147,7 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 				if err := s.env.pause(processingPoll); err != nil {
 					return err
 				}
-				report = s.deviceReport(p, log, platform)
+				report = s.deviceReport(checks, log, platform)
 			}
 		}
 		s.writeDeviceFindings(report)
@@ -175,12 +182,12 @@ func (s *setup) launchOn(p *project.Project, platform project.Platform) error {
 // deviceReport checks what the device's log says, and asks Tenjin about the
 // install it shows. The project checks have already run, so only the device
 // findings are kept.
-func (s *setup) deviceReport(p *project.Project, log *devicelog.Log, platform project.Platform) *verify.Report {
+func (s *setup) deviceReport(checks *verify.Prepared, log *devicelog.Log, platform project.Platform) *verify.Report {
 	input := &verify.DeviceInput{Log: log, Platform: platform}
 	if !s.offline {
 		input.Lookup = s.env.trackClient()
 	}
-	report := verify.Run(s.cmd.Context(), p, verify.Options{Given: s.givenForChecks(), Device: input})
+	report := checks.Device(input)
 	var device []verify.Finding
 	for _, f := range report.Findings {
 		if strings.HasPrefix(f.ID, "device.") {

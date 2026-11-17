@@ -37,6 +37,10 @@ const zeroAdvertisingID = "00000000-0000-0000-0000-000000000000"
 // what Tenjin answered, and whether Tenjin went on to process the install.
 // It reports on the target whose platform the device is.
 func (r *runner) checkDevice(t *project.Target, src source) {
+	if r.collect != nil {
+		r.collect(t, src)
+		return
+	}
 	d := r.opts.Device
 	if d == nil || d.Platform != t.Platform {
 		return

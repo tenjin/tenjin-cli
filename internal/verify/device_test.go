@@ -3,6 +3,8 @@ package verify_test
 import (
 	"context"
 	"errors"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -339,6 +341,64 @@ func TestTheKeyTellsThisAppWhenTheProjectsBundleIDIsUnknown(t *testing.T) {
 	}
 	if find(r, "device.requests", project.IOS) != nil || find(r, "device.bundle_id", project.IOS) != nil {
 		t.Errorf("the other key's purchase, or a bundle ID that could not be compared, was reported: %s", ids(r))
+	}
+}
+
+// setup reads a device again and again while Tenjin processes the install.
+// The project's checks run once (Prepare), and each read adds the device's:
+// the report is the one a full run with the device gives, finding for
+// finding, and a later read starts afresh.
+func TestPreparedChecksGiveTheReportOfAFullRun(t *testing.T) {
+	android := deviceLog(connectURL, connectParams, `{"code":200,"success":true}`)
+	ios := iosRequest(1, "com.example.sample", testproject.Key, "event", "advertising_id=A1&developer_device_id=V1&tracking_status=3&analytics_installation_id=install-1", `{"code":200,"success":true}`)
+	cases := map[string]struct {
+		files    testproject.Files
+		platform project.Platform
+		log      string
+	}{
+		"android": {testproject.AndroidNative(), project.Android, android},
+		"ios":     {testproject.IOSNative(), project.IOS, ios},
+		"flutter": {testproject.Flutter(), project.Android, android},
+		"unity":   {testproject.Unity(), project.IOS, ios},
+		// A platform the project does not build for.
+		"unsupported": {testproject.AndroidNative(), project.IOS, ios},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			p, err := project.Detect(testproject.Write(t, tc.files))
+			if err != nil {
+				t.Fatal(err)
+			}
+			log, err := devicelog.Parse(strings.NewReader(tc.log))
+			if err != nil {
+				t.Fatal(err)
+			}
+			device := func(lookup verify.DeviceLookup) *verify.DeviceInput {
+				return &verify.DeviceInput{Log: log, Lookup: lookup, Platform: tc.platform}
+			}
+			ctx := context.Background()
+			full := verify.Run(ctx, p, verify.Options{Device: device(&fakeLookup{known: map[string]bool{"install-1": true}})})
+			prepared := verify.Prepare(ctx, p, verify.Options{})
+			// Not processed on the first read, processed on the second: the
+			// second must not carry the first's findings.
+			first := prepared.Device(device(&fakeLookup{}))
+			second := prepared.Device(device(&fakeLookup{known: map[string]bool{"install-1": true}}))
+
+			sorted := func(r *verify.Report) []verify.Finding {
+				findings := append([]verify.Finding{}, r.Findings...)
+				sort.SliceStable(findings, func(i, j int) bool { return findings[i].ID < findings[j].ID })
+				return findings
+			}
+			if !reflect.DeepEqual(sorted(full), sorted(second)) || full.Summary != second.Summary {
+				t.Errorf("prepared:\n%s\nfull run:\n%s", ids(second), ids(full))
+			}
+			if strings.Contains(ids(first), "pass:device.processed") || strings.Count(ids(second), "device.connect") != strings.Count(ids(full), "device.connect") {
+				t.Errorf("first read:\n%s\nsecond read:\n%s", ids(first), ids(second))
+			}
+			if len(full.Findings) == 0 || (name != "unsupported" && find(full, "device.connect", tc.platform) == nil) {
+				t.Errorf("the full run checked no device: %s", ids(full))
+			}
+		})
 	}
 }
 
