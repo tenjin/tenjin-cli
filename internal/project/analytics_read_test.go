@@ -157,6 +157,21 @@ object Other {
 	)
 }
 
+// A regular expression literal holding /* is not a comment: the calls after
+// it are read.
+func TestAnalyticsAfterARegexLiteral(t *testing.T) {
+	p := analyze(t, testproject.Files{
+		"package.json":             `{"dependencies": {"react-native": "0.79.2", "react-native-tenjin": "^1.7.0"}}`,
+		"android/app/build.gradle": "apply plugin: \"com.android.application\"\nandroid { defaultConfig { applicationId \"com.example.rn\" } }\n",
+		"src/api.ts": `import analytics from '@react-native-firebase/analytics';
+
+const base = API_URL.replace(/\/*$/, '');
+export function ping() { analytics().logEvent('ping', {}); }
+`,
+	})
+	wantLines(t, "events", events(p), "Firebase Analytics name=ping @src/api.ts:4 x1")
+}
+
 // A constant imported by name resolves whether it is a Kotlin top-level
 // constant, whose import names only its package, or a companion object's,
 // whose import goes through Companion.
