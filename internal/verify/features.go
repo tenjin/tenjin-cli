@@ -32,9 +32,11 @@ var featureCalls = map[string]struct{ distinct, generic, property []string }{
 		distinct: []string{"optInParams", "optOutParams", "optInGoogleDMA", "optOutGoogleDMA", "optInOutUsingCMP", "setGoogleDMAParameters", "setGoogleDMAParametersWithAdPersonalization", "OptInParams", "OptOutParams", "OptInGoogleDMA", "OptOutGoogleDMA", "OptInOutUsingCMP", "SetGoogleDMAParameters"},
 		generic:  []string{"optIn", "optOut", "OptIn", "OptOut"},
 	},
+	// handleOpenURL is UIKit's too (application:handleOpenURL:, the delegate
+	// method that receives a URL), so the handlers count on Tenjin only.
 	project.FeatureDeepLinks: {
-		distinct: []string{"registerDeepLinkHandler", "getAttributionInfo", "GetAttributionInfo", "connectWithDeferredDeeplink", "handleOpenURL", "handleOpenURLString", "handleOpenIntent", "handleOpenUrl"},
-		generic:  []string{"getDeeplink", "GetDeeplink"},
+		distinct: []string{"registerDeepLinkHandler", "getAttributionInfo", "GetAttributionInfo", "connectWithDeferredDeeplink", "handleOpenIntent"},
+		generic:  []string{"getDeeplink", "GetDeeplink", "handleOpenURL", "handleOpenURLString", "handleOpenUrl"},
 	},
 	project.FeatureSKAN: {
 		distinct: []string{"updatePostbackConversionValue", "UpdatePostbackConversionValue", "updateSkAdNetworkConversionValue"},

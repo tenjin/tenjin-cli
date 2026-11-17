@@ -138,6 +138,27 @@ func TestFeatureCallsAcrossSDKs(t *testing.T) {
 	}
 }
 
+// handleOpenURL is also UIKit's: application:handleOpenURL: is the app
+// delegate method that receives a URL. Only the call on Tenjin's receiver
+// passes the URL to Tenjin.
+func TestADeepLinkHandlerCountsOnTheTenjinReceiverOnly(t *testing.T) {
+	ios := testproject.IOSNative()
+	const delegate = "Sample/AppDelegate.m"
+	chosen := verify.Options{Features: []string{project.FeatureDeepLinks}}
+	uikit := "#import <TenjinSDK/TenjinSDK.h>\n@implementation AppDelegate\n- (BOOL)application:(UIApplication *)application handleOpenURL:(NSURL *)url {\n    return YES;\n}\n@end\n"
+	if f := featureFinding(t, run(t, ios.With(testproject.Files{delegate: uikit}), chosen), "feature.deep_links"); f == nil || f.Severity != verify.Warning {
+		t.Fatalf("UIKit's delegate method passed for Tenjin's call: %+v", f)
+	}
+	tenjin := strings.Replace(uikit, "    return YES;", "    [TenjinSDK handleOpenURL:url];\n    return YES;", 1)
+	if f := featureFinding(t, run(t, ios.With(testproject.Files{delegate: tenjin}), chosen), "feature.deep_links"); f == nil || f.Severity != verify.Pass || f.Line != 4 {
+		t.Fatalf("finding = %+v", f)
+	}
+	swift := ios.With(testproject.Files{"Sample/Links.swift": "import TenjinSDK\nfunc opened(_ url: URL) {\n    TenjinSDK.handleOpenURL(url)\n}\n"})
+	if f := featureFinding(t, run(t, swift, chosen), "feature.deep_links"); f == nil || f.Severity != verify.Pass {
+		t.Fatalf("finding = %+v", f)
+	}
+}
+
 // A feature nothing suggests and nobody chose is not mentioned.
 func TestUnchosenFeaturesTheProjectDoesNotSuggest(t *testing.T) {
 	r := run(t, testproject.AndroidNative(), verify.Options{})
