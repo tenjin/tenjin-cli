@@ -432,6 +432,31 @@ func TestFlavorsWithNoIDThatCanBeReadGiveNoBuild(t *testing.T) {
 	}
 }
 
+// Unreal's default IDs hold a token it fills in when it packages the app:
+// not an app's ID, so no build, and a note that says what to do.
+func TestAnUnrealPlaceholderIDMakesNoBuild(t *testing.T) {
+	p := detect(t, testproject.Files{
+		"Game.uproject":            `{"FileVersion": 3}`,
+		"Config/DefaultEngine.ini": "[/Script/IOSRuntimeSettings.IOSRuntimeSettings]\nBundleIdentifier=com.example.unreal\n\n[/Script/AndroidRuntimeSettings.AndroidRuntimeSettings]\nPackageName=com.example.[PROJECT_NAME]\n",
+		"Source/Game/Game.cpp":     "",
+	})
+	if got := buildList(t, p, project.Android); got != "" {
+		t.Errorf("android builds:\n%s", got)
+	}
+	if got := buildList(t, p, project.IOS); got != "ios com.example.unreal ios  __TENJIN_IOS_SDK_KEY__" {
+		t.Errorf("ios builds:\n%s", got)
+	}
+	if !hasNote(p, "PackageName in Config/DefaultEngine.ini is com.example.[PROJECT_NAME], a token Unreal fills in") || hasNote(p, "BundleIdentifier in") {
+		t.Errorf("notes = %q", p.Notes)
+	}
+	// A whole token is a placeholder; a stray bracket is only an odd ID.
+	for id, want := range map[string]bool{"com.example.sample": true, "com.example.sample[1": true, "com.example.[PROJECT_NAME]": false, "$(APP_ID)": false, "${appId}": false} {
+		if got := project.Resolved(id); got != want {
+			t.Errorf("Resolved(%q) = %v", id, got)
+		}
+	}
+}
+
 // An applicationIdSuffix is joined to the ID with a dot whether or not it
 // is written with one, as the Android Gradle plugin joins them.
 func TestAnApplicationIdSuffixIsJoinedWithADot(t *testing.T) {

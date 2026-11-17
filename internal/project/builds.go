@@ -192,11 +192,15 @@ func StoreName(tenjinPlatform string) string {
 	return "Google Play"
 }
 
-// Resolved reports whether a bundle ID is a value, not a build setting or
-// a variable left to resolve ($(APP_BUNDLE_ID), ${appId}): only a value can
-// name an app in Tenjin.
+// bracketedToken is a placeholder a tool fills in when it builds the app,
+// as Unreal's [PROJECT_NAME] is.
+var bracketedToken = regexp.MustCompile(`\[\w+\]`)
+
+// Resolved reports whether a bundle ID is a value, not a build setting, a
+// variable or a token left to resolve ($(APP_BUNDLE_ID), ${appId}, Unreal's
+// com.company.[PROJECT_NAME]): only a value can name an app in Tenjin.
 func Resolved(bundleID string) bool {
-	return bundleID != "" && !strings.ContainsAny(bundleID, "$@{}") && !strings.Contains(bundleID, "(")
+	return bundleID != "" && !strings.ContainsAny(bundleID, "$@{}") && !strings.Contains(bundleID, "(") && !bracketedToken.MatchString(bundleID)
 }
 
 // withSuffixes adds applicationIdSuffix values to an application ID as the

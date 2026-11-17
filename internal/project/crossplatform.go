@@ -446,12 +446,24 @@ func (d *detector) unreal() bool {
 	d.p.Framework = Unreal
 	d.p.Supported = true
 
-	ini := strings.ReplaceAll(d.read("Config/DefaultEngine.ini"), "\r\n", "\n")
-	if m := iniPackageName.FindStringSubmatch(ini); m != nil {
-		d.p.Targets = append(d.p.Targets, Target{Platform: Android, BundleID: strings.TrimSpace(m[1]), Source: "Config/DefaultEngine.ini"})
-	}
-	if m := iniBundleID.FindStringSubmatch(ini); m != nil {
-		d.p.Targets = append(d.p.Targets, Target{Platform: IOS, BundleID: strings.TrimSpace(m[1]), Source: "Config/DefaultEngine.ini"})
+	const ini = "Config/DefaultEngine.ini"
+	settings := d.read(ini)
+	for _, id := range []struct {
+		platform Platform
+		pattern  *regexp.Regexp
+		setting  string
+	}{{Android, iniPackageName, "PackageName"}, {IOS, iniBundleID, "BundleIdentifier"}} {
+		m := id.pattern.FindStringSubmatch(settings)
+		if m == nil {
+			continue
+		}
+		bundleID := strings.TrimSpace(m[1])
+		d.p.Targets = append(d.p.Targets, Target{Platform: id.platform, BundleID: bundleID, Source: ini})
+		// Unreal's default, com.YourCompany.[PROJECT_NAME], is filled in
+		// when the app is packaged; the token names no app in Tenjin.
+		if !Resolved(bundleID) {
+			d.note("%s in %s is %s, a token Unreal fills in when it packages the app. Set it to the %s app's final ID in Project Settings, or create the Tenjin app with that ID and pass its key with --sdk-key.", id.setting, ini, bundleID, id.platform)
+		}
 	}
 	if !d.isDir("Source") {
 		d.note("This is a Blueprint-only project. The Tenjin plugin needs a C++ project: add a C++ class in the editor to convert it.")
