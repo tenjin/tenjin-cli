@@ -98,6 +98,31 @@ func TestStoreDeclarations(t *testing.T) {
 	}
 }
 
+// A flavor is named for a store when a word of its name is the store's:
+// firebase is not Amazon's Fire, and a galaxy theme is not the Galaxy Store.
+func TestStoreFlavorsAreNamedInWholeWords(t *testing.T) {
+	base := testproject.AndroidMultiStore().Without("app/src/amazon/AndroidManifest.xml")
+	const build = "app/build.gradle.kts"
+	for flavor, store := range map[string]string{
+		"amazonFire": "amazon", "fire": "amazon", "kindleFire": "amazon", "amazon_prod": "amazon", "FIRE": "amazon",
+		"galaxyStore": "other", "galaxy_store": "other", "samsung": "other", "appGallery": "other", "oneStore": "other",
+		"firebase": "", "noFirebase": "", "wildfire": "", "galaxyDark": "", "galaxy": "", "prod": "",
+	} {
+		t.Run(flavor, func(t *testing.T) {
+			files := base.With(testproject.Files{build: strings.Replace(base[build], `create("amazon")`, `create("`+flavor+`")`, 1)})
+			f := find(run(t, files, verify.Options{}), "android.store", project.Android)
+			switch {
+			case store == "" && f != nil:
+				t.Errorf("named for a store: %+v", f)
+			case store != "" && f == nil:
+				t.Errorf("not named for the %s store", store)
+			case store != "" && (!strings.Contains(f.Fix, `android:value="`+store+`"`) || !strings.Contains(f.Fix, "app/src/"+flavor+"/AndroidManifest.xml")):
+				t.Errorf("fix = %q", f.Fix)
+			}
+		})
+	}
+}
+
 // A store set in code cannot be read, so the name of a flavor is no reason
 // to warn; the finding says what tenjin cannot see.
 func TestAStoreSetInCode(t *testing.T) {

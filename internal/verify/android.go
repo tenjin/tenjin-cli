@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/tenjin/tenjin-cli/internal/project"
 )
@@ -351,12 +352,55 @@ func (r *runner) readRel(rel string) string {
 	return project.Text(raw)
 }
 
-// storeFlavors are flavor names that say a build is for a store other than
-// Google Play, with the TENJIN_APP_STORE value that store needs.
-var storeFlavors = []struct{ word, store string }{
+// storeFlavors are the words of a flavor's name that say a build is for a
+// store other than Google Play, with the TENJIN_APP_STORE value that store
+// needs. A word counts whole, as one of the name's camelCase or snake_case
+// words: firebase is not Fire, and a galaxy theme is not the Galaxy Store.
+var storeFlavors = []struct{ words, store string }{
 	{"amazon", "amazon"}, {"kindle", "amazon"}, {"fire", "amazon"},
-	{"galaxy", "other"}, {"samsung", "other"}, {"huawei", "other"}, {"appgallery", "other"},
-	{"xiaomi", "other"}, {"onestore", "other"}, {"aptoide", "other"},
+	{"galaxy store", "other"}, {"galaxystore", "other"}, {"samsung", "other"}, {"huawei", "other"},
+	{"app gallery", "other"}, {"appgallery", "other"}, {"xiaomi", "other"},
+	{"one store", "other"}, {"onestore", "other"}, {"aptoide", "other"},
+}
+
+// storeOfFlavor is the store a flavor's name says the build is for, by
+// storeFlavors, or "".
+func storeOfFlavor(variant string) string {
+	words := " " + strings.Join(nameWords(variant), " ") + " "
+	for _, sf := range storeFlavors {
+		if strings.Contains(words, " "+sf.words+" ") {
+			return sf.store
+		}
+	}
+	return ""
+}
+
+// nameWords splits a camelCase, snake_case or kebab-case name into its
+// words, in lower case: amazonFire and amazon_fire are both amazon, fire.
+func nameWords(name string) []string {
+	var words []string
+	var word strings.Builder
+	runes := []rune(name)
+	for i, c := range runes {
+		switch {
+		case !unicode.IsLetter(c) && !unicode.IsDigit(c):
+			if word.Len() > 0 {
+				words = append(words, word.String())
+				word.Reset()
+			}
+			continue
+		case i > 0 && word.Len() > 0 && unicode.IsUpper(c) && (unicode.IsLower(runes[i-1]) || i+1 < len(runes) && unicode.IsLower(runes[i+1])):
+			// A capital after a small letter starts a word (amazonFire), and
+			// so does the last capital of a run before small letters (FireTV).
+			words = append(words, word.String())
+			word.Reset()
+		}
+		word.WriteRune(unicode.ToLower(c))
+	}
+	if word.Len() > 0 {
+		words = append(words, word.String())
+	}
+	return words
 }
 
 // checkStores reports what would put a build's events under the wrong app
@@ -393,18 +437,16 @@ func (r *runner) checkStores(t *project.Target) {
 				r.add(f)
 				continue
 			}
-			for _, sf := range storeFlavors {
-				if d.Variant == "" || !strings.Contains(strings.ToLower(d.Variant), sf.word) {
-					continue
-				}
-				f.ID, f.Severity = "android.store", Warning
-				f.Title = "The " + d.Variant + " build declares no app store, so Tenjin files it under the Google Play app"
-				f.Detail = "Its name says it is for another store. A build for another store is its own app in Tenjin, with its own SDK key; without TENJIN_APP_STORE its events go to the Google Play app."
-				manifest := path.Join(t.Android.ModuleDir, "src", d.Variant, "AndroidManifest.xml")
-				f.Fix = "Add <meta-data android:name=\"TENJIN_APP_STORE\" android:value=\"" + sf.store + "\" /> inside <application> in " + manifest + ", then give the build its own app and key (tenjin setup)."
-				r.add(f)
-				break
+			store := storeOfFlavor(d.Variant)
+			if d.Variant == "" || store == "" {
+				continue
 			}
+			f.ID, f.Severity = "android.store", Warning
+			f.Title = "The " + d.Variant + " build declares no app store, so Tenjin files it under the Google Play app"
+			f.Detail = "Its name says it is for another store. A build for another store is its own app in Tenjin, with its own SDK key; without TENJIN_APP_STORE its events go to the Google Play app."
+			manifest := path.Join(t.Android.ModuleDir, "src", d.Variant, "AndroidManifest.xml")
+			f.Fix = "Add <meta-data android:name=\"TENJIN_APP_STORE\" android:value=\"" + store + "\" /> inside <application> in " + manifest + ", then give the build its own app and key (tenjin setup)."
+			r.add(f)
 		}
 	}
 }
