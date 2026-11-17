@@ -721,7 +721,13 @@ func (s *setup) verify(p *project.Project) *verify.Report {
 // agent when they agree to it, otherwise by pointing at the guide.
 func (s *setup) integrate(p *project.Project) error {
 	report := s.verify(p)
-	if report.Summary.Errors == 0 && report.Summary.Warnings == 0 {
+	switch {
+	case hasFinding(report, "framework.unchecked"):
+		// A report with nothing in it says nothing: the SDK is set up only
+		// where the checks found it.
+		s.sayUnchecked(p)
+		return nil
+	case report.Summary.Errors == 0 && report.Summary.Warnings == 0 && sdkDeclared(report):
 		s.say("The Tenjin SDK is already set up in this project.")
 		return nil
 	}
@@ -766,6 +772,30 @@ func (s *setup) integrate(p *project.Project) error {
 		s.manualGuide(report)
 	}
 	return nil
+}
+
+// sdkDeclared reports whether the checks found the SDK in the project: a
+// dependency check that passed.
+func sdkDeclared(report *verify.Report) bool {
+	for _, f := range report.Findings {
+		if f.ID == "sdk.dependency" && f.Severity == verify.Pass {
+			return true
+		}
+	}
+	return false
+}
+
+// sayUnchecked says, for a framework this version has no checks for, what
+// step 1 did find out, and where the guide is. Whether the SDK is set up is
+// the developer's to tell.
+func (s *setup) sayUnchecked(p *project.Project) {
+	kind := frameworkNames[p.Framework]
+	if len(p.Tenjin) == 0 {
+		s.say("The Tenjin SDK was not found in this project, and this version cannot check %s projects beyond that.", kind)
+	} else {
+		s.say("The Tenjin SDK is in this project (%s), and this version cannot check %s projects beyond that: follow the guide to make sure it is set up.", render.Clean(p.Tenjin[0].Source), kind)
+	}
+	s.sayGuide(p)
 }
 
 // agentJob is what a coding agent is offered for: work, as in "can do the
@@ -1026,8 +1056,13 @@ func (s *setup) manualGuide(report *verify.Report) {
 			s.say("%s", render.Indent(render.Clean(line), 2, width))
 		}
 	}
-	// The guide this version checks against, offline, before the public
-	// repository it comes from.
+	s.sayGuide(p)
+	s.say("The next step lists everything that is missing, with the fix for each item.")
+}
+
+// sayGuide names the full integration guide: the one this version checks
+// against, offline, before the public repository it comes from.
+func (s *setup) sayGuide(p *project.Project) {
 	s.say("The full guide:")
 	switch name := guides.ForProject(p); {
 	case name != "":
@@ -1039,7 +1074,6 @@ func (s *setup) manualGuide(report *verify.Report) {
 	default:
 		s.say("  %s", guideURLs[p.Framework])
 	}
-	s.say("The next step lists everything that is missing, with the fix for each item.")
 }
 
 // runAgent hands the open findings to the coding agent and reports what it
@@ -1206,6 +1240,11 @@ func (s *setup) check() error {
 		}
 		status := reportStatus(report.Summary, false)
 		if status == nil {
+			// A check that cannot tell must not say pass.
+			if hasFinding(report, "framework.unchecked") {
+				s.say("\n%s Nothing here was checked: this version has no checks for %s projects.", s.style.Dim("i"), frameworkNames[p.Framework])
+				return nil
+			}
 			s.say("\n%s Nothing here would stop events reaching Tenjin.", s.style.Green("✓"))
 			return nil
 		}
