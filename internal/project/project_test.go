@@ -823,6 +823,42 @@ func TestTheTrackingPromptIsTheAppsOwn(t *testing.T) {
 	}
 }
 
+// A module that sets no applicationId ships under its namespace, which the
+// Android Gradle plugin takes as the default, in either DSL.
+func TestTheNamespaceIsTheDefaultApplicationID(t *testing.T) {
+	base := testproject.AndroidNative()
+	const build = "app/build.gradle.kts"
+	if !strings.Contains(base[build], `applicationId = "com.example.sample"`) {
+		t.Fatal("the fixture sets no applicationId")
+	}
+	p := detect(t, base.With(testproject.Files{build: strings.Replace(base[build], `        applicationId = "com.example.sample"`+"\n", "", 1)}))
+	target := p.Target(project.Android)
+	if target == nil || target.BundleID != "com.example.sample" || target.Source != build {
+		t.Fatalf("android target = %+v", target)
+	}
+	if got := buildList(t, p, project.Android); got != "android com.example.sample android  __TENJIN_ANDROID_SDK_KEY__" {
+		t.Errorf("builds:\n%s", got)
+	}
+	if hasNote(p, "Could not read") {
+		t.Errorf("notes = %q", p.Notes)
+	}
+
+	p = detect(t, testproject.Files{
+		"settings.gradle":                  "include ':app'\n",
+		"app/build.gradle":                 "apply plugin: 'com.android.application'\nandroid {\n    namespace 'com.example.groovy'\n    defaultConfig {\n        minSdk 24\n    }\n}\n",
+		"app/src/main/AndroidManifest.xml": testproject.AndroidManifest,
+	})
+	if got := bundleID(p, project.Android); got != "com.example.groovy" {
+		t.Errorf("bundle ID = %q, notes = %q", got, p.Notes)
+	}
+
+	// An applicationId still wins over the namespace.
+	p = detect(t, base.With(testproject.Files{build: strings.Replace(base[build], `applicationId = "com.example.sample"`, `applicationId = "com.example.shipped"`, 1)}))
+	if got := bundleID(p, project.Android); got != "com.example.shipped" {
+		t.Errorf("bundle ID = %q", got)
+	}
+}
+
 // Shrinking is on in every spelling Gradle takes: Groovy's minifyEnabled
 // true, the assignment minifyEnabled = true, and Kotlin's isMinifyEnabled.
 func TestMinifyInEverySpelling(t *testing.T) {

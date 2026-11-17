@@ -182,7 +182,7 @@ func (d *detector) androidTarget(rel string) (Target, bool) {
 	best := -1
 	for _, f := range buildFiles {
 		content := stripComments(d.read(f))
-		if !applicationID.MatchString(content) {
+		if moduleApplicationID(content) == "" {
 			continue
 		}
 		score := 1
@@ -218,11 +218,11 @@ func (d *detector) androidTarget(rel string) (Target, bool) {
 	// from the file without them.
 	flavors, rest := cutBlock(content, productFlavors)
 	target := Target{Platform: Android, Android: info}
-	if m := applicationID.FindStringSubmatch(rest); m != nil {
-		target.BundleID = m[1]
+	if id := moduleApplicationID(rest); id != "" {
+		target.BundleID = id
 		target.Source = buildFile
 	} else {
-		d.note("Could not read applicationId from %s.", buildFile)
+		d.note("Could not read applicationId or namespace from %s.", buildFile)
 	}
 	// Every other ID a build of this module can have: a flavor's own, or the
 	// default with a build type's or a flavor's suffix.
@@ -291,10 +291,24 @@ func cutBlock(content string, start *regexp.Regexp) (block, rest string) {
 	return content[loc[1]:], content[:loc[0]]
 }
 
+// moduleApplicationID is the application ID an Android module's build file
+// declares: applicationId, or, when it is not set, namespace, which the
+// Android Gradle plugin takes as the default since version 7. It is "" when
+// the file sets neither.
+func moduleApplicationID(content string) string {
+	if m := applicationID.FindStringSubmatch(content); m != nil {
+		return m[1]
+	}
+	if m := gradleNamespace.FindStringSubmatch(content); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
 func countModules(buildFiles []string, d *detector) int {
 	n := 0
 	for _, f := range buildFiles {
-		if applicationID.MatchString(d.read(f)) {
+		if moduleApplicationID(stripComments(d.read(f))) != "" {
 			n++
 		}
 	}
