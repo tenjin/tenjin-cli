@@ -844,6 +844,26 @@ class MainActivity : Activity() {
 	expect(t, r, "sdk.connect", "", verify.Pass)
 }
 
+// A receiver rewritten under its own name keeps its line breaks, so a call
+// on the line after the name, and every finding after it, are on the right
+// lines.
+func TestARewrittenReceiverKeepsItsLines(t *testing.T) {
+	android := testproject.AndroidNative()
+	const activity = "app/src/main/java/com/example/sample/MainActivity.kt"
+	r := run(t, android.With(testproject.Files{activity: strings.Replace(android[activity], "        tenjin.connect()\n", "        tenjin\n            .connect()\n", 1)}), verify.Options{})
+	if f := expect(t, r, "sdk.connect", project.Android, verify.Pass); f.File != activity || f.Line != 11 {
+		t.Errorf("connect found at %s:%d", f.File, f.Line)
+	}
+
+	unity := testproject.Unity()
+	const before = "        instance.SetAppStoreType(AppStoreType.googleplay);\n"
+	script := strings.Replace(unity[unityScript], before, "        instance\n            .SetAppStoreType(AppStoreType.googleplay);\n        instance.DebugLogs();\n", 1)
+	r = run(t, unity.With(testproject.Files{unityScript: script}), verify.Options{})
+	if f := expect(t, r, "ios.debug_logs", project.IOS, verify.Warning); f.File != unityScript || f.Line != 25 {
+		t.Errorf("DebugLogs found at %s:%d", f.File, f.Line)
+	}
+}
+
 // A call written in a string is text the app prints, not a call; the key
 // in a string is still read.
 func TestCallsInsideStringsAreNotCalls(t *testing.T) {

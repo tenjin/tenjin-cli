@@ -50,13 +50,16 @@ func aliases(pattern *regexp.Regexp, text string) []string {
 }
 
 // rewrite replaces `name.` with `receiver.` for each name other than the
-// receiver itself.
+// receiver itself, `?.` and `!!.` included. The spaces and line breaks
+// between the name and the dot move before the receiver, so that the call
+// reads receiver.call and every line keeps its number.
 func rewrite(text string, names []string, receiver string) string {
+	replacement := "${1}${2}" + strings.ReplaceAll(receiver, "$", "$$") + "."
 	for _, name := range names {
 		if name == receiver || strings.HasPrefix(receiver, name+".") {
 			continue
 		}
-		text = regexp.MustCompile(`\b`+regexp.QuoteMeta(name)+`\s*(?:\?|!!)?\.`).ReplaceAllString(text, receiver+".")
+		text = regexp.MustCompile(`\b`+regexp.QuoteMeta(name)+`(\s*)(?:\?|!!)?(\s*)\.`).ReplaceAllString(text, replacement)
 	}
 	return text
 }
