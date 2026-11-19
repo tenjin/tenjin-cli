@@ -127,7 +127,8 @@ func cask(t *testing.T, version *string) (string, *atomic.Int32) {
 			http.NotFound(w, r)
 			return
 		}
-		// As GoReleaser writes it: a custom block first, then the stanzas.
+		// As the tap's 1.0.0 cask is: a block before version, then the
+		// stanzas. Later casks have version first; the reader takes both.
 		_, _ = fmt.Fprintf(w, `cask "tenjin" do
   postflight_steps do
     on_macos do

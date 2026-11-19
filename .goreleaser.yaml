@@ -104,15 +104,12 @@ homebrew_casks:
       fish: completions/tenjin.fish
     # Homebrew marks what a cask downloads as quarantined, and macOS then
     # refuses to run a binary that is not notarized. Until releases are
-    # signed and notarized, the mark is removed after install.
-    #
-    # Homebrew deprecated `postflight` (an error in developer mode) for
-    # `postflight_steps`. GoReleaser writes that from hooks.post.install_steps
-    # from v2.19; until then it goes in custom_block, which puts it first in
-    # the cask, out of Homebrew's stanza order but working.
-    custom_block: |
-      postflight_steps do
-        on_macos do
-          run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/tenjin"]
-        end
-      end
+    # signed and notarized, the mark is removed after install. GoReleaser
+    # writes this as the cask's `postflight_steps` (Homebrew deprecated
+    # `postflight`), in Homebrew's stanza order.
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/tenjin"]
+          end
