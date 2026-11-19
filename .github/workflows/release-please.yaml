@@ -18,13 +18,15 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Token for this repository
-        # The organization's Code Ops app, as the SDK repositories use it. A
+        # The CLI's own GitHub App, installed on this repository and the tap
+        # and nowhere else: a public repository holds no token that reaches a
+        # private one, so the organization's shared app is not used here. A
         # pull request opened with the workflow's own token starts no checks.
         id: token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
-          app-id: ${{ vars.CODE_OPS_APP_ID }}
-          private-key: ${{ secrets.CODE_OPS_APP_PRIVATE_KEY }}
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           owner: tenjin
           repositories: tenjin-cli
           permission-contents: write
@@ -54,5 +56,5 @@ jobs:
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
     secrets:
-      CODE_OPS_APP_PRIVATE_KEY: ${{ secrets.CODE_OPS_APP_PRIVATE_KEY }}
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       AMPLITUDE_API_KEY: ${{ secrets.AMPLITUDE_API_KEY }}

@@ -7,7 +7,10 @@ on:
         type: string
         required: true
     secrets:
-      CODE_OPS_APP_PRIVATE_KEY:
+      # The private key of the CLI's own GitHub App, installed on this
+      # repository and tenjin/homebrew-tap only; its ID is the RELEASE_APP_ID
+      # variable. Both belong to this repository, not the organization.
+      RELEASE_APP_PRIVATE_KEY:
         required: true
       # Stamped into the binaries for the usage statistics (readable there, as
       # an ingestion key is; a secret only to keep it out of the repository).
@@ -85,14 +88,13 @@ jobs:
           TAG: ${{ inputs.tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: The tap can be reached
-        # The organization's Code Ops app, as the SDK releases use it, limited
-        # to tenjin/homebrew-tap. Checked before anything is published, so a
-        # missing app or permission stops the release here; the cask job
-        # makes its own token.
+        # The CLI's own GitHub App, here limited to tenjin/homebrew-tap.
+        # Checked before anything is published, so a missing app, install or
+        # permission stops the release here; the cask job makes its own token.
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
-          app-id: ${{ vars.CODE_OPS_APP_ID }}
-          private-key: ${{ secrets.CODE_OPS_APP_PRIVATE_KEY }}
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           owner: tenjin
           repositories: homebrew-tap
           permission-contents: write
@@ -155,8 +157,8 @@ jobs:
         id: tap-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
-          app-id: ${{ vars.CODE_OPS_APP_ID }}
-          private-key: ${{ secrets.CODE_OPS_APP_PRIVATE_KEY }}
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           owner: tenjin
           repositories: homebrew-tap
           permission-contents: write
