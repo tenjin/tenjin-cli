@@ -47,7 +47,7 @@ fmt-check:
 lint: fmt-check
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0 run
 
-GORELEASER := go run github.com/goreleaser/goreleaser/v2@v2.18.2
+GORELEASER := go run github.com/goreleaser/goreleaser/v2@v2.20.2
 
 # Validates .goreleaser.yaml.
 release-check:

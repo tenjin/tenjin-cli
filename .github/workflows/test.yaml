@@ -195,6 +195,10 @@ jobs:
           # developer mode, where a deprecated cask stanza is an error.
           brew update --quiet
           brew --version
+          # Homebrew's cask style rules change between its releases, and the
+          # tap runs this on the pull request a release proposes: a cask
+          # GoReleaser writes in a shape Homebrew no longer accepts fails here.
+          brew style dist/homebrew/Casks/tenjin.rb
           brew tap-new --no-git tenjin/local
           tap="$(brew --repository tenjin/local)"
           mkdir -p "$tap/Casks"
