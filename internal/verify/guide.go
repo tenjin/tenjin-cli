@@ -87,6 +87,8 @@ func Guide(report *Report) []GuidePart {
 		}
 	case project.Unity:
 		add(GuidePart{Steps: steps(unitySpec, "")})
+	case project.Godot:
+		add(GuidePart{Steps: steps(godotSpec, "")})
 	}
 	return parts
 }

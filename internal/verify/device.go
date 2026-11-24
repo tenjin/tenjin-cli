@@ -33,6 +33,10 @@ type DeviceInput struct {
 
 const zeroAdvertisingID = "00000000-0000-0000-0000-000000000000"
 
+// godotIOSLogs is where to see what a Godot app sent on iOS, whose logs
+// the Godot SDK cannot turn on.
+const godotIOSLogs = "To see what the app sent, check a launch on Android with tenjin doctor --device, or open the SDK Live page in the Tenjin dashboard."
+
 // checkDevice reports what the SDK did on the device: whether it connected,
 // what Tenjin answered, and whether Tenjin went on to process the install.
 // It reports on the target whose platform the device is.
@@ -63,6 +67,10 @@ func (r *runner) checkDevice(t *project.Target, src source) {
 		if platform == project.IOS {
 			f.Detail = "Either the app has not been launched in the last 10 minutes, the SDK never ran, or the build does not call TenjinSDK.debugLogs(): without it the iOS SDK logs nothing about its requests."
 			f.Fix = "In the iOS app's launch code, call TenjinSDK.debugLogs() inside #if DEBUG … #endif, launch the app on the simulator, then run this again."
+			if r.p.Framework == project.Godot {
+				f.Detail = "Either the app has not been launched in the last 10 minutes, or the SDK never ran. The Godot SDK cannot turn on the iOS SDK's request logs, so the iOS SDK logs little about its requests."
+				f.Fix = "Launch the app on the device, then run this again. " + godotIOSLogs
+			}
 		}
 		r.add(f)
 		return
@@ -113,14 +121,24 @@ func (r *runner) checkDevice(t *project.Target, src source) {
 			Detail: "Without TenjinSDK.debugLogs() the request's contents are not logged. A 401 means Tenjin does not accept the SDK key for this app; a 404, that it has no app with this bundle ID.",
 			Fix:    "Check that the SDK key is this app's, from its page in the Tenjin dashboard. To see the whole answer, call TenjinSDK.debugLogs() inside #if DEBUG … #endif and launch again.",
 		}
+		if r.p.Framework == project.Godot {
+			f.Detail = "The Godot SDK cannot turn on the iOS SDK's request logs, so the request's contents are not logged. A 401 means Tenjin does not accept the SDK key for this app; a 404, that it has no app with this bundle ID."
+			f.Fix = "Check that the SDK key is this app's, from its page in the Tenjin dashboard."
+		}
 		r.add(f)
 	case platform == project.IOS && hasUnread(d.Log):
-		r.add(Finding{
+		f := Finding{
 			ID: "device.no_debug_logs", Severity: Warning, Platform: platform,
 			Title:  "The SDK sent requests, but their contents are not in the log",
 			Detail: "Without TenjinSDK.debugLogs() the iOS SDK logs only that a request was sent and its HTTP status, so a connect cannot be told from an event.",
 			Fix:    "In the iOS app's launch code, call TenjinSDK.debugLogs() inside #if DEBUG … #endif, launch the app again, then run this again.",
-		})
+		}
+		if r.p.Framework == project.Godot {
+			f.Severity = Info
+			f.Detail = "The Godot SDK cannot turn on the iOS SDK's request logs, so the iOS SDK logs only that a request was sent and its HTTP status, and a connect cannot be told from an event."
+			f.Fix = godotIOSLogs
+		}
+		r.add(f)
 	default:
 		r.add(Finding{
 			ID: "device.no_connect", Severity: Warning, Platform: platform,

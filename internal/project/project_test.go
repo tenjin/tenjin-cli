@@ -186,6 +186,7 @@ func TestFrameworkPrecedence(t *testing.T) {
 			"Config/DefaultEngine.ini": "[/Script/IOSRuntimeSettings.IOSRuntimeSettings]\nBundleIdentifier=com.example.unreal\n\n[/Script/AndroidRuntimeSettings.AndroidRuntimeSettings]\nPackageName=com.example.unreal\n",
 			"Source/Game/Game.cpp":     "",
 		}, project.Unreal},
+		{"godot", testproject.Godot(), project.Godot},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -878,5 +879,67 @@ func TestMinifyInEverySpelling(t *testing.T) {
 		if p.Target(project.Android).Android.Minify {
 			t.Errorf("%q: minify is on", spelling)
 		}
+	}
+}
+
+func TestGodotReadsThePresetsAndTheAddon(t *testing.T) {
+	p := detect(t, testproject.Godot())
+	if bundleID(p, project.Android) != "com.example.sample" || bundleID(p, project.IOS) != "com.example.sample" {
+		t.Errorf("targets = %+v", p.Targets)
+	}
+	if len(p.Tenjin) != 1 || p.Tenjin[0].Package != "tenjin-godot-sdk" || p.Tenjin[0].Version != "1.0.0" || p.Tenjin[0].Source != project.GodotAddon {
+		t.Errorf("tenjin = %+v", p.Tenjin)
+	}
+	if name := project.AppName(p, project.Android); name != "Sample Game" {
+		t.Errorf("app name = %q", name)
+	}
+	if p.TrackingPrompt == nil || p.TrackingPrompt.File != testproject.GodotMain {
+		t.Errorf("tracking prompt = %+v", p.TrackingPrompt)
+	}
+
+	// Godot's default package name is not one, and a project with no
+	// presets has no bundle IDs to read: both are said.
+	p = detect(t, testproject.Godot().With(testproject.Files{"export_presets.cfg": "[preset.0]\n\nplatform=\"Android\"\n\n[preset.0.options]\n\npackage/unique_name=\"com.example.$genname\"\n"}))
+	if len(p.Builds()) != 0 || !hasNote(p, "Godot's default") {
+		t.Errorf("builds = %+v, notes = %q", p.Builds(), p.Notes)
+	}
+	p = detect(t, testproject.Godot().Without("export_presets.cfg", "addons/tenjin/plugin.cfg", "addons/tenjin/tenjin.gd"))
+	if p.Framework != project.Godot || len(p.Targets) != 0 || len(p.Tenjin) != 0 || !hasNote(p, "no Android or iOS export presets") {
+		t.Errorf("project = %+v", p)
+	}
+}
+
+// A quoted value runs over several lines to its closing quote, and lines
+// inside it with an = are no options.
+func TestGodotPresetValueOverSeveralLines(t *testing.T) {
+	presets := "[preset.0]\n\nname=\"iOS\"\nplatform=\"iOS\"\n\n[preset.0.options]\n\n" +
+		"application/additional_plist_content=\"<dict>\n<key>a</key><string>x=\\\"y\\\"</string>\n</dict>\"\n" +
+		"application/bundle_identifier=\"com.example.sample\"\n"
+	root := testproject.Write(t, testproject.Files{"project.godot": "config_version=5\n", "export_presets.cfg": presets})
+	got := project.GodotPresets(root)
+	if len(got) != 1 {
+		t.Fatalf("presets = %+v", got)
+	}
+	p := got[0]
+	if want := "<dict>\n<key>a</key><string>x=\"y\"</string>\n</dict>"; p.Options["application/additional_plist_content"] != want {
+		t.Errorf("value = %q, want %q", p.Options["application/additional_plist_content"], want)
+	}
+	if p.OptionLines["application/additional_plist_content"] != 8 || p.Options["application/bundle_identifier"] != "com.example.sample" || p.OptionLines["application/bundle_identifier"] != 11 {
+		t.Errorf("options = %q, lines = %v", p.Options, p.OptionLines)
+	}
+	if len(p.Options) != 2 {
+		t.Errorf("continuation lines read as options: %q", p.Options)
+	}
+}
+
+// The android/ folder Godot installs for Gradle builds holds a Gradle
+// project: the Godot project is still what is detected.
+func TestGodotWithItsAndroidBuildTemplate(t *testing.T) {
+	p := detect(t, testproject.Godot().With(testproject.Files{
+		"android/build/settings.gradle": "include ':app'\n",
+		"android/build/build.gradle":    "apply plugin: 'com.android.application'\nandroid { defaultConfig { applicationId 'com.godot.game' } }\n",
+	}))
+	if p.Framework != project.Godot || bundleID(p, project.Android) != "com.example.sample" {
+		t.Errorf("framework = %q, targets = %+v", p.Framework, p.Targets)
 	}
 }

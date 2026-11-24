@@ -19,7 +19,8 @@ var latestSDK = []struct{ packagePrefix, version string }{
 	{"tenjin_plugin", "1.5.0"},
 	{"react-native-tenjin", "1.7.0"},
 	{"ionic-capacitor-tenjin", "2.2.0"},
-	{"com.tenjin.sdk", "1.22.1"}, // Unity, from the GitHub releases
+	{"com.tenjin.sdk", "1.22.1"},  // Unity, from the GitHub releases
+	{"tenjin-godot-sdk", "1.0.0"}, // Godot, from the GitHub releases
 }
 
 // initializeSince is the release of each SDK that brought the initializer

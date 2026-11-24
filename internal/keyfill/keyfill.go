@@ -48,7 +48,7 @@ var exts = []string{
 	".kt", ".kts", ".java", ".gradle", ".properties",
 	".swift", ".m", ".mm", ".h", ".plist", ".xcconfig",
 	".dart", ".js", ".jsx", ".ts", ".tsx", ".vue", ".json",
-	".cs", ".cpp", ".ini", ".xml", ".yaml", ".yml",
+	".cs", ".cpp", ".ini", ".xml", ".yaml", ".yml", ".gd",
 	// Unity scenes, prefabs and assets, where the TenjinObject component
 	// keeps its SDK Key.
 	".unity", ".prefab", ".asset",
