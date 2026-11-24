@@ -22,6 +22,7 @@ const (
 	Capacitor   Framework = "capacitor"
 	Unity       Framework = "unity"
 	Unreal      Framework = "unreal"
+	Godot       Framework = "godot"
 	Cordova     Framework = "cordova"
 	// UnityExport is the Android or Xcode project that Unity generates on
 	// each build. It is output, not source.
@@ -321,7 +322,7 @@ func (d *detector) detect() bool {
 // wrapper matches everything that is not a plain native project.
 func (d *detector) wrapper() bool {
 	for _, detect := range []func() bool{
-		d.unity, d.unityExport, d.unreal, d.flutter, d.reactNative, d.capacitor, d.cordova, d.dotnet, d.kotlinMultiplatform,
+		d.unity, d.unityExport, d.unreal, d.godot, d.flutter, d.reactNative, d.capacitor, d.cordova, d.dotnet, d.kotlinMultiplatform,
 	} {
 		if detect() {
 			return true

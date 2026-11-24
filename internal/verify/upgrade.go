@@ -87,6 +87,7 @@ var releaseNotes = map[string]string{
 	"react-native-tenjin":    "https://github.com/tenjin/tenjin-react-native-sdk/releases",
 	"ionic-capacitor-tenjin": "https://github.com/tenjin/tenjin-ionic-sdk/releases",
 	"com.tenjin.sdk":         "https://github.com/tenjin/tenjin-unity-sdk/releases",
+	"tenjin-godot-sdk":       "https://github.com/tenjin/tenjin-godot-sdk/releases",
 }
 
 // How a package is declared, which decides how its range is read and how
@@ -172,6 +173,8 @@ func byHandOnly(i project.Integration, live map[string]string) string {
 		return "The SDK is a file in the project, not a dependency, so nothing records its version. Download " + i.Package + " " + latestVersion("com.tenjin:android-sdk", live) + " from " + releaseNotes["com.tenjin:android-sdk"] + " and replace " + i.Source + " with it, or declare com.tenjin:android-sdk:" + latestVersion("com.tenjin:android-sdk", live) + " from Maven Central instead and delete the file."
 	case "Tenjin (.unitypackage)":
 		return "It was imported from a .unitypackage, which keeps no version. Download the .unitypackage of " + latestVersion("com.tenjin.sdk", live) + " from " + releaseNotes["com.tenjin.sdk"] + " and import it over " + i.Source + "."
+	case "tenjin-godot-sdk":
+		return "The Godot addon is copied into the project. Download tenjin-godot-sdk-" + latestVersion("tenjin-godot-sdk", live) + ".zip from " + releaseNotes["tenjin-godot-sdk"] + " and replace " + path.Dir(i.Source) + " with the addons/tenjin folder inside it."
 	case "TenjinSDK (Unreal plugin)":
 		return "The Unreal plugin is copied into the project. Download its newest release from https://github.com/tenjin/tenjin-unreal-sdk/releases and replace the plugin's folder, " + path.Dir(i.Source) + ", with it."
 	case project.CommunityFlutterPackage:

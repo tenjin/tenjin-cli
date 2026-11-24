@@ -18,6 +18,7 @@ var (
 	capacitorTSName = regexp.MustCompile(`\bappName\s*:\s*` + jsString + `[ \t]*(?:[,}\r\n]|$)`)
 	expoConfigName  = regexp.MustCompile(`(?m)^[ \t]*name\s*:\s*` + jsString + `[ \t]*(?:[,}\r\n]|$)`)
 	unityName       = regexp.MustCompile(`(?m)^[ \t]*productName:[ \t]*(.*?)[ \t\r]*$`)
+	godotName       = regexp.MustCompile(`(?m)^config/name="((?:[^"\\\n]|\\.)*)"[ \t]*$`)
 	plistDisplay    = regexp.MustCompile(`<key>CFBundleDisplayName</key>\s*<string>([^<]*)</string>`)
 	manifestLabel   = regexp.MustCompile(`<application\b[^>]*?\bandroid:label\s*=\s*"([^"]*)"`)
 	stringResource  = `<string\s+name\s*=\s*"%s"[^>/]*>([^<]*)</string>`
@@ -28,8 +29,8 @@ const jsString = "(\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*'|`(?:[^`\
 // AppName is the name the project gives its app on a platform, read from
 // where its tools keep it: Gradle's rootProject.name, the Xcode project's
 // name, a Flutter app's display name or label (else pubspec.yaml's name),
-// Expo's app config or app.json, the Capacitor appName, or Unity's
-// productName. Only a literal counts. "" when there is none to read.
+// Expo's app config or app.json, the Capacitor appName, Unity's
+// productName, or Godot's config/name. Only a literal counts. "" when there is none to read.
 func AppName(p *Project, platform Platform) string {
 	d := &detector{root: p.Root, p: p}
 	switch p.Framework {
@@ -72,6 +73,10 @@ func AppName(p *Project, platform Platform) string {
 			if name, ok := yamlScalar(m[1]); ok {
 				return appName(name)
 			}
+		}
+	case Godot:
+		if m := godotName.FindStringSubmatch(d.read("project.godot")); m != nil {
+			return appName(godotUnquote(m[1]))
 		}
 	default:
 		t := p.Target(platform)

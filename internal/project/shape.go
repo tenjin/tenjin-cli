@@ -20,7 +20,7 @@ var (
 	// inherits from (FlutterAppDelegate, RCTAppDelegate, UIResponder).
 	swiftDelegate   = regexp.MustCompile(`(?:@main|@UIApplicationMain)\s+(?:@\w+\s+)*(?:\w+\s+)*class\s+\w+`)
 	objcDelegate    = regexp.MustCompile(`@implementation\s+\w*AppDelegate\b`)
-	trackingRequest = regexp.MustCompile(`requestTrackingAuthorization|RequestAuthorizationTracking|RequestTrackingAuthorization|requestTrackingPermission`)
+	trackingRequest = regexp.MustCompile(`requestTrackingAuthorization|RequestAuthorizationTracking|RequestTrackingAuthorization|requestTrackingPermission|request_tracking_authorization`)
 )
 
 // androidShape fills in how the Android module is built and where the app
@@ -235,6 +235,8 @@ func (d *detector) trackingPrompt() {
 		scans = append(scans, scan{"src", []string{".ts", ".tsx", ".js", ".jsx", ".vue"}})
 	case Unity:
 		scans = append(scans, scan{"Assets", []string{".cs"}})
+	case Godot:
+		scans = append(scans, scan{".", []string{".gd"}})
 	}
 	if ios.IOS != nil {
 		scans = append(scans, scan{path.Dir(ios.IOS.Xcodeproj), []string{".swift", ".m", ".mm"}})

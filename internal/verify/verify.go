@@ -340,12 +340,14 @@ func (r *runner) run() {
 		}
 	case project.Unity:
 		r.checkUnity()
+	case project.Godot:
+		r.checkGodot()
 	default:
 		r.add(Finding{
 			ID:       "framework.unchecked",
 			Severity: Info,
 			Title:    "Integration checks for " + frameworkTitle(r.p.Framework) + " projects are not available yet",
-			Detail:   "The project was detected, but this version only checks native Android, native iOS, Flutter, React Native, Capacitor and Unity projects.",
+			Detail:   "The project was detected, but this version only checks native Android, native iOS, Flutter, React Native, Capacitor, Unity and Godot projects.",
 		})
 		return
 	}

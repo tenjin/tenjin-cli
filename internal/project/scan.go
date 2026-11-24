@@ -18,6 +18,8 @@ var skipDirs = map[string]bool{
 	"node_modules": true, "Pods": true, "Carthage": true, "vendor": true,
 	"build": true, "DerivedData": true, "DerivedDataCache": true,
 	"Library": true, "Intermediate": true, "Binaries": true, "Saved": true,
+	// Godot's import cache.
+	".godot": true,
 }
 
 // bundleSuffixes are directories that look like folders but are single
@@ -69,9 +71,15 @@ func unityExport(dir, name string) bool {
 }
 
 // appCode reports whether a source file is the app's own code: not a test,
-// and in a Unity project not the Tenjin package's.
+// and in a Unity or Godot project not the Tenjin package's.
 func (d *detector) appCode(rel string) bool {
-	return !TestSource(rel) && (d.p.Framework != Unity || !UnitySDKFile(rel))
+	return !TestSource(rel) && (d.p.Framework != Unity || !UnitySDKFile(rel)) && (d.p.Framework != Godot || !GodotSDKFile(rel))
+}
+
+// GodotSDKFile reports whether a file of a Godot project is the Tenjin
+// addon's own, which calls everything the SDK has.
+func GodotSDKFile(rel string) bool {
+	return strings.HasPrefix(rel, "addons/tenjin/")
 }
 
 // UnitySDKFile reports whether a file of a Unity project is the Tenjin

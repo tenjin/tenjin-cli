@@ -419,3 +419,80 @@ public static class TenjinPostProcess
 `,
 	}
 }
+
+// GodotMain is the script of a Godot project's main scene.
+const GodotMain = "main.gd"
+
+// IOSKey is the SDK key of the iOS app, in a project whose Android app's
+// key is Key: each platform is its own app in Tenjin, with its own key.
+const IOSKey = "IOSKEY1234567890ABCDEFGHIJKLMNOIOS"
+
+// Godot is a Godot project for both platforms, with the Tenjin addon
+// copied in and enabled, and integrated as the Godot SDK's README shows,
+// with each platform's key chosen by OS.get_name().
+func Godot() Files {
+	return Files{
+		"project.godot": `; Engine configuration file.
+
+config_version=5
+
+[application]
+
+config/name="Sample Game"
+run/main_scene="res://main.tscn"
+
+[autoload]
+
+Tenjin="*res://addons/tenjin/tenjin.gd"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/tenjin/plugin.cfg")
+`,
+		"export_presets.cfg": `[preset.0]
+
+name="Android"
+platform="Android"
+runnable=true
+
+[preset.0.options]
+
+gradle_build/use_gradle_build=true
+package/unique_name="com.example.sample"
+
+[preset.1]
+
+name="iOS"
+platform="iOS"
+runnable=true
+
+[preset.1.options]
+
+application/bundle_identifier="com.example.sample"
+application/additional_plist_content="<key>NSAdvertisingAttributionReportEndpoint</key><string>https://tenjin-skan.com</string>"
+`,
+		"addons/tenjin/plugin.cfg": "[plugin]\n\nname=\"Tenjin SDK\"\nversion=\"1.0.0\"\nscript=\"tenjin_editor_plugin.gd\"\n",
+		// The addon's own script calls the native SDK by the same names.
+		"addons/tenjin/tenjin.gd": "extends Node\n\nfunc initialize(sdk_key: String) -> void:\n\t_call(\"initialize\", [sdk_key])\n\nfunc connect_sdk() -> void:\n\t_call(\"connectSdk\")\n",
+		GodotMain: `extends Node
+
+const ANDROID_SDK_KEY := "` + Key + `"
+const IOS_SDK_KEY := "` + IOSKey + `"
+
+
+func _ready() -> void:
+	Tenjin.initialize(IOS_SDK_KEY if OS.get_name() == "iOS" else ANDROID_SDK_KEY)
+	Tenjin.set_app_store(Tenjin.AppStore.GOOGLE_PLAY)
+	if OS.get_name() == "iOS":
+		Tenjin.tracking_authorization_received.connect(func(_status: int) -> void: Tenjin.connect_sdk())
+		Tenjin.request_tracking_authorization()
+	else:
+		Tenjin.connect_sdk()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_RESUMED:
+		Tenjin.connect_sdk()
+`,
+	}
+}

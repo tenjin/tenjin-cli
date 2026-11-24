@@ -68,7 +68,7 @@ func loadProject(args []string) (*project.Project, error) {
 		if len(p.Notes) > 0 {
 			return nil, e.WithHint("%s", strings.Join(p.Notes, "\n"))
 		}
-		return nil, e.WithHint("Run this in the root of an Android, iOS, Flutter, React Native, Capacitor, Unity or Unreal project, or pass its path.")
+		return nil, e.WithHint("Run this in the root of an Android, iOS, Flutter, React Native, Capacitor, Unity, Unreal or Godot project, or pass its path.")
 	}
 	return p, nil
 }
@@ -80,6 +80,7 @@ var frameworkNames = map[project.Framework]string{
 	project.Capacitor:           "Capacitor",
 	project.Unity:               "Unity",
 	project.Unreal:              "Unreal Engine",
+	project.Godot:               "Godot",
 	project.Cordova:             "Cordova (not supported by the Tenjin SDK)",
 	project.UnityExport:         "Unity (exported build)",
 	project.KotlinMultiplatform: "Kotlin Multiplatform (no Tenjin SDK)",
